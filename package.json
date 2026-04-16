@@ -1,0 +1,19 @@
+{
+  "name": "aletis-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ALETIS — Finanças Estratégicas & Agrobusiness Platform",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "dev:web": "pnpm --filter @aletis/web dev",
+    "dev:api": "pnpm --filter @aletis/api dev",
+    "dev:portal": "pnpm --filter @aletis/portal-client dev"
+  }
+}

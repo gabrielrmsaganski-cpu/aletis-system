@@ -1,0 +1,25 @@
+{
+  "name": "@aletis/knowledge-base",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Base de conhecimento normativo, jurisprudencial e regulatorio do credito rural brasileiro - ALETIS",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./dist/*.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "echo 'no lint configured'"
+  }
+}

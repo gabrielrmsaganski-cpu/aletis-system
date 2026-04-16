@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply font-body text-aletis-grafite-escuro;
+  }
+  h1, h2, h3 {
+    @apply font-display;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-2xl border border-aletis-borda shadow-sm hover:shadow-md transition-shadow duration-300;
+  }
+  .card-premium {
+    @apply relative bg-white rounded-2xl border border-aletis-borda/70 shadow-[0_4px_20px_-8px_rgba(15,76,53,0.12)] hover:shadow-[0_10px_30px_-10px_rgba(15,76,53,0.22)] hover:border-aletis-dourado/40 hover:-translate-y-0.5 transition-all duration-300;
+  }
+  .card-premium::before {
+    content: "";
+    @apply pointer-events-none absolute inset-x-0 top-0 h-[2px] rounded-t-2xl bg-gradient-to-r from-transparent via-aletis-dourado/60 to-transparent opacity-0 transition-opacity duration-300;
+  }
+  .card-premium:hover::before {
+    @apply opacity-100;
+  }
+  .section-chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-aletis-verde/15 bg-aletis-verde/5 px-2.5 py-1 text-[10px] font-display font-semibold uppercase tracking-wider text-aletis-verde;
+  }
+  .kpi-card {
+    @apply relative overflow-hidden rounded-2xl border border-aletis-borda/60 bg-gradient-to-br from-white to-aletis-bege/40 p-5 shadow-[0_2px_10px_-4px_rgba(15,76,53,0.1)] transition-all duration-300 hover:shadow-[0_10px_24px_-10px_rgba(15,76,53,0.25)] hover:border-aletis-dourado/40;
+  }
+  .btn-primary {
+    @apply bg-aletis-verde text-white px-6 py-3 rounded-xl font-semibold hover:bg-aletis-verde-medio transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98];
+  }
+  .btn-gold {
+    @apply bg-aletis-dourado text-white px-6 py-3 rounded-xl font-semibold hover:bg-aletis-dourado-escuro transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98];
+  }
+  .btn-outline {
+    @apply border-2 border-aletis-verde text-aletis-verde px-6 py-3 rounded-xl font-semibold hover:bg-aletis-verde hover:text-white transition-all duration-200;
+  }
+  .input-field {
+    @apply w-full px-4 py-3 rounded-xl border border-aletis-borda bg-white text-aletis-grafite-escuro placeholder:text-aletis-grafite-claro focus:outline-none focus:ring-2 focus:ring-aletis-verde/30 focus:border-aletis-verde transition-all;
+  }
+  .badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold;
+  }
+  .badge-verde { @apply badge bg-positivo/10 text-positivo; }
+  .badge-dourado { @apply badge bg-aletis-dourado/10 text-aletis-dourado-escuro; }
+  .badge-vermelho { @apply badge bg-alerta/10 text-alerta; }
+  .badge-ambar { @apply badge bg-ambar/10 text-ambar; }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all duration-200;
+  }
+  .sidebar-link.active {
+    @apply bg-white/15 text-white shadow-inner;
+  }
+
+  /* Custom scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-aletis-borda rounded-full;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-aletis-grafite-claro;
+  }
+}
+
+/* Ticker animation */
+.ticker-wrapper {
+  overflow: hidden;
+  white-space: nowrap;
+}
+.ticker-content {
+  display: inline-flex;
+  animation: ticker 60s linear infinite;
+}
+.ticker-content:hover {
+  animation-play-state: paused;
+}
+
+/* Gauge animation */
+@keyframes fillGauge {
+  from { stroke-dashoffset: 283; }
+}
+
+/* Skeleton loading */
+.skeleton {
+  @apply animate-pulse bg-aletis-borda/50 rounded;
+}
