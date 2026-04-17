@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
+  Target,
 } from 'lucide-react'
 
 interface NavItem {
@@ -31,6 +32,7 @@ const navSections: NavSection[] = [
     header: 'PRINCIPAL',
     items: [
       { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+      { label: 'Prospeccao', path: '/prospeccao', icon: Target },
       { label: 'CRM', path: '/crm', icon: Users },
       { label: 'Propostas', path: '/propostas', icon: FileText },
     ],

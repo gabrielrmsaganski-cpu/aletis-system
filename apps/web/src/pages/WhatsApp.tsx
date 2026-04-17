@@ -12,7 +12,89 @@ import {
   Check,
   CheckCheck,
   MessageCircle,
+  Play,
+  Pause,
+  Sparkles,
 } from 'lucide-react'
+
+// ────────────────────────────────────────────────────────────
+// Audio Bubble (real playback with progress)
+// ────────────────────────────────────────────────────────────
+function AudioBubble({ url, fallbackDuration }: { url?: string; fallbackDuration?: string }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [playing, setPlaying] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [currentTime, setCurrentTime] = useState(0)
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    const onTime = () => {
+      setCurrentTime(audio.currentTime)
+      if (audio.duration > 0) setProgress((audio.currentTime / audio.duration) * 100)
+    }
+    const onLoaded = () => setDuration(audio.duration || 0)
+    const onEnded = () => {
+      setPlaying(false)
+      setProgress(0)
+      setCurrentTime(0)
+    }
+    audio.addEventListener('timeupdate', onTime)
+    audio.addEventListener('loadedmetadata', onLoaded)
+    audio.addEventListener('ended', onEnded)
+    return () => {
+      audio.removeEventListener('timeupdate', onTime)
+      audio.removeEventListener('loadedmetadata', onLoaded)
+      audio.removeEventListener('ended', onEnded)
+    }
+  }, [url])
+
+  const toggle = () => {
+    const audio = audioRef.current
+    if (!audio || !url) return
+    if (playing) {
+      audio.pause()
+      setPlaying(false)
+    } else {
+      audio.play().then(() => setPlaying(true)).catch(() => setPlaying(false))
+    }
+  }
+
+  const fmt = (s: number) => {
+    if (!isFinite(s) || s < 0) return '0:00'
+    const m = Math.floor(s / 60)
+    const sec = Math.floor(s % 60)
+    return `${m}:${sec.toString().padStart(2, '0')}`
+  }
+
+  const label = playing || currentTime > 0
+    ? `${fmt(currentTime)} / ${fmt(duration)}`
+    : (duration ? fmt(duration) : fallbackDuration || '0:00')
+
+  return (
+    <div className="flex items-center gap-3 min-w-[220px]">
+      {url && <audio ref={audioRef} src={url} preload="metadata" />}
+      <button
+        onClick={toggle}
+        disabled={!url}
+        className="w-9 h-9 rounded-full bg-aletis-verde flex items-center justify-center flex-shrink-0 hover:bg-aletis-verde-escuro transition-colors disabled:opacity-50"
+        aria-label={playing ? 'Pausar audio' : 'Reproduzir audio'}
+      >
+        {playing ? <Pause className="w-4 h-4 text-white" /> : <Play className="w-4 h-4 text-white ml-0.5" />}
+      </button>
+      <div className="flex-1">
+        <div className="h-1.5 bg-aletis-grafite-claro/20 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-aletis-verde rounded-full transition-all"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <p className="text-[11px] font-body text-aletis-grafite-claro mt-1">{label}</p>
+      </div>
+    </div>
+  )
+}
 
 // ────────────────────────────────────────────────────────────
 // Types
@@ -25,6 +107,8 @@ interface ChatMessage {
   read?: boolean
   type?: 'text' | 'audio' | 'image'
   audioDuration?: string
+  audioUrl?: string
+  senderLabel?: string
 }
 
 interface Contact {
@@ -42,6 +126,15 @@ interface Contact {
 // Contacts Data
 // ────────────────────────────────────────────────────────────
 const contacts: Contact[] = [
+  {
+    id: 7,
+    name: 'Ricardo Silva',
+    lastMessage: '\uD83C\uDFA4 Alix enviou um audio',
+    time: 'agora',
+    unread: 1,
+    avatar: 'RS',
+    online: true,
+  },
   {
     id: 1,
     name: 'Ailton Caeiro',
@@ -326,13 +419,56 @@ const chatData: Record<number, ChatMessage[]> = {
       read: true,
     },
   ],
+  7: [
+    {
+      id: 1,
+      from: 'client',
+      text: 'oi',
+      time: '13:48',
+      read: true,
+    },
+    {
+      id: 2,
+      from: 'consultant',
+      senderLabel: 'Alix',
+      text: 'Boa tarde Ricardo! Aqui e a Alix, assistente da ALETIS. Pra te ajudar melhor, como posso te chamar?',
+      time: '13:48',
+      read: true,
+    },
+    {
+      id: 3,
+      from: 'client',
+      text: 'Ricardo Silva, de Cascavel PR. Tenho uma divida de 1.2 milhao no Banco do Brasil e to preocupado.',
+      time: '13:49',
+      read: true,
+    },
+    {
+      id: 4,
+      from: 'consultant',
+      senderLabel: 'Alix',
+      text: '\u00C1udio enviado pela Alix',
+      time: '13:50',
+      read: false,
+      type: 'audio',
+      audioDuration: '0:31',
+      audioUrl: '/alix-demo-ricardo.ogg',
+    },
+    {
+      id: 5,
+      from: 'consultant',
+      senderLabel: 'Alix',
+      text: 'Vou acionar o Christian agora. Enquanto isso, se tiver o contrato em PDF me manda por aqui.',
+      time: '13:50',
+      read: false,
+    },
+  ],
 }
 
 // ────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ────────────────────────────────────────────────────────────
 export default function WhatsApp() {
-  const [selectedContact, setSelectedContact] = useState<number>(1)
+  const [selectedContact, setSelectedContact] = useState<number>(7)
   const [searchTerm, setSearchTerm] = useState('')
   const [messageInput, setMessageInput] = useState('')
   const [messages, setMessages] = useState<Record<number, ChatMessage[]>>(chatData)
@@ -601,21 +737,19 @@ export default function WhatsApp() {
                               : 'bg-white text-aletis-grafite-escuro rounded-tl-md'
                           }`}
                         >
+                          {/* Alix label (IA assistant) */}
+                          {msg.senderLabel === 'Alix' && (
+                            <div className="flex items-center gap-1 mb-1">
+                              <Sparkles className="w-3 h-3 text-aletis-verde" />
+                              <span className="text-[10px] font-semibold text-aletis-verde uppercase tracking-wide">
+                                Alix · IA
+                              </span>
+                            </div>
+                          )}
+
                           {/* Audio message special rendering */}
                           {msg.type === 'audio' ? (
-                            <div className="flex items-center gap-3 min-w-[200px]">
-                              <button className="w-8 h-8 rounded-full bg-aletis-verde flex items-center justify-center flex-shrink-0">
-                                <Mic className="w-4 h-4 text-white" />
-                              </button>
-                              <div className="flex-1">
-                                <div className="h-1.5 bg-aletis-grafite-claro/20 rounded-full overflow-hidden">
-                                  <div className="h-full w-0 bg-aletis-verde rounded-full" />
-                                </div>
-                                <p className="text-[11px] font-body text-aletis-grafite-claro mt-1">
-                                  {msg.audioDuration}
-                                </p>
-                              </div>
-                            </div>
+                            <AudioBubble url={msg.audioUrl} fallbackDuration={msg.audioDuration} />
                           ) : (
                             <p className="text-sm font-body leading-relaxed">{msg.text}</p>
                           )}

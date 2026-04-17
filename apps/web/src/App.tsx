@@ -12,6 +12,7 @@ import Clima from './pages/Clima'
 import Relatorios from './pages/Relatorios'
 import Configuracoes from './pages/Configuracoes'
 import ALIX from './pages/ALIX'
+import Prospeccao from './pages/Prospeccao'
 
 export default function App() {
   return (
@@ -33,6 +34,7 @@ export default function App() {
               <Route path="/credito" element={<Credito />} />
               <Route path="/whatsapp" element={<WhatsApp />} />
               <Route path="/ia" element={<ALIX />} />
+              <Route path="/prospeccao" element={<Prospeccao />} />
               <Route path="/relatorios" element={<Relatorios />} />
               <Route path="/clima" element={<Clima />} />
               <Route path="/configuracoes" element={<Configuracoes />} />

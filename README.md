@@ -72,6 +72,20 @@ Cada secao e fundamentada em `@aletis/knowledge-base` (Sumulas STJ, MCR, Plano S
 
 Listar: `GET /api/propostas/inteligentes/list` · Detalhar: `GET /api/propostas/inteligente/:id`
 
+## ALIX (assistente IA interna)
+
+Chat persistente no painel web que orquestra 20+ fontes de dados em tempo real + base de conhecimento (Sumulas STJ, MCR, Plano Safra, precedentes). Responde sobre cambio, Selic/IPCA/IGPM/CDI, commodities, clima, CRM, propostas, jurisprudencia.
+
+`POST /api/alix/chat` · `GET /api/alix/sessions` · `GET|DELETE /api/alix/session/:id`
+
+## WhatsApp Business + Voz (opcional)
+
+Atende clientes por WhatsApp com voz feminina neural PT-BR (Azure Speech). Transcreve audio recebido, responde por voz quando o cliente mandou voz, captura lead estruturado (nome → cidade → credor → valor), detecta urgencia (penhora/leilao/execucao) e escala para humano.
+
+`POST /api/whatsapp/webhook` · `POST /api/whatsapp/test-brain` · `GET /api/whatsapp/status`
+
+Setup: `.env.example` + `apps/api/src/services/whatsapp/README.md`
+
 ## Rodar em outro servidor (passo a passo)
 
 **Pre-requisitos:** Node 20+, pnpm 9+ (`npm i -g pnpm@9.15.4`), git.
@@ -99,6 +113,9 @@ Vite faz proxy de `/api/*` pra 3001 automaticamente.
 
 **Nao precisa de `.env`.** Todos os servicos externos (BCB, CEPEA, INMET, etc.) sao publicos.
 Variaveis opcionais da API: `PORT` (3001), `HOST` (0.0.0.0), `NODE_ENV`, `LOG_LEVEL`.
+
+**Integracoes opcionais** (WhatsApp Business + Azure Speech): copie `.env.example` pra `.env` na raiz
+e preencha. Veja `apps/api/src/services/whatsapp/README.md` pra setup passo-a-passo.
 
 **Acesso externo (opcional):** nginx reverse proxy (80 → Vite 5173 + Fastify 3001).
 
