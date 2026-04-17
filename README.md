@@ -72,18 +72,44 @@ Cada secao e fundamentada em `@aletis/knowledge-base` (Sumulas STJ, MCR, Plano S
 
 Listar: `GET /api/propostas/inteligentes/list` · Detalhar: `GET /api/propostas/inteligente/:id`
 
-## Desenvolvimento
+## Rodar em outro servidor (passo a passo)
+
+**Pre-requisitos:** Node 20+, pnpm 9+ (`npm i -g pnpm@9.15.4`), git.
 
 ```bash
-pnpm install                              # instala tudo
-pnpm -F @aletis/knowledge-base build      # compila knowledge-base (requerido)
-pnpm -F @aletis/shared-types build
-pnpm -F @aletis/financial-calc build
-pnpm --filter ./apps/api dev              # API em :3001
-pnpm --filter ./apps/web dev              # Web em :8080
+# 1. Clonar
+git clone https://github.com/gabrielrmsaganski-cpu/aletis-system.git
+cd aletis-system
+
+# 2. Instalar dependencias (workspace inteiro)
+pnpm install
+
+# 3. Compilar o knowledge-base (obrigatorio — API importa do dist/)
+pnpm -F @aletis/knowledge-base build
+
+# 4a. Subir API (terminal 1) — porta 3001
+pnpm --filter ./apps/api dev
+
+# 4b. Subir Web (terminal 2) — porta 5173
+pnpm --filter ./apps/web dev
 ```
 
-Acesso externo: nginx reverse proxy (80 → Vite 8080 + Fastify 3001).
+Frontend em `http://localhost:5173`, API em `http://localhost:3001/api`.
+Vite faz proxy de `/api/*` pra 3001 automaticamente.
+
+**Nao precisa de `.env`.** Todos os servicos externos (BCB, CEPEA, INMET, etc.) sao publicos.
+Variaveis opcionais da API: `PORT` (3001), `HOST` (0.0.0.0), `NODE_ENV`, `LOG_LEVEL`.
+
+**Acesso externo (opcional):** nginx reverse proxy (80 → Vite 5173 + Fastify 3001).
+
+## Build de producao
+
+```bash
+pnpm -F @aletis/knowledge-base build
+pnpm --filter ./apps/web build          # gera apps/web/dist/
+pnpm --filter ./apps/api build          # gera apps/api/dist/
+pnpm --filter ./apps/api start          # node dist/server.js
+```
 
 ## Stack
 
