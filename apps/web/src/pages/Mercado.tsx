@@ -1312,9 +1312,8 @@ function CambioSection() {
     const fetchCambio = async () => {
       setLoading(true)
       try {
-        const base = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api'
-        const resp = await fetch(`${base}/mercado/cambio`)
-        if (!resp.ok) throw new Error('API cambio indisponivel')
+        const resp = await fetch('/api/mercado/cambio')
+        if (!resp.ok) throw new Error(`API cambio indisponivel (${resp.status})`)
         const payload = await resp.json()
         const arr = Array.isArray(payload?.data) ? payload.data : []
         const items: CambioItem[] = arr.map((d: any) => {
