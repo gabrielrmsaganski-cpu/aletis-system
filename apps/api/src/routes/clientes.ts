@@ -55,7 +55,7 @@ interface Cliente {
  *  Dados em memoria (seed com casos reais + ficticios)
  * ======================================================================== */
 
-const clientes: Map<string, Cliente> = new Map()
+export const clientes: Map<string, Cliente> = new Map()
 
 function seed() {
   const data: Cliente[] = [

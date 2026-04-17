@@ -1,0 +1,2 @@
+# ALIX session files are written to storage/alix-sessions/*.json at runtime.
+# They are NOT committed — gitignore'd below.

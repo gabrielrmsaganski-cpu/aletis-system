@@ -45,8 +45,8 @@ interface Proposta {
  *  Dados em memoria
  * ======================================================================== */
 
-const propostas: Map<string, Proposta> = new Map()
-const propostasInteligentes: Map<string, PropostaInteligente> = new Map()
+export const propostas: Map<string, Proposta> = new Map()
+export const propostasInteligentes: Map<string, PropostaInteligente> = new Map()
 
 function seed() {
   const data: Proposta[] = [
