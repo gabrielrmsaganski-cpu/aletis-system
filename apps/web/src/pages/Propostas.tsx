@@ -64,7 +64,7 @@ const statusConfig: Record<
     icon: Loader2,
   },
   revisao: {
-    label: 'Em Revisao',
+    label: 'Em Revisão',
     bgClass: 'bg-amber-50',
     textClass: 'text-amber-600',
     dotClass: 'bg-amber-500',
@@ -99,7 +99,7 @@ const statusConfig: Record<
     icon: XCircle,
   },
   em_analise: {
-    label: 'Em Analise',
+    label: 'Em Análise',
     bgClass: 'bg-amber-50',
     textClass: 'text-amber-600',
     dotClass: 'bg-amber-500',
@@ -138,20 +138,20 @@ interface Proposal {
 const fallbackProposals: Proposal[] = [
   {
     id: 1,
-    titulo: 'Proposta de Liquidacao - Ailton Caeiro x Sicoob',
+    titulo: 'Proposta de Liquidação - Ailton Caeiro x Sicoob',
     cliente: 'Ailton Caeiro da Silva',
     credor: 'Sicoob Crediminas',
     valorProposto: 2049802.53,
     valorDivida: 2800000,
     status: 'enviada',
     dataCriacao: '31/03/2026',
-    tipo: 'Dacao em pagamento',
+    tipo: 'Dação em pagamento',
   },
   {
     id: 2,
-    titulo: 'Memoria de Calculo - Paulo Luciano x Fertiflora',
+    titulo: 'Memória de Cálculo - Paulo Luciano x Fertiflora',
     cliente: 'Paulo Luciano de Oliveira',
-    credor: 'Fertiflora Insumos Agricolas',
+    credor: 'Fertiflora Insumos Agrícolas',
     valorProposto: 243178.75,
     valorDivida: 320000,
     status: 'enviada',
@@ -171,14 +171,14 @@ const fallbackProposals: Proposal[] = [
   },
   {
     id: 4,
-    titulo: 'Memoria de Calculo - Roberto Almeida x Cresol',
+    titulo: 'Memória de Cálculo - Roberto Almeida x Cresol',
     cliente: 'Roberto Almeida',
     credor: 'Cresol Cooperativa',
     valorProposto: 1020000.0,
     valorDivida: 1350000,
     status: 'aceita',
     dataCriacao: '10/03/2026',
-    tipo: 'Renegociacao',
+    tipo: 'Renegociação',
   },
   {
     id: 5,
@@ -193,20 +193,20 @@ const fallbackProposals: Proposal[] = [
   },
   {
     id: 6,
-    titulo: 'Proposta de Liquidacao - Pedro Henrique x Itau',
+    titulo: 'Proposta de Liquidação - Pedro Henrique x Itaú',
     cliente: 'Pedro Henrique',
-    credor: 'Itau BBA',
+    credor: 'Itaú BBA',
     valorProposto: 320000.0,
     valorDivida: 420000,
     status: 'gerando',
     dataCriacao: '12/04/2026',
-    tipo: 'Liquidacao antecipada',
+    tipo: 'Liquidação antecipada',
   },
   {
     id: 7,
-    titulo: 'Proposta Preliminar - Joao Silva x Bradesco',
-    cliente: 'Joao Silva',
-    credor: 'Bradesco Agronegocio',
+    titulo: 'Proposta Preliminar - João Silva x Bradesco',
+    cliente: 'João Silva',
+    credor: 'Bradesco Agronegócio',
     valorProposto: 185000.0,
     valorDivida: 250000,
     status: 'rascunho',
@@ -215,7 +215,7 @@ const fallbackProposals: Proposal[] = [
   },
   {
     id: 8,
-    titulo: 'Memoria de Calculo - Faz. Sol Nascente x BNDES',
+    titulo: 'Memória de Cálculo - Faz. Sol Nascente x BNDES',
     cliente: 'Fazenda Sol Nascente',
     credor: 'BNDES',
     valorProposto: 890000.0,
@@ -226,14 +226,14 @@ const fallbackProposals: Proposal[] = [
   },
   {
     id: 9,
-    titulo: 'Proposta de Acordo - Jose Moreira x Santander',
-    cliente: 'Jose Moreira',
+    titulo: 'Proposta de Acordo - José Moreira x Santander',
+    cliente: 'José Moreira',
     credor: 'Santander Rural',
     valorProposto: 510000.0,
     valorDivida: 680000,
     status: 'aceita',
     dataCriacao: '28/02/2026',
-    tipo: 'Dacao em pagamento',
+    tipo: 'Dação em pagamento',
   },
 ]
 
@@ -302,9 +302,9 @@ function StatusBadge({ status }: { status: ProposalStatus }) {
 // New Proposal Form Defaults
 // ────────────────────────────────────────────────────────────
 const TIPO_OPTIONS = [
-  { value: 'liquidacao', label: 'Liquidacao' },
-  { value: 'renegociacao', label: 'Renegociacao' },
-  { value: 'memoria_calculo', label: 'Memoria de Calculo' },
+  { value: 'liquidacao', label: 'Liquidação' },
+  { value: 'renegociacao', label: 'Renegociação' },
+  { value: 'memoria_calculo', label: 'Memória de Cálculo' },
   { value: 'parcelamento', label: 'Parcelamento' },
   { value: 'acordo_judicial', label: 'Acordo Judicial' },
 ]
@@ -371,7 +371,7 @@ export default function Propostas() {
     const aceitas = proposals.filter(p => p.status === 'aceita').length
     return [
       { label: 'Total', value: total, icon: FileText, color: 'bg-aletis-verde/10', textColor: 'text-aletis-verde' },
-      { label: 'Em Elaboracao', value: elaboracao, icon: Loader2, color: 'bg-blue-50', textColor: 'text-blue-600' },
+      { label: 'Em Elaboração', value: elaboracao, icon: Loader2, color: 'bg-blue-50', textColor: 'text-blue-600' },
       { label: 'Enviadas', value: enviadas, icon: Send, color: 'bg-purple-50', textColor: 'text-purple-600' },
       { label: 'Aceitas', value: aceitas, icon: CheckCircle2, color: 'bg-green-50', textColor: 'text-green-600' },
     ]
@@ -470,7 +470,7 @@ export default function Propostas() {
           clienteNome: proposal.cliente,
           credor: proposal.credor,
           titulo: `[COPIA] ${proposal.titulo}`,
-          tipo: proposal.tipo.includes('Parcelamento') ? 'parcelamento' : proposal.tipo.includes('Dacao') ? 'liquidacao' : 'renegociacao',
+          tipo: proposal.tipo.includes('Parcelamento') ? 'parcelamento' : proposal.tipo.includes('Dação') ? 'liquidacao' : 'renegociacao',
           valorDivida: proposal.valorDivida || proposal.valorProposto * 1.3,
           valorProposta: proposal.valorProposto,
         }),
@@ -510,13 +510,13 @@ export default function Propostas() {
 
   const handleSaveCreate = useCallback(async () => {
     if (!formData.titulo.trim() || !formData.clienteNome.trim() || !formData.credor.trim()) {
-      showToast('Preencha titulo, cliente e credor', 'warning')
+      showToast('Preencha título, cliente e credor', 'warning')
       return
     }
     const valorDivida = parseFloat(formData.valorDivida) || 0
     const valorProposta = parseFloat(formData.valorProposta) || 0
     if (valorDivida <= 0 || valorProposta <= 0) {
-      showToast('Preencha valores da divida e proposta', 'warning')
+      showToast('Preencha valores da dívida e proposta', 'warning')
       return
     }
 
@@ -588,7 +588,7 @@ export default function Propostas() {
               Propostas
             </h1>
             <p className="text-aletis-grafite-claro font-body mt-1 text-sm">
-              Gestao de propostas tecnicas
+              Gestão de propostas técnicas
             </p>
           </div>
           <button onClick={handleCreateNew} className="btn-gold flex items-center gap-2 self-start sm:self-auto">
@@ -633,7 +633,7 @@ export default function Propostas() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-grafite-claro" />
             <input
               type="text"
-              placeholder="Buscar por titulo, cliente ou credor..."
+              placeholder="Buscar por título, cliente ou credor..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="input-field pl-10 py-2.5 text-sm"
@@ -651,7 +651,7 @@ export default function Propostas() {
               <option value="todas">Todas</option>
               <option value="rascunho">Rascunho</option>
               <option value="gerando">Gerando</option>
-              <option value="revisao">Em Revisao</option>
+              <option value="revisao">Em Revisão</option>
               <option value="enviada">Enviada</option>
               <option value="visualizada">Visualizada</option>
               <option value="aceita">Aceita</option>
@@ -668,9 +668,9 @@ export default function Propostas() {
               onChange={(e) => setDateFilter(e.target.value)}
               className="input-field pl-10 pr-8 py-2.5 text-sm appearance-none cursor-pointer min-w-[180px]"
             >
-              <option value="todos">Todos os periodos</option>
-              <option value="ultimo-mes">Ultimo mes</option>
-              <option value="ultimos-3-meses">Ultimos 3 meses</option>
+              <option value="todos">Todos os períodos</option>
+              <option value="ultimo-mes">Último mês</option>
+              <option value="ultimos-3-meses">Últimos 3 meses</option>
               <option value="este-ano">Este ano</option>
             </select>
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-grafite-claro pointer-events-none" />
@@ -685,7 +685,7 @@ export default function Propostas() {
                   ? 'bg-aletis-verde text-white'
                   : 'text-aletis-grafite-claro hover:bg-aletis-bege'
               }`}
-              title="Visualizacao em tabela"
+              title="Visualização em tabela"
             >
               <LayoutList className="w-4 h-4" />
             </button>
@@ -696,7 +696,7 @@ export default function Propostas() {
                   ? 'bg-aletis-verde text-white'
                   : 'text-aletis-grafite-claro hover:bg-aletis-bege'
               }`}
-              title="Visualizacao em cards"
+              title="Visualização em cards"
             >
               <LayoutGrid className="w-4 h-4" />
             </button>
@@ -723,7 +723,7 @@ export default function Propostas() {
                       onClick={() => handleSort('titulo')}
                       className="flex items-center gap-1.5 text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider hover:text-aletis-grafite-escuro transition-colors"
                     >
-                      Titulo
+                      Título
                       <ArrowUpDown className="w-3 h-3" />
                     </button>
                   </th>
@@ -760,13 +760,13 @@ export default function Propostas() {
                       onClick={() => handleSort('dataCriacao')}
                       className="flex items-center gap-1.5 text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider hover:text-aletis-grafite-escuro transition-colors"
                     >
-                      Criacao
+                      Criação
                       <ArrowUpDown className="w-3 h-3" />
                     </button>
                   </th>
                   <th className="text-center px-5 py-3.5">
                     <span className="text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider">
-                      Acoes
+                      Ações
                     </span>
                   </th>
                 </tr>
@@ -976,7 +976,7 @@ export default function Propostas() {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Titulo</p>
+                <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Título</p>
                 <p className="text-sm font-body font-medium text-aletis-grafite-escuro">{viewingProposal.titulo}</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -1001,7 +1001,7 @@ export default function Propostas() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Valor Divida</p>
+                  <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Valor Dívida</p>
                   <p className="text-sm font-body font-semibold text-red-600">{formatBRL(viewingProposal.valorDivida || 0)}</p>
                 </div>
                 <div>
@@ -1016,12 +1016,12 @@ export default function Propostas() {
                 </div>
               )}
               <div>
-                <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Data Criacao</p>
+                <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Data Criação</p>
                 <p className="text-sm font-body text-aletis-grafite-escuro">{viewingProposal.dataCriacao}</p>
               </div>
               {viewingProposal.fundamentacao && (
                 <div>
-                  <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Fundamentacao</p>
+                  <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Fundamentação</p>
                   <p className="text-sm font-body text-aletis-grafite-medio">{viewingProposal.fundamentacao}</p>
                 </div>
               )}
@@ -1050,8 +1050,8 @@ export default function Propostas() {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Titulo *</label>
-                <input type="text" value={formData.titulo} onChange={e => updateForm('titulo', e.target.value)} placeholder="Ex: Proposta de Liquidacao - Cliente x Credor" className="input-field py-2.5 text-sm" />
+                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Título *</label>
+                <input type="text" value={formData.titulo} onChange={e => updateForm('titulo', e.target.value)} placeholder="Ex: Proposta de Liquidação - Cliente x Credor" className="input-field py-2.5 text-sm" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -1071,7 +1071,7 @@ export default function Propostas() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Valor Divida (R$) *</label>
+                  <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Valor Dívida (R$) *</label>
                   <input type="number" value={formData.valorDivida} onChange={e => updateForm('valorDivida', e.target.value)} placeholder="0.00" className="input-field py-2.5 text-sm" />
                 </div>
                 <div>
@@ -1080,11 +1080,11 @@ export default function Propostas() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Fundamentacao</label>
-                <textarea value={formData.fundamentacao} onChange={e => updateForm('fundamentacao', e.target.value)} placeholder="Argumentacao tecnica e juridica..." rows={3} className="input-field py-2.5 text-sm resize-none" />
+                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Fundamentação</label>
+                <textarea value={formData.fundamentacao} onChange={e => updateForm('fundamentacao', e.target.value)} placeholder="Argumentação técnica e jurídica..." rows={3} className="input-field py-2.5 text-sm resize-none" />
               </div>
               <div>
-                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Observacoes</label>
+                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Observações</label>
                 <textarea value={formData.observacoes} onChange={e => updateForm('observacoes', e.target.value)} placeholder="Notas internas..." rows={2} className="input-field py-2.5 text-sm resize-none" />
               </div>
             </div>
@@ -1113,7 +1113,7 @@ export default function Propostas() {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Titulo</label>
+                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Título</label>
                 <input type="text" value={formData.titulo} onChange={e => updateForm('titulo', e.target.value)} className="input-field py-2.5 text-sm" />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -1128,7 +1128,7 @@ export default function Propostas() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Valor Divida (R$)</label>
+                  <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Valor Dívida (R$)</label>
                   <input type="text" value={formData.valorDivida ? formatBRL(parseFloat(formData.valorDivida)) : '-'} disabled className="input-field py-2.5 text-sm bg-gray-50 cursor-not-allowed" />
                 </div>
                 <div>
@@ -1137,11 +1137,11 @@ export default function Propostas() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Fundamentacao</label>
+                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Fundamentação</label>
                 <textarea value={formData.fundamentacao} onChange={e => updateForm('fundamentacao', e.target.value)} rows={3} className="input-field py-2.5 text-sm resize-none" />
               </div>
               <div>
-                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Observacoes</label>
+                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Observações</label>
                 <textarea value={formData.observacoes} onChange={e => updateForm('observacoes', e.target.value)} rows={2} className="input-field py-2.5 text-sm resize-none" />
               </div>
             </div>
@@ -1151,7 +1151,7 @@ export default function Propostas() {
               </button>
               <button onClick={handleSaveEdit} disabled={saving} className="px-6 py-2 rounded-xl text-sm font-body font-medium bg-aletis-dourado text-white hover:bg-aletis-dourado/90 transition-colors disabled:opacity-50 flex items-center gap-2">
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                Salvar Alteracoes
+                Salvar Alterações
               </button>
             </div>
           </div>

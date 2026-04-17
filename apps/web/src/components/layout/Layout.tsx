@@ -1,3 +1,12 @@
+/**
+ * Layout (Estrutura Principal)
+ *
+ * Envolve todas as paginas autenticadas do sistema ALETIS com
+ * sidebar lateral (colapsavel no desktop, drawer no mobile) e
+ * header superior. Controla o estado de recolhimento da sidebar
+ * e a abertura do menu mobile, ajustando a margem do conteudo
+ * principal conforme o estado.
+ */
 import { useState, useCallback } from 'react'
 import Sidebar from './Sidebar'
 import Header from './Header'

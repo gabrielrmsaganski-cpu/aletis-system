@@ -58,7 +58,7 @@ async function buildApp(): Promise<FastifyInstance> {
   fastify.setNotFoundHandler((_request: FastifyRequest, reply: FastifyReply) => {
     reply.status(404).send({
       success: false,
-      error: 'Rota nao encontrada',
+      error: 'Rota não encontrada',
       code: 'NOT_FOUND',
       statusCode: 404,
       timestamp: new Date().toISOString(),

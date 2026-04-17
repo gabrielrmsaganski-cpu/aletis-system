@@ -47,7 +47,7 @@ interface Indicador {
 
 const FALLBACK_CULTURAS: Record<string, Omit<CotacaoCultura, 'historico' | 'fonteOrigem'>> = {
   soja: {
-    cultura: 'Soja', unidade: 'R$/saca 60kg', praca: 'Paranagua-PR',
+    cultura: 'Soja', unidade: 'R$/saca 60kg', praca: 'Paranaguá-PR',
     precoAtual: 138.50, variacao24h: 0.85, variacao7d: -1.20, variacao30d: 3.45,
     minimo30d: 132.00, maximo30d: 141.80,
     fonte: 'CEPEA/ESALQ-USP', atualizacao: new Date().toISOString(),
@@ -59,37 +59,37 @@ const FALLBACK_CULTURAS: Record<string, Omit<CotacaoCultura, 'historico' | 'font
     fonte: 'CEPEA/ESALQ-USP', atualizacao: new Date().toISOString(),
   },
   boi: {
-    cultura: 'Boi Gordo', unidade: 'R$/arroba', praca: 'Sao Paulo-SP',
+    cultura: 'Boi Gordo', unidade: 'R$/arroba', praca: 'São Paulo-SP',
     precoAtual: 312.45, variacao24h: 1.20, variacao7d: 2.50, variacao30d: 5.80,
     minimo30d: 295.00, maximo30d: 315.00,
     fonte: 'CEPEA/ESALQ-USP', atualizacao: new Date().toISOString(),
   },
   cafe: {
-    cultura: 'Cafe Arabica', unidade: 'R$/saca 60kg', praca: 'Mogiana-SP',
+    cultura: 'Café Arábica', unidade: 'R$/saca 60kg', praca: 'Mogiana-SP',
     precoAtual: 2450.00, variacao24h: 2.10, variacao7d: 4.30, variacao30d: 8.50,
     minimo30d: 2200.00, maximo30d: 2500.00,
     fonte: 'CEPEA/ESALQ-USP', atualizacao: new Date().toISOString(),
   },
   algodao: {
-    cultura: 'Algodao em Pluma', unidade: 'R$/arroba', praca: 'Esalq',
+    cultura: 'Algodão em Pluma', unidade: 'R$/arroba', praca: 'Esalq',
     precoAtual: 142.80, variacao24h: -0.30, variacao7d: -0.90, variacao30d: 1.50,
     minimo30d: 138.00, maximo30d: 145.00,
     fonte: 'CEPEA/ESALQ-USP', atualizacao: new Date().toISOString(),
   },
   trigo: {
-    cultura: 'Trigo', unidade: 'R$/saca 60kg', praca: 'Parana',
+    cultura: 'Trigo', unidade: 'R$/saca 60kg', praca: 'Paraná',
     precoAtual: 82.50, variacao24h: 0.60, variacao7d: 1.80, variacao30d: -1.20,
     minimo30d: 79.00, maximo30d: 85.00,
     fonte: 'CEPEA/ESALQ-USP', atualizacao: new Date().toISOString(),
   },
   acucar: {
-    cultura: 'Acucar Cristal', unidade: 'R$/saca 50kg', praca: 'Sao Paulo-SP',
+    cultura: 'Açúcar Cristal', unidade: 'R$/saca 50kg', praca: 'São Paulo-SP',
     precoAtual: 158.30, variacao24h: 0.45, variacao7d: -0.70, variacao30d: 2.30,
     minimo30d: 152.00, maximo30d: 161.00,
     fonte: 'CEPEA/ESALQ-USP', atualizacao: new Date().toISOString(),
   },
   leite: {
-    cultura: 'Leite', unidade: 'R$/litro', praca: 'Media Brasil',
+    cultura: 'Leite', unidade: 'R$/litro', praca: 'Média Brasil',
     precoAtual: 2.85, variacao24h: 0.00, variacao7d: 0.35, variacao30d: -1.05,
     minimo30d: 2.78, maximo30d: 2.92,
     fonte: 'CEPEA/ESALQ-USP', atualizacao: new Date().toISOString(),
@@ -100,20 +100,20 @@ const FALLBACK_INDICADORES: Indicador[] = [
   { nome: 'Taxa Selic', sigla: 'SELIC', valor: 14.25, unidade: '% a.a.', referencia: '2026-04-15', variacao: 0, fonte: 'Banco Central do Brasil', fonteOrigem: 'fallback', atualizacao: new Date().toISOString(), confiabilidade: 'alta' },
   { nome: 'IPCA (acumulado 12m)', sigla: 'IPCA', valor: 5.48, unidade: '% a.a.', referencia: '2026-03-31', variacao: 0.12, fonte: 'IBGE', fonteOrigem: 'fallback', atualizacao: new Date().toISOString(), confiabilidade: 'alta' },
   { nome: 'IGP-M (acumulado 12m)', sigla: 'IGP-M', valor: 4.92, unidade: '% a.a.', referencia: '2026-03-31', variacao: -0.35, fonte: 'FGV', fonteOrigem: 'fallback', atualizacao: new Date().toISOString(), confiabilidade: 'alta' },
-  { nome: 'Dolar PTAX (venda)', sigla: 'USD/BRL', valor: 5.72, unidade: 'R$/US$', referencia: new Date().toISOString().slice(0, 10), variacao: -0.28, fonte: 'Banco Central do Brasil (PTAX)', fonteOrigem: 'fallback', atualizacao: new Date().toISOString(), confiabilidade: 'alta' },
+  { nome: 'Dólar PTAX (venda)', sigla: 'USD/BRL', valor: 5.72, unidade: 'R$/US$', referencia: new Date().toISOString().slice(0, 10), variacao: -0.28, fonte: 'Banco Central do Brasil (PTAX)', fonteOrigem: 'fallback', atualizacao: new Date().toISOString(), confiabilidade: 'alta' },
   { nome: 'CDI (acumulado 12m)', sigla: 'CDI', valor: 14.15, unidade: '% a.a.', referencia: new Date().toISOString().slice(0, 10), variacao: 0, fonte: 'CETIP/B3', fonteOrigem: 'fallback', atualizacao: new Date().toISOString(), confiabilidade: 'alta' },
   { nome: 'INPC (acumulado 12m)', sigla: 'INPC', valor: 5.15, unidade: '% a.a.', referencia: '2026-03-31', variacao: 0.08, fonte: 'IBGE', fonteOrigem: 'fallback', atualizacao: new Date().toISOString(), confiabilidade: 'alta' },
-  { nome: 'TR (mes)', sigla: 'TR', valor: 0.18, unidade: '% a.m.', referencia: '2026-03-31', variacao: 0.02, fonte: 'Banco Central do Brasil', fonteOrigem: 'fallback', atualizacao: new Date().toISOString(), confiabilidade: 'alta' },
+  { nome: 'TR (mês)', sigla: 'TR', valor: 0.18, unidade: '% a.m.', referencia: '2026-03-31', variacao: 0.02, fonte: 'Banco Central do Brasil', fonteOrigem: 'fallback', atualizacao: new Date().toISOString(), confiabilidade: 'alta' },
 ]
 
 const insumos = [
-  { produto: 'MAP (Fosfato Monoamonico)', unidade: 'R$/tonelada', precoAtual: 3850.00, variacaoMensal: 2.3, fonte: 'ESALQ/CEPEA', atualizacao: new Date().toISOString(), confiabilidade: 'media' as const },
-  { produto: 'KCl (Cloreto de Potassio)', unidade: 'R$/tonelada', precoAtual: 2680.00, variacaoMensal: -1.5, fonte: 'ESALQ/CEPEA', atualizacao: new Date().toISOString(), confiabilidade: 'media' as const },
+  { produto: 'MAP (Fosfato Monoamônico)', unidade: 'R$/tonelada', precoAtual: 3850.00, variacaoMensal: 2.3, fonte: 'ESALQ/CEPEA', atualizacao: new Date().toISOString(), confiabilidade: 'media' as const },
+  { produto: 'KCl (Cloreto de Potássio)', unidade: 'R$/tonelada', precoAtual: 2680.00, variacaoMensal: -1.5, fonte: 'ESALQ/CEPEA', atualizacao: new Date().toISOString(), confiabilidade: 'media' as const },
   { produto: 'Ureia', unidade: 'R$/tonelada', precoAtual: 2450.00, variacaoMensal: 0.8, fonte: 'ESALQ/CEPEA', atualizacao: new Date().toISOString(), confiabilidade: 'media' as const },
   { produto: 'Glifosato', unidade: 'R$/litro', precoAtual: 22.50, variacaoMensal: -0.5, fonte: 'Agrolink', atualizacao: new Date().toISOString(), confiabilidade: 'media' as const },
   { produto: 'Diesel S10', unidade: 'R$/litro', precoAtual: 6.35, variacaoMensal: 1.2, fonte: 'ANP', atualizacao: new Date().toISOString(), confiabilidade: 'alta' as const },
   { produto: 'Sementes Soja (Intacta)', unidade: 'R$/saca 40kg', precoAtual: 520.00, variacaoMensal: 0.0, fonte: 'Mercado local', atualizacao: new Date().toISOString(), confiabilidade: 'baixa' as const },
-  { produto: 'Calcario Dolomitico', unidade: 'R$/tonelada', precoAtual: 185.00, variacaoMensal: 0.3, fonte: 'DNPM', atualizacao: new Date().toISOString(), confiabilidade: 'media' as const },
+  { produto: 'Calcário Dolomítico', unidade: 'R$/tonelada', precoAtual: 185.00, variacaoMensal: 0.3, fonte: 'DNPM', atualizacao: new Date().toISOString(), confiabilidade: 'media' as const },
   { produto: '04-30-10 (Formulado)', unidade: 'R$/tonelada', precoAtual: 3200.00, variacaoMensal: 1.8, fonte: 'ESALQ/CEPEA', atualizacao: new Date().toISOString(), confiabilidade: 'media' as const },
 ]
 
@@ -122,13 +122,13 @@ const insumos = [
  * ======================================================================== */
 
 const PRACA_MAP: Record<string, string> = {
-  soja: 'Paranagua-PR', milho: 'Campinas-SP', boi: 'Sao Paulo-SP',
+  soja: 'Paranaguá-PR', milho: 'Campinas-SP', boi: 'São Paulo-SP',
   cafe: 'Mogiana-SP', algodao: 'Esalq',
 }
 
 const NOME_MAP: Record<string, string> = {
   soja: 'Soja', milho: 'Milho', boi_gordo: 'Boi Gordo', boi: 'Boi Gordo',
-  cafe_arabica: 'Cafe Arabica', cafe: 'Cafe Arabica', algodao: 'Algodao em Pluma',
+  cafe_arabica: 'Café Arábica', cafe: 'Café Arábica', algodao: 'Algodão em Pluma',
 }
 
 function gerarHistoricoFallback(base: number, dias: number, volatilidade: number): PrecoHistorico[] {
@@ -147,13 +147,13 @@ function gerarHistoricoFallback(base: number, dias: number, volatilidade: number
 }
 
 /* ========================================================================
- *  Roteador — agora usando servicos reais via DataSourceManager
+ *  Roteador — agora usando serviços reais via DataSourceManager
  * ======================================================================== */
 
 export default async function (fastify: FastifyInstance) {
   const dsm = DataSourceManager.getInstance()
 
-  /* ---- PRECOS (multi-cultura) — CONAB primary, CEPEA fallback ---- */
+  /* ---- PREÇOS (multi-cultura) — CONAB primary, CEPEA fallback ---- */
   fastify.get('/api/mercado/precos', async (request: FastifyRequest, reply: FastifyReply) => {
     const { culturas, periodo } = request.query as { culturas?: string; periodo?: string }
     const listaCulturas = culturas
@@ -194,7 +194,7 @@ export default async function (fastify: FastifyInstance) {
             resultado.push({
               cultura: NOME_MAP[chave] || commodity.produto,
               unidade: commodity.unidade,
-              praca: PRACA_MAP[chave] || 'Brasil (media estadual)',
+              praca: PRACA_MAP[chave] || 'Brasil (média estadual)',
               precoAtual: commodity.precoMedio,
               variacao24h: 0,
               variacao7d: 0,
@@ -247,7 +247,7 @@ export default async function (fastify: FastifyInstance) {
 
       if (resultado.length === 0) {
         reply.status(404)
-        return { success: false, error: `Culturas nao encontradas. Disponiveis: soja, milho, boi, cafe, algodao, trigo, acucar, leite` }
+        return { success: false, error: `Culturas não encontradas. Disponíveis: soja, milho, boi, cafe, algodao, trigo, acucar, leite` }
       }
 
       return {
@@ -256,13 +256,13 @@ export default async function (fastify: FastifyInstance) {
         meta: {
           culturasConsultadas: listaCulturas,
           periodo: `${dias} dias`,
-          fonte: fonteGlobal === 'api' ? 'CONAB / CEPEA' : 'CONAB / CEPEA (dados de referencia)',
+          fonte: fonteGlobal === 'api' ? 'CONAB / CEPEA' : 'CONAB / CEPEA (dados de referência)',
           fonteOrigem: fonteGlobal,
           atualizacao: new Date().toISOString(),
           confiabilidade: fonteGlobal === 'api' ? 'alta' : fonteGlobal === 'cache' ? 'alta' : 'media',
           aviso: fonteGlobal === 'fallback'
-            ? 'APIs indisponiveis. Precos de referencia (fallback). Para operacoes reais consulte fontes primarias.'
-            : 'Dados obtidos via CONAB (precos semanais reais por UF) e CEPEA/ESALQ-USP.',
+            ? 'APIs indisponíveis. Preços de referência (fallback). Para operações reais consulte fontes primárias.'
+            : 'Dados obtidos via CONAB (preços semanais reais por UF) e CEPEA/ESALQ-USP.',
         },
       }
     } catch (error) {
@@ -281,17 +281,17 @@ export default async function (fastify: FastifyInstance) {
         meta: {
           culturasConsultadas: listaCulturas,
           periodo: `${dias} dias`,
-          fonte: 'CONAB / CEPEA (dados de referencia)',
+          fonte: 'CONAB / CEPEA (dados de referência)',
           fonteOrigem: 'fallback' as const,
           atualizacao: new Date().toISOString(),
           confiabilidade: 'media',
-          aviso: 'APIs indisponiveis. Precos de referencia (fallback).',
+          aviso: 'APIs indisponíveis. Preços de referência (fallback).',
         },
       }
     }
   })
 
-  /* ---- INDICADORES ECONOMICOS — REAL API via BCB SGS ---- */
+  /* ---- INDICADORES ECONÔMICOS — REAL API via BCB SGS ---- */
   fastify.get('/api/mercado/indicadores', async () => {
     try {
       const bcb = await dsm.bancoCentral.getAllIndicators()
@@ -338,7 +338,7 @@ export default async function (fastify: FastifyInstance) {
           historico: bcb.igpm.historico,
         },
         {
-          nome: 'Dolar PTAX (venda)',
+          nome: 'Dólar PTAX (venda)',
           sigla: 'USD/BRL',
           valor: bcb.ptax.cotacaoVenda,
           unidade: 'R$/US$',
@@ -363,7 +363,7 @@ export default async function (fastify: FastifyInstance) {
           historico: bcb.cdi.historico,
         },
         {
-          nome: 'Credito Rural (volume mensal)',
+          nome: 'Crédito Rural (volume mensal)',
           sigla: 'CRED_RURAL',
           valor: bcb.creditoRural.volume,
           unidade: 'R$',
@@ -404,13 +404,13 @@ export default async function (fastify: FastifyInstance) {
           atualizacao: new Date().toISOString(),
           fonteOrigem: 'fallback' as const,
           confiabilidade: 'media',
-          aviso: 'APIs indisponiveis. Indicadores de referencia (fallback).',
+          aviso: 'APIs indisponíveis. Indicadores de referência (fallback).',
         },
       }
     }
   })
 
-  /* ---- HISTORICO COMMODITY — REAL DATA when available ---- */
+  /* ---- HISTÓRICO COMMODITY — REAL DATA when available ---- */
   fastify.get('/api/mercado/commodities/:commodity/historico', async (request: FastifyRequest, reply: FastifyReply) => {
     const { commodity } = request.params as { commodity: string }
     const { dias: diasQuery } = request.query as { dias?: string }
@@ -423,7 +423,7 @@ export default async function (fastify: FastifyInstance) {
 
     if (!fbDados && !cepealCulturas.includes(chave)) {
       reply.status(404)
-      return { success: false, error: `Commodity "${commodity}" nao encontrada. Disponiveis: ${Object.keys(FALLBACK_CULTURAS).join(', ')}` }
+      return { success: false, error: `Commodity "${commodity}" não encontrada. Disponíveis: ${Object.keys(FALLBACK_CULTURAS).join(', ')}` }
     }
 
     try {
@@ -524,7 +524,7 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
-  /* ---- CENARIO SAFRA — REAL CONAB when available ---- */
+  /* ---- CENÁRIO SAFRA — REAL CONAB when available ---- */
   fastify.get('/api/mercado/safra/cenario', async () => {
     try {
       const safra = await dsm.precos.getPrevisaoSafra()
@@ -535,7 +535,7 @@ export default async function (fastify: FastifyInstance) {
           safra: safra.safra,
           status: 'em_desenvolvimento',
           atualizacao: safra.atualizadoEm,
-          fonte: safra.fonte === 'api' ? 'CONAB' : 'CONAB / Abiove / StoneX (referencia)',
+          fonte: safra.fonte === 'api' ? 'CONAB' : 'CONAB / Abiove / StoneX (referência)',
           fonteOrigem: safra.fonte,
           confiabilidade: safra.fonte === 'api' ? 'alta' : 'media',
           culturas: safra.culturas.map(c => ({
@@ -553,8 +553,8 @@ export default async function (fastify: FastifyInstance) {
             pibAgro2025: 3.2,
             exportacoesAgro2025Bi: 165.0,
             taxaCambioMedia: 5.65,
-            selicImpacto: 'Selic a 14,25% encarece credito rural. Demanda por renegociacao aumenta.',
-            perspectiva: 'Safra 25/26 acima da media historica, mas margens apertadas por custos de insumos e juros elevados.',
+            selicImpacto: 'Selic a 14,25% encarece crédito rural. Demanda por renegociação aumenta.',
+            perspectiva: 'Safra 25/26 acima da média histórica, mas margens apertadas por custos de insumos e juros elevados.',
           },
         },
         meta: {
@@ -562,7 +562,7 @@ export default async function (fastify: FastifyInstance) {
           fonteOrigem: safra.fonte,
           atualizacao: safra.atualizadoEm,
           confiabilidade: safra.fonte === 'api' ? 'alta' : 'media',
-          aviso: safra.fonte === 'fallback' ? 'Dados consolidados de referencia. API CONAB indisponivel.' : 'Dados obtidos da CONAB em tempo real.',
+          aviso: safra.fonte === 'fallback' ? 'Dados consolidados de referência. API CONAB indisponível.' : 'Dados obtidos da CONAB em tempo real.',
         },
       }
     } catch (error) {
@@ -572,7 +572,7 @@ export default async function (fastify: FastifyInstance) {
         data: {
           safra: '2025/2026', status: 'em_desenvolvimento',
           atualizacao: new Date().toISOString(),
-          fonte: 'CONAB / Abiove / StoneX (referencia)', fonteOrigem: 'fallback' as const,
+          fonte: 'CONAB / Abiove / StoneX (referência)', fonteOrigem: 'fallback' as const,
           confiabilidade: 'media',
           culturas: [], macroeconomia: {},
         },
@@ -592,7 +592,7 @@ export default async function (fastify: FastifyInstance) {
         atualizacao: new Date().toISOString(),
         fonteOrigem: 'fallback' as const,
         confiabilidade: 'media',
-        aviso: 'Precos de referencia regionais. Valores CIF podem variar por localizacao.',
+        aviso: 'Preços de referência regionais. Valores CIF podem variar por localização.',
       },
     }
   })
@@ -626,7 +626,7 @@ export default async function (fastify: FastifyInstance) {
           fonteOrigem,
           fonte: 'Banco Central do Brasil — Sistema de Expectativas (Boletim Focus)',
           atualizacao: new Date().toISOString(),
-          descricao: 'Expectativas de mercado coletadas de 100+ instituicoes financeiras',
+          descricao: 'Expectativas de mercado coletadas de 100+ instituições financeiras',
         },
       }
     } catch (error) {
@@ -678,16 +678,16 @@ export default async function (fastify: FastifyInstance) {
         meta: {
           pares: cotacoes.map(c => c.moeda),
           fonteOrigem,
-          fonte: 'AwesomeAPI — Cotacoes em tempo real',
+          fonte: 'AwesomeAPI — Cotações em tempo real',
           atualizacao: new Date().toISOString(),
         },
       }
     } catch {
-      return { success: false, error: 'Falha ao buscar cotacoes cambiais' }
+      return { success: false, error: 'Falha ao buscar cotações cambiais' }
     }
   })
 
-  /* ---- HISTORICO CAMBIAL ---- */
+  /* ---- HISTÓRICO CAMBIAL ---- */
   fastify.get('/api/mercado/cambio/historico', async (request: FastifyRequest<{ Querystring: { par?: string; dias?: string } }>) => {
     const par = (request.query as any).par || 'USD-BRL'
     const dias = parseInt((request.query as any).dias || '30') || 30
@@ -704,11 +704,11 @@ export default async function (fastify: FastifyInstance) {
         },
       }
     } catch {
-      return { success: false, error: 'Falha ao buscar historico cambial' }
+      return { success: false, error: 'Falha ao buscar histórico cambial' }
     }
   })
 
-  /* ---- IC-Br INDICE DE COMMODITIES AGROPECUARIAS ---- */
+  /* ---- IC-Br ÍNDICE DE COMMODITIES AGROPECUÁRIAS ---- */
   fastify.get('/api/mercado/icbr', async () => {
     try {
       const icbr = await dsm.bancoCentral.fetchICBrAgro()
@@ -717,17 +717,17 @@ export default async function (fastify: FastifyInstance) {
         data: icbr,
         meta: {
           fonteOrigem: icbr.fonte,
-          fonte: 'Banco Central do Brasil — IC-Br Agropecuario (SGS 27574)',
+          fonte: 'Banco Central do Brasil — IC-Br Agropecuário (SGS 27574)',
           atualizacao: new Date().toISOString(),
-          descricao: 'Indice de commodities agropecuarias calculado pelo BCB. Substituto confiavel para CEPEA.',
+          descricao: 'Índice de commodities agropecuárias calculado pelo BCB. Substituto confiável para CEPEA.',
         },
       }
     } catch {
-      return { success: false, error: 'Falha ao buscar IC-Br Agropecuario' }
+      return { success: false, error: 'Falha ao buscar IC-Br Agropecuário' }
     }
   })
 
-  /* ---- EMBI+ RISCO PAIS ---- */
+  /* ---- EMBI+ RISCO PAÍS ---- */
   fastify.get('/api/mercado/embi', async () => {
     try {
       const embi = await dsm.bancoCentral.fetchEMBI()
@@ -755,9 +755,9 @@ export default async function (fastify: FastifyInstance) {
         data: safra,
         meta: {
           fonteOrigem: safra.fonte,
-          fonte: 'IBGE SIDRA — LSPA Tabela 6588 (Levantamento Sistematico da Producao Agricola)',
+          fonte: 'IBGE SIDRA — LSPA Tabela 6588 (Levantamento Sistemático da Produção Agrícola)',
           atualizacao: safra.atualizadoEm,
-          descricao: 'Estimativa mensal de area plantada, producao e rendimento para culturas principais.',
+          descricao: 'Estimativa mensal de área plantada, produção e rendimento para culturas principais.',
         },
       }
     } catch {
@@ -765,7 +765,7 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
-  /* ---- PRECOS AGRO — CONAB (dados reais semanais por UF) ---- */
+  /* ---- PREÇOS AGRO — CONAB (dados reais semanais por UF) ---- */
   fastify.get('/api/mercado/precos-agro', async () => {
     try {
       const precos = await dsm.conabPrecos.getAllPrecos()
@@ -776,17 +776,17 @@ export default async function (fastify: FastifyInstance) {
         meta: {
           commodities: ['soja', 'milho', 'cafe_arabica', 'algodao', 'trigo', 'arroz', 'feijao'],
           fonteOrigem: precos.fonte,
-          fonte: 'CONAB — Portal de Informacoes (Precos Semanais por UF)',
+          fonte: 'CONAB — Portal de Informações (Preços Semanais por UF)',
           atualizacao: precos.atualizadoEm,
-          descricao: 'Precos semanais reais de commodities agricolas por estado, coletados pela CONAB junto a produtores e atacadistas.',
+          descricao: 'Preços semanais reais de commodities agrícolas por estado, coletados pela CONAB junto a produtores e atacadistas.',
         },
       }
     } catch {
-      return { success: false, error: 'Falha ao buscar precos agro CONAB' }
+      return { success: false, error: 'Falha ao buscar preços agro CONAB' }
     }
   })
 
-  /* ---- PRECOS AGRO POR COMMODITY ---- */
+  /* ---- PREÇOS AGRO POR COMMODITY ---- */
   fastify.get('/api/mercado/precos-agro/:commodity', async (request: FastifyRequest<{ Params: { commodity: string } }>) => {
     const { commodity } = request.params
     try {
@@ -796,16 +796,16 @@ export default async function (fastify: FastifyInstance) {
         data: preco,
         meta: {
           fonteOrigem: preco.fonte,
-          fonte: 'CONAB — Portal de Informacoes',
+          fonte: 'CONAB — Portal de Informações',
           atualizacao: preco.atualizadoEm,
         },
       }
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'Commodity nao encontrada' }
+      return { success: false, error: error instanceof Error ? error.message : 'Commodity não encontrada' }
     }
   })
 
-  /* ---- PRECOS AGRO POR UF ---- */
+  /* ---- PREÇOS AGRO POR UF ---- */
   fastify.get('/api/mercado/precos-agro/uf/:uf', async (request: FastifyRequest<{ Params: { uf: string } }>) => {
     const { uf } = request.params
     try {
@@ -815,16 +815,16 @@ export default async function (fastify: FastifyInstance) {
         data: { uf: uf.toUpperCase(), precos },
         meta: {
           fonteOrigem: 'api' as const,
-          fonte: 'CONAB — Portal de Informacoes',
+          fonte: 'CONAB — Portal de Informações',
           atualizacao: new Date().toISOString(),
         },
       }
     } catch {
-      return { success: false, error: `Falha ao buscar precos para UF ${uf}` }
+      return { success: false, error: `Falha ao buscar preços para UF ${uf}` }
     }
   })
 
-  /* ---- COMBUSTIVEIS — ANP (dados reais por estado) ---- */
+  /* ---- COMBUSTÍVEIS — ANP (dados reais por estado) ---- */
   fastify.get('/api/mercado/combustiveis', async (request: FastifyRequest<{ Querystring: { uf?: string } }>) => {
     const uf = ((request.query as any).uf || 'SP').toUpperCase()
     try {
@@ -835,17 +835,17 @@ export default async function (fastify: FastifyInstance) {
         meta: {
           estado: uf,
           fonteOrigem: precos.diesel.fonte === 'api' || precos.etanol.fonte === 'api' ? 'api' as const : precos.diesel.fonte as 'cache' | 'fallback',
-          fonte: 'ANP — Agencia Nacional do Petroleo (Dados Abertos)',
+          fonte: 'ANP — Agência Nacional do Petróleo (Dados Abertos)',
           atualizacao: new Date().toISOString(),
-          descricao: 'Precos de combustiveis coletados em postos de revenda pela ANP. Dados abertos mensais.',
+          descricao: 'Preços de combustíveis coletados em postos de revenda pela ANP. Dados abertos mensais.',
         },
       }
     } catch {
-      return { success: false, error: `Falha ao buscar precos de combustiveis para ${uf}` }
+      return { success: false, error: `Falha ao buscar preços de combustíveis para ${uf}` }
     }
   })
 
-  /* ---- COMBUSTIVEIS DIESEL NACIONAL ---- */
+  /* ---- COMBUSTÍVEIS DIESEL NACIONAL ---- */
   fastify.get('/api/mercado/combustiveis/diesel', async () => {
     try {
       const resumo = await dsm.anp.getDieselNacional()
@@ -856,7 +856,7 @@ export default async function (fastify: FastifyInstance) {
           fonteOrigem: resumo.fonte,
           fonte: 'ANP — Dados Abertos (CSV mensal)',
           atualizacao: resumo.atualizadoEm,
-          descricao: 'Resumo nacional de precos do Diesel S10 com detalhamento por estado.',
+          descricao: 'Resumo nacional de preços do Diesel S10 com detalhamento por estado.',
         },
       }
     } catch {
@@ -873,9 +873,9 @@ export default async function (fastify: FastifyInstance) {
         data: icbr,
         meta: {
           fonteOrigem: icbr.fonte,
-          fonte: 'Banco Central do Brasil — IC-Br Sub-indices (SGS 27574/27575/27576)',
+          fonte: 'Banco Central do Brasil — IC-Br Sub-índices (SGS 27574/27575/27576)',
           atualizacao: icbr.atualizadoEm,
-          descricao: 'Indices de commodities BCB: Agropecuario, Energia e Metal. Base dez/2005 = 100.',
+          descricao: 'Índices de commodities BCB: Agropecuário, Energia e Metal. Base dez/2005 = 100.',
         },
       }
     } catch {
@@ -883,7 +883,7 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
-  /* ---- NASA FIRMS — FOCOS DE INCENDIO ---- */
+  /* ---- NASA FIRMS — FOCOS DE INCÊNDIO ---- */
   fastify.get('/api/mercado/incendios', async () => {
     try {
       const dados = await dsm.nasaFirms.getIncendiosBrasil()
@@ -894,15 +894,15 @@ export default async function (fastify: FastifyInstance) {
           fonteOrigem: dados.fonte,
           fonte: 'NASA FIRMS — VIIRS Suomi NPP (Near Real-Time)',
           atualizacao: dados.atualizadoEm,
-          descricao: 'Focos de incendio ativos nas ultimas 24 horas no Brasil, detectados por satelite VIIRS.',
+          descricao: 'Focos de incêndio ativos nas últimas 24 horas no Brasil, detectados por satélite VIIRS.',
         },
       }
     } catch {
-      return { success: false, error: 'Falha ao buscar dados de incendio' }
+      return { success: false, error: 'Falha ao buscar dados de incêndio' }
     }
   })
 
-  /* ---- INCENDIOS PROXIMOS A COORDENADA ---- */
+  /* ---- INCÊNDIOS PRÓXIMOS A COORDENADA ---- */
   fastify.get('/api/mercado/incendios/proximo', async (request: FastifyRequest<{ Querystring: { lat?: string; lon?: string; raio?: string } }>) => {
     const lat = parseFloat((request.query as any).lat || '-15.78')
     const lon = parseFloat((request.query as any).lon || '-47.93')
@@ -922,15 +922,15 @@ export default async function (fastify: FastifyInstance) {
         },
       }
     } catch {
-      return { success: false, error: 'Falha ao buscar incendios proximos' }
+      return { success: false, error: 'Falha ao buscar incêndios próximos' }
     }
   })
 
   /* ==================================================================
-   *  Fase 6 — SICOR (Credito Rural Granular) + ComexStat (Exportacoes)
+   *  Fase 6 — SICOR (Crédito Rural Granular) + ComexStat (Exportações)
    * ================================================================== */
 
-  /* ---- SICOR AGREGADO — Volume/produto/UF/finalidade ultimos N meses ---- */
+  /* ---- SICOR AGREGADO — Volume/produto/UF/finalidade últimos N meses ---- */
   fastify.get('/api/mercado/sicor/agregado', async (request: FastifyRequest<{ Querystring: { meses?: string } }>) => {
     const meses = parseInt((request.query as any).meses || '12') || 12
     try {
@@ -940,9 +940,9 @@ export default async function (fastify: FastifyInstance) {
         data: agregado,
         meta: {
           fonteOrigem: agregado.fonte,
-          fonte: 'Banco Central do Brasil — SICOR (Sistema de Operacoes do Credito Rural)',
+          fonte: 'Banco Central do Brasil — SICOR (Sistema de Operações do Crédito Rural)',
           atualizacao: agregado.atualizadoEm,
-          descricao: 'Volume total de credito rural concedido, por produto/UF/finalidade. Base oficial BCB via OLINDA.',
+          descricao: 'Volume total de crédito rural concedido, por produto/UF/finalidade. Base oficial BCB via OLINDA.',
         },
       }
     } catch {
@@ -950,7 +950,7 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
-  /* ---- SICOR SERIE MENSAL — Evolucao mensal do credito rural ---- */
+  /* ---- SICOR SÉRIE MENSAL — Evolução mensal do crédito rural ---- */
   fastify.get('/api/mercado/sicor/serie-mensal', async (request: FastifyRequest<{ Querystring: { meses?: string } }>) => {
     const meses = parseInt((request.query as any).meses || '24') || 24
     try {
@@ -960,17 +960,17 @@ export default async function (fastify: FastifyInstance) {
         data: serie,
         meta: {
           fonteOrigem: serie.fonte,
-          fonte: 'BCB SGS 20568 — Credito Rural Concedido Mensal',
+          fonte: 'BCB SGS 20568 — Crédito Rural Concedido Mensal',
           atualizacao: serie.atualizadoEm,
-          descricao: 'Serie mensal de desembolsos do credito rural, em R$.',
+          descricao: 'Série mensal de desembolsos do crédito rural, em R$.',
         },
       }
     } catch {
-      return { success: false, error: 'Falha ao buscar serie mensal SICOR' }
+      return { success: false, error: 'Falha ao buscar série mensal SICOR' }
     }
   })
 
-  /* ---- EXPORTACOES AGRO — ComexStat (MDIC) ---- */
+  /* ---- EXPORTAÇÕES AGRO — ComexStat (MDIC) ---- */
   fastify.get('/api/mercado/exportacao/agro', async (request: FastifyRequest<{ Querystring: { meses?: string } }>) => {
     const meses = parseInt((request.query as any).meses || '12') || 12
     try {
@@ -982,22 +982,22 @@ export default async function (fastify: FastifyInstance) {
           fonteOrigem: exp.fonte,
           fonte: 'MDIC/Siscomex — ComexStat',
           atualizacao: exp.atualizadoEm,
-          descricao: 'Exportacoes agropecuarias brasileiras por NCM, pais de destino e mes. Dados oficiais do MDIC.',
+          descricao: 'Exportações agropecuárias brasileiras por NCM, país de destino e mês. Dados oficiais do MDIC.',
         },
       }
     } catch {
-      return { success: false, error: 'Falha ao buscar exportacoes agro' }
+      return { success: false, error: 'Falha ao buscar exportações agro' }
     }
   })
 
-  /* ---- EXPORTACOES POR PRODUTO — Serie mensal ---- */
+  /* ---- EXPORTAÇÕES POR PRODUTO — Série mensal ---- */
   fastify.get('/api/mercado/exportacao/produto/:produto', async (request: FastifyRequest<{ Params: { produto: string }; Querystring: { meses?: string } }>) => {
     const { produto } = request.params
     const meses = parseInt((request.query as any).meses || '24') || 24
     const produtosValidos = ['soja', 'milho', 'cafe', 'carne_bovina', 'carne_frango', 'acucar', 'algodao', 'celulose', 'soja_farelo', 'soja_oleo'] as const
     type ProdutoValido = typeof produtosValidos[number]
     if (!produtosValidos.includes(produto as ProdutoValido)) {
-      return { success: false, error: `Produto invalido. Disponiveis: ${produtosValidos.join(', ')}` }
+      return { success: false, error: `Produto inválido. Disponíveis: ${produtosValidos.join(', ')}` }
     }
     try {
       const serie = await dsm.comexStat.getSerieMensalProduto(produto as ProdutoValido, meses)
@@ -1011,7 +1011,7 @@ export default async function (fastify: FastifyInstance) {
         },
       }
     } catch {
-      return { success: false, error: `Falha ao buscar serie de ${produto}` }
+      return { success: false, error: `Falha ao buscar série de ${produto}` }
     }
   })
 

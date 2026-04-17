@@ -1,6 +1,6 @@
 // ============================================================
-// ALETIS — CONAB Precos Service
-// Weekly commodity prices from CONAB Portal de Informacoes
+// ALETIS — CONAB Preços Service
+// Weekly commodity prices from CONAB Portal de Informações
 // Source: https://portaldeinformacoes.conab.gov.br/downloads/arquivos/PrecosSemanalUF.txt
 // Replaces broken CEPEA scraping with real government open data
 // ============================================================
@@ -63,7 +63,7 @@ const PRODUCT_FILTERS: Record<string, ProductFilter> = {
     productName: 'SOJA',
     classification: 'EM GR',
     nivelComercializacao: 'RECEBIDO',
-    displayName: 'Soja em Graos',
+    displayName: 'Soja em Grãos',
     unidade: 'R$/saca 60kg',
     conversao: 60,
   },
@@ -71,7 +71,7 @@ const PRODUCT_FILTERS: Record<string, ProductFilter> = {
     productName: 'MILHO',
     classification: 'EM GR',
     nivelComercializacao: 'RECEBIDO',
-    displayName: 'Milho em Graos',
+    displayName: 'Milho em Grãos',
     unidade: 'R$/saca 60kg',
     conversao: 60,
   },
@@ -79,7 +79,7 @@ const PRODUCT_FILTERS: Record<string, ProductFilter> = {
     productName: 'CAFE',
     classification: 'AR',
     nivelComercializacao: 'ATACADO',
-    displayName: 'Cafe Arabica',
+    displayName: 'Café Arábica',
     unidade: 'R$/saca 60kg',
     conversao: 60,
   },
@@ -87,7 +87,7 @@ const PRODUCT_FILTERS: Record<string, ProductFilter> = {
     productName: 'ALGODAO EM PLUMA',
     classification: '',
     nivelComercializacao: 'RECEBIDO',
-    displayName: 'Algodao em Pluma',
+    displayName: 'Algodão em Pluma',
     unidade: 'R$/arroba',
     conversao: 15,
   },
@@ -111,7 +111,7 @@ const PRODUCT_FILTERS: Record<string, ProductFilter> = {
     productName: 'FEIJAO',
     classification: 'CORES',
     nivelComercializacao: 'RECEBIDO',
-    displayName: 'Feijao Cores',
+    displayName: 'Feijão Cores',
     unidade: 'R$/saca 60kg',
     conversao: 60,
   },
@@ -121,7 +121,7 @@ const PRODUCT_FILTERS: Record<string, ProductFilter> = {
 
 const FALLBACK_PRECOS: Record<string, PrecoConabResumo> = {
   soja: {
-    produto: 'Soja em Graos', unidade: 'R$/saca 60kg',
+    produto: 'Soja em Grãos', unidade: 'R$/saca 60kg',
     precoMedio: 115.20, precoMinimo: 106.20, precoMaximo: 121.80,
     semana: '06-04-2026 - 10-04-2026',
     estados: [
@@ -132,7 +132,7 @@ const FALLBACK_PRECOS: Record<string, PrecoConabResumo> = {
     fonte: 'fallback', atualizadoEm: '2026-04-10',
   },
   milho: {
-    produto: 'Milho em Graos', unidade: 'R$/saca 60kg',
+    produto: 'Milho em Grãos', unidade: 'R$/saca 60kg',
     precoMedio: 59.40, precoMinimo: 55.80, precoMaximo: 64.80,
     semana: '06-04-2026 - 10-04-2026',
     estados: [
@@ -143,14 +143,14 @@ const FALLBACK_PRECOS: Record<string, PrecoConabResumo> = {
     fonte: 'fallback', atualizadoEm: '2026-04-10',
   },
   cafe_arabica: {
-    produto: 'Cafe Arabica', unidade: 'R$/saca 60kg',
+    produto: 'Café Arábica', unidade: 'R$/saca 60kg',
     precoMedio: 1224.00, precoMinimo: 1224.00, precoMaximo: 1322.40,
     semana: '06-04-2026 - 10-04-2026',
     estados: [{ uf: 'ES', preco: 1224.00 }, { uf: 'MG', preco: 1322.40 }],
     fonte: 'fallback', atualizadoEm: '2026-04-10',
   },
   algodao: {
-    produto: 'Algodao em Pluma', unidade: 'R$/arroba',
+    produto: 'Algodão em Pluma', unidade: 'R$/arroba',
     precoMedio: 122.55, precoMinimo: 115.05, precoMaximo: 130.05,
     semana: '06-04-2026 - 10-04-2026',
     estados: [
@@ -180,7 +180,7 @@ const FALLBACK_PRECOS: Record<string, PrecoConabResumo> = {
     fonte: 'fallback', atualizadoEm: '2026-04-10',
   },
   feijao: {
-    produto: 'Feijao Cores', unidade: 'R$/saca 60kg',
+    produto: 'Feijão Cores', unidade: 'R$/saca 60kg',
     precoMedio: 270.00, precoMinimo: 240.00, precoMaximo: 300.00,
     semana: '06-04-2026 - 10-04-2026',
     estados: [
@@ -223,7 +223,7 @@ export class ConabPrecosService {
     const cacheKey = 'conab_precos_all';
     const cached = this.cache.get<PrecosConabCompleto>(cacheKey);
     if (cached) {
-      console.log('[CONAB] Precos retornados do cache');
+      console.log('[CONAB] Preços retornados do cache');
       return { ...cached, fonte: 'cache' };
     }
 
@@ -303,7 +303,7 @@ export class ConabPrecosService {
     if (data && typeof data === 'object' && 'produto' in data) {
       return data as PrecoConabResumo;
     }
-    throw new Error(`Commodity '${commodity}' nao disponivel. Disponiveis: soja, milho, cafe_arabica, algodao, trigo, arroz, feijao`);
+    throw new Error(`Commodity '${commodity}' não disponível. Disponíveis: soja, milho, cafe_arabica, algodao, trigo, arroz, feijao`);
   }
 
   // ── Public: Prices by UF ───────────────────────────────────

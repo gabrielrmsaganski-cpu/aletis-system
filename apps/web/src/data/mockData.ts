@@ -1,6 +1,14 @@
-// =============================================================================
-// ALETIS — Mock Data for Brazilian Agribusiness Debt Restructuring Platform
-// =============================================================================
+/**
+ * mockData (Dados Mockados do Sistema ALETIS)
+ *
+ * Base de dados de desenvolvimento para a plataforma de reestruturacao
+ * de dividas do agronegocio brasileiro. Exporta: mockUser, mockClientes
+ * (10 casos — 2 reais anonimizados, 8 ficticios), mockCotacoes (soja,
+ * milho, boi, cafe, algodao), mockIndicadores (Selic, IPCA, IGP-M,
+ * Dolar, CDI), mockKPIs, mockNotificacoes, mockEventos (timeline do
+ * cli_001) e mockPropostas. Historicos de 30 dias gerados via
+ * gerarHistorico(). Usado enquanto APIs backend nao estao conectadas.
+ */
 
 // ---------------------------------------------------------------------------
 // Type Definitions
@@ -231,7 +239,7 @@ export const mockClientes: Cliente[] = [
     healthScore: 35,
     contratos: [
       {
-        tipo: 'Credito Rural',
+        tipo: 'Crédito Rural',
         modalidade: 'Custeio',
         banco: 'Sicoob',
         valorOriginal: 1200000.0,
@@ -241,7 +249,7 @@ export const mockClientes: Cliente[] = [
         dataVencimento: '2024-03-15',
       },
       {
-        tipo: 'Credito Rural',
+        tipo: 'Crédito Rural',
         modalidade: 'Investimento',
         banco: 'Sicoob',
         valorOriginal: 948495.32,
@@ -261,7 +269,7 @@ export const mockClientes: Cliente[] = [
       },
     ],
     observacoes:
-      'Divida renegociada para R$2M a 2% a.m. (CET 30.46% a.a.). Produtor ja pagou R$2.215.482,03. Revisional em andamento para correcao de encargos abusivos. Matricula 45434 — 10,0182 ha.',
+      'Dívida renegociada para R$2M a 2% a.m. (CET 30.46% a.a.). Produtor já pagou R$2.215.482,03. Revisional em andamento para correção de encargos abusivos. Matrícula 45434 — 10,0182 ha.',
     criadoEm: '2025-04-10T08:30:00Z',
     atualizadoEm: '2026-04-14T16:45:00Z',
   },
@@ -284,7 +292,7 @@ export const mockClientes: Cliente[] = [
     healthScore: 45,
     contratos: [
       {
-        tipo: 'Insumos Agricolas',
+        tipo: 'Insumos Agrícolas',
         modalidade: 'Fertilizantes',
         banco: 'Fertiflora',
         valorOriginal: 185000.0,
@@ -294,7 +302,7 @@ export const mockClientes: Cliente[] = [
         dataVencimento: '2024-08-10',
       },
       {
-        tipo: 'Insumos Agricolas',
+        tipo: 'Insumos Agrícolas',
         modalidade: 'Defensivos',
         banco: 'Herbioeste',
         valorOriginal: 92380.0,
@@ -306,7 +314,7 @@ export const mockClientes: Cliente[] = [
     ],
     imoveis: [],
     observacoes:
-      'Arrendatario sem imovel proprio. Taxa contratada de 1% a.m. mas CET praticado de 48,58% a.a. indica cobranca de encargos embutidos muito acima do pactuado. Ja pagou R$30.000. Proposta de acordo em elaboracao.',
+      'Arrendatário sem imóvel próprio. Taxa contratada de 1% a.m. mas CET praticado de 48,58% a.a. indica cobrança de encargos embutidos muito acima do pactuado. Já pagou R$30.000. Proposta de acordo em elaboração.',
     criadoEm: '2025-09-20T14:00:00Z',
     atualizadoEm: '2026-04-12T11:20:00Z',
   },
@@ -318,7 +326,7 @@ export const mockClientes: Cliente[] = [
     cpfCnpj: '***.***.***-03',
     telefone: '+55 44 99765-3210',
     email: 'maria.ferreira@email.com',
-    municipio: 'Maringa',
+    municipio: 'Maringá',
     uf: 'PR',
     tipoProdutor: 'proprietario',
     culturas: ['soja', 'milho', 'trigo'],
@@ -329,7 +337,7 @@ export const mockClientes: Cliente[] = [
     healthScore: 52,
     contratos: [
       {
-        tipo: 'Credito Rural',
+        tipo: 'Crédito Rural',
         modalidade: 'Custeio',
         banco: 'Sicredi',
         valorOriginal: 890000.0,
@@ -341,15 +349,15 @@ export const mockClientes: Cliente[] = [
     ],
     imoveis: [
       {
-        descricao: 'Fazenda Boa Esperanca',
+        descricao: 'Fazenda Boa Esperança',
         matricula: '31220',
         areaHa: 48.5,
-        municipio: 'Maringa',
+        municipio: 'Maringá',
         uf: 'PR',
       },
     ],
     observacoes:
-      'Produtora familiar com historico de adimplencia. Dificuldades iniciaram apos frustracoes de safra 2023/24. Sicredi demonstrou abertura para renegociacao.',
+      'Produtora familiar com histórico de adimplência. Dificuldades iniciaram após frustrações de safra 2023/24. Sicredi demonstrou abertura para renegociação.',
     criadoEm: '2025-11-05T09:15:00Z',
     atualizadoEm: '2026-04-10T14:30:00Z',
   },
@@ -357,14 +365,14 @@ export const mockClientes: Cliente[] = [
   // ---- FICTIONAL CASE 4 ----
   {
     id: 'cli_004',
-    nome: 'Jose Carlos Ribeiro',
+    nome: 'José Carlos Ribeiro',
     cpfCnpj: '***.***.***-04',
     telefone: '+55 66 99854-7890',
     email: 'jc.ribeiro@email.com',
     municipio: 'Sorriso',
     uf: 'MT',
     tipoProdutor: 'proprietario',
-    culturas: ['soja', 'algodao'],
+    culturas: ['soja', 'algodão'],
     credores: ['Banco do Brasil'],
     dividaTotal: 4850000.0,
     valorPago: 800000.0,
@@ -372,7 +380,7 @@ export const mockClientes: Cliente[] = [
     healthScore: 60,
     contratos: [
       {
-        tipo: 'Credito Rural',
+        tipo: 'Crédito Rural',
         modalidade: 'Investimento',
         banco: 'Banco do Brasil',
         valorOriginal: 3200000.0,
@@ -382,7 +390,7 @@ export const mockClientes: Cliente[] = [
         dataVencimento: '2025-07-15',
       },
       {
-        tipo: 'Credito Rural',
+        tipo: 'Crédito Rural',
         modalidade: 'Custeio',
         banco: 'Banco do Brasil',
         valorOriginal: 1650000.0,
@@ -401,7 +409,7 @@ export const mockClientes: Cliente[] = [
         uf: 'MT',
       },
       {
-        descricao: 'Chacara Ribeiro',
+        descricao: 'Chácara Ribeiro',
         matricula: '58911',
         areaHa: 5.2,
         municipio: 'Sorriso',
@@ -409,7 +417,7 @@ export const mockClientes: Cliente[] = [
       },
     ],
     observacoes:
-      'Grande produtor de soja e algodao. Acordo ja firmado com BB para parcelamento em 48x com desconto de 15% sobre encargos. Acompanhamento ativo.',
+      'Grande produtor de soja e algodão. Acordo já firmado com BB para parcelamento em 48x com desconto de 15% sobre encargos. Acompanhamento ativo.',
     criadoEm: '2025-06-18T11:00:00Z',
     atualizadoEm: '2026-04-08T09:50:00Z',
   },
@@ -432,8 +440,8 @@ export const mockClientes: Cliente[] = [
     healthScore: 40,
     contratos: [
       {
-        tipo: 'Credito Rural',
-        modalidade: 'Custeio Pecuario',
+        tipo: 'Crédito Rural',
+        modalidade: 'Custeio Pecuário',
         banco: 'Cresol',
         valorOriginal: 345000.0,
         taxaContratada: '1.8% a.m.',
@@ -444,7 +452,7 @@ export const mockClientes: Cliente[] = [
     ],
     imoveis: [
       {
-        descricao: 'Sitio Agua Boa',
+        descricao: 'Sítio Água Boa',
         matricula: '72345',
         areaHa: 22.0,
         municipio: 'Rio Verde',
@@ -452,7 +460,7 @@ export const mockClientes: Cliente[] = [
       },
     ],
     observacoes:
-      'Produtor parceiro (confinamento de boi gordo e milho para silagem). Cresol incluiu encargos de capitalizacao na operacao. Em fase de qualificacao para verificar viabilidade de revisional.',
+      'Produtor parceiro (confinamento de boi gordo e milho para silagem). Cresol incluiu encargos de capitalização na operação. Em fase de qualificação para verificar viabilidade de revisional.',
     criadoEm: '2026-03-01T08:00:00Z',
     atualizadoEm: '2026-04-15T10:00:00Z',
   },
@@ -464,10 +472,10 @@ export const mockClientes: Cliente[] = [
     cpfCnpj: '***.***.***-06',
     telefone: '+55 16 99733-6677',
     email: 'ana.brito@email.com',
-    municipio: 'Ribeirao Preto',
+    municipio: 'Ribeirão Preto',
     uf: 'SP',
     tipoProdutor: 'proprietario',
-    culturas: ['cafe'],
+    culturas: ['café'],
     credores: ['CEF'],
     dividaTotal: 1520000.0,
     valorPago: 350000.0,
@@ -475,9 +483,9 @@ export const mockClientes: Cliente[] = [
     healthScore: 68,
     contratos: [
       {
-        tipo: 'Credito Rural',
+        tipo: 'Crédito Rural',
         modalidade: 'Investimento',
-        banco: 'Caixa Economica Federal',
+        banco: 'Caixa Econômica Federal',
         valorOriginal: 1520000.0,
         taxaContratada: '0.95% a.m.',
         cetPraticado: '15.80% a.a.',
@@ -487,15 +495,15 @@ export const mockClientes: Cliente[] = [
     ],
     imoveis: [
       {
-        descricao: 'Fazenda Cafe Alto',
+        descricao: 'Fazenda Café Alto',
         matricula: '90112',
         areaHa: 85.3,
-        municipio: 'Ribeirao Preto',
+        municipio: 'Ribeirão Preto',
         uf: 'SP',
       },
     ],
     observacoes:
-      'Cafeicultora com acordo firmado junto a CEF. Parcelas em dia. Monitoramento ativo da safra e capacidade de pagamento. Proxima revisao contratual em set/2026.',
+      'Cafeicultora com acordo firmado junto à CEF. Parcelas em dia. Monitoramento ativo da safra e capacidade de pagamento. Próxima revisão contratual em set/2026.',
     criadoEm: '2025-05-22T13:30:00Z',
     atualizadoEm: '2026-04-11T15:15:00Z',
   },
@@ -507,10 +515,10 @@ export const mockClientes: Cliente[] = [
     cpfCnpj: '***.***.***-07',
     telefone: '+55 34 99688-2233',
     email: 'roberto.cruz@email.com',
-    municipio: 'Uberlandia',
+    municipio: 'Uberlândia',
     uf: 'MG',
     tipoProdutor: 'proprietario',
-    culturas: ['soja', 'milho', 'cafe'],
+    culturas: ['soja', 'milho', 'café'],
     credores: ['Sicoob', 'Revenda AgroMax'],
     dividaTotal: 2780000.0,
     valorPago: 450000.0,
@@ -518,7 +526,7 @@ export const mockClientes: Cliente[] = [
     healthScore: 82,
     contratos: [
       {
-        tipo: 'Credito Rural',
+        tipo: 'Crédito Rural',
         modalidade: 'Custeio',
         banco: 'Sicoob',
         valorOriginal: 1800000.0,
@@ -528,8 +536,8 @@ export const mockClientes: Cliente[] = [
         dataVencimento: '2024-11-01',
       },
       {
-        tipo: 'Insumos Agricolas',
-        modalidade: 'Pacote Tecnologico',
+        tipo: 'Insumos Agrícolas',
+        modalidade: 'Pacote Tecnológico',
         banco: 'Revenda AgroMax',
         valorOriginal: 980000.0,
         taxaContratada: '1.5% a.m.',
@@ -540,15 +548,15 @@ export const mockClientes: Cliente[] = [
     ],
     imoveis: [
       {
-        descricao: 'Fazenda Triangulo',
+        descricao: 'Fazenda Triângulo',
         matricula: '45678',
         areaHa: 210.0,
-        municipio: 'Uberlandia',
+        municipio: 'Uberlândia',
         uf: 'MG',
       },
     ],
     observacoes:
-      'Caso concluido com sucesso. Economia total de R$620.000 sobre encargos abusivos. Sicoob e AgroMax aceitaram acordo com reducao de 22% nos juros acumulados.',
+      'Caso concluído com sucesso. Economia total de R$620.000 sobre encargos abusivos. Sicoob e AgroMax aceitaram acordo com redução de 22% nos juros acumulados.',
     criadoEm: '2024-08-12T10:00:00Z',
     atualizadoEm: '2026-02-28T17:00:00Z',
   },
@@ -571,7 +579,7 @@ export const mockClientes: Cliente[] = [
     healthScore: 28,
     contratos: [
       {
-        tipo: 'Insumos Agricolas',
+        tipo: 'Insumos Agrícolas',
         modalidade: 'Sementes e Defensivos',
         banco: 'Revenda Agrofertil',
         valorOriginal: 52000.0,
@@ -583,7 +591,7 @@ export const mockClientes: Cliente[] = [
     ],
     imoveis: [
       {
-        descricao: 'Sitio Takahashi',
+        descricao: 'Sítio Takahashi',
         matricula: '33210',
         areaHa: 12.0,
         municipio: 'Cascavel',
@@ -591,7 +599,7 @@ export const mockClientes: Cliente[] = [
       },
     ],
     observacoes:
-      'Pequeno produtor, lead recente via indicacao. Divida relativamente pequena porem com taxa abusiva de 2,5% a.m. Potencial para revisional rapido.',
+      'Pequeno produtor, lead recente via indicação. Dívida relativamente pequena porém com taxa abusiva de 2,5% a.m. Potencial para revisional rápido.',
     criadoEm: '2026-04-14T09:00:00Z',
     atualizadoEm: '2026-04-14T09:00:00Z',
   },
@@ -614,8 +622,8 @@ export const mockClientes: Cliente[] = [
     healthScore: 50,
     contratos: [
       {
-        tipo: 'Credito Rural',
-        modalidade: 'Investimento Pecuario',
+        tipo: 'Crédito Rural',
+        modalidade: 'Investimento Pecuário',
         banco: 'Banco do Brasil',
         valorOriginal: 2100000.0,
         taxaContratada: '1.1% a.m.',
@@ -624,9 +632,9 @@ export const mockClientes: Cliente[] = [
         dataVencimento: '2026-05-01',
       },
       {
-        tipo: 'Credito Rural',
+        tipo: 'Crédito Rural',
         modalidade: 'Custeio',
-        banco: 'Caixa Economica Federal',
+        banco: 'Caixa Econômica Federal',
         valorOriginal: 1100000.0,
         taxaContratada: '1.4% a.m.',
         cetPraticado: '22.60% a.a.',
@@ -644,7 +652,7 @@ export const mockClientes: Cliente[] = [
       },
     ],
     observacoes:
-      'Pecuarista e sojicultora. Dois credores com taxas elevadas. Negociacao em andamento com ambos simultaneamente. BB mais receptivo que CEF.',
+      'Pecuarista e sojicultora. Dois credores com taxas elevadas. Negociação em andamento com ambos simultaneamente. BB mais receptivo que CEF.',
     criadoEm: '2025-10-03T16:00:00Z',
     atualizadoEm: '2026-04-13T12:30:00Z',
   },
@@ -652,14 +660,14 @@ export const mockClientes: Cliente[] = [
   // ---- FICTIONAL CASE 10 ----
   {
     id: 'cli_010',
-    nome: 'Marcos Vinicius Pereira',
+    nome: 'Marcos Vinícius Pereira',
     cpfCnpj: '***.***.***-10',
     telefone: '+55 65 99900-4455',
     email: 'marcos.pereira@email.com',
-    municipio: 'Rondonopolis',
+    municipio: 'Rondonópolis',
     uf: 'MT',
     tipoProdutor: 'arrendatario',
-    culturas: ['algodao', 'soja'],
+    culturas: ['algodão', 'soja'],
     credores: ['Revenda Nutrien'],
     dividaTotal: 185000.0,
     valorPago: 40000.0,
@@ -667,7 +675,7 @@ export const mockClientes: Cliente[] = [
     healthScore: 38,
     contratos: [
       {
-        tipo: 'Insumos Agricolas',
+        tipo: 'Insumos Agrícolas',
         modalidade: 'Fertilizantes e Corretivos',
         banco: 'Revenda Nutrien',
         valorOriginal: 185000.0,
@@ -679,7 +687,7 @@ export const mockClientes: Cliente[] = [
     ],
     imoveis: [],
     observacoes:
-      'Arrendatario de area de algodao e soja em Rondonopolis. Revenda Nutrien aplicou CET muito acima do contratado. Proposta sendo elaborada com base em pericia de encargos.',
+      'Arrendatário de área de algodão e soja em Rondonópolis. Revenda Nutrien aplicou CET muito acima do contratado. Proposta sendo elaborada com base em perícia de encargos.',
     criadoEm: '2026-01-20T10:45:00Z',
     atualizadoEm: '2026-04-09T08:15:00Z',
   },
@@ -722,7 +730,7 @@ export const mockCotacoes: Cotacao[] = [
   },
   {
     id: 'cot_cafe',
-    commodity: 'Cafe Arabica',
+    commodity: 'Café Arábica',
     unidade: 'R$/sc 60kg',
     precoAtual: 1420.0,
     variacao: -8.52,
@@ -732,7 +740,7 @@ export const mockCotacoes: Cotacao[] = [
   },
   {
     id: 'cot_algodao',
-    commodity: 'Algodao',
+    commodity: 'Algodão',
     unidade: 'R$/@',
     precoAtual: 125.3,
     variacao: 1.88,
@@ -776,7 +784,7 @@ export const mockIndicadores: Indicador[] = [
   },
   {
     id: 'ind_dolar',
-    nome: 'Dolar PTAX',
+    nome: 'Dólar PTAX',
     sigla: 'USD/BRL',
     valor: 5.78,
     unidade: 'R$',
@@ -839,7 +847,7 @@ export const mockNotificacoes: Notificacao[] = [
     tipo: 'novo_lead',
     titulo: 'Novo lead recebido',
     mensagem:
-      'Fernando Henrique Takahashi de Cascavel/PR foi indicado como novo lead. Divida de R$52 mil com revenda.',
+      'Fernando Henrique Takahashi de Cascavel/PR foi indicado como novo lead. Dívida de R$52 mil com revenda.',
     lida: false,
     clienteId: 'cli_008',
     criadaEm: '2026-04-14T09:05:00Z',
@@ -849,7 +857,7 @@ export const mockNotificacoes: Notificacao[] = [
     tipo: 'proposta_aceita',
     titulo: 'Proposta aceita!',
     mensagem:
-      'Jose Carlos Ribeiro aceitou a proposta de renegociacao com Banco do Brasil. Acordo formalizado.',
+      'José Carlos Ribeiro aceitou a proposta de renegociação com Banco do Brasil. Acordo formalizado.',
     lida: true,
     clienteId: 'cli_004',
     criadaEm: '2026-04-08T14:20:00Z',
@@ -869,7 +877,7 @@ export const mockNotificacoes: Notificacao[] = [
     tipo: 'documento_pendente',
     titulo: 'Documento pendente',
     mensagem:
-      'Ailton Caeiro da Silva precisa enviar extrato bancario atualizado para dar prosseguimento a negociacao.',
+      'Ailton Caeiro da Silva precisa enviar extrato bancário atualizado para dar prosseguimento à negociação.',
     lida: false,
     clienteId: 'cli_001',
     criadaEm: '2026-04-15T11:00:00Z',
@@ -879,7 +887,7 @@ export const mockNotificacoes: Notificacao[] = [
     tipo: 'prazo_vencendo',
     titulo: 'Prazo de proposta vencendo',
     mensagem:
-      'A proposta enviada a Marcos Vinicius Pereira vence em 3 dias (19/04). Considere entrar em contato.',
+      'A proposta enviada a Marcos Vinícius Pereira vence em 3 dias (19/04). Considere entrar em contato.',
     lida: false,
     clienteId: 'cli_010',
     criadaEm: '2026-04-16T08:00:00Z',
@@ -889,7 +897,7 @@ export const mockNotificacoes: Notificacao[] = [
     tipo: 'mensagem',
     titulo: 'Mensagem de Luciana Campos',
     mensagem:
-      'Luciana Ferreira Campos enviou uma mensagem: "Banco do Brasil ligou pedindo documentacao adicional. Podem me orientar?"',
+      'Luciana Ferreira Campos enviou uma mensagem: "Banco do Brasil ligou pedindo documentação adicional. Podem me orientar?"',
     lida: false,
     clienteId: 'cli_009',
     criadaEm: '2026-04-15T17:30:00Z',
@@ -907,7 +915,7 @@ export const mockEventos: Evento[] = [
     tipo: 'contato_inicial',
     titulo: 'Primeiro contato',
     descricao:
-      'Ailton entrou em contato via indicacao de outro produtor de Toledo. Relata divida crescente com Sicoob.',
+      'Ailton entrou em contato via indicação de outro produtor de Toledo. Relata dívida crescente com Sicoob.',
     usuario: 'Christian Kohler',
     data: '2025-04-10T08:30:00Z',
   },
@@ -915,9 +923,9 @@ export const mockEventos: Evento[] = [
     id: 'evt_002',
     clienteId: 'cli_001',
     tipo: 'documentacao',
-    titulo: 'Documentacao recebida',
+    titulo: 'Documentação recebida',
     descricao:
-      'Recebidos: contratos de credito rural (custeio e investimento), escritura matricula 45434, extratos Sicoob.',
+      'Recebidos: contratos de crédito rural (custeio e investimento), escritura matrícula 45434, extratos Sicoob.',
     usuario: 'Christian Kohler',
     data: '2025-04-18T14:00:00Z',
   },
@@ -925,9 +933,9 @@ export const mockEventos: Evento[] = [
     id: 'evt_003',
     clienteId: 'cli_001',
     tipo: 'analise',
-    titulo: 'Analise de contratos iniciada',
+    titulo: 'Análise de contratos iniciada',
     descricao:
-      'Identificados dois contratos de credito rural com Sicoob: custeio (R$1,2M) e investimento (R$948.495,32). Taxa nominal de 2% a.m.',
+      'Identificados dois contratos de crédito rural com Sicoob: custeio (R$1,2M) e investimento (R$948.495,32). Taxa nominal de 2% a.m.',
     usuario: 'Christian Kohler',
     data: '2025-05-02T10:00:00Z',
   },
@@ -935,9 +943,9 @@ export const mockEventos: Evento[] = [
     id: 'evt_004',
     clienteId: 'cli_001',
     tipo: 'pericia',
-    titulo: 'Calculo pericial concluido',
+    titulo: 'Cálculo pericial concluído',
     descricao:
-      'CET apurado de 30,46% a.a. Produtor ja pagou R$2.215.482,03 sobre divida original de R$2.148.495,32. Excesso de cobranca identificado.',
+      'CET apurado de 30,46% a.a. Produtor já pagou R$2.215.482,03 sobre dívida original de R$2.148.495,32. Excesso de cobrança identificado.',
     usuario: 'Christian Kohler',
     data: '2025-06-15T16:30:00Z',
   },
@@ -945,9 +953,9 @@ export const mockEventos: Evento[] = [
     id: 'evt_005',
     clienteId: 'cli_001',
     tipo: 'proposta',
-    titulo: 'Proposta de renegociacao elaborada',
+    titulo: 'Proposta de renegociação elaborada',
     descricao:
-      'Proposta: reducao dos encargos acumulados e recomposicao do saldo devedor considerando pagamentos ja efetuados. Meta de desconto de 35% sobre juros.',
+      'Proposta: redução dos encargos acumulados e recomposição do saldo devedor considerando pagamentos já efetuados. Meta de desconto de 35% sobre juros.',
     usuario: 'Christian Kohler',
     data: '2025-07-20T11:00:00Z',
   },
@@ -957,7 +965,7 @@ export const mockEventos: Evento[] = [
     tipo: 'envio',
     titulo: 'Proposta enviada ao Sicoob',
     descricao:
-      'Proposta formal encaminhada ao departamento juridico do Sicoob Toledo via protocolo oficial.',
+      'Proposta formal encaminhada ao departamento jurídico do Sicoob Toledo via protocolo oficial.',
     usuario: 'Christian Kohler',
     data: '2025-07-28T09:15:00Z',
   },
@@ -967,7 +975,7 @@ export const mockEventos: Evento[] = [
     tipo: 'resposta_credor',
     titulo: 'Resposta do Sicoob',
     descricao:
-      'Sicoob respondeu solicitando documentacao complementar: declaracao de bens e ultimo ITR. Demonstrou abertura para negociacao.',
+      'Sicoob respondeu solicitando documentação complementar: declaração de bens e último ITR. Demonstrou abertura para negociação.',
     usuario: 'Christian Kohler',
     data: '2025-08-15T14:45:00Z',
   },
@@ -975,9 +983,9 @@ export const mockEventos: Evento[] = [
     id: 'evt_008',
     clienteId: 'cli_001',
     tipo: 'documentacao',
-    titulo: 'Documentacao complementar enviada',
+    titulo: 'Documentação complementar enviada',
     descricao:
-      'Enviados ao Sicoob: declaracao de bens atualizada, ITR 2024, e CCIR da matricula 45434 (10,0182 ha).',
+      'Enviados ao Sicoob: declaração de bens atualizada, ITR 2024, e CCIR da matrícula 45434 (10,0182 ha).',
     usuario: 'Christian Kohler',
     data: '2025-08-22T10:30:00Z',
   },
@@ -985,9 +993,9 @@ export const mockEventos: Evento[] = [
     id: 'evt_009',
     clienteId: 'cli_001',
     tipo: 'negociacao',
-    titulo: 'Reuniao de negociacao',
+    titulo: 'Reunião de negociação',
     descricao:
-      'Reuniao presencial na agencia Sicoob Toledo. Credor acenou com possibilidade de desconto de 25% sobre juros acumulados. Contraproposta em analise.',
+      'Reunião presencial na agência Sicoob Toledo. Credor acenou com possibilidade de desconto de 25% sobre juros acumulados. Contraproposta em análise.',
     usuario: 'Christian Kohler',
     data: '2025-10-05T15:00:00Z',
   },
@@ -997,7 +1005,7 @@ export const mockEventos: Evento[] = [
     tipo: 'negociacao',
     titulo: 'Contraproposta recebida',
     descricao:
-      'Sicoob ofereceu desconto de 20% sobre encargos, parcelamento em 36x. ALETIS avaliando e preparando nova rodada de negociacao.',
+      'Sicoob ofereceu desconto de 20% sobre encargos, parcelamento em 36x. ALETIS avaliando e preparando nova rodada de negociação.',
     usuario: 'Christian Kohler',
     data: '2025-11-12T11:20:00Z',
   },
@@ -1005,9 +1013,9 @@ export const mockEventos: Evento[] = [
     id: 'evt_011',
     clienteId: 'cli_001',
     tipo: 'negociacao',
-    titulo: 'Nova rodada de negociacao',
+    titulo: 'Nova rodada de negociação',
     descricao:
-      'Apresentados calculos periciais detalhados demonstrando cobranca acima do pactuado. Sicoob elevou desconto para 28%.',
+      'Apresentados cálculos periciais detalhados demonstrando cobrança acima do pactuado. Sicoob elevou desconto para 28%.',
     usuario: 'Christian Kohler',
     data: '2026-01-20T14:00:00Z',
   },
@@ -1017,7 +1025,7 @@ export const mockEventos: Evento[] = [
     tipo: 'alerta',
     titulo: 'Documento pendente',
     descricao:
-      'Solicitado extrato bancario atualizado (ultimos 3 meses) para comprovar capacidade de pagamento na proxima rodada.',
+      'Solicitado extrato bancário atualizado (últimos 3 meses) para comprovar capacidade de pagamento na próxima rodada.',
     usuario: 'Christian Kohler',
     data: '2026-04-15T11:00:00Z',
   },
@@ -1060,12 +1068,12 @@ export const mockPropostas: Proposta[] = [
     criadaEm: '2026-04-05T09:00:00Z',
     atualizadaEm: '2026-04-16T10:15:00Z',
     observacoes:
-      'CET praticado de 48,58% a.a. muito acima do 1% a.m. contratado. Proposta baseada em recalculo com taxa justa.',
+      'CET praticado de 48,58% a.a. muito acima do 1% a.m. contratado. Proposta baseada em recálculo com taxa justa.',
   },
   {
     id: 'prop_003',
     clienteId: 'cli_004',
-    clienteNome: 'Jose Carlos Ribeiro',
+    clienteNome: 'José Carlos Ribeiro',
     credor: 'Banco do Brasil',
     dividaOriginal: 4850000.0,
     valorProposta: 4122500.0,
@@ -1082,7 +1090,7 @@ export const mockPropostas: Proposta[] = [
   {
     id: 'prop_004',
     clienteId: 'cli_010',
-    clienteNome: 'Marcos Vinicius Pereira',
+    clienteNome: 'Marcos Vinícius Pereira',
     credor: 'Revenda Nutrien',
     dividaOriginal: 185000.0,
     valorProposta: 125000.0,
@@ -1111,7 +1119,7 @@ export const mockPropostas: Proposta[] = [
     criadaEm: '2026-03-15T10:00:00Z',
     atualizadaEm: '2026-04-13T12:30:00Z',
     observacoes:
-      'Proposta para divida do BB. CEF sendo negociada separadamente. BB mais receptivo a acordo.',
+      'Proposta para dívida do BB. CEF sendo negociada separadamente. BB mais receptivo a acordo.',
   },
   {
     id: 'prop_006',
@@ -1128,7 +1136,7 @@ export const mockPropostas: Proposta[] = [
     criadaEm: '2025-09-10T08:00:00Z',
     atualizadaEm: '2025-11-20T16:00:00Z',
     observacoes:
-      'Acordo concluido com 22% de desconto total. Ambos credores aceitaram. Caso encerrado com sucesso.',
+      'Acordo concluído com 22% de desconto total. Ambos credores aceitaram. Caso encerrado com sucesso.',
   },
   {
     id: 'prop_007',
@@ -1145,6 +1153,6 @@ export const mockPropostas: Proposta[] = [
     criadaEm: '2026-04-10T14:30:00Z',
     atualizadaEm: '2026-04-10T14:30:00Z',
     observacoes:
-      'Em fase de analise. Rascunho da proposta sera elaborado apos conclusao do calculo pericial.',
+      'Em fase de análise. Rascunho da proposta será elaborado após conclusão do cálculo pericial.',
   },
 ];

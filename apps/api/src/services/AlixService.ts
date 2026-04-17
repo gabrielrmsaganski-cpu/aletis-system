@@ -405,7 +405,7 @@ export class AlixService {
     switch (intent.tipo) {
       case 'saudacao':
         return {
-          content: `${greeting()}, Christian. ALIX aqui — pronta pra operar. Eu tenho acesso ao cambio em tempo real (BCB PTAX + Frankfurter), Selic/IPCA/IGPM/CDI, cotacoes de commodities (Conab), clima BR inteiro, CRM da ALETIS, ${Object.keys(SUMULAS_STJ).length} sumulas do STJ, ${Object.keys(MCR_SECOES).length} secoes do MCR, Plano Safra 2025/26 e ${PRECEDENTES.length} precedentes. Pergunta o que precisar.`,
+          content: `${greeting()}, Christian. ALIX aqui — pronta pra operar. Eu tenho acesso ao câmbio em tempo real (BCB PTAX + Frankfurter), Selic/IPCA/IGPM/CDI, cotações de commodities (Conab), clima BR inteiro, CRM da ALETIS, ${Object.keys(SUMULAS_STJ).length} súmulas do STJ, ${Object.keys(MCR_SECOES).length} seções do MCR, Plano Safra 2025/26 e ${PRECEDENTES.length} precedentes. Pergunta o que precisar.`,
           sources: [],
         };
 
@@ -419,7 +419,7 @@ export class AlixService {
         return { content: this.renderAjuda(), sources: [] };
 
       case 'agradecimento':
-        return { content: 'Disponha. Proxima pergunta?', sources: [] };
+        return { content: 'Disponha. Próxima pergunta?', sources: [] };
 
       case 'fontes_status':
         return this.reportFontes();
@@ -473,34 +473,34 @@ export class AlixService {
   // ── Response renderers ─────────────────────────────────
 
   private renderCapacidade(): string {
-    return `Sou a **ALIX** — Agente de Leitura e Inteligencia Estrategica da ALETIS. Tenho conexao direta a:
+    return `Sou a **ALIX** — Agente de Leitura e Inteligência Estratégica da ALETIS. Tenho conexão direta a:
 
 **Mercado financeiro** (live)
-• Cambio USD/EUR/CNY/GBP — BCB PTAX + Frankfurter (ECB) + open.er-api (cascade)
-• Indicadores BCB: Selic, IPCA, IGP-M, CDI, credito rural
-• Relatorio Focus: expectativas (Selic, IPCA, PIB, cambio)
-• ICBR (Indice Commodities Brasil)
+• Câmbio USD/EUR/CNY/GBP — BCB PTAX + Frankfurter (ECB) + open.er-api (cascade)
+• Indicadores BCB: Selic, IPCA, IGP-M, CDI, crédito rural
+• Relatório Focus: expectativas (Selic, IPCA, PIB, câmbio)
+• ICBR (Índice Commodities Brasil)
 
 **Mercado agro** (live)
-• Precos Conab semanais: soja, milho, cafe, algodao, trigo, arroz, feijao (por UF)
-• Precos ANP: diesel, etanol
-• Focos de incendio (NASA FIRMS)
-• SICOR: agregado de credito rural (contratos, volumes, UFs)
+• Preços Conab semanais: soja, milho, café, algodão, trigo, arroz, feijão (por UF)
+• Preços ANP: diesel, etanol
+• Focos de incêndio (NASA FIRMS)
+• SICOR: agregado de crédito rural (contratos, volumes, UFs)
 
 **Clima**
-• Condicao atual e previsao 7 dias de qualquer municipio BR (OpenMeteo + INMET + IBGE)
+• Condição atual e previsão 7 dias de qualquer município BR (OpenMeteo + INMET + IBGE)
 
 **CRM da ALETIS**
 • Clientes (buscar por nome, CPF, cidade)
-• Propostas (todos os status, incluindo as 15-secoes inteligentes)
+• Propostas (todos os status, incluindo as 15-seções inteligentes)
 
 **Base de conhecimento** (consulta direta)
-• ${Object.keys(SUMULAS_STJ).length} Sumulas STJ (93, 294, 296, 297, 298, 322, 323, 380, 472, 596...)
-• ${Object.keys(MCR_SECOES).length} Secoes do MCR (2-1, 2-6-4, 2-8, 3-2, 6-2, 7-1, 7-4, 8, 16-Proagro)
+• ${Object.keys(SUMULAS_STJ).length} Súmulas STJ (93, 294, 296, 297, 298, 322, 323, 380, 472, 596...)
+• ${Object.keys(MCR_SECOES).length} Seções do MCR (2-1, 2-6-4, 2-8, 3-2, 6-2, 7-1, 7-4, 8, 16-Proagro)
 • Plano Safra 2025/26 — Pronaf, Pronamp, Empresarial
 • Proagro 2025/26 — regras e culturas cobertas
 • ${PRECEDENTES.length} precedentes do STJ
-• Resolucao 4.966/21 (provisoes ECL)
+• Resolução 4.966/21 (provisões ECL)
 
 Pergunta em linguagem natural que eu busco, consulto e cito fonte.`;
   }
@@ -509,20 +509,20 @@ Pergunta em linguagem natural que eu busco, consulto e cito fonte.`;
     return `Exemplos de perguntas que eu entendo:
 
 **Mercado**
-• "Qual o dolar hoje?" / "Historico USD 30 dias"
-• "Quanto esta a soja?" / "Preco do milho em MT"
+• "Qual o dólar hoje?" / "Histórico USD 30 dias"
+• "Quanto está a soja?" / "Preço do milho em MT"
 • "Selic atual" / "IPCA mensal" / "Focus IPCA"
 
 **Agro/clima**
-• "Clima em Uberlandia" / "Previsao em Cascavel proximos dias"
-• "Focos de incendio" / "Diesel hoje"
+• "Clima em Uberlândia" / "Previsão em Cascavel próximos dias"
+• "Focos de incêndio" / "Diesel hoje"
 
 **CRM**
 • "Cliente Paulo Luciano" / "Listar propostas aprovadas"
 • "Propostas inteligentes"
 
-**Juridico**
-• "Sumula 298" / "Sumulas sobre juros capitalizados"
+**Jurídico**
+• "Súmula 298" / "Súmulas sobre juros capitalizados"
 • "MCR 2-6-4" / "Plano Safra Pronaf"
 • "Proagro" / "Precedentes sobre alongamento"
 
@@ -547,7 +547,7 @@ Posso responder tudo em segundos. Manda.`;
       content += `**Offline (${offline.length}):**\n`;
       content += offline.slice(0, 5).map(f => `• ${f.nome} — ${f.ultimoErro || 'sem detalhes'}`).join('\n') + '\n\n';
     }
-    content += `Todas as rotas mantem fallback — o sistema nao quebra.`;
+    content += `Todas as rotas mantêm fallback — o sistema não quebra.`;
     return { content, sources: ['DataSourceManager.getStatusTodasFontes()'], toolsUsed: ['fontes_status'] };
   }
 
@@ -556,7 +556,7 @@ Posso responder tudo em segundos. Manda.`;
     const userMsgs = session.messages.filter(m => m.role === 'user');
     const intents = session.messages.filter(m => m.role === 'assistant' && m.intent).map(m => m.intent);
     const uniqueIntents = Array.from(new Set(intents));
-    return `Sessao "${session.title}" — ${session.messages.length} mensagens, ${userMsgs.length} perguntas tuas.\n\nTopicos cobertos: ${uniqueIntents.join(', ') || 'variado'}.\n\nPrimeira pergunta: "${userMsgs[0]?.content.slice(0, 100) || '—'}".`;
+    return `Sessão "${session.title}" — ${session.messages.length} mensagens, ${userMsgs.length} perguntas tuas.\n\nTópicos cobertos: ${uniqueIntents.join(', ') || 'variado'}.\n\nPrimeira pergunta: "${userMsgs[0]?.content.slice(0, 100) || '—'}".`;
   }
 
   // ── Market handlers ────────────────────────────────────
@@ -564,10 +564,10 @@ Posso responder tudo em segundos. Manda.`;
   private async cambioAtual(moeda?: string): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
     try {
       const cotacoes = await this.dsm.awesomeApi.getCotacoesAtuais();
-      if (!cotacoes || cotacoes.length === 0) throw new Error('sem cotacoes');
+      if (!cotacoes || cotacoes.length === 0) throw new Error('sem cotações');
       const lista = moeda ? cotacoes.filter(c => c.moeda === moeda) : cotacoes;
       if (moeda && lista.length === 0) {
-        return { content: `Nao achei ${moeda}. Disponiveis: ${cotacoes.map(c => c.moeda).join(', ')}.`, sources: [], toolsUsed: [] };
+        return { content: `Não achei ${moeda}. Disponíveis: ${cotacoes.map(c => c.moeda).join(', ')}.`, sources: [], toolsUsed: [] };
       }
       const linhas = lista.map(c => {
         const setaVar = c.pctChange > 0 ? '+' : (c.pctChange < 0 ? '' : '=');
@@ -580,26 +580,26 @@ Posso responder tudo em segundos. Manda.`;
         toolsUsed: ['awesome.getCotacoesAtuais'],
       };
     } catch (err) {
-      return { content: `Cambio indisponivel agora (${(err as Error).message}). Tenta de novo em segundos.`, sources: [], toolsUsed: [] };
+      return { content: `Câmbio indisponível agora (${(err as Error).message}). Tenta de novo em segundos.`, sources: [], toolsUsed: [] };
     }
   }
 
   private async cambioHistorico(moeda: string, dias: number): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
     try {
       const hist = await this.dsm.awesomeApi.getHistoricoDiario(moeda, dias);
-      if (!hist.cotacoes?.length) throw new Error('sem historico');
+      if (!hist.cotacoes?.length) throw new Error('sem histórico');
       const primeira = hist.cotacoes[0];
       const ultima = hist.cotacoes[hist.cotacoes.length - 1];
       const var30d = ((ultima.valor - primeira.valor) / primeira.valor) * 100;
       const min = Math.min(...hist.cotacoes.map(c => c.valor));
       const max = Math.max(...hist.cotacoes.map(c => c.valor));
       return {
-        content: `**${moeda}** — ultimos ${hist.cotacoes.length} dias (${hist.provedor}):\n\n• Atual: ${fmtBRL(ultima.valor)}\n• ${dias} dias atras: ${fmtBRL(primeira.valor)}\n• Variacao: ${fmtPct(var30d)}\n• Maxima: ${fmtBRL(max)}\n• Minima: ${fmtBRL(min)}\n\n_Fonte: ${hist.provedor}_`,
+        content: `**${moeda}** — últimos ${hist.cotacoes.length} dias (${hist.provedor}):\n\n• Atual: ${fmtBRL(ultima.valor)}\n• ${dias} dias atrás: ${fmtBRL(primeira.valor)}\n• Variação: ${fmtPct(var30d)}\n• Máxima: ${fmtBRL(max)}\n• Mínima: ${fmtBRL(min)}\n\n_Fonte: ${hist.provedor}_`,
         sources: [hist.provedor || 'unknown'],
         toolsUsed: ['awesome.getHistoricoDiario'],
       };
     } catch (err) {
-      return { content: `Historico de ${moeda} indisponivel (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+      return { content: `Histórico de ${moeda} indisponível (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
   }
 
@@ -607,14 +607,14 @@ Posso responder tudo em segundos. Manda.`;
     try {
       const all = await this.dsm.bancoCentral.getAllIndicators();
       const ind = (all as any)[serieKey];
-      if (!ind) throw new Error(`indicador ${nome} nao encontrado`);
+      if (!ind) throw new Error(`indicador ${nome} não encontrado`);
       return {
-        content: `**${ind.nome}**: **${fmtNum(ind.valor, 2)} ${ind.unidade}**\n\n• Referencia: ${ind.data}\n• Fonte: BCB SGS (serie ${ind.serie})${ind.fonte === 'fallback' ? ' — _dado em fallback_' : ''}`,
-        sources: [`BCB SGS (serie ${ind.serie})`],
+        content: `**${ind.nome}**: **${fmtNum(ind.valor, 2)} ${ind.unidade}**\n\n• Referência: ${ind.data}\n• Fonte: BCB SGS (série ${ind.serie})${ind.fonte === 'fallback' ? ' — _dado em fallback_' : ''}`,
+        sources: [`BCB SGS (série ${ind.serie})`],
         toolsUsed: ['bancoCentral.getAllIndicators'],
       };
     } catch (err) {
-      return { content: `${nome} indisponivel (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+      return { content: `${nome} indisponível (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
   }
 
@@ -626,12 +626,12 @@ Posso responder tudo em segundos. Manda.`;
         `• **${all.ipca.nome}**: ${fmtNum(all.ipca.valor, 2)} ${all.ipca.unidade}`,
         `• **${all.igpm.nome}**: ${fmtNum(all.igpm.valor, 2)} ${all.igpm.unidade}`,
         `• **${all.cdi.nome}**: ${fmtNum(all.cdi.valor, 2)} ${all.cdi.unidade}`,
-        `• **Dolar PTAX**: ${fmtBRL(all.ptax.cotacaoVenda)} (${all.ptax.dataHoraCotacao?.slice(0, 10) || '—'})`,
-        `• **Credito Rural (${all.creditoRural.periodo})**: ${all.creditoRural.unidade} ${fmtNum(all.creditoRural.volume, 0)}`,
+        `• **Dólar PTAX**: ${fmtBRL(all.ptax.cotacaoVenda)} (${all.ptax.dataHoraCotacao?.slice(0, 10) || '—'})`,
+        `• **Crédito Rural (${all.creditoRural.periodo})**: ${all.creditoRural.unidade} ${fmtNum(all.creditoRural.volume, 0)}`,
       ];
-      return { content: `**Indicadores macroeconomicos (BCB):**\n\n${linhas.join('\n')}`, sources: ['BCB SGS'], toolsUsed: ['bancoCentral.getAllIndicators'] };
+      return { content: `**Indicadores macroeconômicos (BCB):**\n\n${linhas.join('\n')}`, sources: ['BCB SGS'], toolsUsed: ['bancoCentral.getAllIndicators'] };
     } catch (err) {
-      return { content: `Indicadores indisponivel (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+      return { content: `Indicadores indisponível (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
   }
 
@@ -639,8 +639,8 @@ Posso responder tudo em segundos. Manda.`;
     try {
       if (indicador) {
         const exp = await this.dsm.expectativas.getExpectativasAnuais(indicador, 5);
-        if (!exp || !exp.expectativas || exp.expectativas.length === 0) return { content: `Focus: sem projecao para ${indicador}.`, sources: [], toolsUsed: [] };
-        const linhas = exp.expectativas.slice(0, 4).map((p: any) => `• **${p.dataReferencia}**: mediana ${fmtNum(p.mediana, 2)} (min ${fmtNum(p.minimo, 2)} / max ${fmtNum(p.maximo, 2)})`).join('\n');
+        if (!exp || !exp.expectativas || exp.expectativas.length === 0) return { content: `Focus: sem projeção para ${indicador}.`, sources: [], toolsUsed: [] };
+        const linhas = exp.expectativas.slice(0, 4).map((p: any) => `• **${p.dataReferencia}**: mediana ${fmtNum(p.mediana, 2)} (mín ${fmtNum(p.minimo, 2)} / máx ${fmtNum(p.maximo, 2)})`).join('\n');
         return { content: `**Focus — ${indicador}:**\n\n${linhas}`, sources: ['BCB Expectativas (Focus)'], toolsUsed: ['expectativas.getExpectativasAnuais'] };
       }
       const all = await this.dsm.expectativas.getAllExpectativas();
@@ -648,9 +648,9 @@ Posso responder tudo em segundos. Manda.`;
         const next = v.expectativas?.[0];
         return next ? `• **${k}**: mediana ${fmtNum(next.mediana, 2)} (${next.dataReferencia})` : `• **${k}**: sem dado`;
       }).join('\n');
-      return { content: `**Relatorio Focus (BCB):**\n\n${linhas}`, sources: ['BCB Expectativas (Focus)'], toolsUsed: ['expectativas.getAllExpectativas'] };
+      return { content: `**Relatório Focus (BCB):**\n\n${linhas}`, sources: ['BCB Expectativas (Focus)'], toolsUsed: ['expectativas.getAllExpectativas'] };
     } catch (err) {
-      return { content: `Focus indisponivel (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+      return { content: `Focus indisponível (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
   }
 
@@ -659,12 +659,12 @@ Posso responder tudo em segundos. Manda.`;
       const icbr = await this.dsm.bancoCentral.fetchICBrCompleto();
       const refStr = (icbr as any).data || (icbr as any).referencia || 'recente';
       return {
-        content: `**ICBR (Indice Commodities Brasil):**\n\n• Agro: ${fmtNum(icbr.agro?.valor ?? 0, 2)}\n• Metal: ${fmtNum(icbr.metal?.valor ?? 0, 2)}\n• Energia: ${fmtNum(icbr.energia?.valor ?? 0, 2)}\n• Referencia: ${refStr}`,
-        sources: ['BCB SGS (series ICBR)'],
+        content: `**ICBR (Índice Commodities Brasil):**\n\n• Agro: ${fmtNum(icbr.agro?.valor ?? 0, 2)}\n• Metal: ${fmtNum(icbr.metal?.valor ?? 0, 2)}\n• Energia: ${fmtNum(icbr.energia?.valor ?? 0, 2)}\n• Referência: ${refStr}`,
+        sources: ['BCB SGS (séries ICBR)'],
         toolsUsed: ['bancoCentral.fetchICBrCompleto'],
       };
     } catch (err) {
-      return { content: `ICBR indisponivel (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+      return { content: `ICBR indisponível (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
   }
 
@@ -674,12 +674,12 @@ Posso responder tudo em segundos. Manda.`;
       const topProd = agg.topProdutos.slice(0, 3).map(p => `${p.produto} (${p.participacao}%)`).join(', ');
       const topUFs = agg.topUFs.slice(0, 3).map(u => `${u.uf} ${fmtBRL(u.valor / 1e9)}Bi`).join(', ');
       return {
-        content: `**SICOR — credito rural ${agg.periodo}:**\n\n• Total: ${fmtBRL(agg.valorTotal / 1e9)} Bi em ${agg.totalContratos.toLocaleString('pt-BR')} contratos\n• Valor medio: ${fmtBRL(agg.valorMedio)}\n• Area: ${(agg.areaTotal / 1e6).toFixed(1)} Mi ha\n• Top produtos: ${topProd}\n• Top UFs: ${topUFs}`,
+        content: `**SICOR — crédito rural ${agg.periodo}:**\n\n• Total: ${fmtBRL(agg.valorTotal / 1e9)} Bi em ${agg.totalContratos.toLocaleString('pt-BR')} contratos\n• Valor médio: ${fmtBRL(agg.valorMedio)}\n• Área: ${(agg.areaTotal / 1e6).toFixed(1)} Mi ha\n• Top produtos: ${topProd}\n• Top UFs: ${topUFs}`,
         sources: ['BCB SICOR (fallback: direcional CY 2025)'],
         toolsUsed: ['sicor.getAgregado'],
       };
     } catch (err) {
-      return { content: `SICOR indisponivel (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+      return { content: `SICOR indisponível (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
   }
 
@@ -691,12 +691,12 @@ Posso responder tudo em segundos. Manda.`;
         .slice(0, 3)
         .map(([uf, qtd]) => `${uf} (${qtd})`).join(', ');
       return {
-        content: `**Focos de incendio (NASA FIRMS — ultimas 24h):**\n\n• Total: ${focos.totalFocos}\n• Ultimas 24h: ${focos.focosUltimas24h}\n• Top estados: ${topEstados || 'n/d'}\n• Atualizado: ${focos.atualizadoEm}`,
+        content: `**Focos de incêndio (NASA FIRMS — últimas 24h):**\n\n• Total: ${focos.totalFocos}\n• Últimas 24h: ${focos.focosUltimas24h}\n• Top estados: ${topEstados || 'n/d'}\n• Atualizado: ${focos.atualizadoEm}`,
         sources: ['NASA FIRMS VIIRS'],
         toolsUsed: ['nasaFirms.getIncendiosBrasil'],
       };
     } catch (err) {
-      return { content: `NASA FIRMS indisponivel (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+      return { content: `NASA FIRMS indisponível (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
   }
 
@@ -705,12 +705,12 @@ Posso responder tudo em segundos. Manda.`;
       const resumo = await this.dsm.anp.getDieselNacional();
       const diesel = resumo.diesel;
       return {
-        content: `**Diesel (ANP — ultima coleta):**\n\n• Preco medio Brasil: ${fmtBRL(diesel.precoMedio)}\n• Minimo: ${fmtBRL(diesel.precoMinimo)}\n• Maximo: ${fmtBRL(diesel.precoMaximo)}\n• Referencia: ${diesel.dataReferencia || resumo.atualizadoEm?.slice(0, 10) || '—'}`,
+        content: `**Diesel (ANP — última coleta):**\n\n• Preço médio Brasil: ${fmtBRL(diesel.precoMedio)}\n• Mínimo: ${fmtBRL(diesel.precoMinimo)}\n• Máximo: ${fmtBRL(diesel.precoMaximo)}\n• Referência: ${diesel.dataReferencia || resumo.atualizadoEm?.slice(0, 10) || '—'}`,
         sources: ['ANP'],
         toolsUsed: ['anp.getDieselNacional'],
       };
     } catch (err) {
-      return { content: `ANP indisponivel (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+      return { content: `ANP indisponível (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
   }
 
@@ -719,12 +719,12 @@ Posso responder tudo em segundos. Manda.`;
       const preco = await this.dsm.conabPrecos.getPreco(produto);
       const topEstados = preco.estados.sort((a, b) => b.preco - a.preco).slice(0, 5);
       return {
-        content: `**${preco.produto}** — ${preco.semana}\n\n• Preco medio: ${fmtBRL(preco.precoMedio)} (${preco.unidade})\n• Minimo: ${fmtBRL(preco.precoMinimo)}  •  Maximo: ${fmtBRL(preco.precoMaximo)}\n• Top 5 UFs: ${topEstados.map(e => `${e.uf} ${fmtBRL(e.preco)}`).join(', ')}\n\n_Fonte: CONAB Portal de Informacoes (${preco.fonte})_`,
+        content: `**${preco.produto}** — ${preco.semana}\n\n• Preço médio: ${fmtBRL(preco.precoMedio)} (${preco.unidade})\n• Mínimo: ${fmtBRL(preco.precoMinimo)}  •  Máximo: ${fmtBRL(preco.precoMaximo)}\n• Top 5 UFs: ${topEstados.map(e => `${e.uf} ${fmtBRL(e.preco)}`).join(', ')}\n\n_Fonte: CONAB Portal de Informações (${preco.fonte})_`,
         sources: ['CONAB PrecosSemanalUF'],
         toolsUsed: ['conabPrecos.getPreco'],
       };
     } catch (err) {
-      return { content: `Preco de ${produto} indisponivel (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+      return { content: `Preço de ${produto} indisponível (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
   }
 
@@ -736,9 +736,9 @@ Posso responder tudo em segundos. Manda.`;
         const d = all[p] as any;
         return `• **${d.produto}**: ${fmtBRL(d.precoMedio)} (${d.unidade})`;
       }).join('\n');
-      return { content: `**Cotacoes Conab (semana corrente):**\n\n${linhas}`, sources: ['CONAB'], toolsUsed: ['conabPrecos.getAllPrecos'] };
+      return { content: `**Cotações Conab (semana corrente):**\n\n${linhas}`, sources: ['CONAB'], toolsUsed: ['conabPrecos.getAllPrecos'] };
     } catch (err) {
-      return { content: `Conab indisponivel (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+      return { content: `Conab indisponível (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
   }
 
@@ -746,9 +746,9 @@ Posso responder tudo em segundos. Manda.`;
     try {
       const precos = await this.dsm.conabPrecos.getPrecosPorUF(uf);
       const entries = Object.values(precos);
-      if (entries.length === 0) return { content: `Nenhum preco em ${uf}.`, sources: [], toolsUsed: [] };
+      if (entries.length === 0) return { content: `Nenhum preço em ${uf}.`, sources: [], toolsUsed: [] };
       const linhas = entries.slice(0, 10).map(e => `• **${e.produto}**: ${fmtBRL(e.preco)} ${e.unidade}`).join('\n');
-      return { content: `**Precos em ${uf}:**\n\n${linhas}`, sources: ['CONAB'], toolsUsed: ['conabPrecos.getPrecosPorUF'] };
+      return { content: `**Preços em ${uf}:**\n\n${linhas}`, sources: ['CONAB'], toolsUsed: ['conabPrecos.getPrecosPorUF'] };
     } catch (err) {
       return { content: `Erro: ${(err as Error).message}`, sources: [], toolsUsed: [] };
     }
@@ -765,7 +765,7 @@ Posso responder tudo em segundos. Manda.`;
         c.cpf?.replace(/\D/g, '').includes(t.replace(/\D/g, '')) ||
         c.cidade?.toLowerCase().includes(t)
       );
-      if (!match) return { content: `Nao achei "${termo}" no CRM (${list.length} clientes cadastrados).`, sources: ['CRM'], toolsUsed: [] };
+      if (!match) return { content: `Não achei "${termo}" no CRM (${list.length} clientes cadastrados).`, sources: ['CRM'], toolsUsed: [] };
       const linhas: string[] = [
         `**${match.nome}**`,
         `• CPF: ${match.cpf || 's/ info'}`,
@@ -773,10 +773,10 @@ Posso responder tudo em segundos. Manda.`;
         `• Cooperativa: ${match.cooperativa || 'independente'}`,
         `• Status: ${match.statusRelacionamento || 'ativo'}`,
       ];
-      if (match.dividaAtual) linhas.push(`• Divida atual: ${fmtBRL(match.dividaAtual)}`);
+      if (match.dividaAtual) linhas.push(`• Dívida atual: ${fmtBRL(match.dividaAtual)}`);
       return { content: linhas.join('\n'), sources: ['CRM /api/clientes'], toolsUsed: ['crm.buscar'] };
     } catch (err) {
-      return { content: `CRM indisponivel (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+      return { content: `CRM indisponível (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
   }
 
@@ -803,7 +803,7 @@ Posso responder tudo em segundos. Manda.`;
   private async propostasInteligentesListar(): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
     const list = getPropostasInteligentesList();
     if (list.length === 0) return { content: 'Nenhuma proposta inteligente gerada ainda. Use o gerador em Propostas.', sources: [], toolsUsed: [] };
-    const topo = list.slice(0, 5).map(p => `• **${p.clienteNome}** — ${p.estrategia} — ${fmtBRL(p.dividaTotal)} — ${p.secoes} secoes`).join('\n');
+    const topo = list.slice(0, 5).map(p => `• **${p.clienteNome}** — ${p.estrategia} — ${fmtBRL(p.dividaTotal)} — ${p.secoes} seções`).join('\n');
     return {
       content: `**${list.length} proposta(s) inteligente(s):**\n\n${topo}`,
       sources: ['/api/propostas/inteligentes/list'],
@@ -824,43 +824,43 @@ Posso responder tudo em segundos. Manda.`;
   }
 
   private async climaAtual(cidade?: string): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
-    if (!cidade) return { content: 'Me diz o municipio. Ex: "clima em Uberlandia".', sources: [], toolsUsed: [] };
+    if (!cidade) return { content: 'Me diz o município. Ex: "clima em Uberlândia".', sources: [], toolsUsed: [] };
     try {
       const mun = await this.resolveMunicipio(cidade);
-      if (!mun) throw new Error(`municipio "${cidade}" nao encontrado no IBGE`);
+      if (!mun) throw new Error(`município "${cidade}" não encontrado no IBGE`);
       const data = await this.fetchInternal(`/api/clima/municipio/${mun.codigoIbge}`);
       const c = data?.condicaoAtual;
       const m = data?.municipio || mun;
-      if (!c) throw new Error('condicao indisponivel');
+      if (!c) throw new Error('condição indisponível');
       return {
-        content: `**Clima em ${m.nome}${m.uf ? `/${m.uf}` : ''}:**\n\n• Temperatura: ${c.temperatura}°C (sensacao ${c.sensacaoTermica}°)\n• Umidade: ${c.umidade}%\n• Condicao: ${c.condicao}\n• Precipitacao 24h: ${c.precipitacao24h} mm\n• Vento: ${c.ventoVelocidade} km/h ${c.ventoDirecao}\n• UV: ${c.indiceUV}\n\n_Fonte: ${c.fonteOrigem || 'Open-Meteo'}_`,
+        content: `**Clima em ${m.nome}${m.uf ? `/${m.uf}` : ''}:**\n\n• Temperatura: ${c.temperatura}°C (sensação ${c.sensacaoTermica}°)\n• Umidade: ${c.umidade}%\n• Condição: ${c.condicao}\n• Precipitação 24h: ${c.precipitacao24h} mm\n• Vento: ${c.ventoVelocidade} km/h ${c.ventoDirecao}\n• UV: ${c.indiceUV}\n\n_Fonte: ${c.fonteOrigem || 'Open-Meteo'}_`,
         sources: data?.fontes || ['Open-Meteo', 'IBGE'],
         toolsUsed: ['/api/clima/buscar', '/api/clima/municipio'],
       };
     } catch (err) {
-      return { content: `Clima de "${cidade}" indisponivel (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+      return { content: `Clima de "${cidade}" indisponível (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
   }
 
   private async climaPrevisao(cidade?: string): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
-    if (!cidade) return { content: 'Preciso do municipio pra previsao.', sources: [], toolsUsed: [] };
+    if (!cidade) return { content: 'Preciso do município pra previsão.', sources: [], toolsUsed: [] };
     try {
       const mun = await this.resolveMunicipio(cidade);
-      if (!mun) throw new Error(`municipio "${cidade}" nao encontrado no IBGE`);
+      if (!mun) throw new Error(`município "${cidade}" não encontrado no IBGE`);
       const data = await this.fetchInternal(`/api/clima/municipio/${mun.codigoIbge}`);
       const prev = data?.previsao || [];
       const m = data?.municipio || mun;
-      if (prev.length === 0) throw new Error('sem previsao');
+      if (prev.length === 0) throw new Error('sem previsão');
       const linhas = prev.slice(0, 7).map((d: any) =>
         `• **${d.diaSemana} ${d.data}**: ${d.tempMinima}°/${d.tempMaxima}°, ${d.condicao}, chuva ${d.precipitacaoMm}mm (${d.probabilidadeChuva}%)`
       ).join('\n');
       return {
-        content: `**Previsao 7 dias em ${m?.nome}${m?.uf ? `/${m.uf}` : ''}:**\n\n${linhas}\n\n_Fonte: ${data?.fontes?.join(', ') || 'Open-Meteo'}_`,
+        content: `**Previsão 7 dias em ${m?.nome}${m?.uf ? `/${m.uf}` : ''}:**\n\n${linhas}\n\n_Fonte: ${data?.fontes?.join(', ') || 'Open-Meteo'}_`,
         sources: data?.fontes || ['Open-Meteo', 'IBGE'],
         toolsUsed: ['/api/clima/buscar', '/api/clima/municipio'],
       };
     } catch (err) {
-      return { content: `Previsao indisponivel (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+      return { content: `Previsão indisponível (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
   }
 
@@ -877,54 +877,54 @@ Posso responder tudo em segundos. Manda.`;
   private sumula(numero?: number, termo?: string): { content: string; sources: string[]; toolsUsed: string[] } {
     if (numero) {
       const found = Object.values(SUMULAS_STJ).find(s => s.numero === numero);
-      if (!found) return { content: `Sumula ${numero} nao consta na base. Disponiveis: ${Object.values(SUMULAS_STJ).map(s => s.numero).join(', ')}.`, sources: [], toolsUsed: [] };
+      if (!found) return { content: `Súmula ${numero} não consta na base. Disponíveis: ${Object.values(SUMULAS_STJ).map(s => s.numero).join(', ')}.`, sources: [], toolsUsed: [] };
       return {
-        content: `**Sumula STJ ${found.numero}** (${found.area}):\n\n> "${found.texto}"\n\n**Contexto:** ${found.contexto}\n\n**Aplicacao ALETIS:** ${found.aplicacaoPratica}`,
-        sources: [`STJ — Sumula ${found.numero}`],
+        content: `**Súmula STJ ${found.numero}** (${found.area}):\n\n> "${found.texto}"\n\n**Contexto:** ${found.contexto}\n\n**Aplicação ALETIS:** ${found.aplicacaoPratica}`,
+        sources: [`STJ — Súmula ${found.numero}`],
         toolsUsed: ['knowledge.sumula'],
       };
     }
     if (termo) {
       const matches = buscarSumulaPorTema(termo);
-      if (matches.length === 0) return { content: `Nenhuma sumula sobre "${termo}".`, sources: [], toolsUsed: [] };
-      const linhas = matches.slice(0, 5).map(s => `• **Sumula ${s.numero}**: ${s.texto.slice(0, 140)}...`).join('\n');
-      return { content: `${matches.length} sumula(s) relacionada(s) a "${termo}":\n\n${linhas}`, sources: ['STJ'], toolsUsed: ['knowledge.sumulaPorTema'] };
+      if (matches.length === 0) return { content: `Nenhuma súmula sobre "${termo}".`, sources: [], toolsUsed: [] };
+      const linhas = matches.slice(0, 5).map(s => `• **Súmula ${s.numero}**: ${s.texto.slice(0, 140)}...`).join('\n');
+      return { content: `${matches.length} súmula(s) relacionada(s) a "${termo}":\n\n${linhas}`, sources: ['STJ'], toolsUsed: ['knowledge.sumulaPorTema'] };
     }
     const lista = Object.values(SUMULAS_STJ).map(s => `• **${s.numero}** — ${s.texto.slice(0, 100)}...`).join('\n');
-    return { content: `**${Object.keys(SUMULAS_STJ).length} sumulas na base:**\n\n${lista}`, sources: ['STJ'], toolsUsed: ['knowledge.sumulas'] };
+    return { content: `**${Object.keys(SUMULAS_STJ).length} súmulas na base:**\n\n${lista}`, sources: ['STJ'], toolsUsed: ['knowledge.sumulas'] };
   }
 
   private mcr(secao?: string, termo?: string): { content: string; sources: string[]; toolsUsed: string[] } {
     if (secao) {
       const found = Object.values(MCR_SECOES).find(s => s.numero === secao);
-      if (!found) return { content: `MCR ${secao} nao consta. Disponiveis: ${Object.values(MCR_SECOES).map(s => s.numero).join(', ')}.`, sources: [], toolsUsed: [] };
+      if (!found) return { content: `MCR ${secao} não consta. Disponíveis: ${Object.values(MCR_SECOES).map(s => s.numero).join(', ')}.`, sources: [], toolsUsed: [] };
       return {
-        content: `**MCR ${found.numero} — ${found.titulo}**\n\n${found.ementa}\n\n**Aplicacao pratica:** ${found.aplicacaoPratica}`,
-        sources: [`BCB MCR — Secao ${found.numero}`],
+        content: `**MCR ${found.numero} — ${found.titulo}**\n\n${found.ementa}\n\n**Aplicação prática:** ${found.aplicacaoPratica}`,
+        sources: [`BCB MCR — Seção ${found.numero}`],
         toolsUsed: ['knowledge.mcr'],
       };
     }
     if (termo) {
       const matches = buscarMCRPorTema(termo);
-      if (matches.length === 0) return { content: `Nenhuma secao MCR sobre "${termo}".`, sources: [], toolsUsed: [] };
+      if (matches.length === 0) return { content: `Nenhuma seção MCR sobre "${termo}".`, sources: [], toolsUsed: [] };
       const linhas = matches.slice(0, 5).map(s => `• **MCR ${s.numero}** — ${s.titulo}`).join('\n');
-      return { content: `${matches.length} secao(oes) do MCR sobre "${termo}":\n\n${linhas}`, sources: ['BCB MCR'], toolsUsed: ['knowledge.mcrPorTema'] };
+      return { content: `${matches.length} seção(ões) do MCR sobre "${termo}":\n\n${linhas}`, sources: ['BCB MCR'], toolsUsed: ['knowledge.mcrPorTema'] };
     }
     const lista = Object.values(MCR_SECOES).map(s => `• **MCR ${s.numero}** — ${s.titulo}`).join('\n');
-    return { content: `**${Object.keys(MCR_SECOES).length} secoes do MCR na base:**\n\n${lista}`, sources: ['BCB MCR'], toolsUsed: ['knowledge.mcr'] };
+    return { content: `**${Object.keys(MCR_SECOES).length} seções do MCR na base:**\n\n${lista}`, sources: ['BCB MCR'], toolsUsed: ['knowledge.mcr'] };
   }
 
   private planoSafra(programa?: 'pronaf' | 'pronamp' | 'empresarial'): { content: string; sources: string[]; toolsUsed: string[] } {
     if (programa === 'pronaf') {
-      const linhas = PRONAF_LINHAS.slice(0, 8).map((l: any) => `• **${l.nome}** — ${l.taxaJuros}% a.a. — ${l.publico} — ate ${l.limiteValor ? fmtBRL(l.limiteValor) : 's/ limite'}`).join('\n');
+      const linhas = PRONAF_LINHAS.slice(0, 8).map((l: any) => `• **${l.nome}** — ${l.taxaJuros}% a.a. — ${l.publico} — até ${l.limiteValor ? fmtBRL(l.limiteValor) : 's/ limite'}`).join('\n');
       return { content: `**Pronaf — Plano Safra 2025/26** (${PRONAF_LINHAS.length} linhas):\n\n${linhas}`, sources: ['Plano Safra 2025/26 — Pronaf'], toolsUsed: ['knowledge.planoSafra'] };
     }
     if (programa === 'pronamp') {
-      const linhas = PRONAMP_LINHAS.slice(0, 8).map((l: any) => `• **${l.nome}** — ${l.taxaJuros}% a.a. — ${l.publico} — ate ${l.limiteValor ? fmtBRL(l.limiteValor) : 's/ limite'}`).join('\n');
+      const linhas = PRONAMP_LINHAS.slice(0, 8).map((l: any) => `• **${l.nome}** — ${l.taxaJuros}% a.a. — ${l.publico} — até ${l.limiteValor ? fmtBRL(l.limiteValor) : 's/ limite'}`).join('\n');
       return { content: `**Pronamp — Plano Safra 2025/26** (${PRONAMP_LINHAS.length} linhas):\n\n${linhas}`, sources: ['Plano Safra 2025/26 — Pronamp'], toolsUsed: ['knowledge.planoSafra'] };
     }
     if (programa === 'empresarial') {
-      const linhas = EMPRESARIAL_LINHAS.slice(0, 8).map((l: any) => `• **${l.nome}** — ${l.taxaJuros}% a.a. — ${l.publico} — ate ${l.limiteValor ? fmtBRL(l.limiteValor) : 's/ limite'}`).join('\n');
+      const linhas = EMPRESARIAL_LINHAS.slice(0, 8).map((l: any) => `• **${l.nome}** — ${l.taxaJuros}% a.a. — ${l.publico} — até ${l.limiteValor ? fmtBRL(l.limiteValor) : 's/ limite'}`).join('\n');
       return { content: `**Empresarial — Plano Safra 2025/26** (${EMPRESARIAL_LINHAS.length} linhas):\n\n${linhas}`, sources: ['Plano Safra 2025/26 — Empresarial'], toolsUsed: ['knowledge.planoSafra'] };
     }
     return {
@@ -937,7 +937,7 @@ Posso responder tudo em segundos. Manda.`;
   private proagro(): { content: string; sources: string[]; toolsUsed: string[] } {
     const p: any = PROAGRO_REGRAS_2025_26;
     return {
-      content: `**Proagro 2025/26**\n\n${p.descricao || 'Programa de Garantia da Atividade Agropecuaria — cobre perdas por eventos naturais em operacoes de custeio'}\n\n• Adesao: ${p.adesao || 'obrigatoria para Pronaf, opcional para demais'}\n• Cobertura maxima: ${p.coberturaMaxima || 'ate 100% do custeio'}\n• Culturas cobertas: ${p.culturasCobertas?.slice(0, 5).join(', ') || 'soja, milho, arroz, feijao, trigo, algodao, cafe...'}`,
+      content: `**Proagro 2025/26**\n\n${p.descricao || 'Programa de Garantia da Atividade Agropecuária — cobre perdas por eventos naturais em operações de custeio'}\n\n• Adesão: ${p.adesao || 'obrigatória para Pronaf, opcional para demais'}\n• Cobertura máxima: ${p.coberturaMaxima || 'até 100% do custeio'}\n• Culturas cobertas: ${p.culturasCobertas?.slice(0, 5).join(', ') || 'soja, milho, arroz, feijão, trigo, algodão, café...'}`,
       sources: ['MCR 16 — Proagro / Res. CMN 5.190/2024'],
       toolsUsed: ['knowledge.proagro'],
     };
@@ -956,7 +956,7 @@ Posso responder tudo em segundos. Manda.`;
     const hits = buscarConhecimento(termo);
     const partes: string[] = [];
     if (hits.sumulas.length > 0) {
-      partes.push(`**Sumulas (${hits.sumulas.length}):**\n` + hits.sumulas.slice(0, 3).map(s => `• Sumula ${s.numero}: ${s.texto.slice(0, 100)}...`).join('\n'));
+      partes.push(`**Súmulas (${hits.sumulas.length}):**\n` + hits.sumulas.slice(0, 3).map(s => `• Súmula ${s.numero}: ${s.texto.slice(0, 100)}...`).join('\n'));
     }
     if (hits.mcr.length > 0) {
       partes.push(`**MCR (${hits.mcr.length}):**\n` + hits.mcr.slice(0, 3).map(m => `• MCR ${m.numero}: ${m.titulo}`).join('\n'));
@@ -976,7 +976,7 @@ Posso responder tudo em segundos. Manda.`;
 
   private generico(raw: string): { content: string; sources: string[]; toolsUsed: string[] } {
     return {
-      content: `Nao entendi completamente "${raw.slice(0, 80)}". Posso ajudar com:\n\n• Cotacoes (dolar, euro, soja, milho, selic, ipca)\n• Clima e previsao de qualquer municipio BR\n• CRM (buscar cliente, listar propostas)\n• Sumulas STJ e MCR\n• Plano Safra 2025/26, Proagro\n\nDigita "ajuda" pra exemplos ou tenta reformular.`,
+      content: `Não entendi completamente "${raw.slice(0, 80)}". Posso ajudar com:\n\n• Cotações (dólar, euro, soja, milho, selic, ipca)\n• Clima e previsão de qualquer município BR\n• CRM (buscar cliente, listar propostas)\n• Súmulas STJ e MCR\n• Plano Safra 2025/26, Proagro\n\nDigita "ajuda" pra exemplos ou tenta reformular.`,
       sources: [],
       toolsUsed: [],
     };

@@ -40,18 +40,18 @@ export interface HistoricoCambio {
 // ── Names & fallback ────────────────────────────────────────
 
 const NOMES: Record<string, string> = {
-  'USD-BRL': 'Dolar Americano',
+  'USD-BRL': 'Dólar Americano',
   'EUR-BRL': 'Euro',
-  'CNY-BRL': 'Yuan Chines',
+  'CNY-BRL': 'Yuan Chinês',
   'GBP-BRL': 'Libra Esterlina',
-  'JPY-BRL': 'Iene Japones',
+  'JPY-BRL': 'Iene Japonês',
   'ARS-BRL': 'Peso Argentino',
 };
 
 const FALLBACK_RATES: Record<string, Omit<CotacaoCambio, 'fonte' | 'provedor'>> = {
-  'USD-BRL': { moeda: 'USD-BRL', nome: 'Dolar Americano', bid: 5.00, ask: 5.01, high: 5.05, low: 4.95, varBid: -0.02, pctChange: -0.4, timestamp: '', createDate: '' },
+  'USD-BRL': { moeda: 'USD-BRL', nome: 'Dólar Americano', bid: 5.00, ask: 5.01, high: 5.05, low: 4.95, varBid: -0.02, pctChange: -0.4, timestamp: '', createDate: '' },
   'EUR-BRL': { moeda: 'EUR-BRL', nome: 'Euro', bid: 5.70, ask: 5.71, high: 5.75, low: 5.65, varBid: 0.01, pctChange: 0.2, timestamp: '', createDate: '' },
-  'CNY-BRL': { moeda: 'CNY-BRL', nome: 'Yuan Chines', bid: 0.69, ask: 0.70, high: 0.71, low: 0.68, varBid: 0.0, pctChange: 0.0, timestamp: '', createDate: '' },
+  'CNY-BRL': { moeda: 'CNY-BRL', nome: 'Yuan Chinês', bid: 0.69, ask: 0.70, high: 0.71, low: 0.68, varBid: 0.0, pctChange: 0.0, timestamp: '', createDate: '' },
   'GBP-BRL': { moeda: 'GBP-BRL', nome: 'Libra Esterlina', bid: 6.35, ask: 6.36, high: 6.40, low: 6.30, varBid: 0.02, pctChange: 0.3, timestamp: '', createDate: '' },
 };
 
@@ -156,7 +156,7 @@ export class AwesomeApiService {
             this.dsm.updateSourceStatus('bcb_dolar_ptax', 'online', Date.now() - start);
             return {
               moeda: 'USD-BRL',
-              nome: 'Dolar Americano',
+              nome: 'Dólar Americano',
               bid,
               ask,
               high: Math.max(bid, ask),
@@ -336,7 +336,7 @@ export class AwesomeApiService {
     try {
       const resp = await this.http.get(`json/daily/${par}/${dias}`);
       const items = resp.data;
-      if (!Array.isArray(items) || items.length === 0) throw new Error('Historico vazio');
+      if (!Array.isArray(items) || items.length === 0) throw new Error('Histórico vazio');
       const cotacoes = items.map((item: any) => ({
         data: item.create_date?.split(' ')[0] || new Date(parseInt(item.timestamp) * 1000).toISOString().slice(0, 10),
         valor: parseFloat(item.bid),

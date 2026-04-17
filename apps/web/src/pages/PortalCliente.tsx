@@ -1,3 +1,14 @@
+/**
+ * PortalCliente (Portal do Cliente)
+ *
+ * Interface independente (sem sidebar do sistema) acessada via
+ * rota /portal-cliente. Fluxo de login por CPF + codigo de 6
+ * digitos, seguido de dashboard pessoal do cliente com: status
+ * de negociacao (stepper), resumo financeiro (divida original,
+ * saldo recalculado, proposta), documentos (proposta, confissao
+ * de divida, comprovantes), previsao do tempo, cotacoes de
+ * commodities e chat com a IA ALIX.
+ */
 import React, { useState, useCallback, useRef, useEffect } from 'react'
 import {
   LogIn,
@@ -51,20 +62,20 @@ function getGreeting(): string {
 // Negotiation Steps
 // ────────────────────────────────────────────────────────────
 const negotiationSteps = [
-  { label: 'Analise Iniciada', done: true },
+  { label: 'Análise Iniciada', done: true },
   { label: 'Proposta Elaborada', done: true },
   { label: 'Proposta Enviada', done: true },
-  { label: 'Em Negociacao', done: false, current: true },
+  { label: 'Em Negociação', done: false, current: true },
   { label: 'Acordo', done: false },
-  { label: 'Concluido', done: false },
+  { label: 'Concluído', done: false },
 ]
 
 // ────────────────────────────────────────────────────────────
 // Documents
 // ────────────────────────────────────────────────────────────
 const documents = [
-  { nome: 'Memoria de Calculo e Proposta', data: '24/03/2026', tipo: 'proposta', canView: true },
-  { nome: 'Confissao de Divida', data: '02/10/2025', tipo: 'contrato', canView: true },
+  { nome: 'Memória de Cálculo e Proposta', data: '24/03/2026', tipo: 'proposta', canView: true },
+  { nome: 'Confissão de Dívida', data: '02/10/2025', tipo: 'contrato', canView: true },
   { nome: 'Comprovante Pgto R$ 10.000', data: '23/12/2025', tipo: 'comprovante', canView: false },
   { nome: 'Comprovante Pgto R$ 20.000', data: '26/02/2026', tipo: 'comprovante', canView: false },
 ]
@@ -76,7 +87,7 @@ const chatMessages = [
   {
     id: 1,
     from: 'alix',
-    text: 'Ola Paulo! Sua proposta foi enviada ao credor. Estamos aguardando retorno.',
+    text: 'Olá Paulo! Sua proposta foi enviada ao credor. Estamos aguardando retorno.',
     time: '24/03 14:30',
   },
   {
@@ -88,7 +99,7 @@ const chatMessages = [
   {
     id: 3,
     from: 'alix',
-    text: 'O prazo usual da Fertiflora e de 5 a 7 dias uteis. Vou te manter informado assim que houver qualquer movimentacao.',
+    text: 'O prazo usual da Fertiflora é de 5 a 7 dias úteis. Vou te manter informado assim que houver qualquer movimentação.',
     time: '24/03 14:47',
   },
 ]
@@ -159,7 +170,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
             {/* Codigo de Acesso */}
             <div>
               <label className="block text-sm font-body font-medium text-aletis-grafite-escuro mb-1.5">
-                Codigo de Acesso
+                Código de Acesso
               </label>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-aletis-grafite-claro" />
@@ -194,7 +205,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
 
         {/* Tagline */}
         <p className="text-center mt-8 text-white/60 font-body text-sm italic">
-          "Verdade nos numeros. Prosperidade nos acordos."
+          "Verdade nos números. Prosperidade nos acordos."
         </p>
       </div>
     </div>
@@ -208,7 +219,7 @@ function NegotiationProgress() {
   return (
     <div className="card-premium p-6 sm:p-8">
       <h2 className="text-lg sm:text-xl font-display font-bold text-aletis-grafite-escuro mb-6">
-        Status da Negociacao
+        Status da Negociação
       </h2>
 
       {/* Desktop: horizontal stepper */}
@@ -417,7 +428,7 @@ function ClientDashboard({ onLogout }: { onLogout: () => void }) {
             {getGreeting()}, Paulo
           </h1>
           <p className="text-aletis-grafite-claro font-body mt-2 text-base">
-            Aqui esta o resumo da sua negociacao com a Fertiflora Insumos Agricolas.
+            Aqui está o resumo da sua negociação com a Fertiflora Insumos Agrícolas.
           </p>
         </header>
 
@@ -436,7 +447,7 @@ function ClientDashboard({ onLogout }: { onLogout: () => void }) {
                 <div className="w-10 h-10 rounded-xl bg-aletis-grafite-claro/10 flex items-center justify-center">
                   <DollarSign className="w-5 h-5 text-aletis-grafite-medio" />
                 </div>
-                <p className="text-sm font-body text-aletis-grafite-claro">Divida Original</p>
+                <p className="text-sm font-body text-aletis-grafite-claro">Dívida Original</p>
               </div>
               <p className="text-2xl sm:text-3xl font-display font-bold text-aletis-grafite-escuro">
                 {formatBRL(277380.0)}
@@ -474,7 +485,7 @@ function ClientDashboard({ onLogout }: { onLogout: () => void }) {
                 4x {formatBRL(70550.0)}
               </p>
               <p className="text-xs font-body text-aletis-grafite-claro mt-2">
-                Alinhado com o calendario da safra
+                Alinhado com o calendário da safra
               </p>
             </div>
           </div>
@@ -530,7 +541,7 @@ function ClientDashboard({ onLogout }: { onLogout: () => void }) {
             <div className="flex items-center gap-2 mb-4">
               <Cloud className="w-5 h-5 text-blue-500" />
               <h2 className="text-base font-display font-semibold text-aletis-grafite-escuro">
-                Previsao do Tempo
+                Previsão do Tempo
               </h2>
             </div>
 
@@ -556,7 +567,7 @@ function ClientDashboard({ onLogout }: { onLogout: () => void }) {
             </div>
 
             <div className="p-3 rounded-xl bg-blue-50 text-sm font-body text-blue-700">
-              Prox. 7 dias: sem previsao de chuva significativa
+              Próx. 7 dias: sem previsão de chuva significativa
             </div>
           </div>
 
@@ -565,7 +576,7 @@ function ClientDashboard({ onLogout }: { onLogout: () => void }) {
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="w-5 h-5 text-aletis-dourado" />
               <h2 className="text-base font-display font-semibold text-aletis-grafite-escuro">
-                Cotacoes Relevantes
+                Cotações Relevantes
               </h2>
             </div>
 
@@ -703,10 +714,10 @@ function ClientDashboard({ onLogout }: { onLogout: () => void }) {
         {/* Footer tagline */}
         <footer className="text-center py-8">
           <p className="text-sm font-body text-aletis-grafite-claro italic">
-            "Verdade nos numeros. Prosperidade nos acordos."
+            "Verdade nos números. Prosperidade nos acordos."
           </p>
           <p className="text-xs font-body text-aletis-grafite-claro/60 mt-2">
-            ALETIS Financas Estrategicas
+            ALETIS Finanças Estratégicas
           </p>
         </footer>
       </div>

@@ -1,3 +1,12 @@
+/**
+ * Relatorios (Relatórios)
+ *
+ * Pagina de relatorios dinamicos do sistema ALETIS com 6 tipos:
+ * Portfolio de Clientes, Analise de Rentabilidade, Performance de
+ * Propostas, Inteligencia de Mercado, Fluxo de Caixa Consolidado
+ * e Auditoria/Compliance (LGPD). Cada relatorio renderiza graficos
+ * (Recharts), KPIs e tabelas, com exportacao em PDF e Excel.
+ */
 import React, { useState, useMemo } from 'react'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
@@ -69,16 +78,16 @@ interface ReportDef {
 const REPORTS: ReportDef[] = [
   {
     id: 'portfolio',
-    titulo: 'Portfolio de Clientes',
-    descricao: 'Visao completa de todos os clientes e estagios',
+    titulo: 'Portfólio de Clientes',
+    descricao: 'Visão completa de todos os clientes e estágios',
     icon: Users,
     cor: '#0F4C35',
     corBg: 'bg-aletis-verde/10',
   },
   {
     id: 'rentabilidade',
-    titulo: 'Analise de Rentabilidade',
-    descricao: 'ROI por cliente e periodo',
+    titulo: 'Análise de Rentabilidade',
+    descricao: 'ROI por cliente e período',
     icon: TrendingUp,
     cor: '#C9A84C',
     corBg: 'bg-aletis-dourado/10',
@@ -86,15 +95,15 @@ const REPORTS: ReportDef[] = [
   {
     id: 'propostas',
     titulo: 'Performance de Propostas',
-    descricao: 'Taxa de aceite, tempo medio, volume',
+    descricao: 'Taxa de aceite, tempo médio, volume',
     icon: FileText,
     cor: '#3B82F6',
     corBg: 'bg-blue-50',
   },
   {
     id: 'mercado',
-    titulo: 'Inteligencia de Mercado',
-    descricao: 'Evolucao de precos e indicadores',
+    titulo: 'Inteligência de Mercado',
+    descricao: 'Evolução de preços e indicadores',
     icon: BarChart3,
     cor: '#8B5CF6',
     corBg: 'bg-purple-50',
@@ -102,7 +111,7 @@ const REPORTS: ReportDef[] = [
   {
     id: 'fluxo',
     titulo: 'Fluxo de Caixa Consolidado',
-    descricao: 'Projecoes e realizados',
+    descricao: 'Projeções e realizados',
     icon: DollarSign,
     cor: '#27AE60',
     corBg: 'bg-positivo/10',
@@ -110,7 +119,7 @@ const REPORTS: ReportDef[] = [
   {
     id: 'auditoria',
     titulo: 'Auditoria e Compliance',
-    descricao: 'Log de acoes e conformidade LGPD',
+    descricao: 'Log de ações e conformidade LGPD',
     icon: Shield,
     cor: '#C0392B',
     corBg: 'bg-alerta/10',
@@ -139,25 +148,25 @@ const CLIENTES_POR_ESTADO = [
 
 const CLIENTES_POR_ESTAGIO = [
   { name: 'Lead', value: 7, color: '#6B7280' },
-  { name: 'Qualificacao', value: 5, color: '#3B82F6' },
-  { name: 'Analise', value: 8, color: '#8B5CF6' },
+  { name: 'Qualificação', value: 5, color: '#3B82F6' },
+  { name: 'Análise', value: 8, color: '#8B5CF6' },
   { name: 'Proposta', value: 6, color: '#C9A84C' },
-  { name: 'Negociacao', value: 4, color: '#E67E22' },
+  { name: 'Negociação', value: 4, color: '#E67E22' },
   { name: 'Acordo', value: 12, color: '#27AE60' },
-  { name: 'Concluido', value: 5, color: '#0F4C35' },
+  { name: 'Concluído', value: 5, color: '#0F4C35' },
 ]
 
 const TOP_CLIENTES = [
   { nome: 'Ailton Caeiro da Silva', cidade: 'Toledo/PR', divida: 2049802.53, estagio: 'Proposta', credor: 'Sicoob' },
-  { nome: 'Paulo Luciano Machado', cidade: 'Dourados/MS', divida: 1876543.21, estagio: 'Negociacao', credor: 'Banco do Brasil' },
-  { nome: 'Fazenda Santa Rita Ltda', cidade: 'Sorriso/MT', divida: 1654321.00, estagio: 'Analise', credor: 'Cresol' },
+  { nome: 'Paulo Luciano Machado', cidade: 'Dourados/MS', divida: 1876543.21, estagio: 'Negociação', credor: 'Banco do Brasil' },
+  { nome: 'Fazenda Santa Rita Ltda', cidade: 'Sorriso/MT', divida: 1654321.00, estagio: 'Análise', credor: 'Cresol' },
   { nome: 'Agro Cerrado S.A.', cidade: 'Rio Verde/GO', divida: 1432100.87, estagio: 'Acordo', credor: 'Bradesco' },
-  { nome: 'Coopernova Agric.', cidade: 'Sinop/MT', divida: 1298765.43, estagio: 'Acordo', credor: 'Itau' },
-  { nome: 'Joao B. Fernandes', cidade: 'Cascavel/PR', divida: 987654.32, estagio: 'Proposta', credor: 'Sicredi' },
+  { nome: 'Coopernova Agric.', cidade: 'Sinop/MT', divida: 1298765.43, estagio: 'Acordo', credor: 'Itaú' },
+  { nome: 'João B. Fernandes', cidade: 'Cascavel/PR', divida: 987654.32, estagio: 'Proposta', credor: 'Sicredi' },
   { nome: 'Maria Aparecida Cruz', cidade: 'Londrina/PR', divida: 876543.21, estagio: 'Acordo', credor: 'Banco do Brasil' },
-  { nome: 'Sitio Bela Vista', cidade: 'Uberlandia/MG', divida: 765432.10, estagio: 'Analise', credor: 'Santander' },
-  { nome: 'Fernando R. Teixeira', cidade: 'Ribeirao Preto/SP', divida: 654321.98, estagio: 'Lead', credor: 'Banco do Brasil' },
-  { nome: 'Agropec. Progresso', cidade: 'Rondonopolis/MT', divida: 543210.87, estagio: 'Acordo', credor: 'Caixa' },
+  { nome: 'Sítio Bela Vista', cidade: 'Uberlândia/MG', divida: 765432.10, estagio: 'Análise', credor: 'Santander' },
+  { nome: 'Fernando R. Teixeira', cidade: 'Ribeirão Preto/SP', divida: 654321.98, estagio: 'Lead', credor: 'Banco do Brasil' },
+  { nome: 'Agropec. Progresso', cidade: 'Rondonópolis/MT', divida: 543210.87, estagio: 'Acordo', credor: 'Caixa' },
 ]
 
 // ────────────────────────────────────────────────────────────
@@ -178,10 +187,10 @@ const RENTABILIDADE_MENSAL = [
 // ────────────────────────────────────────────────────────────
 
 const PROPOSTAS_KPIS = [
-  { label: 'Propostas Enviadas', valor: '34', sub: 'ultimos 90 dias' },
+  { label: 'Propostas Enviadas', valor: '34', sub: 'últimos 90 dias' },
   { label: 'Taxa de Aceite', valor: '62%', sub: '21 de 34' },
-  { label: 'Tempo Medio Resposta', valor: '12 dias', sub: 'mediana: 9 dias' },
-  { label: 'Volume Total', valor: fmtBRLCompact(14_870_000), sub: 'em negociacao' },
+  { label: 'Tempo Médio Resposta', valor: '12 dias', sub: 'mediana: 9 dias' },
+  { label: 'Volume Total', valor: fmtBRLCompact(14_870_000), sub: 'em negociação' },
 ]
 
 const PROPOSTAS_STATUS = [
@@ -210,12 +219,12 @@ const FLUXO_MENSAL = [
 const AUDITORIA_LOG = [
   { data: '16/04/2026 08:32', usuario: 'Christian Oliveira', acao: 'Login no sistema', tipo: 'acesso', status: 'ok' },
   { data: '16/04/2026 08:45', usuario: 'Christian Oliveira', acao: 'Consulta dados Ailton Caeiro', tipo: 'dados_pessoais', status: 'ok' },
-  { data: '16/04/2026 09:12', usuario: 'Christian Oliveira', acao: 'Geracao proposta PDF #2026-047', tipo: 'documento', status: 'ok' },
-  { data: '15/04/2026 17:30', usuario: 'Sistema', acao: 'Backup automatico banco de dados', tipo: 'sistema', status: 'ok' },
-  { data: '15/04/2026 14:20', usuario: 'Christian Oliveira', acao: 'Exportacao relatorio clientes', tipo: 'exportacao', status: 'ok' },
+  { data: '16/04/2026 09:12', usuario: 'Christian Oliveira', acao: 'Geração proposta PDF #2026-047', tipo: 'documento', status: 'ok' },
+  { data: '15/04/2026 17:30', usuario: 'Sistema', acao: 'Backup automático banco de dados', tipo: 'sistema', status: 'ok' },
+  { data: '15/04/2026 14:20', usuario: 'Christian Oliveira', acao: 'Exportação relatório clientes', tipo: 'exportacao', status: 'ok' },
   { data: '15/04/2026 11:45', usuario: 'API', acao: 'Consulta SERASA - Paulo Luciano', tipo: 'api_externa', status: 'ok' },
-  { data: '14/04/2026 16:00', usuario: 'Sistema', acao: 'Anonimizacao dados ex-cliente #032', tipo: 'lgpd', status: 'ok' },
-  { data: '14/04/2026 10:30', usuario: 'Christian Oliveira', acao: 'Atualizacao contrato Fazenda Santa Rita', tipo: 'documento', status: 'ok' },
+  { data: '14/04/2026 16:00', usuario: 'Sistema', acao: 'Anonimização dados ex-cliente #032', tipo: 'lgpd', status: 'ok' },
+  { data: '14/04/2026 10:30', usuario: 'Christian Oliveira', acao: 'Atualização contrato Fazenda Santa Rita', tipo: 'documento', status: 'ok' },
 ]
 
 // ────────────────────────────────────────────────────────────
@@ -300,7 +309,7 @@ function PortfolioContent({ onExport }: { onExport: (fmt: string) => void }) {
         {/* Pie: Clientes por Estagio */}
         <div className="card p-5">
           <h3 className="text-sm font-display font-bold text-aletis-grafite-escuro mb-4">
-            Clientes por Estagio
+            Clientes por Estágio
           </h3>
           <div className="h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -330,7 +339,7 @@ function PortfolioContent({ onExport }: { onExport: (fmt: string) => void }) {
       {/* Table: Top 10 */}
       <div className="card p-5">
         <h3 className="text-sm font-display font-bold text-aletis-grafite-escuro mb-4">
-          Top 10 Clientes por Volume de Divida
+          Top 10 Clientes por Volume de Dívida
         </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -340,20 +349,20 @@ function PortfolioContent({ onExport }: { onExport: (fmt: string) => void }) {
                 <th className="text-left py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Cliente</th>
                 <th className="text-left py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Cidade</th>
                 <th className="text-left py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Credor</th>
-                <th className="text-right py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Divida</th>
-                <th className="text-center py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Estagio</th>
+                <th className="text-right py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Dívida</th>
+                <th className="text-center py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Estágio</th>
               </tr>
             </thead>
             <tbody>
               {TOP_CLIENTES.map((c, idx) => {
                 const estagioColor: Record<string, string> = {
                   Lead: 'bg-gray-100 text-gray-600',
-                  Qualificacao: 'bg-blue-50 text-blue-600',
-                  Analise: 'bg-purple-50 text-purple-600',
+                  'Qualificação': 'bg-blue-50 text-blue-600',
+                  'Análise': 'bg-purple-50 text-purple-600',
                   Proposta: 'bg-aletis-dourado/10 text-aletis-dourado-escuro',
-                  Negociacao: 'bg-ambar/10 text-ambar',
+                  'Negociação': 'bg-ambar/10 text-ambar',
                   Acordo: 'bg-positivo/10 text-positivo',
-                  Concluido: 'bg-aletis-verde/10 text-aletis-verde',
+                  'Concluído': 'bg-aletis-verde/10 text-aletis-verde',
                 }
                 return (
                   <tr
@@ -414,9 +423,9 @@ function RentabilidadeContent({ onExport }: { onExport: (fmt: string) => void })
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: 'Receita Total', valor: fmtBRLCompact(totalReceita), cor: '#0F4C35', bg: 'bg-aletis-verde/10' },
-          { label: 'Lucro Liquido', valor: fmtBRLCompact(totalLucro), cor: '#27AE60', bg: 'bg-positivo/10' },
-          { label: 'Margem Media', valor: `${margemMedia.toFixed(1)}%`, cor: '#C9A84C', bg: 'bg-aletis-dourado/10' },
-          { label: 'ROI Periodo', valor: '287%', cor: '#3B82F6', bg: 'bg-blue-50' },
+          { label: 'Lucro Líquido', valor: fmtBRLCompact(totalLucro), cor: '#27AE60', bg: 'bg-positivo/10' },
+          { label: 'Margem Média', valor: `${margemMedia.toFixed(1)}%`, cor: '#C9A84C', bg: 'bg-aletis-dourado/10' },
+          { label: 'ROI Período', valor: '287%', cor: '#3B82F6', bg: 'bg-blue-50' },
         ].map((kpi) => (
           <div key={kpi.label} className="card p-4">
             <p className="text-[11px] font-body text-aletis-grafite-claro mb-1">{kpi.label}</p>
@@ -427,7 +436,7 @@ function RentabilidadeContent({ onExport }: { onExport: (fmt: string) => void })
 
       <div className="card p-5">
         <h3 className="text-sm font-display font-bold text-aletis-grafite-escuro mb-4">
-          Receita vs Custo vs Lucro — Ultimos 6 Meses
+          Receita vs Custo vs Lucro — Últimos 6 Meses
         </h3>
         <div className="h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
@@ -543,7 +552,7 @@ function MercadoContent({ onExport }: { onExport: (fmt: string) => void }) {
   const indicadores = [
     { nome: 'Soja (saca 60kg)', valor: 'R$ 128,50', variacao: '+2,3%', up: true },
     { nome: 'Milho (saca 60kg)', valor: 'R$ 62,80', variacao: '-0,8%', up: false },
-    { nome: 'Dolar Comercial', valor: 'R$ 5,12', variacao: '+0,4%', up: true },
+    { nome: 'Dólar Comercial', valor: 'R$ 5,12', variacao: '+0,4%', up: true },
     { nome: 'Selic (aa)', valor: '14,25%', variacao: '0,0%', up: true },
   ]
 
@@ -561,7 +570,7 @@ function MercadoContent({ onExport }: { onExport: (fmt: string) => void }) {
 
       <div className="card p-5">
         <h3 className="text-sm font-display font-bold text-aletis-grafite-escuro mb-4">
-          Evolucao Precos Commodities (ultimos 6 meses)
+          Evolução Preços Commodities (últimos 6 meses)
         </h3>
         <div className="h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
@@ -608,9 +617,9 @@ function FluxoCaixaContent({ onExport }: { onExport: (fmt: string) => void }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: 'Total Entradas', valor: fmtBRLCompact(totalEntrada), cor: 'text-positivo' },
-          { label: 'Total Saidas', valor: fmtBRLCompact(totalSaida), cor: 'text-alerta' },
-          { label: 'Saldo Liquido', valor: fmtBRLCompact(totalEntrada - totalSaida), cor: 'text-aletis-verde' },
-          { label: 'Projecao Jun/26', valor: fmtBRLCompact(420000), cor: 'text-aletis-dourado-escuro' },
+          { label: 'Total Saídas', valor: fmtBRLCompact(totalSaida), cor: 'text-alerta' },
+          { label: 'Saldo Líquido', valor: fmtBRLCompact(totalEntrada - totalSaida), cor: 'text-aletis-verde' },
+          { label: 'Projeção Jun/26', valor: fmtBRLCompact(420000), cor: 'text-aletis-dourado-escuro' },
         ].map((kpi) => (
           <div key={kpi.label} className="card p-4">
             <p className="text-[11px] font-body text-aletis-grafite-claro">{kpi.label}</p>
@@ -632,7 +641,7 @@ function FluxoCaixaContent({ onExport }: { onExport: (fmt: string) => void }) {
               <Tooltip content={<CustomTooltip />} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="entrada" name="Entradas" fill="#27AE60" radius={[4, 4, 0, 0]} barSize={24} />
-              <Bar dataKey="saida" name="Saidas" fill="#C0392B" radius={[4, 4, 0, 0]} barSize={24} />
+              <Bar dataKey="saida" name="Saídas" fill="#C0392B" radius={[4, 4, 0, 0]} barSize={24} />
               <Bar dataKey="saldo" name="Saldo" fill="#C9A84C" radius={[4, 4, 0, 0]} barSize={24} />
             </BarChart>
           </ResponsiveContainer>
@@ -658,9 +667,9 @@ function AuditoriaContent({ onExport }: { onExport: (fmt: string) => void }) {
     <div className="space-y-6 animate-fade-in">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Acoes Registradas', valor: '1.247', cor: '#0F4C35', bg: 'bg-aletis-verde/10', Icon: Eye },
+          { label: 'Ações Registradas', valor: '1.247', cor: '#0F4C35', bg: 'bg-aletis-verde/10', Icon: Eye },
           { label: 'Consultas LGPD', valor: '86', cor: '#3B82F6', bg: 'bg-blue-50', Icon: Shield },
-          { label: 'Exportacoes', valor: '34', cor: '#C9A84C', bg: 'bg-aletis-dourado/10', Icon: Download },
+          { label: 'Exportações', valor: '34', cor: '#C9A84C', bg: 'bg-aletis-dourado/10', Icon: Download },
           { label: 'Alertas', valor: '0', cor: '#27AE60', bg: 'bg-positivo/10', Icon: CheckCircle2 },
         ].map((kpi) => (
           <div key={kpi.label} className="card p-4">
@@ -686,8 +695,8 @@ function AuditoriaContent({ onExport }: { onExport: (fmt: string) => void }) {
             <thead>
               <tr className="border-b border-aletis-borda">
                 <th className="text-left py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Data/Hora</th>
-                <th className="text-left py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Usuario</th>
-                <th className="text-left py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Acao</th>
+                <th className="text-left py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Usuário</th>
+                <th className="text-left py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Ação</th>
                 <th className="text-center py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Tipo</th>
                 <th className="text-center py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Status</th>
               </tr>
@@ -737,8 +746,8 @@ function AuditoriaContent({ onExport }: { onExport: (fmt: string) => void }) {
         <div>
           <p className="text-xs font-display font-bold text-aletis-grafite-escuro">Conformidade LGPD</p>
           <p className="text-[11px] font-body text-aletis-grafite-medio mt-1">
-            Todos os acessos a dados pessoais sao registrados conforme Art. 37 da LGPD (Lei 13.709/2018).
-            Dados anonimizados automaticamente apos encerramento de contrato. Ultimo backup: 15/04/2026 17:30.
+            Todos os acessos a dados pessoais são registrados conforme Art. 37 da LGPD (Lei 13.709/2018).
+            Dados anonimizados automaticamente após encerramento de contrato. Último backup: 15/04/2026 17:30.
           </p>
         </div>
       </div>
@@ -784,13 +793,13 @@ export default function Relatorios() {
             linhas: CLIENTES_POR_ESTADO.map(c => [c.estado, c.clientes]),
           },
           {
-            tipo: 'tabela', titulo: 'Clientes por Estagio',
-            colunas: ['Estagio', 'Qtd'],
+            tipo: 'tabela', titulo: 'Clientes por Estágio',
+            colunas: ['Estágio', 'Qtd'],
             linhas: CLIENTES_POR_ESTAGIO.map(c => [c.name, c.value]),
           },
           {
-            tipo: 'tabela', titulo: 'Top 10 Clientes por Divida',
-            colunas: ['Cliente', 'Cidade/UF', 'Divida', 'Estagio', 'Credor'],
+            tipo: 'tabela', titulo: 'Top 10 Clientes por Dívida',
+            colunas: ['Cliente', 'Cidade/UF', 'Dívida', 'Estágio', 'Credor'],
             linhas: TOP_CLIENTES.map(c => [c.nome, c.cidade, fmtBRL(c.divida), c.estagio, c.credor]),
           },
         ],
@@ -803,7 +812,7 @@ export default function Relatorios() {
         sections: [
           {
             tipo: 'tabela', titulo: 'Rentabilidade Mensal',
-            colunas: ['Mes', 'Receita', 'Custo', 'Lucro'],
+            colunas: ['Mês', 'Receita', 'Custo', 'Lucro'],
             linhas: RENTABILIDADE_MENSAL.map(r => [r.mes, fmtBRL(r.receita), fmtBRL(r.custo), fmtBRL(r.lucro)]),
           },
         ],
@@ -833,7 +842,7 @@ export default function Relatorios() {
         sections: [
           {
             tipo: 'texto', titulo: 'Resumo',
-            texto: 'Relatorio de inteligencia de mercado com indicadores econômicos (Selic, IPCA, Dolar), preços de commodities agrícolas (soja, milho, café, boi gordo, cafe arabica) e projeções de mercado. Dados obtidos em tempo real via APIs do BCB, CONAB e CEPEA.',
+            texto: 'Relatório de inteligência de mercado com indicadores econômicos (Selic, IPCA, Dólar), preços de commodities agrícolas (soja, milho, café, boi gordo, café arábica) e projeções de mercado. Dados obtidos em tempo real via APIs do BCB, CONAB e CEPEA.',
           },
         ],
       }
@@ -845,7 +854,7 @@ export default function Relatorios() {
         sections: [
           {
             tipo: 'tabela', titulo: 'Fluxo de Caixa Mensal',
-            colunas: ['Mes', 'Entrada', 'Saida', 'Saldo'],
+            colunas: ['Mês', 'Entrada', 'Saída', 'Saldo'],
             linhas: FLUXO_MENSAL.map(f => [f.mes, fmtBRL(f.entrada), fmtBRL(f.saida), fmtBRL(f.saldo)]),
           },
         ],
@@ -858,7 +867,7 @@ export default function Relatorios() {
       sections: [
         {
           tipo: 'tabela', titulo: 'Log de Auditoria',
-          colunas: ['Data/Hora', 'Usuario', 'Acao', 'Tipo', 'Status'],
+          colunas: ['Data/Hora', 'Usuário', 'Ação', 'Tipo', 'Status'],
           linhas: AUDITORIA_LOG.map(a => [a.data, a.usuario, a.acao, a.tipo, a.status]),
         },
       ],
@@ -899,10 +908,10 @@ export default function Relatorios() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold text-aletis-grafite-escuro">
-            Relatorios
+            Relatórios
           </h1>
           <p className="text-aletis-grafite-medio mt-1 font-body text-sm">
-            Relatorios dinamicos e exportacao de dados do sistema ALETIS
+            Relatórios dinâmicos e exportação de dados do sistema ALETIS
           </p>
         </div>
         {selectedReport && (
@@ -911,7 +920,7 @@ export default function Relatorios() {
             className="flex items-center gap-2 text-sm font-body text-aletis-verde hover:text-aletis-verde-medio transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Voltar aos relatorios
+            Voltar aos relatórios
           </button>
         )}
       </div>
@@ -922,7 +931,7 @@ export default function Relatorios() {
           <div className="flex items-center gap-2 mb-4">
             <BarChart3 className="w-5 h-5 text-aletis-verde" />
             <h2 className="text-lg font-display font-bold text-aletis-grafite-escuro">
-              Relatorios Disponiveis
+              Relatórios Disponíveis
             </h2>
           </div>
 

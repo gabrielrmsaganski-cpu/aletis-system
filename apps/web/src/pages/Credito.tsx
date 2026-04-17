@@ -43,7 +43,7 @@ function ServerVerifiedBadge({ loading, verified, error }: { loading: boolean; v
     return (
       <span className="inline-flex items-center gap-1.5 text-[11px] font-body text-ambar">
         <AlertTriangle className="w-3.5 h-3.5" />
-        Servidor indisponivel — usando calculo local
+        Servidor indisponível — usando cálculo local
       </span>
     )
   }
@@ -367,11 +367,11 @@ function CalculadoraCET() {
     <SectionCard
       icon={Calculator}
       title="Calculadora de CET"
-      subtitle="Custo Efetivo Total - Compare o custo real do credito"
+      subtitle="Custo Efetivo Total - Compare o custo real do crédito"
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
         <InputField
-          label="Valor do Credito"
+          label="Valor do Crédito"
           value={valorCredito}
           onChange={setValorCredito}
           placeholder="100.000"
@@ -406,7 +406,7 @@ function CalculadoraCET() {
           suffix="R$"
         />
         <InputField
-          label="Taxas Cartorio"
+          label="Taxas Cartório"
           value={taxasCartorio}
           onChange={setTaxasCartorio}
           placeholder="500"
@@ -464,7 +464,7 @@ function CalculadoraCET() {
           {/* Comparison bar */}
           <div className="bg-aletis-bege rounded-xl p-4">
             <p className="text-xs font-body text-aletis-grafite-claro mb-3">
-              Comparacao: Taxa Informada vs CET
+              Comparação: Taxa Informada vs CET
             </p>
             <div className="space-y-2">
               <div className="flex items-center gap-3">
@@ -507,7 +507,7 @@ function CalculadoraCET() {
             <div className="flex items-center gap-3 bg-alerta/10 border border-alerta/20 rounded-xl p-4">
               <AlertTriangle className="w-5 h-5 text-alerta flex-shrink-0" />
               <p className="text-sm font-body text-alerta font-medium">
-                Atencao: CET significativamente acima da taxa informada
+                Atenção: CET significativamente acima da taxa informada
               </p>
             </div>
           )}
@@ -516,7 +516,7 @@ function CalculadoraCET() {
             <div className="flex items-center gap-3 bg-positivo/10 border border-positivo/20 rounded-xl p-4">
               <CheckCircle className="w-5 h-5 text-positivo flex-shrink-0" />
               <p className="text-sm font-body text-positivo font-medium">
-                CET dentro de parametros razoaveis em relacao a taxa informada
+                CET dentro de parâmetros razoáveis em relação à taxa informada
               </p>
             </div>
           )}
@@ -594,7 +594,7 @@ function CalculadoraSpread() {
     <SectionCard
       icon={TrendingUp}
       title="Calculadora de Spread"
-      subtitle="Analise a diferenca entre taxa original e praticada"
+      subtitle="Analise a diferença entre taxa original e praticada"
     >
       <div className="bg-aletis-dourado/5 border border-aletis-dourado/20 rounded-xl p-3 mb-5">
         <p className="text-xs font-body text-aletis-dourado-escuro">
@@ -641,7 +641,7 @@ function CalculadoraSpread() {
           {/* Visual comparison bar */}
           <div className="bg-aletis-bege rounded-xl p-4">
             <p className="text-xs font-body text-aletis-grafite-claro mb-3">
-              Comparacao Visual
+              Comparação Visual
             </p>
             <div className="space-y-3">
               <div>
@@ -684,7 +684,7 @@ function CalculadoraSpread() {
           {displayResult.analiseServidor && (
             <div className="bg-aletis-bege rounded-xl p-3">
               <p className="text-[11px] font-body text-aletis-grafite-claro leading-relaxed">
-                <strong>Analise do servidor:</strong> {displayResult.analiseServidor}
+                <strong>Análise do servidor:</strong> {displayResult.analiseServidor}
               </p>
             </div>
           )}
@@ -696,7 +696,7 @@ function CalculadoraSpread() {
                 <p className="text-sm font-body text-alerta font-bold">SPREAD EXCESSIVO</p>
                 <p className="text-xs font-body text-alerta/80 mt-0.5">
                   O spread relativo de {fmtPct(displayResult.spreadRelativo)} excede o limite de 50%.
-                  Possivel pratica abusiva.
+                  Possível prática abusiva.
                 </p>
               </div>
             </div>
@@ -830,12 +830,12 @@ function SimuladorAmortizacao() {
   return (
     <SectionCard
       icon={Table}
-      title="Simulador de Amortizacao"
+      title="Simulador de Amortização"
       subtitle="Gere tabelas SAC ou PRICE completas"
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
         <InputField
-          label="Valor do Emprestimo"
+          label="Valor do Empréstimo"
           value={valor}
           onChange={setValor}
           placeholder="500.000"
@@ -857,7 +857,7 @@ function SimuladorAmortizacao() {
         />
         <div>
           <label className="block text-xs font-body font-medium text-aletis-grafite-medio mb-1.5">
-            Sistema de Amortizacao
+            Sistema de Amortização
           </label>
           <div className="relative">
             <select
@@ -866,14 +866,14 @@ function SimuladorAmortizacao() {
               className="input-field appearance-none cursor-pointer"
             >
               <option value="PRICE">PRICE (Parcelas Fixas)</option>
-              <option value="SAC">SAC (Amortizacao Constante)</option>
+              <option value="SAC">SAC (Amortização Constante)</option>
             </select>
             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-grafite-claro pointer-events-none" />
           </div>
         </div>
         <div>
           <label className="block text-xs font-body font-medium text-aletis-grafite-medio mb-1.5">
-            Data de Inicio
+            Data de Início
           </label>
           <input
             type="date"
@@ -924,7 +924,7 @@ function SimuladorAmortizacao() {
                   <th className="px-3 py-2.5 text-left font-semibold">Data</th>
                   <th className="px-3 py-2.5 text-right font-semibold">Saldo Inicial</th>
                   <th className="px-3 py-2.5 text-right font-semibold">Juros</th>
-                  <th className="px-3 py-2.5 text-right font-semibold">Amortizacao</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Amortização</th>
                   <th className="px-3 py-2.5 text-right font-semibold">Pagamento</th>
                   <th className="px-3 py-2.5 text-right font-semibold">Saldo Final</th>
                 </tr>
@@ -1020,7 +1020,7 @@ function SimuladorRenegociacao() {
       schedule.push({
         data: fmtDate(d),
         valor: 0,
-        tipo: 'Carencia',
+        tipo: 'Carência',
       })
     }
 
@@ -1059,7 +1059,7 @@ function SimuladorRenegociacao() {
         schedule.push({
           data: fmtDate(addMonths(startDate, i)),
           valor: 0,
-          tipo: 'Carencia',
+          tipo: 'Carência',
         })
       }
       for (let i = 1; i <= n; i++) {
@@ -1115,8 +1115,8 @@ function SimuladorRenegociacao() {
   return (
     <SectionCard
       icon={RefreshCw}
-      title="Simulador de Renegociacao"
-      subtitle="Compare cenarios e alinhe pagamentos com a safra"
+      title="Simulador de Renegociação"
+      subtitle="Compare cenários e alinhe pagamentos com a safra"
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <InputField
@@ -1141,7 +1141,7 @@ function SimuladorRenegociacao() {
           suffix="meses"
         />
         <InputField
-          label="Carencia"
+          label="Carência"
           value={carencia}
           onChange={setCarencia}
           placeholder="6"
@@ -1154,7 +1154,7 @@ function SimuladorRenegociacao() {
         className="btn-primary flex items-center gap-2 mb-5"
       >
         <RefreshCw className="w-4 h-4" />
-        Simular Renegociacao
+        Simular Renegociação
       </button>
 
       {result && (
@@ -1169,7 +1169,7 @@ function SimuladorRenegociacao() {
             <div className="rounded-xl border border-alerta/20 bg-alerta/5 p-5">
               <h3 className="text-sm font-display font-semibold text-alerta mb-4 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4" />
-                Cenario Atual
+                Cenário Atual
               </h3>
               <div className="space-y-3">
                 <div className="flex justify-between">
@@ -1205,7 +1205,7 @@ function SimuladorRenegociacao() {
             <div className="rounded-xl border border-positivo/20 bg-positivo/5 p-5">
               <h3 className="text-sm font-display font-semibold text-positivo mb-4 flex items-center gap-2">
                 <CheckCircle className="w-4 h-4" />
-                Cenario Proposto
+                Cenário Proposto
               </h3>
               <div className="space-y-3">
                 <div className="flex justify-between">
@@ -1217,7 +1217,7 @@ function SimuladorRenegociacao() {
                 <div className="flex justify-between">
                   <span className="text-xs font-body text-aletis-grafite-claro">Prazo</span>
                   <span className="text-sm font-body font-semibold text-aletis-grafite-escuro">
-                    {novoPrazo} meses + {carencia}m carencia
+                    {novoPrazo} meses + {carencia}m carência
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -1248,7 +1248,7 @@ function SimuladorRenegociacao() {
                 {fmtBRL(result.economia)}
               </p>
               <p className="text-sm font-body text-positivo/80 mt-1">
-                Reducao de {fmtPct(result.economiaPercent)} no custo total
+                Redução de {fmtPct(result.economiaPercent)} no custo total
               </p>
             </div>
           )}
@@ -1283,7 +1283,7 @@ function SimuladorRenegociacao() {
                       <td className="px-3 py-2">
                         <span
                           className={`badge text-[10px] ${
-                            row.tipo === 'Carencia'
+                            row.tipo === 'Carência'
                               ? 'bg-ambar/10 text-ambar'
                               : 'bg-positivo/10 text-positivo'
                           }`}
@@ -1381,7 +1381,7 @@ function ConversorTaxas() {
     <SectionCard
       icon={ArrowRightLeft}
       title="Conversor de Taxas"
-      subtitle="Converta entre taxas mensais, anuais e diarias (juros compostos)"
+      subtitle="Converta entre taxas mensais, anuais e diárias (juros compostos)"
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
         <InputField
@@ -1393,7 +1393,7 @@ function ConversorTaxas() {
         />
         <div>
           <label className="block text-xs font-body font-medium text-aletis-grafite-medio mb-1.5">
-            Direcao da Conversao
+            Direção da Conversão
           </label>
           <div className="flex rounded-xl border border-aletis-borda overflow-hidden">
             <button
@@ -1429,7 +1429,7 @@ function ConversorTaxas() {
             <ResultBadge label="Taxa Mensal" value={fmtPct(displayResult.mensal, 4)} variant="green" />
             <ResultBadge label="Taxa Anual" value={fmtPct(displayResult.anual, 4)} variant="gold" />
             <ResultBadge
-              label="Taxa Diaria (252 d.u.)"
+              label="Taxa Diária (252 d.u.)"
               value={fmtPct(displayResult.diaria, 6)}
               variant="green"
             />
@@ -1439,8 +1439,8 @@ function ConversorTaxas() {
 
       <div className="mt-4 bg-aletis-bege rounded-xl p-3">
         <p className="text-[11px] font-body text-aletis-grafite-claro leading-relaxed">
-          <strong>Formula:</strong> Conversao por juros compostos. Mensal → Anual: (1 + i)<sup>12</sup> - 1.
-          Anual → Mensal: (1 + i)<sup>1/12</sup> - 1. Diaria utiliza 252 dias uteis (21 d.u./mes para mensal, 252 d.u./ano para anual).
+          <strong>Fórmula:</strong> Conversão por juros compostos. Mensal → Anual: (1 + i)<sup>12</sup> - 1.
+          Anual → Mensal: (1 + i)<sup>1/12</sup> - 1. Diária utiliza 252 dias úteis (21 d.u./mês para mensal, 252 d.u./ano para anual).
         </p>
       </div>
     </SectionCard>
@@ -1458,15 +1458,15 @@ export default function Credito() {
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
           <div>
             <h1 className="text-3xl lg:text-4xl font-display font-bold text-aletis-grafite-escuro tracking-tight">
-              Analise de Credito
+              Análise de Crédito
             </h1>
             <p className="text-aletis-grafite-claro font-body mt-1 text-sm">
-              Ferramentas de calculo financeiro para analise e renegociacao de dividas rurais
+              Ferramentas de cálculo financeiro para análise e renegociação de dívidas rurais
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs font-body text-aletis-grafite-claro">
             <Calculator className="w-4 h-4 text-aletis-verde" />
-            13 calculadoras disponiveis (5 basicas + 8 premium)
+            13 calculadoras disponíveis (5 básicas + 8 premium)
           </div>
         </div>
       </header>

@@ -1,3 +1,13 @@
+/**
+ * App (Roteamento Raiz)
+ *
+ * Ponto de entrada de rotas do sistema ALETIS. Portal do Cliente
+ * (/portal-cliente) usa layout independente (sem sidebar). Demais
+ * rotas sao agrupadas dentro do Layout completo: Dashboard, CRM,
+ * Propostas, Prospeccao, Mercado, Credito, WhatsApp, ALIX IA,
+ * Prospeccao, Relatorios, Clima e Configuracoes. Rotas
+ * desconhecidas redirecionam para /dashboard.
+ */
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/layout/Layout'
 import Dashboard from './pages/Dashboard'
@@ -17,7 +27,7 @@ import Prospeccao from './pages/Prospeccao'
 export default function App() {
   return (
     <Routes>
-      {/* Portal do Cliente — standalone layout, sem sidebar */}
+      {/* Portal do Cliente — layout independente, sem sidebar */}
       <Route path="/portal-cliente" element={<PortalCliente />} />
 
       {/* Rotas do sistema — com Layout completo (sidebar + header + ticker) */}

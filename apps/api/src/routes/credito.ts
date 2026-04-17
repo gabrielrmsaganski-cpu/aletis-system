@@ -30,7 +30,7 @@ import {
 } from '../lib/calculadoras-premium.js'
 
 /* ========================================================================
- *  Roteador — endpoints de calculo financeiro
+ *  Roteador — endpoints de cálculo financeiro
  * ======================================================================== */
 
 export default async function (fastify: FastifyInstance) {
@@ -43,13 +43,13 @@ export default async function (fastify: FastifyInstance) {
 
     if (!body.fluxos || !Array.isArray(body.fluxos) || body.fluxos.length < 2) {
       reply.status(400)
-      return { success: false, error: 'fluxos e obrigatorio (array com minimo 2 items, cada um com { data, valor })' }
+      return { success: false, error: 'fluxos é obrigatório (array com mínimo 2 items, cada um com { data, valor })' }
     }
 
     for (const f of body.fluxos) {
       if (!f.data || f.valor === undefined) {
         reply.status(400)
-        return { success: false, error: 'Cada fluxo deve ter { data: "yyyy-mm-dd", valor: number }. Saidas negativas, entradas positivas.' }
+        return { success: false, error: 'Cada fluxo deve ter { data: "yyyy-mm-dd", valor: number }. Saídas negativas, entradas positivas.' }
       }
     }
 
@@ -66,7 +66,7 @@ export default async function (fastify: FastifyInstance) {
       }
     } catch (err) {
       reply.status(422)
-      return { success: false, error: `Erro no calculo: ${(err as Error).message}` }
+      return { success: false, error: `Erro no cálculo: ${(err as Error).message}` }
     }
   })
 
@@ -79,7 +79,7 @@ export default async function (fastify: FastifyInstance) {
 
     if (body.taxaOriginal === undefined || body.taxaPraticada === undefined) {
       reply.status(400)
-      return { success: false, error: 'taxaOriginal e taxaPraticada sao obrigatorias (% ao mes)' }
+      return { success: false, error: 'taxaOriginal e taxaPraticada são obrigatórias (% ao mês)' }
     }
 
     if (body.taxaOriginal <= 0 || body.taxaPraticada <= 0) {
@@ -93,13 +93,13 @@ export default async function (fastify: FastifyInstance) {
       success: true,
       data: {
         ...resultado,
-        unidade: '% ao mes (entradas) / % ao ano (saidas)',
+        unidade: '% ao mês (entradas) / % ao ano (saídas)',
         selicReferenciaAnual: 14.25,
         analise: resultado.excessoSobreSelic > 10
-          ? 'Spread MUITO acima da Selic - possivel abusividade'
+          ? 'Spread MUITO acima da Selic - possível abusividade'
           : resultado.excessoSobreSelic > 5
             ? 'Spread elevado sobre Selic - requer justificativa'
-            : 'Spread dentro de parametros razoaveis',
+            : 'Spread dentro de parâmetros razoáveis',
       },
     }
   })
@@ -118,15 +118,15 @@ export default async function (fastify: FastifyInstance) {
     }
 
     const errors: string[] = []
-    if (!body.valor || body.valor <= 0) errors.push('valor e obrigatorio e deve ser positivo')
-    if (!body.taxa || body.taxa <= 0) errors.push('taxa (mensal, %) e obrigatoria e deve ser positiva')
-    if (!body.prazo || body.prazo < 1) errors.push('prazo (meses) e obrigatorio e deve ser >= 1')
+    if (!body.valor || body.valor <= 0) errors.push('valor é obrigatório e deve ser positivo')
+    if (!body.taxa || body.taxa <= 0) errors.push('taxa (mensal, %) é obrigatória e deve ser positiva')
+    if (!body.prazo || body.prazo < 1) errors.push('prazo (meses) é obrigatório e deve ser >= 1')
     if (!body.sistema || !['SAC', 'PRICE'].includes(body.sistema)) errors.push('sistema deve ser "SAC" ou "PRICE"')
-    if (!body.dataInicio) errors.push('dataInicio (yyyy-mm-dd) e obrigatorio')
+    if (!body.dataInicio) errors.push('dataInicio (yyyy-mm-dd) é obrigatório')
 
     if (errors.length > 0) {
       reply.status(400)
-      return { success: false, error: 'Erro de validacao', detalhes: errors }
+      return { success: false, error: 'Erro de validação', detalhes: errors }
     }
 
     try {
@@ -164,7 +164,7 @@ export default async function (fastify: FastifyInstance) {
       }
     } catch (err) {
       reply.status(422)
-      return { success: false, error: `Erro na simulacao: ${(err as Error).message}` }
+      return { success: false, error: `Erro na simulação: ${(err as Error).message}` }
     }
   })
 
@@ -182,14 +182,14 @@ export default async function (fastify: FastifyInstance) {
     }
 
     const errors: string[] = []
-    if (!body.valorOriginal || body.valorOriginal <= 0) errors.push('valorOriginal e obrigatorio')
-    if (!body.dataInicio) errors.push('dataInicio (yyyy-mm-dd) e obrigatorio')
-    if (!body.taxaMensal || body.taxaMensal <= 0) errors.push('taxaMensal (%) e obrigatoria')
-    if (!body.dataCorte) errors.push('dataCorte (yyyy-mm-dd) e obrigatorio')
+    if (!body.valorOriginal || body.valorOriginal <= 0) errors.push('valorOriginal é obrigatório')
+    if (!body.dataInicio) errors.push('dataInicio (yyyy-mm-dd) é obrigatório')
+    if (!body.taxaMensal || body.taxaMensal <= 0) errors.push('taxaMensal (%) é obrigatória')
+    if (!body.dataCorte) errors.push('dataCorte (yyyy-mm-dd) é obrigatório')
 
     if (errors.length > 0) {
       reply.status(400)
-      return { success: false, error: 'Erro de validacao', detalhes: errors }
+      return { success: false, error: 'Erro de validação', detalhes: errors }
     }
 
     try {
@@ -217,30 +217,30 @@ export default async function (fastify: FastifyInstance) {
       }
     } catch (err) {
       reply.status(422)
-      return { success: false, error: `Erro no recalculo: ${(err as Error).message}` }
+      return { success: false, error: `Erro no recálculo: ${(err as Error).message}` }
     }
   })
 
   /* ------------------------------------------------------------------ *
    *  POST /api/credito/projetar-fluxo-caixa
-   *  Projecao de fluxo de caixa agricola
+   *  Projeção de fluxo de caixa agrícola
    * ------------------------------------------------------------------ */
   fastify.post('/api/credito/projetar-fluxo-caixa', async (request: FastifyRequest, reply: FastifyReply) => {
     const body = request.body as Partial<FluxoCaixaParams>
 
     const errors: string[] = []
-    if (!body.cultura) errors.push('cultura e obrigatorio')
-    if (!body.areaTotalHa || body.areaTotalHa <= 0) errors.push('areaTotalHa e obrigatorio')
-    if (!body.produtividadeSacasHa || body.produtividadeSacasHa <= 0) errors.push('produtividadeSacasHa e obrigatorio')
-    if (!body.precoSacaAtual || body.precoSacaAtual <= 0) errors.push('precoSacaAtual e obrigatorio')
-    if (!body.custoHa || body.custoHa <= 0) errors.push('custoHa e obrigatorio')
-    if (!body.dataPlantio) errors.push('dataPlantio (yyyy-mm-dd) e obrigatorio')
-    if (!body.dataColheita) errors.push('dataColheita (yyyy-mm-dd) e obrigatorio')
-    if (!body.dividas || !Array.isArray(body.dividas)) errors.push('dividas e obrigatorio (array)')
+    if (!body.cultura) errors.push('cultura é obrigatório')
+    if (!body.areaTotalHa || body.areaTotalHa <= 0) errors.push('areaTotalHa é obrigatório')
+    if (!body.produtividadeSacasHa || body.produtividadeSacasHa <= 0) errors.push('produtividadeSacasHa é obrigatório')
+    if (!body.precoSacaAtual || body.precoSacaAtual <= 0) errors.push('precoSacaAtual é obrigatório')
+    if (!body.custoHa || body.custoHa <= 0) errors.push('custoHa é obrigatório')
+    if (!body.dataPlantio) errors.push('dataPlantio (yyyy-mm-dd) é obrigatório')
+    if (!body.dataColheita) errors.push('dataColheita (yyyy-mm-dd) é obrigatório')
+    if (!body.dividas || !Array.isArray(body.dividas)) errors.push('dividas é obrigatório (array)')
 
     if (errors.length > 0) {
       reply.status(400)
-      return { success: false, error: 'Erro de validacao', detalhes: errors }
+      return { success: false, error: 'Erro de validação', detalhes: errors }
     }
 
     try {
@@ -261,20 +261,20 @@ export default async function (fastify: FastifyInstance) {
             dataColheita: body.dataColheita,
           },
           analise: {
-            viabilidade: resultado.capacidadePagamento < 70 ? 'VIAVEL' : resultado.capacidadePagamento < 100 ? 'APERTADO' : 'INVIAVEL',
+            viabilidade: resultado.capacidadePagamento < 70 ? 'VIÁVEL' : resultado.capacidadePagamento < 100 ? 'APERTADO' : 'INVIÁVEL',
             comprometimentoReceita: `${resultado.capacidadePagamento.toFixed(1)}%`,
             recomendacao:
               resultado.capacidadePagamento < 70
-                ? 'Fluxo de caixa comporta as dividas com margem de seguranca'
+                ? 'Fluxo de caixa comporta as dívidas com margem de segurança'
                 : resultado.capacidadePagamento < 100
-                  ? 'Fluxo de caixa apertado - considerar renegociacao de prazos'
-                  : 'Dividas superam capacidade de pagamento - reestruturacao necessaria',
+                  ? 'Fluxo de caixa apertado - considerar renegociação de prazos'
+                  : 'Dívidas superam capacidade de pagamento - reestruturação necessária',
           },
         },
       }
     } catch (err) {
       reply.status(422)
-      return { success: false, error: `Erro na projecao: ${(err as Error).message}` }
+      return { success: false, error: `Erro na projeção: ${(err as Error).message}` }
     }
   })
 
@@ -287,7 +287,7 @@ export default async function (fastify: FastifyInstance) {
 
     if (!taxa || isNaN(Number(taxa))) {
       reply.status(400)
-      return { success: false, error: 'taxa e obrigatoria (numero, ex: 1.5)' }
+      return { success: false, error: 'taxa é obrigatória (número, ex: 1.5)' }
     }
 
     const tipoValido = tipo as 'mensal' | 'anual' | 'diaria'
@@ -306,7 +306,7 @@ export default async function (fastify: FastifyInstance) {
           taxa: Number(taxa),
           tipo,
         },
-        nota: 'Taxas equivalentes compostas (juros sobre juros). Formula: (1+i)^n - 1',
+        nota: 'Taxas equivalentes compostas (juros sobre juros). Fórmula: (1+i)^n - 1',
       },
     }
   })
@@ -316,7 +316,7 @@ export default async function (fastify: FastifyInstance) {
    *  Inspiradas em propostas reais ALETIS
    * ================================================================ */
 
-  // 1. Memoria de Calculo Completa
+  // 1. Memória de Cálculo Completa
   fastify.post('/api/credito/memoria-calculo', async (request, reply) => {
     try {
       const resultado = calcularMemoriaCompleta(request.body as any)
@@ -327,7 +327,7 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
-  // 2. Dacao em Pagamento
+  // 2. Dação em Pagamento
   fastify.post('/api/credito/dacao-pagamento', async (request, reply) => {
     try {
       const resultado = simularDacao(request.body as any)
@@ -338,7 +338,7 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
-  // 3. Alongamento (Sumula 298 + MCR 2-6-4)
+  // 3. Alongamento (Súmula 298 + MCR 2-6-4)
   fastify.post('/api/credito/alongamento', async (request, reply) => {
     try {
       const resultado = simularAlongamento(request.body as any)
@@ -349,7 +349,7 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
-  // 4. Capitalizacao de Despesas (analise abusividade)
+  // 4. Capitalização de Despesas (análise abusividade)
   fastify.post('/api/credito/capitalizacao-despesas', async (request, reply) => {
     try {
       const resultado = analisarCapitalizacaoDespesas(request.body as any)
@@ -360,7 +360,7 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
-  // 5. Descaracterizacao de Credito Rural
+  // 5. Descaracterização de Crédito Rural
   fastify.post('/api/credito/descaracterizacao', async (request, reply) => {
     try {
       const resultado = detectarDescaracterizacao(request.body as any)
@@ -382,7 +382,7 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
-  // 7. Equivalencia em Sacas (hedge natural)
+  // 7. Equivalência em Sacas (hedge natural)
   fastify.post('/api/credito/equivalencia-sacas', async (request, reply) => {
     try {
       const resultado = calcularEquivalenciaSacas(request.body as any)
@@ -393,7 +393,7 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
-  // 8. Stress Test de Preco
+  // 8. Stress Test de Preço
   fastify.post('/api/credito/stress-test-preco', async (request, reply) => {
     try {
       const resultado = executarStressTest(request.body as any)
@@ -426,7 +426,7 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
-  // 11. Arrendamento - Analise de Impacto
+  // 11. Arrendamento - Análise de Impacto
   fastify.post('/api/credito/arrendamento', async (request, reply) => {
     try {
       const resultado = analisarArrendamento(request.body as any)
@@ -448,7 +448,7 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
-  // 13. CPR - Cedula de Produto Rural
+  // 13. CPR - Cédula de Produto Rural
   fastify.post('/api/credito/cpr', async (request, reply) => {
     try {
       const resultado = simularCPR(request.body as any)
@@ -459,7 +459,7 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
-  // 14. Pericia Revisional
+  // 14. Perícia Revisional
   fastify.post('/api/credito/pericia-revisional', async (request, reply) => {
     try {
       const resultado = executarPericiaRevisional(request.body as any)
@@ -470,7 +470,7 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
-  // 15. Lista de calculadoras disponiveis (manifest)
+  // 15. Lista de calculadoras disponíveis (manifest)
   fastify.get('/api/credito/calculadoras', async () => {
     return {
       success: true,
@@ -480,26 +480,26 @@ export default async function (fastify: FastifyInstance) {
           basicas: [
             { id: 'calcular-cet', nome: 'Calcular CET (TIR)', endpoint: 'POST /api/credito/calcular-cet' },
             { id: 'calcular-spread', nome: 'Analisar Spread', endpoint: 'POST /api/credito/calcular-spread' },
-            { id: 'simular-amortizacao', nome: 'Simular Amortizacao (SAC/PRICE)', endpoint: 'POST /api/credito/simular-amortizacao' },
-            { id: 'recalcular-divida', nome: 'Recalcular Divida', endpoint: 'POST /api/credito/recalcular-divida' },
-            { id: 'projetar-fluxo-caixa', nome: 'Fluxo de Caixa Agricola', endpoint: 'POST /api/credito/projetar-fluxo-caixa' },
+            { id: 'simular-amortizacao', nome: 'Simular Amortização (SAC/PRICE)', endpoint: 'POST /api/credito/simular-amortizacao' },
+            { id: 'recalcular-divida', nome: 'Recalcular Dívida', endpoint: 'POST /api/credito/recalcular-divida' },
+            { id: 'projetar-fluxo-caixa', nome: 'Fluxo de Caixa Agrícola', endpoint: 'POST /api/credito/projetar-fluxo-caixa' },
             { id: 'converter-taxa', nome: 'Converter Taxa', endpoint: 'GET /api/credito/converter-taxa' },
           ],
           premium: [
-            { id: 'memoria-calculo', nome: 'Memoria de Calculo Completa', endpoint: 'POST /api/credito/memoria-calculo' },
-            { id: 'dacao-pagamento', nome: 'Dacao em Pagamento', endpoint: 'POST /api/credito/dacao-pagamento' },
-            { id: 'alongamento', nome: 'Alongamento (Sumula 298)', endpoint: 'POST /api/credito/alongamento' },
-            { id: 'capitalizacao-despesas', nome: 'Analise Capitalizacao de Despesas', endpoint: 'POST /api/credito/capitalizacao-despesas' },
-            { id: 'descaracterizacao', nome: 'Descaracterizacao Credito Rural', endpoint: 'POST /api/credito/descaracterizacao' },
+            { id: 'memoria-calculo', nome: 'Memória de Cálculo Completa', endpoint: 'POST /api/credito/memoria-calculo' },
+            { id: 'dacao-pagamento', nome: 'Dação em Pagamento', endpoint: 'POST /api/credito/dacao-pagamento' },
+            { id: 'alongamento', nome: 'Alongamento (Súmula 298)', endpoint: 'POST /api/credito/alongamento' },
+            { id: 'capitalizacao-despesas', nome: 'Análise Capitalização de Despesas', endpoint: 'POST /api/credito/capitalizacao-despesas' },
+            { id: 'descaracterizacao', nome: 'Descaracterização Crédito Rural', endpoint: 'POST /api/credito/descaracterizacao' },
             { id: 'fluxo-plurianual', nome: 'Fluxo Plurianual 5 anos', endpoint: 'POST /api/credito/fluxo-plurianual' },
-            { id: 'equivalencia-sacas', nome: 'Equivalencia em Sacas', endpoint: 'POST /api/credito/equivalencia-sacas' },
-            { id: 'stress-test-preco', nome: 'Stress Test de Preco', endpoint: 'POST /api/credito/stress-test-preco' },
+            { id: 'equivalencia-sacas', nome: 'Equivalência em Sacas', endpoint: 'POST /api/credito/equivalencia-sacas' },
+            { id: 'stress-test-preco', nome: 'Stress Test de Preço', endpoint: 'POST /api/credito/stress-test-preco' },
             { id: 'multi-credor', nome: 'Comparador Multi-Credor', endpoint: 'POST /api/credito/multi-credor' },
             { id: 'enquadramento-pronaf', nome: 'Enquadramento Pronaf/Pronamp', endpoint: 'POST /api/credito/enquadramento-pronaf' },
-            { id: 'arrendamento', nome: 'Analise de Arrendamento', endpoint: 'POST /api/credito/arrendamento' },
+            { id: 'arrendamento', nome: 'Análise de Arrendamento', endpoint: 'POST /api/credito/arrendamento' },
             { id: 'parcelamento-safra', nome: 'Parcelamento por Safra', endpoint: 'POST /api/credito/parcelamento-safra' },
-            { id: 'cpr', nome: 'CPR - Cedula de Produto Rural', endpoint: 'POST /api/credito/cpr' },
-            { id: 'pericia-revisional', nome: 'Pericia Revisional', endpoint: 'POST /api/credito/pericia-revisional' },
+            { id: 'cpr', nome: 'CPR - Cédula de Produto Rural', endpoint: 'POST /api/credito/cpr' },
+            { id: 'pericia-revisional', nome: 'Perícia Revisional', endpoint: 'POST /api/credito/pericia-revisional' },
           ],
         },
       },

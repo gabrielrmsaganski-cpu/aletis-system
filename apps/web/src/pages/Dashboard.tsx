@@ -1,3 +1,13 @@
+/**
+ * Dashboard (Painel Principal)
+ *
+ * Pagina inicial do sistema ALETIS com visao geral do portfolio de
+ * reestruturacao de dividas rurais: KPIs (clientes, volume, economia,
+ * conversao), evolucao mensal, pipeline de negociacao, alertas de
+ * mercado dinamicos (SELIC, PTAX, focos de incendio, diesel) e metas
+ * do mes. Consome dados reais via /clientes, /mercado/indicadores,
+ * /mercado/incendios e /mercado/combustiveis/diesel.
+ */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApi, useApiFull } from '../hooks/useApi'
@@ -181,12 +191,12 @@ const portfolioData = [
 
 const stageData = [
   { name: 'Lead', value: 8, color: '#0A3526' },
-  { name: 'Qualificacao', value: 5, color: '#0F4C35' },
-  { name: 'Analise', value: 4, color: '#1B6B4A' },
+  { name: 'Qualificação', value: 5, color: '#0F4C35' },
+  { name: 'Análise', value: 4, color: '#1B6B4A' },
   { name: 'Proposta', value: 6, color: '#2A8F64' },
-  { name: 'Negociacao', value: 3, color: '#27AE60' },
+  { name: 'Negociação', value: 3, color: '#27AE60' },
   { name: 'Acordo', value: 4, color: '#C9A84C' },
-  { name: 'Concluido', value: 12, color: '#A68A3A' },
+  { name: 'Concluído', value: 12, color: '#A68A3A' },
 ]
 
 const recentActivity = [
@@ -389,16 +399,16 @@ export default function Dashboard() {
         icon: TrendingUp,
         titulo: selicValor ? `Selic em ${selicValor.toFixed(2).replace('.', ',')}% a.a.` : 'Selic em 14,75%',
         descricao: selicValor && selicValor > 14
-          ? `Taxa elevada encarece credito rural. Demanda por renegociacao em alta. ${ipcaValor ? `IPCA mensal: ${ipcaValor.toFixed(2).replace('.', ',')}%.` : ''}`
-          : 'COPOM pode iniciar ciclo de corte. Monitorar impacto nos recalculos de dividas rurais.',
+          ? `Taxa elevada encarece crédito rural. Demanda por renegociação em alta. ${ipcaValor ? `IPCA mensal: ${ipcaValor.toFixed(2).replace('.', ',')}%.` : ''}`
+          : 'COPOM pode iniciar ciclo de corte. Monitorar impacto nos recálculos de dívidas rurais.',
         tipo: 'ambar' as const,
       },
       {
         icon: Wheat,
-        titulo: ptaxValor ? `Dolar PTAX a R$ ${ptaxValor.toFixed(2).replace('.', ',')}` : 'Soja CBOT em alta',
+        titulo: ptaxValor ? `Dólar PTAX a R$ ${ptaxValor.toFixed(2).replace('.', ',')}` : 'Soja CBOT em alta',
         descricao: ptaxValor
-          ? `Exportadores favorecidos. Oportunidade para hedge de clientes com colheita proxima.`
-          : '+3,2% na semana. Oportunidade para hedge de clientes com colheita proxima.',
+          ? `Exportadores favorecidos. Oportunidade para hedge de clientes com colheita próxima.`
+          : '+3,2% na semana. Oportunidade para hedge de clientes com colheita próxima.',
         tipo: 'positivo' as const,
       },
     ]
@@ -414,8 +424,8 @@ export default function Dashboard() {
       const tipo = incendios.totalFocos > 500 ? 'alerta' as const : 'ambar' as const
       alerts.push({
         icon: AlertTriangle,
-        titulo: `${incendios.totalFocos.toLocaleString('pt-BR')} focos de incendio (24h)`,
-        descricao: `Satelite NASA VIIRS detectou focos ativos. Maiores concentracoes: ${topEstados}. Monitorar propriedades de clientes nessas regioes.`,
+        titulo: `${incendios.totalFocos.toLocaleString('pt-BR')} focos de incêndio (24h)`,
+        descricao: `Satélite NASA VIIRS detectou focos ativos. Maiores concentrações: ${topEstados}. Monitorar propriedades de clientes nessas regiões.`,
         tipo,
       })
     }
@@ -425,7 +435,7 @@ export default function Dashboard() {
       alerts.push({
         icon: DollarSign,
         titulo: `Diesel S10: R$ ${dieselNacional.precoMedio.toFixed(2).replace('.', ',')}/L`,
-        descricao: `Preco medio nacional do diesel (ANP). Custos de frete e operacao impactam margem dos produtores rurais.`,
+        descricao: `Preço médio nacional do diesel (ANP). Custos de frete e operação impactam margem dos produtores rurais.`,
         tipo: dieselNacional.precoMedio > 7 ? 'ambar' as const : 'positivo' as const,
       })
     }
@@ -497,7 +507,7 @@ export default function Dashboard() {
             </div>
             <span className="badge-verde text-[11px]">
               <ArrowUpRight className="w-3 h-3 mr-1" />
-              +3 este mes
+              +3 este mês
             </span>
           </div>
           <p className="text-4xl font-display font-bold text-aletis-grafite-escuro leading-none">
@@ -574,7 +584,7 @@ export default function Dashboard() {
             {taxaConversao.toFixed(1).replace('.', ',')}%
           </p>
           <p className="text-sm font-body text-aletis-grafite-claro mt-2">
-            Taxa de Conversao
+            Taxa de Conversão
           </p>
         </div>
       </section>
@@ -592,10 +602,10 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-                Evolucao do Portfolio
+                Evolução do Portfólio
               </h2>
               <p className="text-xs font-body text-aletis-grafite-claro mt-0.5">
-                Volume negociado mensal — ultimos 12 meses
+                Volume negociado mensal — últimos 12 meses
               </p>
             </div>
             <div className="flex items-center gap-3 text-xs font-body text-aletis-grafite-claro">
@@ -647,7 +657,7 @@ export default function Dashboard() {
         <div className="card-premium p-6 lg:col-span-2">
           <div className="mb-6">
             <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-              Distribuicao por Estagio
+              Distribuição por Estágio
             </h2>
             <p className="text-xs font-body text-aletis-grafite-claro mt-0.5">
               Clientes por fase do funil
@@ -710,7 +720,7 @@ export default function Dashboard() {
                 Atividade Recente
               </h2>
               <p className="text-xs font-body text-aletis-grafite-claro mt-0.5">
-                Ultimos eventos do sistema
+                Últimos eventos do sistema
               </p>
             </div>
             <button onClick={() => navigate('/crm')} className="text-xs font-body text-aletis-verde hover:text-aletis-verde-claro transition-colors flex items-center gap-1">
@@ -762,10 +772,10 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-                Pipeline de Negociacao
+                Pipeline de Negociação
               </h2>
               <p className="text-xs font-body text-aletis-grafite-claro mt-0.5">
-                Visao geral do funil ativo
+                Visão geral do funil ativo
               </p>
             </div>
             <button onClick={() => navigate('/crm')} className="text-xs font-body text-aletis-verde hover:text-aletis-verde-claro transition-colors flex items-center gap-1">
@@ -815,7 +825,7 @@ export default function Dashboard() {
           sectionVisible[2] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
         }`}
       >
-        {/* Proximos Vencimentos */}
+        {/* Próximos Vencimentos */}
         <div className="card-premium p-6">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2.5">
@@ -823,7 +833,7 @@ export default function Dashboard() {
                 <Calendar className="w-4.5 h-4.5 text-alerta" />
               </div>
               <h2 className="text-base font-display font-semibold text-aletis-grafite-escuro">
-                Proximos Vencimentos
+                Próximos Vencimentos
               </h2>
             </div>
           </div>
@@ -904,7 +914,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Metas do Mes */}
+        {/* Metas do Mês */}
         <div className="card-premium p-6">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2.5">
@@ -912,7 +922,7 @@ export default function Dashboard() {
                 <BarChart3 className="w-4.5 h-4.5 text-aletis-verde" />
               </div>
               <h2 className="text-base font-display font-semibold text-aletis-grafite-escuro">
-                Metas do Mes
+                Metas do Mês
               </h2>
             </div>
             <span className="text-xs font-body text-aletis-grafite-claro">Abril 2026</span>

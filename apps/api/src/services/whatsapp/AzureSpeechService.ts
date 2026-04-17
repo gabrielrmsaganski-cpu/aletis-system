@@ -31,7 +31,7 @@ function readConfig(): AzureSpeechConfig | null {
 export const VOZES_PT_BR_FEMININAS = {
   francisca: {
     nome: 'pt-BR-FranciscaNeural',
-    descricao: 'Voz feminina adulta, tom amigavel e confiavel (padrao ALETIS)',
+    descricao: 'Voz feminina adulta, tom amigável e confiável (padrão ALETIS)',
     estilos: ['assistant', 'calm'],
   },
   leticia: {
@@ -46,7 +46,7 @@ export const VOZES_PT_BR_FEMININAS = {
   },
   thalita: {
     nome: 'pt-BR-ThalitaMultilingualNeural',
-    descricao: 'Voz feminina multilingue (mais recente), expressao natural',
+    descricao: 'Voz feminina multilíngue (mais recente), expressão natural',
     estilos: ['chat', 'empathetic'],
   },
 }
@@ -123,9 +123,9 @@ export class AzureSpeechService {
   constructor() {
     this.config = readConfig()
     if (!this.config) {
-      console.warn('[AzureSpeech] AZURE_SPEECH_KEY / AZURE_SPEECH_REGION nao configurados — STT/TTS desabilitados')
+      console.warn('[AzureSpeech] AZURE_SPEECH_KEY / AZURE_SPEECH_REGION não configurados — STT/TTS desabilitados')
     } else {
-      console.log(`[AzureSpeech] Inicializado: regiao=${this.config.region} voz=${this.config.defaultVoice}`)
+      console.log(`[AzureSpeech] Inicializado: região=${this.config.region} voz=${this.config.defaultVoice}`)
     }
   }
 
@@ -155,7 +155,7 @@ export class AzureSpeechService {
     language: string = 'pt-BR',
   ): Promise<SpeechToTextResult> {
     if (!this.config) {
-      throw new Error('Azure Speech nao configurado (defina AZURE_SPEECH_KEY / AZURE_SPEECH_REGION)')
+      throw new Error('Azure Speech não configurado (defina AZURE_SPEECH_KEY / AZURE_SPEECH_REGION)')
     }
 
     const url = `https://${this.config.region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=${encodeURIComponent(language)}&format=detailed&profanity=masked`
@@ -180,7 +180,7 @@ export class AzureSpeechService {
     const status = data?.RecognitionStatus
 
     if (status !== 'Success') {
-      throw new Error(`Azure STT nao reconheceu (status=${status || 'desconhecido'})`)
+      throw new Error(`Azure STT não reconheceu (status=${status || 'desconhecido'})`)
     }
 
     const best = data?.NBest?.[0]
@@ -206,7 +206,7 @@ export class AzureSpeechService {
    */
   async textToSpeech(text: string, options: TextToSpeechOptions = {}): Promise<Buffer> {
     if (!this.config) {
-      throw new Error('Azure Speech nao configurado (defina AZURE_SPEECH_KEY / AZURE_SPEECH_REGION)')
+      throw new Error('Azure Speech não configurado (defina AZURE_SPEECH_KEY / AZURE_SPEECH_REGION)')
     }
 
     const voice = options.voice || this.config.defaultVoice

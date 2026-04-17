@@ -1,6 +1,6 @@
 // ============================================================
 // ALETIS — IBGE Service
-// Integrations: IBGE Localidades, SIDRA (producao agricola, censo)
+// Integrations: IBGE Localidades, SIDRA (produção agrícola, censo)
 // ============================================================
 
 import axios, { type AxiosInstance } from 'axios';
@@ -72,18 +72,18 @@ export interface FaixaFundiaria {
 // ── Fallback Data ────────────────────────────────────────────
 
 const FALLBACK_MUNICIPIOS_SP: MunicipioSimplificado[] = [
-  { codigoIbge: 3550308, nome: 'Sao Paulo', microrregiao: 'Sao Paulo', mesorregiao: 'Metropolitana de Sao Paulo', uf: 'SP' },
+  { codigoIbge: 3550308, nome: 'São Paulo', microrregiao: 'São Paulo', mesorregiao: 'Metropolitana de São Paulo', uf: 'SP' },
   { codigoIbge: 3509502, nome: 'Campinas', microrregiao: 'Campinas', mesorregiao: 'Campinas', uf: 'SP' },
-  { codigoIbge: 3543402, nome: 'Ribeirao Preto', microrregiao: 'Ribeirao Preto', mesorregiao: 'Ribeirao Preto', uf: 'SP' },
-  { codigoIbge: 3549805, nome: 'Sao Jose do Rio Preto', microrregiao: 'Sao Jose do Rio Preto', mesorregiao: 'Sao Jose do Rio Preto', uf: 'SP' },
+  { codigoIbge: 3543402, nome: 'Ribeirão Preto', microrregiao: 'Ribeirão Preto', mesorregiao: 'Ribeirão Preto', uf: 'SP' },
+  { codigoIbge: 3549805, nome: 'São José do Rio Preto', microrregiao: 'São José do Rio Preto', mesorregiao: 'São José do Rio Preto', uf: 'SP' },
   { codigoIbge: 3552205, nome: 'Sorocaba', microrregiao: 'Sorocaba', mesorregiao: 'Macro Metropolitana Paulista', uf: 'SP' },
 ];
 
 const FALLBACK_PRODUCAO: ProdutoAgricola[] = [
-  { produto: 'Soja (em grao)', areaPlantada: 4200, areaColhida: 4180, producao: 14600, rendimentoMedio: 3492, valorProducao: 72800 },
-  { produto: 'Milho (em grao)', areaPlantada: 3800, areaColhida: 3750, producao: 22500, rendimentoMedio: 6000, valorProducao: 45000 },
-  { produto: 'Cana-de-acucar', areaPlantada: 5500, areaColhida: 5450, producao: 435000, rendimentoMedio: 79816, valorProducao: 130500 },
-  { produto: 'Cafe (em grao)', areaPlantada: 210, areaColhida: 200, producao: 450, rendimentoMedio: 2250, valorProducao: 18000 },
+  { produto: 'Soja (em grão)', areaPlantada: 4200, areaColhida: 4180, producao: 14600, rendimentoMedio: 3492, valorProducao: 72800 },
+  { produto: 'Milho (em grão)', areaPlantada: 3800, areaColhida: 3750, producao: 22500, rendimentoMedio: 6000, valorProducao: 45000 },
+  { produto: 'Cana-de-açúcar', areaPlantada: 5500, areaColhida: 5450, producao: 435000, rendimentoMedio: 79816, valorProducao: 130500 },
+  { produto: 'Café (em grão)', areaPlantada: 210, areaColhida: 200, producao: 450, rendimentoMedio: 2250, valorProducao: 18000 },
   { produto: 'Laranja', areaPlantada: 380, areaColhida: 370, producao: 9250, rendimentoMedio: 25000, valorProducao: 46250 },
 ];
 
@@ -132,13 +132,13 @@ export class IBGEService {
     });
   }
 
-  // ── Public: Municipios por UF ────────────────────────────
+  // ── Public: Municípios por UF ────────────────────────────
 
   async getMunicipios(uf: string): Promise<MunicipioSimplificado[]> {
     const cacheKey = `ibge_municipios_${uf.toUpperCase()}`;
     const cached = this.cache.get<MunicipioSimplificado[]>(cacheKey);
     if (cached) {
-      console.log(`[IBGE] Municipios ${uf} retornados do cache`);
+      console.log(`[IBGE] Municípios ${uf} retornados do cache`);
       return cached;
     }
 
@@ -165,7 +165,7 @@ export class IBGEService {
       }));
 
       this.cache.set(cacheKey, municipios);
-      console.log(`[IBGE] Municipios ${uf} OK em ${latencia}ms: ${municipios.length} municipios`);
+      console.log(`[IBGE] Municípios ${uf} OK em ${latencia}ms: ${municipios.length} municipios`);
       return municipios;
     } catch (error) {
       const latencia = Date.now() - startTime;
@@ -187,26 +187,26 @@ export class IBGEService {
     }
   }
 
-  // ── Public: Producao Agricola Municipal (LSPA) ───────────
+  // ── Public: Produção Agrícola Municipal (LSPA) ───────────
 
   async getProducaoAgricola(codigoIbge: string): Promise<ProducaoAgricola> {
     const cacheKey = `ibge_producao_${codigoIbge}`;
     const cached = this.cache.get<ProducaoAgricola>(cacheKey);
     if (cached) {
-      console.log(`[IBGE] Producao ${codigoIbge} retornada do cache`);
+      console.log(`[IBGE] Produção ${codigoIbge} retornada do cache`);
       return { ...cached, fonte: 'cache' };
     }
 
     const startTime = Date.now();
     try {
-      // SIDRA Table 5457 = LSPA (Levantamento Sistematico da Producao Agricola)
+      // SIDRA Table 5457 = LSPA (Levantamento Sistemático da Produção Agrícola)
       // n6/{codigoIbge} = municipal level
       // v/109,216,214,112,215 = area plantada, area colhida, producao, rendimento, valor
       // p/last 1 = most recent period
       // c48/0 = all products (total)
       const sidraUrl = `/t/5457/n6/${codigoIbge}/v/109,216,214,112,215/p/last%201/c48/39443,39441,39442,39430,39436`;
 
-      console.log(`[IBGE] Buscando producao agricola SIDRA para ${codigoIbge}`);
+      console.log(`[IBGE] Buscando produção agrícola SIDRA para ${codigoIbge}`);
       const response = await this.httpSIDRA.get(sidraUrl);
       const latencia = Date.now() - startTime;
 
@@ -262,17 +262,17 @@ export class IBGEService {
       };
 
       this.cache.set(cacheKey, result, 86400);
-      console.log(`[IBGE] Producao ${codigoIbge} OK em ${latencia}ms: ${produtos.length} produtos`);
+      console.log(`[IBGE] Produção ${codigoIbge} OK em ${latencia}ms: ${produtos.length} produtos`);
       return result;
     } catch (error) {
       const latencia = Date.now() - startTime;
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       this.manager.updateSourceStatus('ibge_producao_agricola', 'offline', latencia, msg);
-      console.warn(`[IBGE] Erro producao ${codigoIbge}: ${msg}. Usando fallback.`);
+      console.warn(`[IBGE] Erro produção ${codigoIbge}: ${msg}. Usando fallback.`);
 
       const fallback: ProducaoAgricola = {
         codigoIbge,
-        municipio: `Municipio ${codigoIbge}`,
+        municipio: `Município ${codigoIbge}`,
         produtos: FALLBACK_PRODUCAO,
         ano: new Date().getFullYear().toString(),
         fonte: 'fallback',
@@ -283,26 +283,26 @@ export class IBGEService {
     }
   }
 
-  // ── Public: Estrutura Fundiaria ──────────────────────────
+  // ── Public: Estrutura Fundiária ──────────────────────────
 
   async getEstruturaFundiaria(uf: string): Promise<EstruturaFundiaria> {
     const cacheKey = `ibge_fundiaria_${uf.toUpperCase()}`;
     const cached = this.cache.get<EstruturaFundiaria>(cacheKey);
     if (cached) {
-      console.log(`[IBGE] Estrutura fundiaria ${uf} retornada do cache`);
+      console.log(`[IBGE] Estrutura fundiária ${uf} retornada do cache`);
       return { ...cached, fonte: 'cache' };
     }
 
     const startTime = Date.now();
     try {
-      // SIDRA Table 6778 = Censo Agropecuario 2017
-      // Grupos de area total (classificacao c220)
+      // SIDRA Table 6778 = Censo Agropecuário 2017
+      // Grupos de área total (classificação c220)
       // n3/{codigoUF} = state level
       // v/184 = number of establishments, v/2375 = total area
       const ufCode = this.getUFCode(uf);
       const sidraUrl = `/t/6778/n3/${ufCode}/v/184,2375/p/last%201/c220/110085,110086,110087,110088,110089`;
 
-      console.log(`[IBGE] Buscando estrutura fundiaria SIDRA para ${uf} (${ufCode})`);
+      console.log(`[IBGE] Buscando estrutura fundiária SIDRA para ${uf} (${ufCode})`);
       const response = await this.httpSIDRA.get(sidraUrl);
       const latencia = Date.now() - startTime;
 
@@ -370,13 +370,13 @@ export class IBGEService {
       };
 
       this.cache.set(cacheKey, result, 86400);
-      console.log(`[IBGE] Fundiaria ${uf} OK em ${latencia}ms: ${distribuicao.length} faixas`);
+      console.log(`[IBGE] Fundiária ${uf} OK em ${latencia}ms: ${distribuicao.length} faixas`);
       return result;
     } catch (error) {
       const latencia = Date.now() - startTime;
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       this.manager.updateSourceStatus('ibge_estrutura_fundiaria', 'offline', latencia, msg);
-      console.warn(`[IBGE] Erro fundiaria ${uf}: ${msg}. Usando fallback.`);
+      console.warn(`[IBGE] Erro fundiária ${uf}: ${msg}. Usando fallback.`);
 
       const fallback: EstruturaFundiaria = {
         ...FALLBACK_ESTRUTURA_SP,

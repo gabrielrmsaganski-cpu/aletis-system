@@ -1,3 +1,13 @@
+/**
+ * ALIX (Agente de Leitura e Inteligência Estratégica)
+ *
+ * Interface de chat com a IA ALIX do sistema ALETIS. Gerencia
+ * sessoes de conversa persistidas no backend (/alix/sessions),
+ * envia perguntas em linguagem natural e exibe respostas com
+ * fontes citadas (BCB, Conab, ANP, NASA FIRMS, CRM, sumulas
+ * STJ, MCR, Plano Safra) e renderizacao markdown-lite. Inclui
+ * acoes rapidas pre-configuradas (Dolar, Soja, Selic, Clima).
+ */
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Send,
@@ -123,13 +133,13 @@ function renderContent(content: string): React.ReactNode {
 // ────────────────────────────────────────────────────────────
 
 const QUICK_ACTIONS = [
-  { icon: DollarSign, label: 'Dolar hoje', prompt: 'Qual o dolar hoje?' },
-  { icon: TrendingUp, label: 'Soja', prompt: 'Quanto esta a soja?' },
+  { icon: DollarSign, label: 'Dólar hoje', prompt: 'Qual o dólar hoje?' },
+  { icon: TrendingUp, label: 'Soja', prompt: 'Quanto está a soja?' },
   { icon: Calculator, label: 'Selic', prompt: 'Selic atual' },
-  { icon: Cloud, label: 'Clima', prompt: 'Clima em Uberlandia' },
+  { icon: Cloud, label: 'Clima', prompt: 'Clima em Uberlândia' },
   { icon: Users, label: 'Ailton Caeiro', prompt: 'Status do cliente Ailton Caeiro' },
   { icon: FileText, label: 'MCR 2-6-4', prompt: 'MCR 2-6-4' },
-  { icon: Scale, label: 'Sumula 298', prompt: 'Sumula 298 STJ' },
+  { icon: Scale, label: 'Súmula 298', prompt: 'Súmula 298 STJ' },
 ]
 
 // ────────────────────────────────────────────────────────────
@@ -260,7 +270,7 @@ export default function ALIX() {
 
   const handleDeleteSession = useCallback(async (id: string, event: React.MouseEvent) => {
     event.stopPropagation()
-    if (!window.confirm('Apagar essa conversa? Nao da pra recuperar.')) return
+    if (!window.confirm('Apagar essa conversa? Não dá pra recuperar.')) return
     try {
       await apiFetch(`/alix/session/${id}`, { method: 'DELETE' })
       if (activeSessionId === id) {
@@ -362,7 +372,7 @@ export default function ALIX() {
             <div>
               <h1 className="text-3xl font-display font-bold text-aletis-grafite-escuro leading-tight">ALIX</h1>
               <p className="text-aletis-grafite-medio text-sm font-body">
-                Agente de Leitura e Inteligencia Estrategica
+                Agente de Leitura e Inteligência Estratégica
               </p>
             </div>
           </div>
@@ -395,7 +405,7 @@ export default function ALIX() {
                     <span className="text-xs font-semibold text-aletis-dourado">ALIX</span>
                   </div>
                   <div className="text-sm leading-relaxed font-body">
-                    {greetingByTime()} Christian. ALIX aqui — pergunta em linguagem natural, eu consulto dados ao vivo (BCB, Conab, ANP, NASA FIRMS, CRM), sumulas STJ, MCR e Plano Safra. Tudo com citacao de fonte.
+                    {greetingByTime()} Christian. ALIX aqui — pergunta em linguagem natural, eu consulto dados ao vivo (BCB, Conab, ANP, NASA FIRMS, CRM), súmulas STJ, MCR e Plano Safra. Tudo com citação de fonte.
                   </div>
                 </div>
               </div>

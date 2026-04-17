@@ -1,3 +1,14 @@
+/**
+ * Clima (Inteligencia Climatica)
+ *
+ * Pagina de monitoramento agroclimatico do sistema ALETIS com
+ * busca de qualquer municipio brasileiro via /api/clima/buscar,
+ * dados em tempo real (/api/clima/municipio/:codigoIbge) com
+ * condicao atual, previsao de 7 dias, historico de 30 dias,
+ * alertas agroclimaticos (/api/clima/alertas/:uf) e zoneamento
+ * MAPA/EMBRAPA. Usa estacoes favoritas em MT/MS/PR/GO/MG/SP e
+ * cacheia buscas recentes no localStorage.
+ */
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   ComposedChart,
@@ -85,7 +96,7 @@ interface ZoneamentoRow {
   cultura: string
   plantio: string
   colheita: string
-  risco: 'Baixo' | 'Medio' | 'Alto'
+  risco: 'Baixo' | 'Médio' | 'Alto'
 }
 
 // ────────────────────────────────────────────────────────────
@@ -217,10 +228,10 @@ function mapApiToMunicipioDados(
 function mapApiToPrevisaoDia(dia: ApiPrevisaoDia, idx: number): PrevisaoDia {
   const dt = new Date()
   dt.setDate(dt.getDate() + idx)
-  const NOMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab']
+  const NOMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
   return {
     data: dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-    diaSemana: idx === 0 ? 'Hoje' : idx === 1 ? 'Amanha' : NOMES[dt.getDay()],
+    diaSemana: idx === 0 ? 'Hoje' : idx === 1 ? 'Amanhã' : NOMES[dt.getDay()],
     tempMax: dia.tempMaxima,
     tempMin: dia.tempMinima,
     condicao: mapApiCondicaoIcone(dia.condicaoIcone),
@@ -275,15 +286,15 @@ const FAVORITOS: MunicipioDados[] = [
   { codigoIbge: '5003702', nome: 'Dourados', uf: 'MS', lat: -22.2231, lon: -54.8118, tempAtual: 28.7, condicao: 'sol', umidade: 42, precipitacao24h: 0.0, ventoKmh: 8, sensacaoTermica: 29.5 },
   { codigoIbge: '5107875', nome: 'Sorriso', uf: 'MT', lat: -12.5426, lon: -55.7211, tempAtual: 33.2, condicao: 'sol', umidade: 38, precipitacao24h: 0.0, ventoKmh: 6, sensacaoTermica: 35.1 },
   { codigoIbge: '5218805', nome: 'Rio Verde', uf: 'GO', lat: -17.7927, lon: -50.9286, tempAtual: 27.6, condicao: 'parcialmente_nublado', umidade: 55, precipitacao24h: 4.3, ventoKmh: 12, sensacaoTermica: 28.2 },
-  { codigoIbge: '3170206', nome: 'Uberlandia', uf: 'MG', lat: -18.9186, lon: -48.2772, tempAtual: 26.1, condicao: 'nublado', umidade: 52, precipitacao24h: 0.8, ventoKmh: 10, sensacaoTermica: 26.0 },
-  { codigoIbge: '3543402', nome: 'Ribeirao Preto', uf: 'SP', lat: -21.1704, lon: -47.8103, tempAtual: 29.3, condicao: 'sol', umidade: 45, precipitacao24h: 0.0, ventoKmh: 7, sensacaoTermica: 30.4 },
+  { codigoIbge: '3170206', nome: 'Uberlândia', uf: 'MG', lat: -18.9186, lon: -48.2772, tempAtual: 26.1, condicao: 'nublado', umidade: 52, precipitacao24h: 0.8, ventoKmh: 10, sensacaoTermica: 26.0 },
+  { codigoIbge: '3543402', nome: 'Ribeirão Preto', uf: 'SP', lat: -21.1704, lon: -47.8103, tempAtual: 29.3, condicao: 'sol', umidade: 45, precipitacao24h: 0.0, ventoKmh: 7, sensacaoTermica: 30.4 },
   { codigoIbge: '4104808', nome: 'Cascavel', uf: 'PR', lat: -24.9573, lon: -53.4593, tempAtual: 20.8, condicao: 'chuva_leve', umidade: 78, precipitacao24h: 8.5, ventoKmh: 18, sensacaoTermica: 19.6 },
-  { codigoIbge: '5107602', nome: 'Rondonopolis', uf: 'MT', lat: -16.4700, lon: -54.6353, tempAtual: 31.5, condicao: 'parcialmente_nublado', umidade: 41, precipitacao24h: 0.0, ventoKmh: 9, sensacaoTermica: 32.3 },
+  { codigoIbge: '5107602', nome: 'Rondonópolis', uf: 'MT', lat: -16.4700, lon: -54.6353, tempAtual: 31.5, condicao: 'parcialmente_nublado', umidade: 41, precipitacao24h: 0.0, ventoKmh: 9, sensacaoTermica: 32.3 },
 ]
 
 function gerarPrevisao7Dias(mun: MunicipioDados): PrevisaoDia[] {
   const dias: PrevisaoDia[] = []
-  const NOMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab']
+  const NOMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
   const CONDICOES: PrevisaoDia['condicao'][] = ['sol', 'parcialmente_nublado', 'nublado', 'chuva_leve', 'chuva', 'tempestade']
 
   for (let d = 0; d < 7; d++) {
@@ -337,40 +348,40 @@ const ALERTAS: Alerta[] = [
   {
     id: '1',
     tipo: 'alerta',
-    titulo: 'Veranico previsto para regiao de Dourados/MS entre 20-27 Abril',
-    descricao: 'Periodo de estiagem prolongada de 7 a 10 dias previsto. Deficit hidrico pode afetar milho safrinha em estagio de enchimento de graos. Recomenda-se irrigacao suplementar.',
-    municipios: ['Dourados', 'Maracaju', 'Ponta Pora'],
+    titulo: 'Veranico previsto para região de Dourados/MS entre 20-27 Abril',
+    descricao: 'Período de estiagem prolongada de 7 a 10 dias previsto. Déficit hídrico pode afetar milho safrinha em estágio de enchimento de grãos. Recomenda-se irrigação suplementar.',
+    municipios: ['Dourados', 'Maracaju', 'Ponta Porã'],
     vigencia: '20/04 - 27/04/2026',
   },
   {
     id: '2',
     tipo: 'severo',
-    titulo: 'Geada possivel no Parana na proxima semana',
-    descricao: 'Massa de ar polar intensa deve atingir o sul do Parana entre 22-24 de Abril. Temperaturas minimas de 2 a 5 graus C previstas. Risco para trigo recem-plantado e horticultura.',
-    municipios: ['Toledo', 'Cascavel', 'Foz do Iguacu'],
+    titulo: 'Geada possível no Paraná na próxima semana',
+    descricao: 'Massa de ar polar intensa deve atingir o sul do Paraná entre 22-24 de Abril. Temperaturas mínimas de 2 a 5 graus C previstas. Risco para trigo recém-plantado e horticultura.',
+    municipios: ['Toledo', 'Cascavel', 'Foz do Iguaçu'],
     vigencia: '22/04 - 24/04/2026',
   },
   {
     id: '3',
     tipo: 'favoravel',
-    titulo: 'Condicoes favoraveis para colheita de soja em Mato Grosso',
-    descricao: 'Janela de tempo seco prevista por 10 dias na regiao norte de MT. Umidade relativa abaixo de 50% nas tardes. Ideal para finalizacao da colheita e plantio de safrinha.',
+    titulo: 'Condições favoráveis para colheita de soja em Mato Grosso',
+    descricao: 'Janela de tempo seco prevista por 10 dias na região norte de MT. Umidade relativa abaixo de 50% nas tardes. Ideal para finalização da colheita e plantio de safrinha.',
     municipios: ['Sorriso', 'Sinop', 'Lucas do Rio Verde'],
     vigencia: '16/04 - 26/04/2026',
   },
   {
     id: '4',
     tipo: 'alerta',
-    titulo: 'Deficit hidrico no Triangulo Mineiro',
-    descricao: 'Precipitacao abaixo de 30mm nos ultimos 20 dias na regiao de Uberlandia. Culturas de safrinha podem apresentar estresse hidrico.',
-    municipios: ['Uberlandia', 'Uberaba', 'Patos de Minas'],
+    titulo: 'Déficit hídrico no Triângulo Mineiro',
+    descricao: 'Precipitação abaixo de 30mm nos últimos 20 dias na região de Uberlândia. Culturas de safrinha podem apresentar estresse hídrico.',
+    municipios: ['Uberlândia', 'Uberaba', 'Patos de Minas'],
     vigencia: '12/04 - 22/04/2026',
   },
   {
     id: '5',
     tipo: 'favoravel',
     titulo: 'Temperaturas ideais para plantio de trigo no PR',
-    descricao: 'Temperaturas medias entre 15-20 graus C previstas para final de abril no oeste do Parana. Janela ideal para inicio do plantio de trigo de inverno.',
+    descricao: 'Temperaturas médias entre 15-20 graus C previstas para final de abril no oeste do Paraná. Janela ideal para início do plantio de trigo de inverno.',
     municipios: ['Toledo', 'Cascavel', 'Palotina'],
     vigencia: '25/04 - 10/05/2026',
   },
@@ -378,45 +389,45 @@ const ALERTAS: Alerta[] = [
 
 const ZONEAMENTO: Record<string, ZoneamentoRow[]> = {
   '4127700': [
-    { cultura: 'Soja', plantio: 'Set - Dez', colheita: 'Jan - Abr', risco: 'Medio' },
+    { cultura: 'Soja', plantio: 'Set - Dez', colheita: 'Jan - Abr', risco: 'Médio' },
     { cultura: 'Milho safrinha', plantio: 'Jan - Mar', colheita: 'Jun - Ago', risco: 'Alto' },
     { cultura: 'Trigo', plantio: 'Abr - Jun', colheita: 'Set - Nov', risco: 'Baixo' },
-    { cultura: 'Feijao', plantio: 'Ago - Out', colheita: 'Nov - Jan', risco: 'Medio' },
+    { cultura: 'Feijão', plantio: 'Ago - Out', colheita: 'Nov - Jan', risco: 'Médio' },
     { cultura: 'Mandioca', plantio: 'Set - Nov', colheita: 'Jun - Set', risco: 'Baixo' },
   ],
   '5003702': [
-    { cultura: 'Soja', plantio: 'Set - Dez', colheita: 'Jan - Abr', risco: 'Medio' },
+    { cultura: 'Soja', plantio: 'Set - Dez', colheita: 'Jan - Abr', risco: 'Médio' },
     { cultura: 'Milho safrinha', plantio: 'Jan - Mar', colheita: 'Jun - Ago', risco: 'Alto' },
     { cultura: 'Trigo', plantio: 'Abr - Jun', colheita: 'Set - Nov', risco: 'Baixo' },
-    { cultura: 'Algodao', plantio: 'Dez - Jan', colheita: 'Jun - Jul', risco: 'Alto' },
-    { cultura: 'Sorgo', plantio: 'Fev - Mar', colheita: 'Jun - Jul', risco: 'Medio' },
+    { cultura: 'Algodão', plantio: 'Dez - Jan', colheita: 'Jun - Jul', risco: 'Alto' },
+    { cultura: 'Sorgo', plantio: 'Fev - Mar', colheita: 'Jun - Jul', risco: 'Médio' },
   ],
   '5107875': [
     { cultura: 'Soja', plantio: 'Set - Nov', colheita: 'Jan - Mar', risco: 'Baixo' },
     { cultura: 'Milho safrinha', plantio: 'Jan - Mar', colheita: 'Jun - Jul', risco: 'Alto' },
-    { cultura: 'Algodao', plantio: 'Dez - Jan', colheita: 'Jun - Ago', risco: 'Medio' },
-    { cultura: 'Girassol', plantio: 'Fev - Mar', colheita: 'Jun - Jul', risco: 'Medio' },
+    { cultura: 'Algodão', plantio: 'Dez - Jan', colheita: 'Jun - Ago', risco: 'Médio' },
+    { cultura: 'Girassol', plantio: 'Fev - Mar', colheita: 'Jun - Jul', risco: 'Médio' },
   ],
   '5218805': [
-    { cultura: 'Soja', plantio: 'Out - Nov', colheita: 'Fev - Abr', risco: 'Medio' },
+    { cultura: 'Soja', plantio: 'Out - Nov', colheita: 'Fev - Abr', risco: 'Médio' },
     { cultura: 'Milho safrinha', plantio: 'Jan - Mar', colheita: 'Jun - Ago', risco: 'Alto' },
-    { cultura: 'Trigo', plantio: 'Abr - Jun', colheita: 'Set - Nov', risco: 'Medio' },
-    { cultura: 'Sorgo', plantio: 'Fev - Mar', colheita: 'Jun - Jul', risco: 'Medio' },
+    { cultura: 'Trigo', plantio: 'Abr - Jun', colheita: 'Set - Nov', risco: 'Médio' },
+    { cultura: 'Sorgo', plantio: 'Fev - Mar', colheita: 'Jun - Jul', risco: 'Médio' },
   ],
   '3170206': [
-    { cultura: 'Soja', plantio: 'Out - Nov', colheita: 'Fev - Abr', risco: 'Medio' },
+    { cultura: 'Soja', plantio: 'Out - Nov', colheita: 'Fev - Abr', risco: 'Médio' },
     { cultura: 'Milho safrinha', plantio: 'Fev - Mar', colheita: 'Jul - Ago', risco: 'Alto' },
-    { cultura: 'Cafe', plantio: 'Perene', colheita: 'Mai - Set', risco: 'Medio' },
-    { cultura: 'Feijao', plantio: 'Fev - Mar', colheita: 'Mai - Jun', risco: 'Medio' },
+    { cultura: 'Café', plantio: 'Perene', colheita: 'Mai - Set', risco: 'Médio' },
+    { cultura: 'Feijão', plantio: 'Fev - Mar', colheita: 'Mai - Jun', risco: 'Médio' },
   ],
   '3543402': [
-    { cultura: 'Cana-de-acucar', plantio: 'Jan - Mar', colheita: 'Abr - Nov', risco: 'Baixo' },
-    { cultura: 'Soja', plantio: 'Out - Nov', colheita: 'Fev - Abr', risco: 'Medio' },
-    { cultura: 'Amendoim', plantio: 'Out - Nov', colheita: 'Fev - Mar', risco: 'Medio' },
+    { cultura: 'Cana-de-açúcar', plantio: 'Jan - Mar', colheita: 'Abr - Nov', risco: 'Baixo' },
+    { cultura: 'Soja', plantio: 'Out - Nov', colheita: 'Fev - Abr', risco: 'Médio' },
+    { cultura: 'Amendoim', plantio: 'Out - Nov', colheita: 'Fev - Mar', risco: 'Médio' },
     { cultura: 'Laranja', plantio: 'Perene', colheita: 'Jun - Out', risco: 'Baixo' },
   ],
   '4104808': [
-    { cultura: 'Soja', plantio: 'Set - Dez', colheita: 'Jan - Abr', risco: 'Medio' },
+    { cultura: 'Soja', plantio: 'Set - Dez', colheita: 'Jan - Abr', risco: 'Médio' },
     { cultura: 'Milho safrinha', plantio: 'Jan - Mar', colheita: 'Jun - Ago', risco: 'Alto' },
     { cultura: 'Trigo', plantio: 'Abr - Jun', colheita: 'Set - Nov', risco: 'Baixo' },
     { cultura: 'Aveia', plantio: 'Abr - Jun', colheita: 'Set - Out', risco: 'Baixo' },
@@ -424,8 +435,8 @@ const ZONEAMENTO: Record<string, ZoneamentoRow[]> = {
   '5107602': [
     { cultura: 'Soja', plantio: 'Out - Nov', colheita: 'Fev - Mar', risco: 'Baixo' },
     { cultura: 'Milho safrinha', plantio: 'Jan - Mar', colheita: 'Jun - Jul', risco: 'Alto' },
-    { cultura: 'Algodao', plantio: 'Dez - Jan', colheita: 'Jun - Ago', risco: 'Medio' },
-    { cultura: 'Pecuaria', plantio: 'Perene', colheita: 'Perene', risco: 'Baixo' },
+    { cultura: 'Algodão', plantio: 'Dez - Jan', colheita: 'Jun - Ago', risco: 'Médio' },
+    { cultura: 'Pecuária', plantio: 'Perene', colheita: 'Perene', risco: 'Baixo' },
   ],
 }
 
@@ -643,10 +654,10 @@ export default function Clima() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold text-aletis-grafite-escuro">
-            Inteligencia Climatica
+            Inteligência Climática
           </h1>
           <p className="text-aletis-grafite-medio mt-1 font-body text-sm">
-            Monitoramento agroclimatico em tempo real para municipios-chave do agronegocio
+            Monitoramento agroclimático em tempo real para municípios-chave do agronegócio
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -666,7 +677,7 @@ export default function Clima() {
         <div className="flex items-center gap-2 mb-4">
           <MapPin className="w-5 h-5 text-aletis-verde" />
           <h2 className="text-lg font-display font-bold text-aletis-grafite-escuro">
-            Estacoes Monitoradas
+            Estações Monitoradas
           </h2>
           <span className="badge bg-aletis-verde/10 text-aletis-verde text-[11px]">
             {FAVORITOS.length} favoritos · 5570 BR
@@ -683,9 +694,9 @@ export default function Clima() {
               onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true) }}
               onFocus={() => setSearchOpen(true)}
               onBlur={() => setTimeout(() => setSearchOpen(false), 180)}
-              placeholder="Buscar qualquer municipio brasileiro..."
+              placeholder="Buscar qualquer município brasileiro..."
               className="w-full pl-10 pr-10 py-2.5 rounded-xl text-sm bg-white border border-aletis-borda focus:outline-none focus:ring-2 focus:ring-aletis-verde/30 focus:border-aletis-verde transition-all"
-              aria-label="Buscar municipio"
+              aria-label="Buscar município"
             />
             {searchLoading && (
               <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-grafite-claro animate-spin" />
@@ -707,7 +718,7 @@ export default function Clima() {
             <div className="absolute z-20 left-0 right-0 mt-2 bg-white border border-aletis-borda rounded-xl shadow-lg max-h-72 overflow-y-auto custom-scrollbar">
               {searchResults.length === 0 && !searchLoading && (
                 <div className="p-4 text-xs font-body text-aletis-grafite-claro text-center">
-                  Nenhum municipio encontrado para "{searchQuery}".
+                  Nenhum município encontrado para "{searchQuery}".
                 </div>
               )}
               {searchResults.map((r) => (
@@ -823,7 +834,7 @@ export default function Clima() {
         <div className="flex items-center gap-2 mb-5">
           <Calendar className="w-5 h-5 text-aletis-dourado" />
           <h2 className="text-lg font-display font-bold text-aletis-grafite-escuro">
-            Previsao 7 Dias
+            Previsão 7 Dias
           </h2>
           <ChevronRight className="w-4 h-4 text-aletis-grafite-claro" />
           <span className="text-sm font-body text-aletis-verde font-semibold">
@@ -879,7 +890,7 @@ export default function Clima() {
         <div className="flex items-center gap-2 mb-5">
           <Thermometer className="w-5 h-5 text-aletis-dourado" />
           <h2 className="text-lg font-display font-bold text-aletis-grafite-escuro">
-            Dados Historicos — Ultimos 30 Dias
+            Dados Históricos — Últimos 30 Dias
           </h2>
           <ChevronRight className="w-4 h-4 text-aletis-grafite-claro" />
           <span className="text-sm font-body text-aletis-verde font-semibold">
@@ -931,7 +942,7 @@ export default function Clima() {
               <Bar
                 yAxisId="precip"
                 dataKey="precipMm"
-                name="Precipitacao"
+                name="Precipitação"
                 fill="#3B82F6"
                 fillOpacity={0.7}
                 radius={[2, 2, 0, 0]}
@@ -951,8 +962,8 @@ export default function Clima() {
             const maxTemp = Math.max(...temps)
 
             return [
-              { label: 'Temp. Media', valor: `${avgTemp.toFixed(1)} C`, icon: Thermometer, color: '#C9A84C' },
-              { label: 'Temp. Maxima', valor: `${maxTemp.toFixed(1)} C`, icon: Sun, color: '#E67E22' },
+              { label: 'Temp. Média', valor: `${avgTemp.toFixed(1)} C`, icon: Thermometer, color: '#C9A84C' },
+              { label: 'Temp. Máxima', valor: `${maxTemp.toFixed(1)} C`, icon: Sun, color: '#E67E22' },
               { label: 'Precip. Acum.', valor: `${totalPrecip.toFixed(1)} mm`, icon: CloudRain, color: '#3B82F6' },
               { label: 'Dias c/ Chuva', valor: `${diasChuva} dias`, icon: Droplets, color: '#2563EB' },
             ].map((item) => (
@@ -975,7 +986,7 @@ export default function Clima() {
         <div className="flex items-center gap-2 mb-4">
           <AlertTriangle className="w-5 h-5 text-ambar" />
           <h2 className="text-lg font-display font-bold text-aletis-grafite-escuro">
-            Alertas Agroclimaticos
+            Alertas Agroclimáticos
           </h2>
           <span className="badge bg-ambar/10 text-ambar text-[11px]">
             {alertas.length} ativos
@@ -1012,7 +1023,7 @@ export default function Clima() {
                 iconBg: 'bg-positivo/10',
                 iconColor: 'text-positivo',
                 badge: 'bg-positivo/10 text-positivo',
-                label: 'Favoravel',
+                label: 'Favorável',
                 Icon: CheckCircle2,
               },
               informativo: {
@@ -1041,7 +1052,7 @@ export default function Clima() {
                         {config.label}
                       </span>
                       <span className="text-[10px] text-aletis-grafite-claro font-body">
-                        Vigencia: {alerta.vigencia}
+                        Vigência: {alerta.vigencia}
                       </span>
                     </div>
                     <h3 className="text-sm font-display font-bold text-aletis-grafite-escuro mb-1">
@@ -1071,7 +1082,7 @@ export default function Clima() {
         <div className="flex items-center gap-2 mb-5">
           <Wheat className="w-5 h-5 text-aletis-verde" />
           <h2 className="text-lg font-display font-bold text-aletis-grafite-escuro">
-            Zoneamento Agroclimatico
+            Zoneamento Agroclimático
           </h2>
           <ChevronRight className="w-4 h-4 text-aletis-grafite-claro" />
           <span className="text-sm font-body text-aletis-verde font-semibold">
@@ -1087,13 +1098,13 @@ export default function Clima() {
                   Cultura
                 </th>
                 <th className="text-left py-3 px-4 font-display font-bold text-aletis-grafite-escuro">
-                  Epoca de Plantio
+                  Época de Plantio
                 </th>
                 <th className="text-left py-3 px-4 font-display font-bold text-aletis-grafite-escuro">
-                  Epoca de Colheita
+                  Época de Colheita
                 </th>
                 <th className="text-center py-3 px-4 font-display font-bold text-aletis-grafite-escuro">
-                  Risco Climatico
+                  Risco Climático
                 </th>
               </tr>
             </thead>
@@ -1101,7 +1112,7 @@ export default function Clima() {
               {zoneamento.map((row, idx) => {
                 const riscoConfig = {
                   Baixo: { bg: 'bg-positivo/10', text: 'text-positivo', dot: 'bg-positivo' },
-                  Medio: { bg: 'bg-ambar/10', text: 'text-ambar', dot: 'bg-ambar' },
+                  Médio: { bg: 'bg-ambar/10', text: 'text-ambar', dot: 'bg-ambar' },
                   Alto: { bg: 'bg-alerta/10', text: 'text-alerta', dot: 'bg-alerta' },
                 }[row.risco]
 
@@ -1142,7 +1153,7 @@ export default function Clima() {
         <div className="mt-4 bg-aletis-bege/80 rounded-xl p-3 flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-aletis-grafite-claro/40 flex-shrink-0" />
           <p className="text-[11px] font-body text-aletis-grafite-claro">
-            Fonte: MAPA/EMBRAPA — Zoneamento Agricola de Risco Climatico (ZARC) 2025/2026. Dados indicativos sujeitos a atualizacao conforme publicacao no Diario Oficial.
+            Fonte: MAPA/EMBRAPA — Zoneamento Agrícola de Risco Climático (ZARC) 2025/2026. Dados indicativos sujeitos a atualização conforme publicação no Diário Oficial.
           </p>
         </div>
       </section>

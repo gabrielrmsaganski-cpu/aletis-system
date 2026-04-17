@@ -263,7 +263,7 @@ const FALLBACK_COTACOES: Commodity[] = [
   },
   {
     id: 'cafe',
-    nome: 'Cafe',
+    nome: 'Café',
     preco: 1420.0,
     unidade: 'sc 60kg',
     variacao: 2.1,
@@ -276,7 +276,7 @@ const FALLBACK_COTACOES: Commodity[] = [
   },
   {
     id: 'algodao',
-    nome: 'Algodao',
+    nome: 'Algodão',
     preco: 125.3,
     unidade: '@',
     variacao: -0.3,
@@ -289,7 +289,7 @@ const FALLBACK_COTACOES: Commodity[] = [
   },
   {
     id: 'acucar',
-    nome: 'Acucar',
+    nome: 'Açúcar',
     preco: 152.4,
     unidade: 'sc 50kg',
     variacao: 0.7,
@@ -306,15 +306,15 @@ const FALLBACK_INDICADORES: Indicator[] = [
   { nome: 'Selic', valor: '14,75%', variacao: 0.0, icon: TrendingUp },
   { nome: 'IPCA', valor: '4,82%', variacao: 0.15, icon: BarChart3 },
   { nome: 'IGP-M', valor: '3,15%', variacao: -0.22, icon: BarChart3 },
-  { nome: 'Dolar PTAX', valor: 'R$ 5,78', variacao: -0.45, icon: DollarSign },
+  { nome: 'Dólar PTAX', valor: 'R$ 5,78', variacao: -0.45, icon: DollarSign },
   { nome: 'CDI', valor: '14,65%', variacao: 0.0, icon: TrendingUp },
 ]
 
 const safraData: SafraCard[] = [
-  { label: 'Producao Estimada Soja', valor: '168', unidade: 'milhoes ton', icon: Wheat },
-  { label: 'Area Plantada', valor: '47', unidade: 'milhoes ha', icon: MapPin },
-  { label: 'Produtividade Media', valor: '57', unidade: 'sc/ha', icon: TrendingUp },
-  { label: 'Exportacoes', valor: '98', unidade: 'milhoes ton', icon: ArrowUpRight },
+  { label: 'Produção Estimada Soja', valor: '168', unidade: 'milhões ton', icon: Wheat },
+  { label: 'Área Plantada', valor: '47', unidade: 'milhões ha', icon: MapPin },
+  { label: 'Produtividade Média', valor: '57', unidade: 'sc/ha', icon: TrendingUp },
+  { label: 'Exportações', valor: '98', unidade: 'milhões ton', icon: ArrowUpRight },
 ]
 
 // ────────────────────────────────────────────────────────────
@@ -455,12 +455,12 @@ function PriceTooltip({ active, payload, label }: any) {
 type MercadoTab = 'graos' | 'indicadores' | 'safra' | 'combustiveis' | 'cambio' | 'riscos'
 
 const MERCADO_TABS: { id: MercadoTab; label: string; icon: React.ElementType; description: string }[] = [
-  { id: 'graos', label: 'Graos & Commodities', icon: Wheat, description: 'Cotacoes de soja, milho, cafe, boi, etc.' },
+  { id: 'graos', label: 'Grãos & Commodities', icon: Wheat, description: 'Cotações de soja, milho, café, boi, etc.' },
   { id: 'indicadores', label: 'Indicadores Macro', icon: BarChart3, description: 'Selic, IPCA, CDI, IGP-M, IC-Br' },
-  { id: 'cambio', label: 'Cambio', icon: Globe, description: 'USD, EUR, CNY - cotacoes em tempo real' },
-  { id: 'safra', label: 'Safra 2025/26', icon: Calendar, description: 'Producao, area, produtividade CONAB' },
-  { id: 'combustiveis', label: 'Combustiveis & Insumos', icon: Fuel, description: 'Diesel, gasolina, etanol (ANP)' },
-  { id: 'riscos', label: 'Riscos Agroclimaticos', icon: AlertTriangle, description: 'Incendios, secas, NDVI' },
+  { id: 'cambio', label: 'Câmbio', icon: Globe, description: 'USD, EUR, CNY - cotações em tempo real' },
+  { id: 'safra', label: 'Safra 2025/26', icon: Calendar, description: 'Produção, área, produtividade CONAB' },
+  { id: 'combustiveis', label: 'Combustíveis & Insumos', icon: Fuel, description: 'Diesel, gasolina, etanol (ANP)' },
+  { id: 'riscos', label: 'Riscos Agroclimáticos', icon: AlertTriangle, description: 'Incêndios, secas, NDVI' },
 ]
 
 export default function Mercado() {
@@ -550,14 +550,14 @@ export default function Mercado() {
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-aletis-dourado" />
               </span>
               <span className="text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-aletis-dourado">
-                Inteligencia ao vivo
+                Inteligência ao vivo
               </span>
             </div>
             <h1 className="font-display text-3xl font-bold tracking-tight text-white lg:text-[2.5rem] lg:leading-[1.1]">
-              Inteligencia de Mercado
+              Inteligência de Mercado
             </h1>
             <p className="mt-2 max-w-2xl font-body text-sm text-white/75 lg:text-base">
-              Cotacoes, indicadores macroeconomicos e cenario da safra — consolidados em tempo real
+              Cotações, indicadores macroeconômicos e cenário da safra — consolidados em tempo real
               a partir de BCB, CONAB, IBGE, MDIC e MAPA.
             </p>
           </div>
@@ -632,10 +632,10 @@ export default function Mercado() {
           </div>
           <div>
             <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-              Cotacoes em Tempo Real
+              Cotações em Tempo Real
             </h2>
             <p className="text-xs font-body text-aletis-grafite-claro">
-              Principais commodities do agronegocio brasileiro
+              Principais commodities do agronegócio brasileiro
             </p>
           </div>
         </div>
@@ -668,7 +668,7 @@ export default function Mercado() {
               Indicadores Financeiros
             </h2>
             <p className="text-xs font-body text-aletis-grafite-claro">
-              Taxas e indices de referencia — Banco Central / IBGE
+              Taxas e índices de referência — Banco Central / IBGE
             </p>
             {indicadoresMeta.detalhe && (
               <p className="text-[10px] font-body text-aletis-grafite-claro mt-0.5">{indicadoresMeta.detalhe}</p>
@@ -711,7 +711,7 @@ export default function Mercado() {
                 )}
                 {isNeutral && (
                   <span className="mt-1.5 text-[10px] font-body text-aletis-grafite-claro">
-                    Estavel
+                    Estável
                   </span>
                 )}
               </div>
@@ -746,10 +746,10 @@ export default function Mercado() {
               </div>
               <div>
                 <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-                  Historico de Precos — {activeComm.nome}
+                  Histórico de Preços — {activeComm.nome}
                 </h2>
                 <p className="text-xs font-body text-aletis-grafite-claro">
-                  Ultimos 12 meses | {activeComm.fonte}
+                  Últimos 12 meses | {activeComm.fonte}
                 </p>
               </div>
             </div>
@@ -816,7 +816,7 @@ export default function Mercado() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-5 border-t border-aletis-borda">
             <div className="text-center">
               <p className="text-[11px] font-body text-aletis-grafite-claro mb-1">
-                Preco Atual
+                Preço Atual
               </p>
               <p className="text-base font-display font-bold text-aletis-grafite-escuro">
                 R$ {fmtNum(activeComm.preco)}
@@ -824,7 +824,7 @@ export default function Mercado() {
             </div>
             <div className="text-center">
               <p className="text-[11px] font-body text-aletis-grafite-claro mb-1">
-                Variacao
+                Variação
               </p>
               <p
                 className={`text-base font-display font-bold ${
@@ -836,7 +836,7 @@ export default function Mercado() {
             </div>
             <div className="text-center">
               <p className="text-[11px] font-body text-aletis-grafite-claro mb-1">
-                Minima 12m
+                Mínima 12m
               </p>
               <p className="text-base font-display font-bold text-alerta">
                 R${' '}
@@ -847,7 +847,7 @@ export default function Mercado() {
             </div>
             <div className="text-center">
               <p className="text-[11px] font-body text-aletis-grafite-claro mb-1">
-                Maxima 12m
+                Máxima 12m
               </p>
               <p className="text-base font-display font-bold text-positivo">
                 R${' '}
@@ -883,10 +883,10 @@ export default function Mercado() {
             </div>
             <div>
               <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-                Cenario de Safra 2025/2026
+                Cenário de Safra 2025/2026
               </h2>
               <p className="text-xs font-body text-aletis-grafite-claro">
-                Projecoes e estimativas — CONAB / IBGE
+                Projeções e estimativas — CONAB / IBGE
               </p>
             </div>
           </div>
@@ -927,8 +927,8 @@ export default function Mercado() {
         <div className="mt-4 bg-aletis-bege/80 rounded-xl p-3 flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-aletis-grafite-claro/40 flex-shrink-0" />
           <p className="text-[11px] font-body text-aletis-grafite-claro">
-            Fonte: CONAB (Companhia Nacional de Abastecimento) / IBGE. Dados de producao e area plantada referentes a safra 2025/2026.
-            Valores sujeitos a revisao conforme levantamentos oficiais.
+            Fonte: CONAB (Companhia Nacional de Abastecimento) / IBGE. Dados de produção e área plantada referentes à safra 2025/2026.
+            Valores sujeitos a revisão conforme levantamentos oficiais.
           </p>
         </div>
       </section>
@@ -1026,7 +1026,7 @@ function CombustiveisSection() {
         </div>
         <div>
           <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-            Combustiveis — Precos Reais ANP
+            Combustíveis — Preços Reais ANP
           </h2>
           <p className="text-xs font-body text-aletis-grafite-claro">
             {diesel.combustivel} | {diesel.numeroPesquisas.toLocaleString('pt-BR')} postos pesquisados
@@ -1038,7 +1038,7 @@ function CombustiveisSection() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* National Average */}
         <div className="card-premium p-5">
-          <p className="text-xs font-body text-aletis-grafite-claro mb-1">Media Nacional</p>
+          <p className="text-xs font-body text-aletis-grafite-claro mb-1">Média Nacional</p>
           <p className="text-3xl font-display font-bold text-aletis-grafite-escuro">
             R$ {fmtNum(diesel.precoMedio)}
           </p>
@@ -1054,7 +1054,7 @@ function CombustiveisSection() {
 
         {/* State Prices */}
         <div className="card-premium p-5 lg:col-span-2">
-          <p className="text-xs font-body text-aletis-grafite-claro mb-3">Diesel S10 por Estado (menores precos)</p>
+          <p className="text-xs font-body text-aletis-grafite-claro mb-3">Diesel S10 por Estado (menores preços)</p>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
             {topEstados.map(([uf, val]) => (
               <div key={uf} className="text-center bg-aletis-bege/60 rounded-lg p-2">
@@ -1092,9 +1092,9 @@ function ICBrSection() {
   if (error || !icbr?.agro?.valor) return null
 
   const indices = [
-    { nome: 'Agropecuario', valor: icbr.agro.valor, icon: Wheat, color: '#27AE60', desc: 'Soja, milho, cafe, acucar, carnes' },
-    { nome: 'Energia', valor: icbr.energia.valor, icon: Activity, color: '#E67E22', desc: 'Petroleo, gas natural, carvao' },
-    { nome: 'Metal', valor: icbr.metal.valor, icon: Globe, color: '#3498DB', desc: 'Ferro, cobre, aluminio, niquel' },
+    { nome: 'Agropecuário', valor: icbr.agro.valor, icon: Wheat, color: '#27AE60', desc: 'Soja, milho, café, açúcar, carnes' },
+    { nome: 'Energia', valor: icbr.energia.valor, icon: Activity, color: '#E67E22', desc: 'Petróleo, gás natural, carvão' },
+    { nome: 'Metal', valor: icbr.metal.valor, icon: Globe, color: '#3498DB', desc: 'Ferro, cobre, alumínio, níquel' },
   ]
 
   return (
@@ -1105,10 +1105,10 @@ function ICBrSection() {
         </div>
         <div>
           <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-            Indices de Commodities — BCB
+            Índices de Commodities — BCB
           </h2>
           <p className="text-xs font-body text-aletis-grafite-claro">
-            IC-Br Sub-indices | Base dez/2005 = 100 | Ref: {icbr.agro.data}
+            IC-Br Subíndices | Base dez/2005 = 100 | Ref: {icbr.agro.data}
           </p>
         </div>
         <DataSourceBadge fonteOrigem={fonteOrigem as any} fonte="BCB SGS" />
@@ -1198,10 +1198,10 @@ function IncendiosSection() {
         </div>
         <div>
           <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-            Focos de Incendio — Satelite VIIRS
+            Focos de Incêndio — Satélite VIIRS
           </h2>
           <p className="text-xs font-body text-aletis-grafite-claro">
-            Ultimas 24 horas | NASA FIRMS Near Real-Time
+            Últimas 24 horas | NASA FIRMS Near Real-Time
           </p>
         </div>
         <DataSourceBadge fonteOrigem={fonteOrigem as any} fonte="NASA FIRMS" />
@@ -1257,7 +1257,7 @@ function IncendiosSection() {
 
           {incendios.maioresIncendios.length > 0 && (
             <div className="mt-4 pt-3 border-t border-aletis-borda">
-              <p className="text-xs font-body text-aletis-grafite-claro mb-2">Maiores focos (por potencia radiativa)</p>
+              <p className="text-xs font-body text-aletis-grafite-claro mb-2">Maiores focos (por potência radiativa)</p>
               <div className="space-y-1">
                 {incendios.maioresIncendios.slice(0, 3).map((foco, i) => (
                   <div key={i} className="flex items-center gap-3 text-xs font-body">
@@ -1278,8 +1278,8 @@ function IncendiosSection() {
       <div className="mt-4 bg-aletis-bege/80 rounded-xl p-3 flex items-center gap-2">
         <div className="w-2 h-2 rounded-full bg-red-400/60 flex-shrink-0" />
         <p className="text-[11px] font-body text-aletis-grafite-claro">
-          Fonte: NASA FIRMS (Fire Information for Resource Management System) — Satelite VIIRS Suomi NPP. Dados atualizados a cada 3 horas.
-          Focos com confianca "nominal" ou superior. Util para avaliar risco de sinistro em areas de clientes.
+          Fonte: NASA FIRMS (Fire Information for Resource Management System) — Satélite VIIRS Suomi NPP. Dados atualizados a cada 3 horas.
+          Focos com confiança "nominal" ou superior. Útil para avaliar risco de sinistro em áreas de clientes.
         </p>
       </div>
     </section>
@@ -1313,7 +1313,7 @@ function CambioSection() {
       setLoading(true)
       try {
         const resp = await fetch('/api/mercado/cambio')
-        if (!resp.ok) throw new Error(`API cambio indisponivel (${resp.status})`)
+        if (!resp.ok) throw new Error(`API câmbio indisponível (${resp.status})`)
         const payload = await resp.json()
         const arr = Array.isArray(payload?.data) ? payload.data : []
         const items: CambioItem[] = arr.map((d: any) => {
@@ -1342,7 +1342,7 @@ function CambioSection() {
           setError((e as Error).message)
           setFonte('fallback')
           setCotacoes([
-            { codigo: 'USD/BRL', nome: 'Dolar Americano/Real', bid: 5.78, ask: 5.79, variacao: -0.02, pctChange: -0.3, high: 5.82, low: 5.76, timestamp: '' },
+            { codigo: 'USD/BRL', nome: 'Dólar Americano/Real', bid: 5.78, ask: 5.79, variacao: -0.02, pctChange: -0.3, high: 5.82, low: 5.76, timestamp: '' },
             { codigo: 'EUR/BRL', nome: 'Euro/Real', bid: 6.25, ask: 6.27, variacao: 0.03, pctChange: 0.5, high: 6.28, low: 6.22, timestamp: '' },
             { codigo: 'CNY/BRL', nome: 'Yuan/Real', bid: 0.79, ask: 0.80, variacao: 0.00, pctChange: 0.1, high: 0.80, low: 0.79, timestamp: '' },
           ])
@@ -1364,9 +1364,9 @@ function CambioSection() {
             <Globe className="w-4.5 h-4.5 text-aletis-verde" />
           </div>
           <div>
-            <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">Cambio — Moedas Estrangeiras</h2>
+            <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">Câmbio — Moedas Estrangeiras</h2>
             <p className="text-xs font-body text-aletis-grafite-claro">
-              Cotacoes comerciais em tempo real — atualiza a cada 60s
+              Cotações comerciais em tempo real — atualiza a cada 60s
             </p>
           </div>
         </div>
@@ -1375,7 +1375,7 @@ function CambioSection() {
 
       {loading && cotacoes.length === 0 ? (
         <div className="card-premium p-8 text-center text-sm font-body text-aletis-grafite-claro">
-          Carregando cotacoes de cambio...
+          Carregando cotações de câmbio...
         </div>
       ) : (
         <>
@@ -1383,7 +1383,7 @@ function CambioSection() {
             <div className="mb-4 rounded-xl border border-ambar/30 bg-ambar/5 p-3 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-ambar flex-shrink-0" />
               <p className="text-xs font-body text-aletis-grafite-medio">
-                Cotacoes ao vivo indisponiveis — exibindo valores de referencia. {error}
+                Cotações ao vivo indisponíveis — exibindo valores de referência. {error}
               </p>
             </div>
           )}
@@ -1418,11 +1418,11 @@ function CambioSection() {
                       <p className="text-xs font-display font-semibold text-aletis-grafite-escuro">{c.ask.toFixed(4)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-body text-aletis-grafite-claro">Maxima</p>
+                      <p className="text-[10px] font-body text-aletis-grafite-claro">Máxima</p>
                       <p className="text-xs font-display font-semibold text-positivo">{c.high.toFixed(4)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-body text-aletis-grafite-claro">Minima</p>
+                      <p className="text-[10px] font-body text-aletis-grafite-claro">Mínima</p>
                       <p className="text-xs font-display font-semibold text-alerta">{c.low.toFixed(4)}</p>
                     </div>
                   </div>
@@ -1435,7 +1435,7 @@ function CambioSection() {
             <div className="w-2 h-2 rounded-full bg-aletis-grafite-claro/40 flex-shrink-0" />
             <p className="text-[11px] font-body text-aletis-grafite-claro">
               Fonte: AwesomeAPI (economia.awesomeapi.com.br) — dados sindicados do Banco Central do Brasil.
-              Relevante para exportadores de soja, cafe, carne, e para operacoes de hedge via NDF.
+              Relevante para exportadores de soja, café, carne, e para operações de hedge via NDF.
             </p>
           </div>
         </>
@@ -1515,10 +1515,10 @@ function GraosComparisonSection({ commodities }: { commodities: Commodity[] }) {
             </div>
             <div>
               <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-                Comparativo de Performance — Indice 100
+                Comparativo de Performance — Índice 100
               </h2>
               <p className="text-xs font-body text-aletis-grafite-claro">
-                Evolucao relativa de commodities selecionadas | Base: dia inicial = 100
+                Evolução relativa de commodities selecionadas | Base: dia inicial = 100
               </p>
             </div>
           </div>
@@ -1662,10 +1662,10 @@ function MacroHistoricoSection({ apiIndicadores }: { apiIndicadores: ApiIndicado
             </div>
             <div>
               <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-                Historico Macro — 24 meses
+                Histórico Macro — 24 meses
               </h2>
               <p className="text-xs font-body text-aletis-grafite-claro">
-                Serie temporal oficial BCB/IBGE/FGV
+                Série temporal oficial BCB/IBGE/FGV
               </p>
             </div>
           </div>
@@ -1714,7 +1714,7 @@ function MacroHistoricoSection({ apiIndicadores }: { apiIndicadores: ApiIndicado
             </ResponsiveContainer>
           ) : (
             <div className="h-full flex items-center justify-center text-xs font-body text-aletis-grafite-claro">
-              Historico indisponivel — serie nao retornada pelo BCB
+              Histórico indisponível — série não retornada pelo BCB
             </div>
           )}
         </div>
@@ -1765,7 +1765,7 @@ function ExpectativasFocusSection() {
             Expectativas de Mercado — Boletim Focus
           </h2>
           <p className="text-xs font-body text-aletis-grafite-claro">
-            Projecoes coletadas pelo BCB junto a 100+ instituicoes financeiras
+            Projeções coletadas pelo BCB junto a 100+ instituições financeiras
           </p>
         </div>
         <DataSourceBadge fonteOrigem={fonteOrigem as any} fonte="BCB Focus" />
@@ -1814,7 +1814,7 @@ function ExpectativasFocusSection() {
                     ) : (
                       <ArrowDownRight className="w-2.5 h-2.5 text-positivo" />
                     )}
-                    <span className="text-[10px] text-aletis-grafite-claro">Revisao semanal</span>
+                    <span className="text-[10px] text-aletis-grafite-claro">Revisão semanal</span>
                   </div>
                 )}
               </div>
@@ -1826,7 +1826,7 @@ function ExpectativasFocusSection() {
       <div className="mt-4 bg-aletis-bege/80 rounded-xl p-3 flex items-center gap-2">
         <div className="w-2 h-2 rounded-full bg-aletis-dourado/60 flex-shrink-0" />
         <p className="text-[11px] font-body text-aletis-grafite-claro">
-          Relatorio Focus — atualizado semanalmente pelo Banco Central. Impacta precificacao de taxas de credito rural, Selic futura e expectativas inflacionarias.
+          Relatório Focus — atualizado semanalmente pelo Banco Central. Impacta precificação de taxas de crédito rural, Selic futura e expectativas inflacionárias.
         </p>
       </div>
     </section>
@@ -1884,10 +1884,10 @@ function SicorVolumeSection() {
         </div>
         <div className="flex-1">
           <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-            Credito Rural — SICOR/BCB
+            Crédito Rural — SICOR/BCB
           </h2>
           <p className="text-xs font-body text-aletis-grafite-claro">
-            Sistema de Operacoes do Credito Rural | Ultimos 12 meses
+            Sistema de Operações do Crédito Rural | Últimos 12 meses
           </p>
         </div>
         <DataSourceBadge fonteOrigem={fonteOrigem as any} fonte="BCB SICOR" />
@@ -1906,17 +1906,17 @@ function SicorVolumeSection() {
           <p className="text-2xl font-display font-bold text-aletis-grafite-escuro mt-1">
             {sicor.totalContratos.toLocaleString('pt-BR')}
           </p>
-          <p className="text-[10px] font-body text-aletis-grafite-claro mt-1">operacoes</p>
+          <p className="text-[10px] font-body text-aletis-grafite-claro mt-1">operações</p>
         </div>
         <div className="card-premium p-5">
-          <p className="text-xs font-body text-aletis-grafite-claro">Valor Medio</p>
+          <p className="text-xs font-body text-aletis-grafite-claro">Valor Médio</p>
           <p className="text-2xl font-display font-bold text-aletis-grafite-escuro mt-1">
             {fmtBRL(sicor.valorMedio)}
           </p>
           <p className="text-[10px] font-body text-aletis-grafite-claro mt-1">por contrato</p>
         </div>
         <div className="card-premium p-5">
-          <p className="text-xs font-body text-aletis-grafite-claro">Area Financiada</p>
+          <p className="text-xs font-body text-aletis-grafite-claro">Área Financiada</p>
           <p className="text-2xl font-display font-bold text-aletis-grafite-escuro mt-1">
             {(sicor.areaTotal / 1_000_000).toFixed(1)}M
           </p>
@@ -1927,7 +1927,7 @@ function SicorVolumeSection() {
       {/* Serie mensal */}
       {serie.length > 0 && (
         <div className="card-premium p-5 mb-5">
-          <p className="text-xs font-body text-aletis-grafite-claro mb-3">Evolucao Mensal — Desembolsos (R$)</p>
+          <p className="text-xs font-body text-aletis-grafite-claro mb-3">Evolução Mensal — Desembolsos (R$)</p>
           <div className="h-52">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={serie} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
@@ -2054,7 +2054,7 @@ function SafraPorEstadoSection() {
             Safra por Estado — LSPA/IBGE
           </h2>
           <p className="text-xs font-body text-aletis-grafite-claro">
-            Levantamento Sistematico da Producao Agricola | Tabela SIDRA 6588
+            Levantamento Sistemático da Produção Agrícola | Tabela SIDRA 6588
           </p>
         </div>
         <DataSourceBadge fonteOrigem={fonteOrigem as any} fonte="IBGE SIDRA" />
@@ -2080,7 +2080,7 @@ function SafraPorEstadoSection() {
         <div className="card-premium p-5">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-xs font-body text-aletis-grafite-claro">
-              {d.nivel || ufSelected} — Referencia: {d.periodo || '—'}
+              {d.nivel || ufSelected} — Referência: {d.periodo || '—'}
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -2088,9 +2088,9 @@ function SafraPorEstadoSection() {
               <thead>
                 <tr className="text-aletis-grafite-claro text-[10px] uppercase tracking-wider">
                   <th className="text-left pb-2 font-medium">Cultura</th>
-                  <th className="text-right pb-2 font-medium">Area Plantada (ha)</th>
-                  <th className="text-right pb-2 font-medium">Area Colhida (ha)</th>
-                  <th className="text-right pb-2 font-medium">Producao (t)</th>
+                  <th className="text-right pb-2 font-medium">Área Plantada (ha)</th>
+                  <th className="text-right pb-2 font-medium">Área Colhida (ha)</th>
+                  <th className="text-right pb-2 font-medium">Produção (t)</th>
                   <th className="text-right pb-2 font-medium">Rendimento (kg/ha)</th>
                 </tr>
               </thead>
@@ -2114,7 +2114,7 @@ function SafraPorEstadoSection() {
         </div>
       ) : (
         <div className="card-premium p-8 text-center text-xs font-body text-aletis-grafite-claro">
-          Sem dados LSPA disponiveis para {ufSelected} no periodo.
+          Sem dados LSPA disponíveis para {ufSelected} no período.
         </div>
       )}
     </section>
@@ -2159,10 +2159,10 @@ function ExportacaoAgroSection() {
         </div>
         <div className="flex-1">
           <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-            Exportacoes Agropecuarias — ComexStat
+            Exportações Agropecuárias — ComexStat
           </h2>
           <p className="text-xs font-body text-aletis-grafite-claro">
-            MDIC/Siscomex | {exp.periodo} | Balanca Comercial do Agronegocio
+            MDIC/Siscomex | {exp.periodo} | Balança Comercial do Agronegócio
           </p>
         </div>
         <DataSourceBadge fonteOrigem={fonteOrigem as any} fonte="MDIC ComexStat" />
@@ -2174,17 +2174,17 @@ function ExportacaoAgroSection() {
           <p className="text-2xl font-display font-bold text-aletis-grafite-escuro mt-1">
             US$ {(exp.totalUSD / 1e9).toFixed(1)} bi
           </p>
-          <p className="text-[10px] font-body text-aletis-grafite-claro mt-1">FOB ultimos 12 meses</p>
+          <p className="text-[10px] font-body text-aletis-grafite-claro mt-1">FOB últimos 12 meses</p>
         </div>
         <div className="card-premium p-5">
           <p className="text-xs font-body text-aletis-grafite-claro">Volume</p>
           <p className="text-2xl font-display font-bold text-aletis-grafite-escuro mt-1">
             {(exp.totalToneladas / 1e6).toFixed(1)} Mt
           </p>
-          <p className="text-[10px] font-body text-aletis-grafite-claro mt-1">milhoes de toneladas</p>
+          <p className="text-[10px] font-body text-aletis-grafite-claro mt-1">milhões de toneladas</p>
         </div>
         <div className="card-premium p-5">
-          <p className="text-xs font-body text-aletis-grafite-claro">Preco Medio</p>
+          <p className="text-xs font-body text-aletis-grafite-claro">Preço Médio</p>
           <p className="text-2xl font-display font-bold text-aletis-grafite-escuro mt-1">
             US$ {fmtNum(exp.precoMedioUSDporTon, 0)}
           </p>
@@ -2251,7 +2251,7 @@ function ExportacaoAgroSection() {
       {/* Serie mensal */}
       {exp.serieMensal.length > 0 && (
         <div className="card-premium p-5">
-          <p className="text-xs font-body text-aletis-grafite-claro mb-3">Evolucao Mensal — Valor (US$) + Volume (Mt)</p>
+          <p className="text-xs font-body text-aletis-grafite-claro mb-3">Evolução Mensal — Valor (US$) + Volume (Mt)</p>
           <div className="h-60">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={exp.serieMensal} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
@@ -2272,8 +2272,8 @@ function ExportacaoAgroSection() {
       <div className="mt-4 bg-aletis-bege/80 rounded-xl p-3 flex items-center gap-2">
         <div className="w-2 h-2 rounded-full bg-aletis-verde/60 flex-shrink-0" />
         <p className="text-[11px] font-body text-aletis-grafite-claro">
-          Fonte: MDIC/Siscomex — ComexStat. NCMs: 1201 (soja), 1005 (milho), 0901 (cafe), 0201/0202 (carne bovina), 1701 (acucar), 5201/5203 (algodao), 4703 (celulose).
-          Exportacoes impactam balanca comercial do agro e cambio USD/BRL.
+          Fonte: MDIC/Siscomex — ComexStat. NCMs: 1201 (soja), 1005 (milho), 0901 (café), 0201/0202 (carne bovina), 1701 (açúcar), 5201/5203 (algodão), 4703 (celulose).
+          Exportações impactam balança comercial do agro e câmbio USD/BRL.
         </p>
       </div>
     </section>
@@ -2335,10 +2335,10 @@ function CambioHistoricoSection() {
             </div>
             <div>
               <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-                Historico Cambial
+                Histórico Cambial
               </h2>
               <p className="text-xs font-body text-aletis-grafite-claro">
-                {par} — serie diaria AwesomeAPI
+                {par} — série diária AwesomeAPI
               </p>
             </div>
           </div>
@@ -2388,13 +2388,13 @@ function CambioHistoricoSection() {
               </p>
             </div>
             <div className="text-center p-3 rounded-lg bg-aletis-bege/50">
-              <p className="text-[10px] font-body text-aletis-grafite-claro uppercase">Minima</p>
+              <p className="text-[10px] font-body text-aletis-grafite-claro uppercase">Mínima</p>
               <p className="text-lg font-display font-bold text-alerta">
                 {stats.min.toFixed(4)}
               </p>
             </div>
             <div className="text-center p-3 rounded-lg bg-aletis-bege/50">
-              <p className="text-[10px] font-body text-aletis-grafite-claro uppercase">Maxima</p>
+              <p className="text-[10px] font-body text-aletis-grafite-claro uppercase">Máxima</p>
               <p className="text-lg font-display font-bold text-positivo">
                 {stats.max.toFixed(4)}
               </p>
@@ -2417,14 +2417,14 @@ function CambioHistoricoSection() {
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6B6B6B', fontSize: 11 }} domain={['auto', 'auto']} tickFormatter={(v) => v.toFixed(2)} width={45} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#FFF', border: '1px solid #E2DDD5', borderRadius: 8, fontSize: 11 }}
-                  formatter={(v: any) => [Number(v).toFixed(4), 'Cotacao']}
+                  formatter={(v: any) => [Number(v).toFixed(4), 'Cotação']}
                 />
                 <Area type="monotone" dataKey="bid" stroke="#C9A84C" strokeWidth={2} fill="url(#gradientCambio)" />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
             <div className="h-full flex items-center justify-center text-xs font-body text-aletis-grafite-claro">
-              Carregando historico cambial...
+              Carregando histórico cambial...
             </div>
           )}
         </div>
@@ -2455,7 +2455,7 @@ function EtanolParidadeSection() {
             Paridade Etanol-Gasolina
           </h2>
           <p className="text-xs font-body text-aletis-grafite-claro">
-            Relacao de precos e vantagem competitiva
+            Relação de preços e vantagem competitiva
           </p>
         </div>
       </div>
@@ -2466,7 +2466,7 @@ function EtanolParidadeSection() {
           <p className="text-3xl font-display font-bold text-aletis-grafite-escuro mt-1">
             R$ {etanolMedio.toFixed(2)}
           </p>
-          <p className="text-[10px] font-body text-aletis-grafite-claro">/litro — media BR</p>
+          <p className="text-[10px] font-body text-aletis-grafite-claro">/litro — média BR</p>
         </div>
 
         <div className="card-premium p-5 text-center border-2 border-aletis-dourado/40">
@@ -2484,13 +2484,13 @@ function EtanolParidadeSection() {
           <p className="text-3xl font-display font-bold text-aletis-grafite-escuro mt-1">
             R$ {gasolinaMedio.toFixed(2)}
           </p>
-          <p className="text-[10px] font-body text-aletis-grafite-claro">/litro — media BR</p>
+          <p className="text-[10px] font-body text-aletis-grafite-claro">/litro — média BR</p>
         </div>
       </div>
 
       <div className="mt-4 bg-aletis-bege/80 rounded-xl p-3">
         <p className="text-[11px] font-body text-aletis-grafite-claro">
-          <strong className="text-aletis-grafite-escuro">Regra 70%:</strong> o etanol hidratado e financeiramente vantajoso quando seu preco esta abaixo de 70% da gasolina, compensando o menor poder calorifico. Diesel S10 a <strong>R$ {dieselMedio.toFixed(2)}/L</strong> — insumo critico para safra.
+          <strong className="text-aletis-grafite-escuro">Regra 70%:</strong> o etanol hidratado é financeiramente vantajoso quando seu preço está abaixo de 70% da gasolina, compensando o menor poder calorífico. Diesel S10 a <strong>R$ {dieselMedio.toFixed(2)}/L</strong> — insumo crítico para safra.
         </p>
       </div>
     </section>
@@ -2519,10 +2519,10 @@ function InsumosSection() {
         </div>
         <div className="flex-1">
           <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-            Insumos Agricolas
+            Insumos Agrícolas
           </h2>
           <p className="text-xs font-body text-aletis-grafite-claro">
-            Fertilizantes, defensivos e sementes — variacao mensal
+            Fertilizantes, defensivos e sementes — variação mensal
           </p>
         </div>
         <DataSourceBadge fonteOrigem={fonteOrigem as any} fonte="ESALQ/CEPEA • ANP" />
@@ -2547,7 +2547,7 @@ function InsumosSection() {
                 <ArrowDownRight className="w-3 h-3 text-positivo" />
               )}
               <span className={`text-[11px] font-body font-semibold ${ins.variacaoMensal >= 0 ? 'text-alerta' : 'text-positivo'}`}>
-                {fmtPct(ins.variacaoMensal)} mes
+                {fmtPct(ins.variacaoMensal)} mês
               </span>
             </div>
           </div>
@@ -2588,9 +2588,9 @@ function RiscosComplementaresSection() {
 
   // Risk factors (synthesized indicators)
   const fatoresRisco = [
-    { fator: 'Estiagem prolongada', nivel: 'moderado', impacto: 'Reducao de produtividade em areas sem irrigacao', area: 'Centro-Oeste/MT' },
-    { fator: 'La Nina ativa', nivel: 'baixo', impacto: 'Possivel reducao de chuva no Sul', area: 'RS/SC/PR' },
-    { fator: 'Focos de incendio', nivel: estadosOrdenados[0]?.[1] > 200 ? 'alto' : 'moderado', impacto: 'Risco a ativos rurais e seguros', area: `${estadosOrdenados[0]?.[0] || 'BR'} (${estadosOrdenados[0]?.[1] || 0} focos)` },
+    { fator: 'Estiagem prolongada', nivel: 'moderado', impacto: 'Redução de produtividade em áreas sem irrigação', area: 'Centro-Oeste/MT' },
+    { fator: 'La Niña ativa', nivel: 'baixo', impacto: 'Possível redução de chuva no Sul', area: 'RS/SC/PR' },
+    { fator: 'Focos de incêndio', nivel: estadosOrdenados[0]?.[1] > 200 ? 'alto' : 'moderado', impacto: 'Risco a ativos rurais e seguros', area: `${estadosOrdenados[0]?.[0] || 'BR'} (${estadosOrdenados[0]?.[1] || 0} focos)` },
     { fator: 'Volatilidade cambial', nivel: 'moderado', impacto: 'Afeta custos de insumos dolarizados', area: 'Nacional' },
   ]
 
@@ -2610,10 +2610,10 @@ function RiscosComplementaresSection() {
           </div>
           <div>
             <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-              Fatores de Risco Agroclimaticos
+              Fatores de Risco Agroclimáticos
             </h2>
             <p className="text-xs font-body text-aletis-grafite-claro">
-              Avaliacao sintetica de ameacas relevantes para o credito rural
+              Avaliação sintética de ameaças relevantes para o crédito rural
             </p>
           </div>
         </div>
@@ -2645,10 +2645,10 @@ function RiscosComplementaresSection() {
             </div>
             <div>
               <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-                Mapa de Calor — Focos por Regiao
+                Mapa de Calor — Focos por Região
               </h2>
               <p className="text-xs font-body text-aletis-grafite-claro">
-                Distribuicao geografica dos focos ativos (24h)
+                Distribuição geográfica dos focos ativos (24h)
               </p>
             </div>
           </div>

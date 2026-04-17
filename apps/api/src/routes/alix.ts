@@ -55,7 +55,7 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
       if (!message || typeof message !== 'string' || message.trim().length === 0) {
         return reply.status(400).send({
           success: false,
-          error: 'Campo "message" e obrigatorio (string nao vazia)',
+          error: 'Campo "message" é obrigatório (string não vazia)',
         })
       }
 
@@ -89,7 +89,7 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
       return reply.status(200).send({ success: true, data: sessions, total: sessions.length })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro desconhecido'
-      return reply.status(500).send({ success: false, error: 'Erro ao listar sessoes', detalhes: msg })
+      return reply.status(500).send({ success: false, error: 'Erro ao listar sessões', detalhes: msg })
     }
   })
 
@@ -103,12 +103,12 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
       const { id } = request.params
       const session = await alix.getSession(id)
       if (!session) {
-        return reply.status(404).send({ success: false, error: 'Sessao nao encontrada' })
+        return reply.status(404).send({ success: false, error: 'Sessão não encontrada' })
       }
       return reply.status(200).send({ success: true, data: session })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro desconhecido'
-      return reply.status(500).send({ success: false, error: 'Erro ao buscar sessao', detalhes: msg })
+      return reply.status(500).send({ success: false, error: 'Erro ao buscar sessão', detalhes: msg })
     }
   })
 
@@ -124,7 +124,7 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
       return reply.status(201).send({ success: true, data: session })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro desconhecido'
-      return reply.status(500).send({ success: false, error: 'Erro ao criar sessao', detalhes: msg })
+      return reply.status(500).send({ success: false, error: 'Erro ao criar sessão', detalhes: msg })
     }
   })
 
@@ -136,11 +136,11 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
     try {
       const { id } = request.params
       const ok = await alix.deleteSession(id)
-      if (!ok) return reply.status(404).send({ success: false, error: 'Sessao nao encontrada' })
+      if (!ok) return reply.status(404).send({ success: false, error: 'Sessão não encontrada' })
       return reply.status(200).send({ success: true, data: { deleted: id } })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro desconhecido'
-      return reply.status(500).send({ success: false, error: 'Erro ao deletar sessao', detalhes: msg })
+      return reply.status(500).send({ success: false, error: 'Erro ao deletar sessão', detalhes: msg })
     }
   })
 

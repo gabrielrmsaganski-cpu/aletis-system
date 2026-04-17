@@ -1,15 +1,15 @@
 /**
  * ALETIS - Gerador de Propostas Inteligentes
  *
- * Recebe dados do cliente + parametros da operacao e monta uma proposta
- * completa de 15 secoes, no padrao das propostas reais (PAULO LUCIANO e AILTON),
+ * Recebe dados do cliente + parâmetros da operação e monta uma proposta
+ * completa de 15 seções, no padrão das propostas reais (PAULO LUCIANO e AILTON),
  * combinando:
  *   - Calculadoras do calculadoras-premium.ts
- *   - Base de conhecimento (sumulas, MCR, precedentes, Plano Safra)
- *   - Memoria de calculo auditavel
- *   - Fundamentacao juridica citada
+ *   - Base de conhecimento (súmulas, MCR, precedentes, Plano Safra)
+ *   - Memória de cálculo auditável
+ *   - Fundamentação jurídica citada
  *
- * Nada de dados fabricados - tudo derivado dos inputs ou das referencias normativas.
+ * Nada de dados fabricados - tudo derivado dos inputs ou das referências normativas.
  */
 
 import {
@@ -461,7 +461,7 @@ export async function gerarPropostaInteligente(
   const desconto = ((memoria.saldoAtualizado - valorProposto) / memoria.saldoAtualizado) * 100
 
   const capa: SecaoCapa = {
-    titulo: `Proposta de ${nomeEstrategia(negociacao.estrategia)} - ${cliente.nome}`,
+    titulo: `Proposta de ${nomeEstrategia(negociacao.estrategia)} — ${cliente.nome}`,
     subtitulo: `Credor: ${credito.credor} | Contrato ${credito.contratoAtual.numero}`,
     dataReferencia: dataGeracao,
     clienteNome: cliente.nome,
@@ -472,57 +472,57 @@ export async function gerarPropostaInteligente(
 
   const sumario: SecaoSumarioExecutivo = {
     paragrafoUnico:
-      `${cliente.nome}, produtor rural em ${cliente.cidade}/${cliente.uf}, apresenta divida consolidada ` +
+      `${cliente.nome}, produtor rural em ${cliente.cidade}/${cliente.uf}, apresenta dívida consolidada ` +
       `de R$ ${memoria.saldoAtualizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} perante ${credito.credor}. ` +
-      `A presente proposta estrutura a liquidacao por meio de ${nomeEstrategia(negociacao.estrategia)}, ` +
+      `A presente proposta estrutura a liquidação por meio de ${nomeEstrategia(negociacao.estrategia)}, ` +
       `com economia estimada de R$ ${Math.abs(memoria.saldoAtualizado - valorProposto).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ` +
       `(${desconto.toFixed(1)}% sobre o valor atualizado). ` +
       (descaracterizacao.houveDescaracterizacao
-        ? 'Identificada DESCARACTERIZACAO de credito rural que fundamenta recalculo com taxa original equalizada. '
+        ? 'Identificada DESCARACTERIZAÇÃO de crédito rural que fundamenta recálculo com taxa original equalizada. '
         : '') +
       (perdaMedia > 20
-        ? `Perdas documentadas de ${perdaMedia.toFixed(0)}% na safra autorizam alongamento via Sumula 298 STJ. `
+        ? `Perdas documentadas de ${perdaMedia.toFixed(0)}% na safra autorizam alongamento via Súmula 298 STJ. `
         : '') +
-      'Proposta alinhada a capacidade de pagamento projetada, viabilidade juridica e pratica de mercado.',
+      'Proposta alinhada à capacidade de pagamento projetada, viabilidade jurídica e prática de mercado.',
     pontosChave: [
-      `Divida atualizada: R$ ${memoria.saldoAtualizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      `Dívida atualizada: R$ ${memoria.saldoAtualizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
       `CET contratual efetivo: ${memoria.cetAnual.toFixed(2)}% a.a.`,
       `Multiplicador de despesas: ${memoria.multiplicadorDespesas.toFixed(2)}x` +
         (memoria.multiplicadorDespesas > 2 ? ' - ALERTA DE ABUSIVIDADE' : ''),
-      `Estrategia adotada: ${nomeEstrategia(negociacao.estrategia)}`,
+      `Estratégia adotada: ${nomeEstrategia(negociacao.estrategia)}`,
       `Valor proposto: R$ ${valorProposto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
       desconto > 0 ? `Desconto/economia: ${desconto.toFixed(1)}%` : '',
-      pericia.sumulasAplicaveis.length > 0 ? `Sumulas aplicaveis: ${pericia.sumulasAplicaveis.length}` : '',
+      pericia.sumulasAplicaveis.length > 0 ? `Súmulas aplicáveis: ${pericia.sumulasAplicaveis.length}` : '',
     ].filter(Boolean),
   }
 
   const contexto: SecaoContexto = {
     historiaProdutor:
       `${cliente.nome}, inscrito(a) no CPF/CNPJ ${cliente.cpfCnpj}, produtor rural em ${cliente.cidade}/${cliente.uf}. ` +
-      (cliente.areaHa ? `Explora area de ${cliente.areaHa.toLocaleString('pt-BR')} hectares. ` : '') +
+      (cliente.areaHa ? `Explora área de ${cliente.areaHa.toLocaleString('pt-BR')} hectares. ` : '') +
       (cliente.culturaPrincipal ? `Atividade principal: ${cliente.culturaPrincipal}. ` : '') +
       (cliente.rendaBrutaAnual
         ? `Renda bruta anual declarada: R$ ${cliente.rendaBrutaAnual.toLocaleString('pt-BR')}. `
         : '') +
       (cliente.possuiDap ? 'Possui DAP. ' : '') +
       (cliente.possuiCaf ? 'Possui CAF (Cadastro Agricultura Familiar). ' : '') +
-      (cliente.carAtivo ? 'CAR ativo. ' : 'CAR nao informado. '),
+      (cliente.carAtivo ? 'CAR ativo. ' : 'CAR não informado. '),
     atividadeAtual:
       cliente.areaHa && cliente.produtividadeSacasHa
-        ? `Producao estimada safra atual: ${(cliente.areaHa * cliente.produtividadeSacasHa).toLocaleString('pt-BR')} sacas ` +
+        ? `Produção estimada safra atual: ${(cliente.areaHa * cliente.produtividadeSacasHa).toLocaleString('pt-BR')} sacas ` +
           `(${cliente.produtividadeSacasHa} sacas/ha x ${cliente.areaHa} ha).`
-        : 'Dados de producao nao detalhados.',
+        : 'Dados de produção não detalhados.',
     eventosAdversos: eventos.map(
       e =>
         `${nomeTipoEvento(e.tipo)} em ${e.dataOcorrencia} - ${e.localizacao}: perda de ${e.percentualPerdaSafra}% ` +
-        (e.documentacao ? `(documentado: ${e.documentacao.join(', ')})` : '(sem documentacao anexada)'),
+        (e.documentacao ? `(documentado: ${e.documentacao.join(', ')})` : '(sem documentação anexada)'),
     ),
     relacionamentoCredor:
       `Relacionamento com ${credito.credor} iniciado em ${credito.contratosOriginais[0]?.dataContratacao || 'N/A'}. ` +
       `${credito.contratosOriginais.length} contrato(s) original(is) consolidado(s) no instrumento atual ` +
       `${credito.contratoAtual.numero} (${credito.contratoAtual.dataContratacao}). ` +
       (credito.pagamentosJaRealizados
-        ? `Pagamentos ja realizados: R$ ${credito.pagamentosJaRealizados
+        ? `Pagamentos já realizados: R$ ${credito.pagamentosJaRealizados
             .reduce((s, p) => s + p.valor, 0)
             .toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
         : ''),
@@ -537,7 +537,7 @@ export async function gerarPropostaInteligente(
       ...descaracterizacao.indicios,
       ...(capitalizacao?.abusividadeDetectada ? capitalizacao.fundamentosContestacao : []),
       ...(pericia.anatocismoDetectado ? [`Anatocismo em ${pericia.capitalizacaoAbusivaEm.join(', ')}`] : []),
-      ...(pericia.comissaoPermanenciaIndevida ? ['Comissao de permanencia cumulada com outros encargos'] : []),
+      ...(pericia.comissaoPermanenciaIndevida ? ['Comissão de permanência cumulada com outros encargos'] : []),
     ],
   }
 
@@ -572,7 +572,7 @@ export async function gerarPropostaInteligente(
       : [],
     viabilidade: fluxoProjetado?.viabilidade || 'APERTADO',
     vpl: fluxoProjetado?.valorPresenteLiquido || 0,
-    recomendacoes: fluxoProjetado?.recomendacoes || ['Dados insuficientes para projecao'],
+    recomendacoes: fluxoProjetado?.recomendacoes || ['Dados insuficientes para projeção'],
   }
 
   const stress: SecaoStressTest = {
@@ -608,7 +608,7 @@ export async function gerarPropostaInteligente(
       (dacao
         ? negociacao.bensOferecidosDacao!.map((b, idx) => ({
             numero: idx + 1,
-            descricao: `Dacao - ${b.descricao}${b.matricula ? ` (mat. ${b.matricula})` : ''}`,
+            descricao: `Dação - ${b.descricao}${b.matricula ? ` (mat. ${b.matricula})` : ''}`,
             data: dataGeracao,
             valor: b.valorAvaliacao,
             tipo: 'dacao' as const,
@@ -617,27 +617,27 @@ export async function gerarPropostaInteligente(
     condicoes: [
       ...(alongamento
         ? [
-            'Alongamento da divida com base na Sumula 298 STJ e MCR 2-6-4',
+            'Alongamento da dívida com base na Súmula 298 STJ e MCR 2-6-4',
             `Perda documentada de ${perdaMedia.toFixed(0)}% autoriza alongamento proporcional`,
           ]
         : []),
       ...(dacao
         ? [
-            'Dacao em pagamento conforme arts. 356-359 do CC',
-            'Avaliacao independente exigida (profissional CREA)',
+            'Dação em pagamento conforme arts. 356-359 do CC',
+            'Avaliação independente exigida (profissional CREA)',
             dacao.suficiente
-              ? 'Quitacao integral pela dacao'
+              ? 'Quitação integral pela dação'
               : `Remanescente R$ ${dacao.saldoRemanescente.toLocaleString('pt-BR')} em parcelas posteriores`,
           ]
         : []),
       ...(parcelamento
         ? [
             'Pagamentos alinhados ao ciclo da safra',
-            `${negociacao.numeroSafrasPagamento || 4} safras de pagamento + carencia inicial`,
+            `${negociacao.numeroSafrasPagamento || 4} safras de pagamento + carência inicial`,
           ]
         : []),
-      'Baixa de restritivos em ate 30 dias da liquidacao final',
-      'Quitacao plena e irrevogavel apos cumprimento integral',
+      'Baixa de restritivos em até 30 dias da liquidação final',
+      'Quitação plena e irrevogável após cumprimento integral',
     ],
   }
 
@@ -656,7 +656,7 @@ export async function gerarPropostaInteligente(
   const garantias: SecaoGarantias = {
     garantiasOfertadas:
       negociacao.bensOferecidosDacao?.map(b => ({
-        descricao: `${b.descricao}${b.matricula ? ` (matricula ${b.matricula})` : ''}`,
+        descricao: `${b.descricao}${b.matricula ? ` (matrícula ${b.matricula})` : ''}`,
         tipo: b.tipo,
         valorAvaliacao: b.valorAvaliacao,
       })) || [],
@@ -664,8 +664,8 @@ export async function gerarPropostaInteligente(
       negociacao.bensOferecidosDacao && negociacao.bensOferecidosDacao.length > 0
         ? `Total avaliado: R$ ${negociacao.bensOferecidosDacao
             .reduce((s, b) => s + b.valorAvaliacao, 0)
-            .toLocaleString('pt-BR', { minimumFractionDigits: 2 })}. Sujeitas a avaliacao independente por profissional CREA.`
-        : 'Sem garantias adicionais ofertadas alem das ja previstas no contrato original.',
+            .toLocaleString('pt-BR', { minimumFractionDigits: 2 })}. Sujeitas a avaliação independente por profissional CREA.`
+        : 'Sem garantias adicionais ofertadas além das já previstas no contrato original.',
   }
 
   const fundamentacao: SecaoFundamentacao = {
@@ -673,11 +673,11 @@ export async function gerarPropostaInteligente(
     dispositivosMCR: montarMCRAplicavel(credito, alongamento, capitalizacao),
     precedentes: montarPrecedentesAplicaveis(descaracterizacao, pericia),
     resolucoesCmn: [
-      'Resolucao CMN 5.229/2025 - reorganiza MCR 2-6-4 (alongamento) com limites renovados',
-      'Resolucao CMN 5.234/2025 - ajustes Plano Safra 2025/26',
-      'Resolucao CMN 4.966/2021 (vigor 01/2025) - modelo IFRS9 para provisao',
+      'Resolução CMN 5.229/2025 — reorganiza MCR 2-6-4 (alongamento) com limites renovados',
+      'Resolução CMN 5.234/2025 — ajustes Plano Safra 2025/26',
+      'Resolução CMN 4.966/2021 (vigor 01/2025) — modelo IFRS9 para provisão',
       ...(eventos.some(e => e.tipo === 'veranico' || e.tipo === 'enchente' || e.tipo === 'geada')
-        ? ['Resolucao CMN 5.224/2025 - Proagro 2025/26 (novos limites)']
+        ? ['Resolução CMN 5.224/2025 — Proagro 2025/26 (novos limites)']
         : []),
     ],
     argumentacaoCentral: construirArgumentacaoCentral(
@@ -691,64 +691,64 @@ export async function gerarPropostaInteligente(
 
   const anexos: SecaoAnexos = {
     listaAnexos: [
-      { descricao: 'Cedulas originais dos contratos consolidados', obrigatorio: true },
+      { descricao: 'Cédulas originais dos contratos consolidados', obrigatorio: true },
       { descricao: 'Extrato atualizado do contrato vigente', obrigatorio: true },
-      { descricao: 'Comprovantes de pagamentos ja realizados', obrigatorio: true },
+      { descricao: 'Comprovantes de pagamentos já realizados', obrigatorio: true },
       ...(eventos.length > 0
-        ? [{ descricao: 'Laudo tecnico de perdas / COR Proagro', obrigatorio: true }]
+        ? [{ descricao: 'Laudo técnico de perdas / COR Proagro', obrigatorio: true }]
         : []),
       ...(eventos.some(e => e.tipo === 'veranico' || e.tipo === 'enchente')
-        ? [{ descricao: 'Boletins meteorologicos INMET do periodo', obrigatorio: true }]
+        ? [{ descricao: 'Boletins meteorológicos INMET do período', obrigatorio: true }]
         : []),
       ...(negociacao.bensOferecidosDacao
         ? [
-            { descricao: 'Matriculas atualizadas dos imoveis ofertados', obrigatorio: true },
-            { descricao: 'Laudo tecnico de avaliacao (profissional CREA)', obrigatorio: true },
+            { descricao: 'Matrículas atualizadas dos imóveis ofertados', obrigatorio: true },
+            { descricao: 'Laudo técnico de avaliação (profissional CREA)', obrigatorio: true },
           ]
         : []),
-      { descricao: 'CAR atualizado', obrigatorio: true, observacoes: 'Obrigatorio para operacoes rurais' },
+      { descricao: 'CAR atualizado', obrigatorio: true, observacoes: 'Obrigatório para operações rurais' },
       { descricao: 'DAP ou CAF (se Pronaf)', obrigatorio: false },
-      { descricao: 'Declaracao de Imposto de Renda ultimos 2 anos', obrigatorio: false },
-      { descricao: 'Certidao negativa de debitos trabalhistas/previdenciarios', obrigatorio: false },
+      { descricao: 'Declaração de Imposto de Renda últimos 2 anos', obrigatorio: false },
+      { descricao: 'Certidão negativa de débitos trabalhistas/previdenciários', obrigatorio: false },
     ],
   }
 
   const aceite: SecaoAceite = {
     textoAceite:
-      `Declaro, na qualidade de ${credito.credorTipo === 'cooperativa' ? 'cooperado ativo' : 'mutuario'}, ` +
-      `que recebi a proposta acima, compreendi integralmente seus termos, memoria de calculo, fundamentacao ` +
-      `juridica e condicoes, e manifesto minha aceitacao em todos os seus termos, assumindo as obrigacoes ` +
-      `consignadas e autorizando a formalizacao dos instrumentos juridicos necessarios.`,
+      `Declaro, na qualidade de ${credito.credorTipo === 'cooperativa' ? 'cooperado ativo' : 'mutuário'}, ` +
+      `que recebi a proposta acima, compreendi integralmente seus termos, memória de cálculo, fundamentação ` +
+      `jurídica e condições, e manifesto minha aceitação em todos os seus termos, assumindo as obrigações ` +
+      `consignadas e autorizando a formalização dos instrumentos jurídicos necessários.`,
     prazoValidade: dataValidade,
     condicoesAceite: [
       'Aceite por escrito do representante legal do credor',
-      'Apresentacao da documentacao listada como anexo',
-      'Assinatura de instrumento de novacao/acordo ou termo de quitacao em ate 15 dias uteis',
-      'Em caso de dacao: registro da transmissao no cartorio competente em ate 60 dias',
+      'Apresentação da documentação listada como anexo',
+      'Assinatura de instrumento de novação/acordo ou termo de quitação em até 15 dias úteis',
+      'Em caso de dação: registro da transmissão no cartório competente em até 60 dias',
     ],
   }
 
   const observacoes: SecaoObservacoes = {
     proximosPassos: [
       'Envio desta proposta ao credor via e-mail formal e registro em plataforma ALETIS',
-      'Solicitacao de reuniao tecnica em ate 10 dias uteis',
-      'Preparacao da documentacao de anexo',
+      'Solicitação de reunião técnica em até 10 dias úteis',
+      'Preparação da documentação de anexo',
       ...(negociacao.estrategia === 'revisional' || descaracterizacao.houveDescaracterizacao
-        ? ['Preparacao paralela de acao revisional caso acordo extrajudicial nao prospere em 30 dias']
+        ? ['Preparação paralela de ação revisional caso acordo extrajudicial não prospere em 30 dias']
         : []),
       ...(dacao
         ? [
-            'Contato com cartorio para calculo de ITBI e emolumentos',
-            'Agendamento de avaliacao tecnica independente',
+            'Contato com cartório para cálculo de ITBI e emolumentos',
+            'Agendamento de avaliação técnica independente',
           ]
         : []),
     ],
     cronograma: [
       { etapa: 'Envio da proposta', prazo: 'Imediato (D+0)' },
-      { etapa: 'Primeira resposta do credor', prazo: 'D+10 uteis' },
-      { etapa: 'Reuniao de alinhamento', prazo: 'D+15 uteis' },
-      { etapa: 'Formalizacao do acordo', prazo: 'D+30 uteis' },
-      { etapa: 'Primeiro pagamento/dacao', prazo: 'Conforme cronograma acordado' },
+      { etapa: 'Primeira resposta do credor', prazo: 'D+10 úteis' },
+      { etapa: 'Reunião de alinhamento', prazo: 'D+15 úteis' },
+      { etapa: 'Formalização do acordo', prazo: 'D+30 úteis' },
+      { etapa: 'Primeiro pagamento/dação', prazo: 'Conforme cronograma acordado' },
     ],
     contatoAletis: 'Christian Kohler | christian@aletis.com.br | +55 (66) 98434-1616',
   }
@@ -792,7 +792,7 @@ export async function gerarPropostaInteligente(
       prazoLiquidacao: parcelamento
         ? `${negociacao.numeroSafrasPagamento || 4} safras`
         : dacao
-          ? 'Liquidacao imediata via dacao'
+          ? 'Liquidação imediata via dação'
           : 'A definir',
     },
   }
@@ -804,11 +804,11 @@ export async function gerarPropostaInteligente(
 
 function nomeEstrategia(e: ParametrosNegociacao['estrategia']): string {
   const map = {
-    liquidacao: 'Liquidacao',
-    alongamento: 'Alongamento (Sumula 298 STJ)',
-    renegociacao: 'Renegociacao',
-    dacao: 'Dacao em Pagamento',
-    revisional: 'Revisao Judicial',
+    liquidacao: 'Liquidação',
+    alongamento: 'Alongamento (Súmula 298 STJ)',
+    renegociacao: 'Renegociação',
+    dacao: 'Dação em Pagamento',
+    revisional: 'Revisão Judicial',
     tripartite: 'Acordo Tripartite',
   }
   return map[e]
@@ -816,13 +816,13 @@ function nomeEstrategia(e: ParametrosNegociacao['estrategia']): string {
 
 function nomeTipoEvento(t: EventoAdverso['tipo']): string {
   const map = {
-    veranico: 'Veranico (deficit hidrico)',
+    veranico: 'Veranico (déficit hídrico)',
     enchente: 'Enchente',
     geada: 'Geada',
     pragas: 'Pragas',
-    queda_preco: 'Queda de preco',
-    doenca: 'Doenca na lavoura/rebanho',
-    incendio: 'Incendio',
+    queda_preco: 'Queda de preço',
+    doenca: 'Doença na lavoura/rebanho',
+    incendio: 'Incêndio',
   }
   return map[t]
 }
@@ -899,45 +899,45 @@ function construirArgumentacaoCentral(
 
   if (desc.houveDescaracterizacao) {
     pilares.push(
-      `(i) DESCARACTERIZACAO do credito rural: contratos originais de finalidade rural foram renegociados ` +
-        `sob titulo de credito pessoal/empresarial, com spread de ${desc.excessoSobreOriginal.toFixed(1)}% ` +
-        `sobre a taxa media equalizada - violacao ao MCR 2-1 e 2-6-4.`,
+      `(i) DESCARACTERIZAÇÃO do crédito rural: contratos originais de finalidade rural foram renegociados ` +
+        `sob título de crédito pessoal/empresarial, com spread de ${desc.excessoSobreOriginal.toFixed(1)}% ` +
+        `sobre a taxa média equalizada — violação ao MCR 2-1 e 2-6-4.`,
     )
   }
   if (pericia.anatocismoDetectado) {
     pilares.push(
-      '(ii) ANATOCISMO: capitalizacao em periodicidade nao autorizada legalmente, em contrariedade a Sumula 93 STJ.',
+      '(ii) ANATOCISMO: capitalização em periodicidade não autorizada legalmente, em contrariedade à Súmula 93 STJ.',
     )
   }
   if (pericia.comissaoPermanenciaIndevida) {
     pilares.push(
-      '(iii) COMISSAO DE PERMANENCIA CUMULADA com mora/juros/multa - Sumula 472 STJ expressamente veda.',
+      '(iii) COMISSÃO DE PERMANÊNCIA CUMULADA com mora/juros/multa — Súmula 472 STJ expressamente veda.',
     )
   }
   if (along && perdaMedia > 0) {
     pilares.push(
       `(iv) DIREITO AO ALONGAMENTO: perda documentada de ${perdaMedia.toFixed(0)}% da safra autoriza alongamento ` +
-        `proporcional via Sumula 298 STJ e Lei 9.138/95 - direito subjetivo do devedor, nao faculdade do credor.`,
+        `proporcional via Súmula 298 STJ e Lei 9.138/95 — direito subjetivo do devedor, não faculdade do credor.`,
     )
   }
   if (dacao) {
     pilares.push(
-      '(v) DACAO EM PAGAMENTO: extincao da obrigacao mediante entrega de bem imovel avaliado, ' +
+      '(v) DAÇÃO EM PAGAMENTO: extinção da obrigação mediante entrega de bem imóvel avaliado, ' +
         'fundamentada nos arts. 356-359 CC e precedente STJ REsp 1.429.461/RJ.',
     )
   }
 
   if (pilares.length === 0) {
     return (
-      'A proposta estrutura uma solucao negociada adequada a capacidade de pagamento do devedor, ' +
-      'preservando a relacao comercial e evitando litigios custosos para ambas as partes.'
+      'A proposta estrutura uma solução negociada adequada à capacidade de pagamento do devedor, ' +
+      'preservando a relação comercial e evitando litígios custosos para ambas as partes.'
     )
   }
 
   return (
-    'A presente proposta se sustenta nos seguintes pilares juridicos:\n\n' +
+    'A presente proposta se sustenta nos seguintes pilares jurídicos:\n\n' +
     pilares.join('\n\n') +
     '\n\nCabe ao credor acolher a proposta evitando que as irregularidades identificadas migrem para a esfera ' +
-    'judicial, onde ja existem precedentes uniformes que reconhecem os direitos aqui postulados.'
+    'judicial, onde já existem precedentes uniformes que reconhecem os direitos aqui postulados.'
   )
 }

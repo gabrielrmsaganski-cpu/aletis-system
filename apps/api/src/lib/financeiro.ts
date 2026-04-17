@@ -1,17 +1,17 @@
 /**
- * ALETIS - Motor de Calculo Financeiro
+ * ALETIS - Motor de Cálculo Financeiro
  *
- * Implementa matematica financeira real:
+ * Implementa matemática financeira real:
  * - Juros compostos
  * - TIR via Newton-Raphson
- * - Amortizacao SAC e PRICE
- * - Conversao de taxas equivalentes
- * - Recalculo de divida com pagamentos parciais
+ * - Amortização SAC e PRICE
+ * - Conversão de taxas equivalentes
+ * - Recálculo de dívida com pagamentos parciais
  */
 
 /* ---------- helpers ---------- */
 
-/** Diferenca em dias entre duas datas (UTC, sem horario) */
+/** Diferença em dias entre duas datas (UTC, sem horário) */
 export function diffDias(a: Date, b: Date): number {
   const ms = b.getTime() - a.getTime()
   return Math.round(ms / 86_400_000)
@@ -21,7 +21,7 @@ export function diffDias(a: Date, b: Date): number {
 export function toDate(v: string | Date): Date {
   if (v instanceof Date) return v
   const d = new Date(v + 'T00:00:00Z')
-  if (isNaN(d.getTime())) throw new Error(`Data invalida: ${v}`)
+  if (isNaN(d.getTime())) throw new Error(`Data inválida: ${v}`)
   return d
 }
 

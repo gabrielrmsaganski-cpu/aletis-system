@@ -1,3 +1,12 @@
+/**
+ * CRM (Gestao de Clientes)
+ *
+ * Pagina de gestao de clientes do sistema ALETIS com visualizacoes
+ * em Lista (tabela com ordenacao) e Kanban (por estagio do pipeline).
+ * Permite buscar por nome/cidade/credor, filtrar por estagio,
+ * exportar CSV, criar novo cliente (POST /clientes) e navegar para
+ * a pagina de detalhes. Consome GET /clientes com fallback local.
+ */
 import React, { useState, useMemo } from 'react'
 import { useApi, apiFetch } from '../hooks/useApi'
 import { useToast } from '../hooks/useToast'
@@ -52,13 +61,13 @@ interface Cliente {
 const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
   lead: { label: 'Lead', color: '#6B7280' },
   prospeccao: { label: 'Prospecção', color: '#9CA3AF' },
-  qualificacao: { label: 'Qualificacao', color: '#3B82F6' },
-  analise: { label: 'Analise', color: '#8B5CF6' },
+  qualificacao: { label: 'Qualificação', color: '#3B82F6' },
+  analise: { label: 'Análise', color: '#8B5CF6' },
   proposta: { label: 'Proposta', color: '#C9A84C' },
-  negociacao: { label: 'Negociacao', color: '#E67E22' },
+  negociacao: { label: 'Negociação', color: '#E67E22' },
   acordo: { label: 'Acordo', color: '#27AE60' },
   acompanhamento: { label: 'Acompanhamento', color: '#0F4C35' },
-  concluido: { label: 'Concluido', color: '#1B6B4A' },
+  concluido: { label: 'Concluído', color: '#1B6B4A' },
   encerrado: { label: 'Encerrado', color: '#374151' },
 }
 
@@ -149,7 +158,7 @@ const FALLBACK_CLIENTES: Cliente[] = [
   {
     id: 'maria-santos',
     nome: 'Maria Santos',
-    cidade: 'Rondonopolis',
+    cidade: 'Rondonópolis',
     uf: 'MT',
     credor: 'Banco do Brasil',
     valorDivida: 890_000,
@@ -170,7 +179,7 @@ const FALLBACK_CLIENTES: Cliente[] = [
   },
   {
     id: 'jose-moreira',
-    nome: 'Jose Moreira',
+    nome: 'José Moreira',
     cidade: 'Uberaba',
     uf: 'MG',
     credor: 'Cresol',
@@ -182,7 +191,7 @@ const FALLBACK_CLIENTES: Cliente[] = [
   {
     id: 'carlos-mendes',
     nome: 'Carlos Mendes',
-    cidade: 'Maringa',
+    cidade: 'Maringá',
     uf: 'PR',
     credor: 'Bradesco',
     valorDivida: 780_000,
@@ -204,7 +213,7 @@ const FALLBACK_CLIENTES: Cliente[] = [
   {
     id: 'pedro-henrique',
     nome: 'Pedro Henrique Costa',
-    cidade: 'Ribeirao Preto',
+    cidade: 'Ribeirão Preto',
     uf: 'SP',
     credor: 'Banco do Brasil',
     valorDivida: 320_000,
@@ -225,8 +234,8 @@ const FALLBACK_CLIENTES: Cliente[] = [
   },
   {
     id: 'antonio-barbosa',
-    nome: 'Antonio Barbosa',
-    cidade: 'Jatai',
+    nome: 'Antônio Barbosa',
+    cidade: 'Jataí',
     uf: 'GO',
     credor: 'Sicoob',
     valorDivida: 1_560_000,
@@ -278,7 +287,7 @@ function HealthDot({ value }: { value: number }) {
     <span
       className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
       style={{ backgroundColor: color }}
-      title={`Saude: ${value}`}
+      title={`Saúde: ${value}`}
     />
   )
 }
@@ -359,7 +368,7 @@ export default function CRM() {
 
   const handleSaveNovoCliente = async () => {
     if (!novoCliente.nome.trim()) {
-      showToast('Nome do cliente e obrigatorio', 'warning')
+      showToast('Nome do cliente é obrigatório', 'warning')
       return
     }
     setSaving(true)
@@ -479,7 +488,7 @@ export default function CRM() {
               CRM
             </h1>
             <p className="text-aletis-grafite-claro font-body mt-1 text-sm">
-              Gestao de clientes e pipeline de negocios
+              Gestão de clientes e pipeline de negócios
             </p>
           </div>
           <div className="flex items-center gap-2 self-start sm:self-auto">
@@ -489,7 +498,7 @@ export default function CRM() {
                   showToast('Nenhum cliente para exportar', 'warning')
                   return
                 }
-                const colunas = ['Nome', 'Cidade', 'UF', 'Credor', 'Divida (R$)', 'Estagio', 'Saude Financeira', 'Consultor']
+                const colunas = ['Nome', 'Cidade', 'UF', 'Credor', 'Dívida (R$)', 'Estágio', 'Saúde Financeira', 'Consultor']
                 const linhas = filteredClientes.map(c => [
                   c.nome, c.cidade, c.uf, c.credor,
                   c.valorDivida.toFixed(2).replace('.', ','),
@@ -548,7 +557,7 @@ export default function CRM() {
               {stats.emNegociacao}
             </p>
             <p className="text-[11px] font-body text-aletis-grafite-claro mt-0.5">
-              Em negociacao
+              Em negociação
             </p>
           </div>
         </div>
@@ -561,7 +570,7 @@ export default function CRM() {
               {stats.acordosMes}
             </p>
             <p className="text-[11px] font-body text-aletis-grafite-claro mt-0.5">
-              Acordos este mes
+              Acordos este mês
             </p>
           </div>
         </div>
@@ -591,7 +600,7 @@ export default function CRM() {
               <Filter className="w-4 h-4 text-aletis-grafite-claro" />
               <span>
                 {stageFilter === 'todos'
-                  ? 'Todos os estagios'
+                  ? 'Todos os estágios'
                   : (STAGE_CONFIG[stageFilter] || DEFAULT_STAGE).label}
               </span>
               <ChevronDown className="w-3.5 h-3.5 text-aletis-grafite-claro" />
@@ -609,7 +618,7 @@ export default function CRM() {
                       : 'text-aletis-grafite-escuro'
                   }`}
                 >
-                  Todos os estagios
+                  Todos os estágios
                 </button>
                 {ALL_STAGES.map((stage) => (
                   <button
@@ -689,9 +698,9 @@ export default function CRM() {
                     { key: 'nome' as SortKey, label: 'Cliente' },
                     { key: 'cidade' as SortKey, label: 'Cidade/UF' },
                     { key: 'credor' as SortKey, label: 'Credor' },
-                    { key: 'valorDivida' as SortKey, label: 'Valor Divida' },
-                    { key: 'estagio' as SortKey, label: 'Estagio' },
-                    { key: 'saudeFinanceira' as SortKey, label: 'Saude Financeira' },
+                    { key: 'valorDivida' as SortKey, label: 'Valor Dívida' },
+                    { key: 'estagio' as SortKey, label: 'Estágio' },
+                    { key: 'saudeFinanceira' as SortKey, label: 'Saúde Financeira' },
                     { key: 'consultor' as SortKey, label: 'Consultor' },
                   ].map((col) => (
                     <th
@@ -704,7 +713,7 @@ export default function CRM() {
                     </th>
                   ))}
                   <th className="text-left px-4 py-3 text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider">
-                    Acoes
+                    Ações
                   </th>
                 </tr>
               </thead>
@@ -740,17 +749,17 @@ export default function CRM() {
                         {c.credor}
                       </div>
                     </td>
-                    {/* Valor Divida */}
+                    {/* Valor Dívida */}
                     <td className="px-4 py-3">
                       <span className="text-sm font-body font-semibold text-aletis-grafite-escuro">
                         {formatBRL(c.valorDivida)}
                       </span>
                     </td>
-                    {/* Estagio */}
+                    {/* Estágio */}
                     <td className="px-4 py-3">
                       <StageBadge estagio={c.estagio} />
                     </td>
-                    {/* Saude Financeira */}
+                    {/* Saúde Financeira */}
                     <td className="px-4 py-3">
                       <HealthBar value={c.saudeFinanceira} />
                     </td>
@@ -760,7 +769,7 @@ export default function CRM() {
                         {c.consultor}
                       </span>
                     </td>
-                    {/* Acoes */}
+                    {/* Ações */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <Link
@@ -771,9 +780,9 @@ export default function CRM() {
                           <Eye className="w-4 h-4" />
                         </Link>
                         <button
-                          onClick={() => showToast('Opcoes adicionais em desenvolvimento', 'info')}
+                          onClick={() => showToast('Opções adicionais em desenvolvimento', 'info')}
                           className="p-1.5 rounded-lg hover:bg-aletis-bege text-aletis-grafite-claro hover:text-aletis-grafite-escuro transition-colors"
-                          title="Mais opcoes"
+                          title="Mais opções"
                         >
                           <MoreHorizontal className="w-4 h-4" />
                         </button>
@@ -890,7 +899,7 @@ export default function CRM() {
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Nome *</label>
-                <input type="text" value={novoCliente.nome} onChange={e => updateNovoCliente('nome', e.target.value)} placeholder="Nome completo ou razao social" className="input-field py-2.5 text-sm" />
+                <input type="text" value={novoCliente.nome} onChange={e => updateNovoCliente('nome', e.target.value)} placeholder="Nome completo ou razão social" className="input-field py-2.5 text-sm" />
               </div>
               <div>
                 <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">CPF / CNPJ</label>
@@ -918,7 +927,7 @@ export default function CRM() {
               </div>
               <div>
                 <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Culturas</label>
-                <input type="text" value={novoCliente.culturas} onChange={e => updateNovoCliente('culturas', e.target.value)} placeholder="Soja, Milho, Algodao (separadas por virgula)" className="input-field py-2.5 text-sm" />
+                <input type="text" value={novoCliente.culturas} onChange={e => updateNovoCliente('culturas', e.target.value)} placeholder="Soja, Milho, Algodão (separadas por vírgula)" className="input-field py-2.5 text-sm" />
               </div>
             </div>
             <div className="flex justify-end gap-3 p-6 border-t border-aletis-borda">

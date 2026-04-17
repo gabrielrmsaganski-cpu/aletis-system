@@ -1,8 +1,13 @@
-// ============================================================
-// ALETIS — Configuracoes (Settings)
-// Tabs: Perfil, Aparencia, Fontes de Dados, Preferencias
-// ============================================================
-
+/**
+ * Configurações (Settings)
+ *
+ * Pagina de configuracoes do sistema ALETIS organizada em 4 abas:
+ * Perfil (dados do consultor), Aparencia (tema claro/escuro),
+ * Fontes de Dados (monitoramento de /api/fontes/status) e
+ * Preferencias (moeda, formato de data, notificacoes). Todas as
+ * preferencias sao persistidas no localStorage e o tema e
+ * aplicado via classe .dark no documento.
+ */
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
@@ -66,7 +71,7 @@ const TEMA_KEY = 'aletis:tema'
 
 const DEFAULT_PERFIL: PerfilForm = {
   nome: 'Christian Kohler',
-  cargo: 'Consultor Senior — Reestruturacao Rural',
+  cargo: 'Consultor Sênior — Reestruturação Rural',
   email: 'christian@aletis.com.br',
   telefone: '(45) 99999-0000',
   oab: '',
@@ -106,10 +111,10 @@ function fmtAgo(iso: string | null): string {
   const diff = Date.now() - new Date(iso).getTime()
   const m = Math.floor(diff / 60000)
   if (m < 1) return 'agora'
-  if (m < 60) return `${m}min atras`
+  if (m < 60) return `${m}min atrás`
   const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h atras`
-  return `${Math.floor(h / 24)}d atras`
+  if (h < 24) return `${h}h atrás`
+  return `${Math.floor(h / 24)}d atrás`
 }
 
 // ── Status chip ──────────────────────────────────────────────
@@ -203,7 +208,7 @@ export default function Configuracoes() {
 
   const handleSavePrefs = () => {
     saveJSON(PREFS_KEY, prefs)
-    showToast('Preferencias salvas', 'success')
+    showToast('Preferências salvas', 'success')
   }
 
   const handleSaveTema = (next: 'claro' | 'escuro') => {
@@ -219,10 +224,10 @@ export default function Configuracoes() {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl lg:text-3xl font-display font-bold text-aletis-grafite-escuro tracking-tight">
-          Configuracoes
+          Configurações
         </h1>
         <p className="text-sm font-body text-aletis-grafite-claro mt-1">
-          Perfil, aparencia, fontes de dados e preferencias do sistema.
+          Perfil, aparência, fontes de dados e preferências do sistema.
         </p>
       </div>
 
@@ -231,9 +236,9 @@ export default function Configuracoes() {
         <nav className="flex gap-0 overflow-x-auto" role="tablist">
           {([
             { id: 'perfil', label: 'Perfil', icon: UserIcon },
-            { id: 'aparencia', label: 'Aparencia', icon: Palette },
+            { id: 'aparencia', label: 'Aparência', icon: Palette },
             { id: 'fontes', label: 'Fontes de Dados', icon: Database },
-            { id: 'preferencias', label: 'Preferencias', icon: SlidersHorizontal },
+            { id: 'preferencias', label: 'Preferências', icon: SlidersHorizontal },
           ] as const).map(tab => {
             const Icon = tab.icon
             return (
@@ -264,7 +269,7 @@ export default function Configuracoes() {
             <Field label="Nome completo">
               <input type="text" value={perfil.nome} onChange={e => setPerfil({ ...perfil, nome: e.target.value })} className="input-field py-2.5 text-sm" />
             </Field>
-            <Field label="Cargo / Funcao">
+            <Field label="Cargo / Função">
               <input type="text" value={perfil.cargo} onChange={e => setPerfil({ ...perfil, cargo: e.target.value })} className="input-field py-2.5 text-sm" />
             </Field>
             <Field label="Email">
@@ -289,13 +294,13 @@ export default function Configuracoes() {
       {/* ── Aparencia ── */}
       {activeTab === 'aparencia' && (
         <div className="card-premium p-6 max-w-3xl animate-fade-in">
-          <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro mb-4">Tema e Aparencia</h2>
+          <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro mb-4">Tema e Aparência</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <TemaCard active={tema === 'claro'} onClick={() => handleSaveTema('claro')} nome="Claro" descricao="Fundo bege claro, ideal para o dia a dia." preview="bg-aletis-bege" />
             <TemaCard active={tema === 'escuro'} onClick={() => handleSaveTema('escuro')} nome="Escuro" descricao="Fundo grafite escuro, ideal para pouca luz." preview="bg-aletis-grafite-escuro" />
           </div>
           <p className="text-xs font-body text-aletis-grafite-claro mt-4">
-            O tema e aplicado imediatamente e persistido no navegador.
+            O tema é aplicado imediatamente e persistido no navegador.
           </p>
         </div>
       )}
@@ -320,7 +325,7 @@ export default function Configuracoes() {
                 <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">Fontes Registradas</h2>
                 {fontes && (
                   <p className="text-xs font-body text-aletis-grafite-claro mt-0.5">
-                    Ultima verificacao: {new Date(fontes.ultimaVerificacao).toLocaleString('pt-BR')}
+                    Última verificação: {new Date(fontes.ultimaVerificacao).toLocaleString('pt-BR')}
                   </p>
                 )}
               </div>
@@ -336,7 +341,7 @@ export default function Configuracoes() {
 
             {!fontesLoading && !fontes && (
               <div className="text-center py-10 text-sm text-aletis-grafite-claro">
-                Nenhum dado disponivel. Clique em Atualizar.
+                Nenhum dado disponível. Clique em Atualizar.
               </div>
             )}
 
@@ -351,8 +356,8 @@ export default function Configuracoes() {
                       <tr className="border-b border-aletis-borda text-left">
                         <th className="py-2 pr-3 text-xs font-body font-semibold text-aletis-grafite-claro uppercase tracking-wider">Fonte</th>
                         <th className="py-2 pr-3 text-xs font-body font-semibold text-aletis-grafite-claro uppercase tracking-wider">Status</th>
-                        <th className="py-2 pr-3 text-xs font-body font-semibold text-aletis-grafite-claro uppercase tracking-wider">Latencia</th>
-                        <th className="py-2 pr-3 text-xs font-body font-semibold text-aletis-grafite-claro uppercase tracking-wider">Atualizacao</th>
+                        <th className="py-2 pr-3 text-xs font-body font-semibold text-aletis-grafite-claro uppercase tracking-wider">Latência</th>
+                        <th className="py-2 pr-3 text-xs font-body font-semibold text-aletis-grafite-claro uppercase tracking-wider">Atualização</th>
                         <th className="py-2 pr-3 text-xs font-body font-semibold text-aletis-grafite-claro uppercase tracking-wider">Erros 24h</th>
                       </tr>
                     </thead>
@@ -381,14 +386,14 @@ export default function Configuracoes() {
       {/* ── Preferencias ── */}
       {activeTab === 'preferencias' && (
         <div className="card-premium p-6 max-w-3xl animate-fade-in">
-          <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro mb-4">Preferencias do Sistema</h2>
+          <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro mb-4">Preferências do Sistema</h2>
 
           <div className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Moeda padrao">
+              <Field label="Moeda padrão">
                 <select value={prefs.moeda} onChange={e => setPrefs({ ...prefs, moeda: e.target.value as Preferencias['moeda'] })} className="input-field py-2.5 text-sm appearance-none cursor-pointer">
                   <option value="BRL">Real (BRL)</option>
-                  <option value="USD">Dolar (USD)</option>
+                  <option value="USD">Dólar (USD)</option>
                 </select>
               </Field>
               <Field label="Formato de data">
@@ -400,19 +405,19 @@ export default function Configuracoes() {
             </div>
 
             <div className="border-t border-aletis-borda pt-4">
-              <h3 className="text-sm font-body font-semibold text-aletis-grafite-escuro mb-3">Notificacoes</h3>
+              <h3 className="text-sm font-body font-semibold text-aletis-grafite-escuro mb-3">Notificações</h3>
               <div className="space-y-2">
-                <ToggleRow label="Notificacoes por email" descricao="Receba atualizacoes de propostas e clientes" checked={prefs.notificacoesEmail} onChange={v => setPrefs({ ...prefs, notificacoesEmail: v })} />
-                <ToggleRow label="Notificacoes push" descricao="Alertas em tempo real no navegador" checked={prefs.notificacoesPush} onChange={v => setPrefs({ ...prefs, notificacoesPush: v })} />
-                <ToggleRow label="Resumo diario" descricao="Email diario as 8h com indicadores e pipeline" checked={prefs.resumoDiario} onChange={v => setPrefs({ ...prefs, resumoDiario: v })} />
-                <ToggleRow label="Alertas de mercado" descricao="Variacoes significativas de Selic, dolar e commodities" checked={prefs.alertasMercado} onChange={v => setPrefs({ ...prefs, alertasMercado: v })} />
+                <ToggleRow label="Notificações por email" descricao="Receba atualizações de propostas e clientes" checked={prefs.notificacoesEmail} onChange={v => setPrefs({ ...prefs, notificacoesEmail: v })} />
+                <ToggleRow label="Notificações push" descricao="Alertas em tempo real no navegador" checked={prefs.notificacoesPush} onChange={v => setPrefs({ ...prefs, notificacoesPush: v })} />
+                <ToggleRow label="Resumo diário" descricao="Email diário às 8h com indicadores e pipeline" checked={prefs.resumoDiario} onChange={v => setPrefs({ ...prefs, resumoDiario: v })} />
+                <ToggleRow label="Alertas de mercado" descricao="Variações significativas de Selic, dólar e commodities" checked={prefs.alertasMercado} onChange={v => setPrefs({ ...prefs, alertasMercado: v })} />
               </div>
             </div>
 
             <div className="flex justify-end">
               <button onClick={handleSavePrefs} className="btn-primary inline-flex items-center gap-2 text-sm px-5 py-2.5">
                 <Save className="w-4 h-4" />
-                Salvar Preferencias
+                Salvar Preferências
               </button>
             </div>
           </div>

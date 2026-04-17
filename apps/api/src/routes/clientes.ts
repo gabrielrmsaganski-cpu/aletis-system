@@ -52,7 +52,7 @@ interface Cliente {
 }
 
 /* ========================================================================
- *  Dados em memoria (seed com casos reais + ficticios)
+ *  Dados em memória (seed com casos reais + fictícios)
  * ======================================================================== */
 
 export const clientes: Map<string, Cliente> = new Map()
@@ -68,7 +68,7 @@ function seed() {
       uf: 'PR',
       telefone: '(45) 99999-1001',
       email: 'ailton.caeiro@email.com',
-      atividade: 'Produtor rural - Graos (soja, milho)',
+      atividade: 'Produtor rural - Grãos (soja, milho)',
       areaTotalHa: 480,
       culturas: ['soja', 'milho'],
       estagio: 'negociacao',
@@ -86,27 +86,27 @@ function seed() {
       ],
       pagamentos: [
         { data: '2024-03-15', valor: 500000.00, descricao: 'Pagamento parcial acordo', tipo: 'pagamento' },
-        { data: '2024-06-20', valor: 450000.00, descricao: 'Pagamento pos-safra', tipo: 'pagamento' },
+        { data: '2024-06-20', valor: 450000.00, descricao: 'Pagamento pós-safra', tipo: 'pagamento' },
         { data: '2024-09-10', valor: 380000.00, descricao: 'Pagamento parcial', tipo: 'pagamento' },
-        { data: '2025-01-15', valor: 521285.02, descricao: 'Dacao imovel mat. 45434', tipo: 'dacao' },
+        { data: '2025-01-15', valor: 521285.02, descricao: 'Dação imóvel mat. 45434', tipo: 'dacao' },
         { data: '2025-03-20', valor: 300000.00, descricao: 'Pagamento safra 24/25', tipo: 'pagamento' },
-        { data: '2025-04-10', valor: 64197.01, descricao: 'Capital social Sicoob - quitacao', tipo: 'pagamento' },
+        { data: '2025-04-10', valor: 64197.01, descricao: 'Capital social Sicoob - quitação', tipo: 'pagamento' },
       ],
       timeline: [
-        { data: '2024-01-10', tipo: 'contato', descricao: 'Primeiro contato - cliente busca renegociacao de 5 contratos Sicoob' },
+        { data: '2024-01-10', tipo: 'contato', descricao: 'Primeiro contato - cliente busca renegociação de 5 contratos Sicoob' },
         { data: '2024-01-25', tipo: 'analise', descricao: 'Levantamento completo: contratos 23110-0, 24821-2, 25381-4, 25882-7, 27981-3' },
-        { data: '2024-02-05', tipo: 'proposta', descricao: 'Proposta de consolidacao em contrato unico 30262-4' },
-        { data: '2024-02-20', tipo: 'reuniao', descricao: 'Reuniao Sicoob Toledo - apresentacao proposta de liquidacao' },
+        { data: '2024-02-05', tipo: 'proposta', descricao: 'Proposta de consolidação em contrato único 30262-4' },
+        { data: '2024-02-20', tipo: 'reuniao', descricao: 'Reunião Sicoob Toledo - apresentação proposta de liquidação' },
         { data: '2024-03-15', tipo: 'pagamento', descricao: 'Primeiro pagamento do acordo: R$500.000,00' },
-        { data: '2024-06-20', tipo: 'pagamento', descricao: 'Pagamento pos-safra: R$450.000,00' },
+        { data: '2024-06-20', tipo: 'pagamento', descricao: 'Pagamento pós-safra: R$450.000,00' },
         { data: '2024-09-10', tipo: 'pagamento', descricao: 'Pagamento parcial: R$380.000,00' },
-        { data: '2025-01-15', tipo: 'acordo', descricao: 'Dacao em pagamento - imovel matricula 45434 avaliado em R$521.285,02' },
+        { data: '2025-01-15', tipo: 'acordo', descricao: 'Dação em pagamento - imóvel matrícula 45434 avaliado em R$521.285,02' },
         { data: '2025-03-20', tipo: 'pagamento', descricao: 'Pagamento safra 24/25: R$300.000,00' },
-        { data: '2025-04-10', tipo: 'pagamento', descricao: 'Quitacao final via capital social Sicoob: R$64.197,01' },
+        { data: '2025-04-10', tipo: 'pagamento', descricao: 'Quitação final via capital social Sicoob: R$64.197,01' },
       ],
       dataCadastro: '2024-01-10',
       ultimaAtualizacao: '2025-04-10',
-      observacoes: 'Proposta de liquidacao via dacao imovel mat. 45434 + capital social R$64.197,01. Pagamentos totalizaram R$2.215.482,03.',
+      observacoes: 'Proposta de liquidação via dação imóvel mat. 45434 + capital social R$64.197,01. Pagamentos totalizaram R$2.215.482,03.',
     },
 
     /* ---- CASO REAL 2: Paulo Luciano de Oliveira ---- */
@@ -118,7 +118,7 @@ function seed() {
       uf: 'MS',
       telefone: '(67) 99988-2002',
       email: 'paulo.luciano@email.com',
-      atividade: 'Produtor rural - Graos e pastagem',
+      atividade: 'Produtor rural - Grãos e pastagem',
       areaTotalHa: 320,
       culturas: ['soja', 'milho', 'pastagem'],
       estagio: 'negociacao',
@@ -132,23 +132,23 @@ function seed() {
         { contrato: '20190', valorOriginal: 103500.00, valorAtualizado: 103500.00, vencimento: '2025-10-30', status: 'em_acordo', credor: 'Herbioeste' },
       ],
       pagamentos: [
-        { data: '2025-12-23', valor: 10000.00, descricao: 'Sinal de boa-fe', tipo: 'pagamento' },
-        { data: '2026-02-26', valor: 20000.00, descricao: 'Parcela intermediaria', tipo: 'pagamento' },
+        { data: '2025-12-23', valor: 10000.00, descricao: 'Sinal de boa-fé', tipo: 'pagamento' },
+        { data: '2026-02-26', valor: 20000.00, descricao: 'Parcela intermediária', tipo: 'pagamento' },
       ],
       timeline: [
-        { data: '2025-08-10', tipo: 'contato', descricao: 'Contato inicial - 3 titulos vencidos Fertiflora/Herbioeste' },
-        { data: '2025-08-20', tipo: 'analise', descricao: 'Memoria de calculo: titulos 20189 (R$86.940), 20192 (R$86.940), 20190 (R$103.500)' },
+        { data: '2025-08-10', tipo: 'contato', descricao: 'Contato inicial - 3 títulos vencidos Fertiflora/Herbioeste' },
+        { data: '2025-08-20', tipo: 'analise', descricao: 'Memória de cálculo: títulos 20189 (R$86.940), 20192 (R$86.940), 20190 (R$103.500)' },
         { data: '2025-09-05', tipo: 'proposta', descricao: 'Proposta: 4x R$70.550 alinhadas ao fluxo da safra' },
-        { data: '2025-09-15', tipo: 'reuniao', descricao: 'Reuniao com Fertiflora - negociacao parcelas' },
-        { data: '2025-12-23', tipo: 'pagamento', descricao: 'Sinal de boa-fe: R$10.000,00' },
-        { data: '2026-02-26', tipo: 'pagamento', descricao: 'Parcela intermediaria: R$20.000,00' },
+        { data: '2025-09-15', tipo: 'reuniao', descricao: 'Reunião com Fertiflora - negociação parcelas' },
+        { data: '2025-12-23', tipo: 'pagamento', descricao: 'Sinal de boa-fé: R$10.000,00' },
+        { data: '2026-02-26', tipo: 'pagamento', descricao: 'Parcela intermediária: R$20.000,00' },
       ],
       dataCadastro: '2025-08-10',
       ultimaAtualizacao: '2026-02-26',
-      observacoes: 'Memoria de calculo elaborada. Proposta de 4x R$70.550 alinhadas safra. Pagamentos parciais em andamento.',
+      observacoes: 'Memória de cálculo elaborada. Proposta de 4x R$70.550 alinhadas safra. Pagamentos parciais em andamento.',
     },
 
-    /* ---- FICTICIOS (agronegocio brasileiro realista) ---- */
+    /* ---- FICTÍCIOS (agronegócio brasileiro realista) ---- */
     {
       id: 'cli-003',
       nome: 'Fazenda Santa Helena Ltda',
@@ -157,7 +157,7 @@ function seed() {
       uf: 'MT',
       telefone: '(66) 99977-3003',
       email: 'contato@fazsantahelena.com.br',
-      atividade: 'Producao de soja e algodao',
+      atividade: 'Produção de soja e algodão',
       areaTotalHa: 2800,
       culturas: ['soja', 'algodao'],
       estagio: 'analise',
@@ -171,22 +171,22 @@ function seed() {
       ],
       pagamentos: [],
       timeline: [
-        { data: '2025-11-01', tipo: 'contato', descricao: 'Encaminhamento via indicacao - divida custeio BB' },
-        { data: '2025-11-15', tipo: 'analise', descricao: 'Analise patrimonial e de fluxo de caixa em andamento' },
+        { data: '2025-11-01', tipo: 'contato', descricao: 'Encaminhamento via indicação - dívida custeio BB' },
+        { data: '2025-11-15', tipo: 'analise', descricao: 'Análise patrimonial e de fluxo de caixa em andamento' },
       ],
       dataCadastro: '2025-11-01',
       ultimaAtualizacao: '2025-11-15',
-      observacoes: 'Grande produtor MT. Crise de fluxo de caixa por queda preco soja safra 24/25.',
+      observacoes: 'Grande produtor MT. Crise de fluxo de caixa por queda preço soja safra 24/25.',
     },
     {
       id: 'cli-004',
-      nome: 'Jose Roberto Fernandes',
+      nome: 'José Roberto Fernandes',
       cpfCnpj: '789.XXX.XXX-34',
       cidade: 'Rio Verde',
       uf: 'GO',
       telefone: '(64) 99966-4004',
       email: 'jroberto.fern@email.com',
-      atividade: 'Pecuaria de corte e graos',
+      atividade: 'Pecuária de corte e grãos',
       areaTotalHa: 1200,
       culturas: ['soja', 'milho', 'boi_gordo'],
       estagio: 'acordo',
@@ -200,14 +200,14 @@ function seed() {
       ],
       pagamentos: [
         { data: '2025-06-15', valor: 500000.00, descricao: 'Venda lote 350 cab boi gordo', tipo: 'pagamento' },
-        { data: '2025-10-10', valor: 445000.00, descricao: 'Parcela pos-safra milho', tipo: 'pagamento' },
+        { data: '2025-10-10', valor: 445000.00, descricao: 'Parcela pós-safra milho', tipo: 'pagamento' },
       ],
       timeline: [
         { data: '2025-03-20', tipo: 'contato', descricao: 'Busca acordo Bradesco - custeio + investimento' },
-        { data: '2025-04-05', tipo: 'analise', descricao: 'Analise rebanho + lavoura 1.200 ha' },
-        { data: '2025-05-01', tipo: 'proposta', descricao: 'Proposta de quitacao via venda parcial rebanho + parcelas safra' },
+        { data: '2025-04-05', tipo: 'analise', descricao: 'Análise rebanho + lavoura 1.200 ha' },
+        { data: '2025-05-01', tipo: 'proposta', descricao: 'Proposta de quitação via venda parcial rebanho + parcelas safra' },
         { data: '2025-06-15', tipo: 'pagamento', descricao: 'Pagamento via venda de gado: R$500.000' },
-        { data: '2025-10-10', tipo: 'pagamento', descricao: 'Parcela pos-safra: R$445.000' },
+        { data: '2025-10-10', tipo: 'pagamento', descricao: 'Parcela pós-safra: R$445.000' },
       ],
       dataCadastro: '2025-03-20',
       ultimaAtualizacao: '2025-10-10',
@@ -217,29 +217,29 @@ function seed() {
       id: 'cli-005',
       nome: 'Agroindustrial Campos Verdes S/A',
       cpfCnpj: '34.567.890/0001-12',
-      cidade: 'Uberlandia',
+      cidade: 'Uberlândia',
       uf: 'MG',
       telefone: '(34) 3233-5005',
       email: 'financeiro@camposverdes.agr.br',
-      atividade: 'Agroindustria - processamento de graos',
+      atividade: 'Agroindústria - processamento de grãos',
       areaTotalHa: 5000,
       culturas: ['soja', 'milho', 'cafe'],
       estagio: 'prospeccao',
       consultor: 'Mariana Costa',
-      credor: 'Itau BBA',
+      credor: 'Itaú BBA',
       valorTotalDivida: 12500000.00,
       valorTotalPago: 0,
       dividas: [
-        { contrato: 'IBBA-2025/4455', valorOriginal: 8000000.00, valorAtualizado: 8960000.00, vencimento: '2026-01-15', status: 'ativa', credor: 'Itau BBA' },
-        { contrato: 'IBBA-2025/4456', valorOriginal: 3540000.00, valorAtualizado: 3540000.00, vencimento: '2026-06-30', status: 'ativa', credor: 'Itau BBA' },
+        { contrato: 'IBBA-2025/4455', valorOriginal: 8000000.00, valorAtualizado: 8960000.00, vencimento: '2026-01-15', status: 'ativa', credor: 'Itaú BBA' },
+        { contrato: 'IBBA-2025/4456', valorOriginal: 3540000.00, valorAtualizado: 3540000.00, vencimento: '2026-06-30', status: 'ativa', credor: 'Itaú BBA' },
       ],
       pagamentos: [],
       timeline: [
-        { data: '2026-01-05', tipo: 'contato', descricao: 'Contato via site - agroindustria grande porte' },
+        { data: '2026-01-05', tipo: 'contato', descricao: 'Contato via site - agroindústria grande porte' },
       ],
       dataCadastro: '2026-01-05',
       ultimaAtualizacao: '2026-01-05',
-      observacoes: 'Prospect de alto valor. Divida agroindustrial Itau BBA.',
+      observacoes: 'Prospect de alto valor. Dívida agroindustrial Itaú BBA.',
     },
     {
       id: 'cli-006',
@@ -249,7 +249,7 @@ function seed() {
       uf: 'BA',
       telefone: '(77) 99955-6006',
       email: 'maria.santos@email.com',
-      atividade: 'Producao de algodao e soja',
+      atividade: 'Produção de algodão e soja',
       areaTotalHa: 850,
       culturas: ['algodao', 'soja'],
       estagio: 'negociacao',
@@ -266,45 +266,45 @@ function seed() {
         { data: '2026-01-20', valor: 100000.00, descricao: 'Segunda parcela', tipo: 'pagamento' },
       ],
       timeline: [
-        { data: '2025-06-10', tipo: 'contato', descricao: 'Indicacao - produtora MATOPIBA com divida Santander' },
-        { data: '2025-07-01', tipo: 'analise', descricao: 'Analise 850 ha algodao/soja Barreiras-BA' },
-        { data: '2025-08-05', tipo: 'proposta', descricao: 'Proposta parcelamento com desconto 15% a vista' },
+        { data: '2025-06-10', tipo: 'contato', descricao: 'Indicação - produtora MATOPIBA com dívida Santander' },
+        { data: '2025-07-01', tipo: 'analise', descricao: 'Análise 850 ha algodão/soja Barreiras-BA' },
+        { data: '2025-08-05', tipo: 'proposta', descricao: 'Proposta parcelamento com desconto 15% à vista' },
         { data: '2025-09-15', tipo: 'pagamento', descricao: 'Primeira parcela: R$150.000' },
         { data: '2026-01-20', tipo: 'pagamento', descricao: 'Segunda parcela: R$100.000' },
       ],
       dataCadastro: '2025-06-10',
       ultimaAtualizacao: '2026-01-20',
-      observacoes: 'Acordo Santander em andamento. Proxima parcela prevista pos-colheita algodao.',
+      observacoes: 'Acordo Santander em andamento. Próxima parcela prevista pós-colheita algodão.',
     },
     {
       id: 'cli-007',
-      nome: 'Cooperativa Agropecuaria Rondonia',
+      nome: 'Cooperativa Agropecuária Rondônia',
       cpfCnpj: '45.678.901/0001-23',
-      cidade: 'Ji-Parana',
+      cidade: 'Ji-Paraná',
       uf: 'RO',
       telefone: '(69) 3422-7007',
       email: 'financeiro@cooprn.coop.br',
-      atividade: 'Cooperativa - leite e cafe',
+      atividade: 'Cooperativa - leite e café',
       areaTotalHa: 15000,
       culturas: ['cafe', 'leite', 'cacau'],
       estagio: 'analise',
       consultor: 'Mariana Costa',
-      credor: 'BNDES / Banco da Amazonia',
+      credor: 'BNDES / Banco da Amazônia',
       valorTotalDivida: 8200000.00,
       valorTotalPago: 0,
       dividas: [
-        { contrato: 'BASA-2024/3890', valorOriginal: 5500000.00, valorAtualizado: 6050000.00, vencimento: '2025-12-31', status: 'ativa', credor: 'Banco da Amazonia' },
+        { contrato: 'BASA-2024/3890', valorOriginal: 5500000.00, valorAtualizado: 6050000.00, vencimento: '2025-12-31', status: 'ativa', credor: 'Banco da Amazônia' },
         { contrato: 'BNDES-2024/1120', valorOriginal: 2150000.00, valorAtualizado: 2150000.00, vencimento: '2026-06-30', status: 'ativa', credor: 'BNDES' },
       ],
       pagamentos: [],
       timeline: [
         { data: '2025-10-20', tipo: 'contato', descricao: 'Cooperativa com 120 associados - crise de liquidez' },
-        { data: '2025-11-05', tipo: 'analise', descricao: 'Levantamento patrimonial e analise de cooperados' },
-        { data: '2026-01-15', tipo: 'documento', descricao: 'Documentacao patrimonial entregue' },
+        { data: '2025-11-05', tipo: 'analise', descricao: 'Levantamento patrimonial e análise de cooperados' },
+        { data: '2026-01-15', tipo: 'documento', descricao: 'Documentação patrimonial entregue' },
       ],
       dataCadastro: '2025-10-20',
       ultimaAtualizacao: '2026-01-15',
-      observacoes: 'Caso complexo - cooperativa. Necessita reestruturacao completa.',
+      observacoes: 'Caso complexo - cooperativa. Necessita reestruturação completa.',
     },
     {
       id: 'cli-008',
@@ -327,29 +327,29 @@ function seed() {
       ],
       pagamentos: [
         { data: '2025-05-10', valor: 210000.00, descricao: 'Primeira parcela', tipo: 'pagamento' },
-        { data: '2025-08-15', valor: 210000.00, descricao: 'Quitacao final', tipo: 'pagamento' },
+        { data: '2025-08-15', valor: 210000.00, descricao: 'Quitação final', tipo: 'pagamento' },
       ],
       timeline: [
-        { data: '2025-02-01', tipo: 'contato', descricao: 'Busca renegociacao Cresol' },
-        { data: '2025-02-15', tipo: 'proposta', descricao: 'Proposta 2x iguais pos-safra' },
+        { data: '2025-02-01', tipo: 'contato', descricao: 'Busca renegociação Cresol' },
+        { data: '2025-02-15', tipo: 'proposta', descricao: 'Proposta 2x iguais pós-safra' },
         { data: '2025-03-01', tipo: 'acordo', descricao: 'Acordo firmado com Cresol' },
         { data: '2025-05-10', tipo: 'pagamento', descricao: 'Parcela 1: R$210.000' },
-        { data: '2025-08-15', tipo: 'pagamento', descricao: 'Quitacao final: R$210.000' },
-        { data: '2025-08-20', tipo: 'documento', descricao: 'Termo de quitacao emitido' },
+        { data: '2025-08-15', tipo: 'pagamento', descricao: 'Quitação final: R$210.000' },
+        { data: '2025-08-20', tipo: 'documento', descricao: 'Termo de quitação emitido' },
       ],
       dataCadastro: '2025-02-01',
       ultimaAtualizacao: '2025-08-20',
-      observacoes: 'Caso encerrado com sucesso. Divida quitada em 2 parcelas.',
+      observacoes: 'Caso encerrado com sucesso. Dívida quitada em 2 parcelas.',
     },
     {
       id: 'cli-009',
-      nome: 'Agropecuaria Tres Irmaos Ltda',
+      nome: 'Agropecuária Três Irmãos Ltda',
       cpfCnpj: '56.789.012/0001-34',
-      cidade: 'Luís Eduardo Magalhaes',
+      cidade: 'Luís Eduardo Magalhães',
       uf: 'BA',
       telefone: '(77) 99933-9009',
       email: 'tres.irmaos@email.com',
-      atividade: 'Graos e irrigacao',
+      atividade: 'Grãos e irrigação',
       areaTotalHa: 3500,
       culturas: ['soja', 'milho', 'feijao_irrigado'],
       estagio: 'prospeccao',
@@ -367,17 +367,17 @@ function seed() {
       ],
       dataCadastro: '2026-02-10',
       ultimaAtualizacao: '2026-02-10',
-      observacoes: 'Prospect MATOPIBA. Analise inicial pendente.',
+      observacoes: 'Prospect MATOPIBA. Análise inicial pendente.',
     },
     {
       id: 'cli-010',
       nome: 'Carlos Eduardo Nakamura',
       cpfCnpj: '890.XXX.XXX-67',
-      cidade: 'Maringa',
+      cidade: 'Maringá',
       uf: 'PR',
       telefone: '(44) 99922-1010',
       email: 'carlos.nakamura@email.com',
-      atividade: 'Cafeicultura e graos',
+      atividade: 'Cafeicultura e grãos',
       areaTotalHa: 180,
       culturas: ['cafe', 'soja'],
       estagio: 'negociacao',
@@ -390,17 +390,17 @@ function seed() {
         { contrato: 'BB-2024/8902', valorOriginal: 175000.00, valorAtualizado: 175000.00, vencimento: '2026-03-31', status: 'em_acordo', credor: 'Banco do Brasil' },
       ],
       pagamentos: [
-        { data: '2025-10-20', valor: 140000.00, descricao: 'Venda lote cafe especial', tipo: 'pagamento' },
+        { data: '2025-10-20', valor: 140000.00, descricao: 'Venda lote café especial', tipo: 'pagamento' },
       ],
       timeline: [
-        { data: '2025-07-15', tipo: 'contato', descricao: 'Indicacao - cafeicultor com divida BB' },
-        { data: '2025-08-01', tipo: 'analise', descricao: 'Analise 180 ha cafe + soja Maringa-PR' },
-        { data: '2025-09-01', tipo: 'proposta', descricao: 'Proposta: venda cafe especial + parcelas safra soja' },
-        { data: '2025-10-20', tipo: 'pagamento', descricao: 'Venda lote cafe: R$140.000' },
+        { data: '2025-07-15', tipo: 'contato', descricao: 'Indicação - cafeicultor com dívida BB' },
+        { data: '2025-08-01', tipo: 'analise', descricao: 'Análise 180 ha café + soja Maringá-PR' },
+        { data: '2025-09-01', tipo: 'proposta', descricao: 'Proposta: venda café especial + parcelas safra soja' },
+        { data: '2025-10-20', tipo: 'pagamento', descricao: 'Venda lote café: R$140.000' },
       ],
       dataCadastro: '2025-07-15',
       ultimaAtualizacao: '2025-10-20',
-      observacoes: 'Cafeicultor com cafe especial de alto valor. Negociacao BB em progresso.',
+      observacoes: 'Cafeicultor com café especial de alto valor. Negociação BB em progresso.',
     },
   ]
 
@@ -469,7 +469,7 @@ export default async function (fastify: FastifyInstance) {
 
     if (!cliente) {
       reply.status(404)
-      return { success: false, error: 'Cliente nao encontrado' }
+      return { success: false, error: 'Cliente não encontrado' }
     }
 
     return { success: true, data: cliente }
@@ -481,16 +481,16 @@ export default async function (fastify: FastifyInstance) {
 
     // Zod-style inline validation
     const errors: string[] = []
-    if (!body.nome || typeof body.nome !== 'string') errors.push('nome e obrigatorio (string)')
-    if (!body.cpfCnpj || typeof body.cpfCnpj !== 'string') errors.push('cpfCnpj e obrigatorio (string)')
-    if (!body.cidade || typeof body.cidade !== 'string') errors.push('cidade e obrigatoria (string)')
-    if (!body.uf || typeof body.uf !== 'string' || (body.uf as string).length !== 2) errors.push('uf e obrigatoria (2 caracteres)')
-    if (!body.credor || typeof body.credor !== 'string') errors.push('credor e obrigatorio (string)')
-    if (body.valorTotalDivida === undefined || typeof body.valorTotalDivida !== 'number') errors.push('valorTotalDivida e obrigatorio (number)')
+    if (!body.nome || typeof body.nome !== 'string') errors.push('nome é obrigatório (string)')
+    if (!body.cpfCnpj || typeof body.cpfCnpj !== 'string') errors.push('cpfCnpj é obrigatório (string)')
+    if (!body.cidade || typeof body.cidade !== 'string') errors.push('cidade é obrigatória (string)')
+    if (!body.uf || typeof body.uf !== 'string' || (body.uf as string).length !== 2) errors.push('uf é obrigatória (2 caracteres)')
+    if (!body.credor || typeof body.credor !== 'string') errors.push('credor é obrigatório (string)')
+    if (body.valorTotalDivida === undefined || typeof body.valorTotalDivida !== 'number') errors.push('valorTotalDivida é obrigatório (number)')
 
     if (errors.length > 0) {
       reply.status(400)
-      return { success: false, error: 'Erro de validacao', detalhes: errors }
+      return { success: false, error: 'Erro de validação', detalhes: errors }
     }
 
     const id = `cli-${String(clientes.size + 1).padStart(3, '0')}`
@@ -508,7 +508,7 @@ export default async function (fastify: FastifyInstance) {
       areaTotalHa: (body.areaTotalHa as number) || 0,
       culturas: (body.culturas as string[]) || [],
       estagio: (body.estagio as Cliente['estagio']) || 'prospeccao',
-      consultor: (body.consultor as string) || 'Nao atribuido',
+      consultor: (body.consultor as string) || 'Não atribuído',
       credor: body.credor as string,
       valorTotalDivida: body.valorTotalDivida as number,
       valorTotalPago: (body.valorTotalPago as number) || 0,
@@ -534,7 +534,7 @@ export default async function (fastify: FastifyInstance) {
 
     if (!cliente) {
       reply.status(404)
-      return { success: false, error: 'Cliente nao encontrado' }
+      return { success: false, error: 'Cliente não encontrado' }
     }
 
     const body = request.body as Record<string, unknown>
@@ -558,7 +558,7 @@ export default async function (fastify: FastifyInstance) {
       cliente.timeline.push({
         data: cliente.ultimaAtualizacao,
         tipo: 'analise',
-        descricao: `Estagio alterado para: ${body.estagio}`,
+        descricao: `Estágio alterado para: ${body.estagio}`,
       })
     }
 
@@ -573,7 +573,7 @@ export default async function (fastify: FastifyInstance) {
 
     if (!cliente) {
       reply.status(404)
-      return { success: false, error: 'Cliente nao encontrado' }
+      return { success: false, error: 'Cliente não encontrado' }
     }
 
     const sorted = [...cliente.timeline].sort(

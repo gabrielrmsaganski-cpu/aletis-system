@@ -46,7 +46,7 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
       if (!sourceStatus) {
         return reply.status(404).send({
           sucesso: false,
-          erro: `Fonte '${nome}' nao encontrada`,
+          erro: `Fonte '${nome}' não encontrada`,
           fontesDisponiveis: manager.getSourceStatus().map((s) => s.nome),
         });
       }
@@ -87,7 +87,7 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
       if (!validCategories.includes(categoria as DataSourceCategory)) {
         return reply.status(400).send({
           sucesso: false,
-          erro: `Categoria '${categoria}' invalida`,
+          erro: `Categoria '${categoria}' inválida`,
           categoriasValidas: validCategories,
         });
       }
@@ -138,7 +138,7 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
   // Quick access to all commodity quotes
   fastify.get('/api/fontes/cotacoes', async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
-      console.log('[Fontes] Buscando todas cotacoes de commodities');
+      console.log('[Fontes] Buscando todas cotações de commodities');
       const cotacoes = await manager.precos.getAllCotacoes();
 
       return reply.status(200).send({
@@ -147,10 +147,10 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
-      console.error(`[Fontes] Erro ao buscar cotacoes: ${msg}`);
+      console.error(`[Fontes] Erro ao buscar cotações: ${msg}`);
       return reply.status(500).send({
         sucesso: false,
-        erro: 'Erro ao buscar cotacoes',
+        erro: 'Erro ao buscar cotações',
         detalhes: msg,
       });
     }
@@ -181,7 +181,7 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
       console.error(`[Fontes] Erro ao buscar clima: ${msg}`);
       return reply.status(500).send({
         sucesso: false,
-        erro: 'Erro ao buscar previsao do tempo',
+        erro: 'Erro ao buscar previsão do tempo',
         detalhes: msg,
       });
     }
@@ -196,7 +196,7 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
     try {
       const { uf } = request.params;
 
-      console.log(`[Fontes] Buscando municipios de ${uf}`);
+      console.log(`[Fontes] Buscando municípios de ${uf}`);
       const municipios = await manager.ibge.getMunicipios(uf);
 
       return reply.status(200).send({
@@ -207,10 +207,10 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
-      console.error(`[Fontes] Erro ao buscar municipios: ${msg}`);
+      console.error(`[Fontes] Erro ao buscar municípios: ${msg}`);
       return reply.status(500).send({
         sucesso: false,
-        erro: 'Erro ao buscar municipios',
+        erro: 'Erro ao buscar municípios',
         detalhes: msg,
       });
     }
@@ -225,7 +225,7 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
     try {
       const { estado } = request.params;
 
-      console.log(`[Fontes] Buscando precos combustiveis ${estado}`);
+      console.log(`[Fontes] Buscando preços combustíveis ${estado}`);
       const precos = await manager.anp.getPrecosCombustiveis(estado);
 
       return reply.status(200).send({
@@ -235,10 +235,10 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
-      console.error(`[Fontes] Erro ao buscar combustiveis: ${msg}`);
+      console.error(`[Fontes] Erro ao buscar combustíveis: ${msg}`);
       return reply.status(500).send({
         sucesso: false,
-        erro: 'Erro ao buscar precos de combustiveis',
+        erro: 'Erro ao buscar preços de combustíveis',
         detalhes: msg,
       });
     }
@@ -248,7 +248,7 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
   // CONAB crop forecast
   fastify.get('/api/fontes/safra', async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
-      console.log('[Fontes] Buscando previsao de safra');
+      console.log('[Fontes] Buscando previsão de safra');
       const safra = await manager.precos.getPrevisaoSafra();
 
       return reply.status(200).send({
@@ -260,7 +260,7 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
       console.error(`[Fontes] Erro ao buscar safra: ${msg}`);
       return reply.status(500).send({
         sucesso: false,
-        erro: 'Erro ao buscar previsao de safra',
+        erro: 'Erro ao buscar previsão de safra',
         detalhes: msg,
       });
     }

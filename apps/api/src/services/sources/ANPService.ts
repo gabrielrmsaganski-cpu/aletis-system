@@ -1,7 +1,7 @@
 // ============================================================
 // ALETIS — ANP Service
 // Fuel price integrations: diesel, ethanol by state
-// Source: ANP (Agencia Nacional do Petroleo, Gas Natural e Biocombustiveis)
+// Source: ANP (Agência Nacional do Petróleo, Gás Natural e Biocombustíveis)
 // Real endpoint: dados-abertos CSV files at gov.br
 // ============================================================
 
@@ -115,7 +115,7 @@ export class ANPService {
     });
   }
 
-  // ── Public: Preco Diesel por Estado ──────────────────────
+  // ── Public: Preço Diesel por Estado ──────────────────────
 
   async getPrecoDiesel(estado: string): Promise<PrecoCombustivel> {
     const uf = estado.toUpperCase();
@@ -129,7 +129,7 @@ export class ANPService {
     return this.fetchRealDiesel(uf, cacheKey);
   }
 
-  // ── Public: Preco Etanol por Estado ──────────────────────
+  // ── Public: Preço Etanol por Estado ──────────────────────
 
   async getPrecoEtanol(estado: string): Promise<PrecoCombustivel> {
     const uf = estado.toUpperCase();
@@ -238,7 +238,7 @@ export class ANPService {
         continue;
       }
     }
-    throw new Error('Nenhum CSV ANP disponivel nos ultimos 3 meses');
+    throw new Error('Nenhum CSV ANP disponível nos últimos 3 meses');
   }
 
   // ── Private: Fetch Real Diesel from CSV ──────────────────

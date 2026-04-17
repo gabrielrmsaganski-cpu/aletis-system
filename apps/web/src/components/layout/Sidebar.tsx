@@ -1,3 +1,13 @@
+/**
+ * Sidebar (Barra Lateral)
+ *
+ * Navegacao principal do sistema ALETIS agrupada em secoes:
+ * PRINCIPAL (Dashboard, Prospeccao, CRM, Propostas), INTELIGENCIA
+ * (Mercado, Clima, Credito), COMUNICACAO (WhatsApp, ALIX IA) e
+ * GESTAO (Relatorios, Configuracoes). Suporta modo recolhido (icon-only)
+ * e drawer mobile com overlay. Mantem rotas em ASCII e exibe labels
+ * com acentuacao PT-BR adequada.
+ */
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -32,31 +42,31 @@ const navSections: NavSection[] = [
     header: 'PRINCIPAL',
     items: [
       { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-      { label: 'Prospeccao', path: '/prospeccao', icon: Target },
+      { label: 'Prospecção', path: '/prospeccao', icon: Target },
       { label: 'CRM', path: '/crm', icon: Users },
       { label: 'Propostas', path: '/propostas', icon: FileText },
     ],
   },
   {
-    header: 'INTELIGENCIA',
+    header: 'INTELIGÊNCIA',
     items: [
       { label: 'Mercado', path: '/mercado', icon: TrendingUp },
       { label: 'Clima', path: '/clima', icon: Cloud },
-      { label: 'Credito', path: '/credito', icon: CreditCard },
+      { label: 'Crédito', path: '/credito', icon: CreditCard },
     ],
   },
   {
-    header: 'COMUNICACAO',
+    header: 'COMUNICAÇÃO',
     items: [
       { label: 'WhatsApp', path: '/whatsapp', icon: MessageCircle },
       { label: 'ALIX IA', path: '/ia', icon: Bot },
     ],
   },
   {
-    header: 'GESTAO',
+    header: 'GESTÃO',
     items: [
-      { label: 'Relatorios', path: '/relatorios', icon: BarChart3 },
-      { label: 'Configuracoes', path: '/configuracoes', icon: Settings },
+      { label: 'Relatórios', path: '/relatorios', icon: BarChart3 },
+      { label: 'Configurações', path: '/configuracoes', icon: Settings },
     ],
   },
 ]
@@ -105,7 +115,7 @@ export default function Sidebar({
               ALETIS
             </h1>
             <p className="text-white/60 text-[10px] tracking-widest uppercase leading-tight">
-              Financas Estrategicas
+              Finanças Estratégicas
             </p>
           </div>
         )}
@@ -189,7 +199,7 @@ export default function Sidebar({
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <p className="text-white text-sm font-medium truncate">Christian Kohler</p>
-              <p className="text-white/50 text-[11px] truncate">Consultor Senior</p>
+              <p className="text-white/50 text-[11px] truncate">Consultor Sênior</p>
             </div>
           )}
           {!collapsed && (

@@ -122,7 +122,7 @@ export class NasaFirmsService {
     const cacheKey = 'firms_brasil';
     const cached = this.cache.get<IncendiosResumo>(cacheKey);
     if (cached) {
-      console.log('[FIRMS] Incendios Brasil retornados do cache');
+      console.log('[FIRMS] Incêndios Brasil retornados do cache');
       return { ...cached, fonte: 'cache' };
     }
 
@@ -200,7 +200,7 @@ export class NasaFirmsService {
 
       this.manager.updateSourceStatus('nasa_firms', 'online', latencia);
       this.cache.set(cacheKey, result, 1800);
-      console.log(`[FIRMS] ${focos.length} focos de incendio no Brasil em ${latencia}ms`);
+      console.log(`[FIRMS] ${focos.length} focos de incêndio no Brasil em ${latencia}ms`);
       return result;
     } catch (error) {
       const latencia = Date.now() - startTime;

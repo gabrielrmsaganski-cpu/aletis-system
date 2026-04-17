@@ -1,9 +1,9 @@
 /**
- * ALETIS - API de Inteligencia Climatica
+ * ALETIS - API de Inteligência Climática
  *
- * Rotas de dados meteorologicos e agroclimaticos.
- * Aceita QUALQUER municipio brasileiro via IBGE API + Open-Meteo (primary),
- * com fallback para INMET/CPTEC/NASA POWER e ultimo caso procedural.
+ * Rotas de dados meteorológicos e agroclimáticos.
+ * Aceita QUALQUER município brasileiro via IBGE API + Open-Meteo (primary),
+ * com fallback para INMET/CPTEC/NASA POWER e último caso procedural.
  *
  * GET /api/clima/municipio/:codigoIbge
  * GET /api/clima/local?lat=&lon=&nome=
@@ -150,7 +150,7 @@ async function loadAllMunicipios(): Promise<typeof municipiosAllLoaded> {
       return mapped
     }
   } catch (err) {
-    console.warn('[Clima] Falha ao carregar lista IBGE de municipios:', (err as Error).message)
+    console.warn('[Clima] Falha ao carregar lista IBGE de municípios:', (err as Error).message)
   }
   return null
 }
@@ -231,7 +231,7 @@ function wmoToCondition(code: number): { nome: string; icone: string } {
   return { nome: 'Parcialmente nublado', icone: 'parcialmente_nublado' }
 }
 
-const DIAS_SEMANA = ['Domingo', 'Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado']
+const DIAS_SEMANA = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
 
 function ventoDirecaoNome(graus: number): string {
   const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
@@ -363,7 +363,7 @@ async function buildMunicipioResponse(mun: Municipio, dsm: DataSourceManager) {
       fonteOrigem = current.fonte
     } else {
       condicaoAtual = gerarCondicaoAtualFallback(mun)
-      fontes.push('Modelo estimado (Open-Meteo indisponivel)')
+      fontes.push('Modelo estimado (Open-Meteo indisponível)')
     }
 
     if (forecast.fonte !== 'fallback' && forecast.daily?.time?.length > 0) {
@@ -388,12 +388,12 @@ async function buildMunicipioResponse(mun: Municipio, dsm: DataSourceManager) {
           evapotranspiracaoMm: forecast.daily.et0_fao_evapotranspiration[i],
         }
       })
-      fontes.push('Open-Meteo (previsao 7 dias + ET0 FAO)')
+      fontes.push('Open-Meteo (previsão 7 dias + ET0 FAO)')
       if (forecast.fonte === 'api') fonteOrigem = 'api'
       else if (forecast.fonte === 'cache' && fonteOrigem !== 'api') fonteOrigem = 'cache'
     } else {
       previsao = gerarPrevisaoFallback(mun, 7)
-      fontes.push('Modelo estimado (previsao)')
+      fontes.push('Modelo estimado (previsão)')
     }
   } catch {
     condicaoAtual = gerarCondicaoAtualFallback(mun)
@@ -415,7 +415,7 @@ async function buildMunicipioResponse(mun: Municipio, dsm: DataSourceManager) {
           ventoVelocidade: est.ventoVelocidade ?? condicaoAtual.ventoVelocidade,
           precipitacao24h: est.chuva ?? condicaoAtual.precipitacao24h,
         }
-        fontes.push(`INMET Estacao ${estacaoCode} (sensor ao vivo)`)
+        fontes.push(`INMET Estação ${estacaoCode} (sensor ao vivo)`)
       }
     } catch { /* ignore bonus source failures */ }
   }
@@ -430,33 +430,33 @@ async function buildMunicipioResponse(mun: Municipio, dsm: DataSourceManager) {
 const ALERTAS_FALLBACK: AlertaClimatico[] = [
   {
     id: 'alerta-001', tipo: 'alerta',
-    titulo: 'Veranico previsto para regiao de Dourados/MS',
-    descricao: 'Periodo de estiagem prolongada de 7 a 10 dias. Deficit hidrico pode afetar lavouras de milho safrinha.',
-    estado: 'MS', municipiosAfetados: ['Dourados', 'Maracaju', 'Ponta Pora'],
+    titulo: 'Veranico previsto para região de Dourados/MS',
+    descricao: 'Período de estiagem prolongada de 7 a 10 dias. Déficit hídrico pode afetar lavouras de milho safrinha.',
+    estado: 'MS', municipiosAfetados: ['Dourados', 'Maracaju', 'Ponta Porã'],
     vigenciaInicio: '2026-04-20', vigenciaFim: '2026-04-27',
-    fonte: 'INMET / EMBRAPA Agropecuaria Oeste', emitidoEm: '2026-04-15T14:00:00Z',
+    fonte: 'INMET / EMBRAPA Agropecuária Oeste', emitidoEm: '2026-04-15T14:00:00Z',
   },
   {
     id: 'alerta-002', tipo: 'severo',
-    titulo: 'Geada possivel no Parana',
-    descricao: 'Massa de ar polar deve atingir o sul do PR. Minimas previstas 2 a 5 graus C.',
+    titulo: 'Geada possível no Paraná',
+    descricao: 'Massa de ar polar deve atingir o sul do PR. Mínimas previstas 2 a 5 graus C.',
     estado: 'PR', municipiosAfetados: ['Toledo', 'Cascavel', 'Pato Branco'],
     vigenciaInicio: '2026-04-22', vigenciaFim: '2026-04-24',
     fonte: 'SIMEPAR / INMET', emitidoEm: '2026-04-16T08:00:00Z',
   },
   {
     id: 'alerta-003', tipo: 'favoravel',
-    titulo: 'Condicoes favoraveis para colheita de soja em MT',
-    descricao: 'Janela de tempo seco prevista para os proximos 10 dias na regiao norte de MT.',
+    titulo: 'Condições favoráveis para colheita de soja em MT',
+    descricao: 'Janela de tempo seco prevista para os próximos 10 dias na região norte de MT.',
     estado: 'MT', municipiosAfetados: ['Sorriso', 'Sinop', 'Lucas do Rio Verde'],
     vigenciaInicio: '2026-04-16', vigenciaFim: '2026-04-26',
     fonte: 'INMET / APROSOJA', emitidoEm: '2026-04-16T06:00:00Z',
   },
   {
     id: 'alerta-004', tipo: 'informativo',
-    titulo: 'Chuvas acima da media em GO',
-    descricao: 'Precipitacao acumulada 35% acima da media historica no sudoeste goiano.',
-    estado: 'GO', municipiosAfetados: ['Rio Verde', 'Jatai', 'Mineiros'],
+    titulo: 'Chuvas acima da média em GO',
+    descricao: 'Precipitação acumulada 35% acima da média histórica no sudoeste goiano.',
+    estado: 'GO', municipiosAfetados: ['Rio Verde', 'Jataí', 'Mineiros'],
     vigenciaInicio: '2026-04-10', vigenciaFim: '2026-04-20',
     fonte: 'CPTEC/INPE', emitidoEm: '2026-04-14T10:00:00Z',
   },
@@ -470,17 +470,17 @@ const ALERTAS_FALLBACK: AlertaClimatico[] = [
   },
   {
     id: 'alerta-006', tipo: 'alerta',
-    titulo: 'Deficit hidrico no Triangulo Mineiro',
-    descricao: 'Precipitacao abaixo de 30mm nos ultimos 20 dias em Uberlandia.',
-    estado: 'MG', municipiosAfetados: ['Uberlandia', 'Uberaba', 'Patos de Minas'],
+    titulo: 'Déficit hídrico no Triângulo Mineiro',
+    descricao: 'Precipitação abaixo de 30mm nos últimos 20 dias em Uberlândia.',
+    estado: 'MG', municipiosAfetados: ['Uberlândia', 'Uberaba', 'Patos de Minas'],
     vigenciaInicio: '2026-04-12', vigenciaFim: '2026-04-22',
     fonte: 'INMET / EMATER-MG', emitidoEm: '2026-04-15T09:00:00Z',
   },
   {
     id: 'alerta-007', tipo: 'informativo',
-    titulo: 'Inicio da estacao seca em SP',
-    descricao: 'Transicao para periodo seco em Ribeirao Preto e regiao.',
-    estado: 'SP', municipiosAfetados: ['Ribeirao Preto', 'Araraquara', 'Barretos'],
+    titulo: 'Início da estação seca em SP',
+    descricao: 'Transição para período seco em Ribeirão Preto e região.',
+    estado: 'SP', municipiosAfetados: ['Ribeirão Preto', 'Araraquara', 'Barretos'],
     vigenciaInicio: '2026-04-15', vigenciaFim: '2026-04-30',
     fonte: 'CIIAGRO / IAC', emitidoEm: '2026-04-15T12:00:00Z',
   },
@@ -528,8 +528,8 @@ export default async function climaRoutes(app: FastifyInstance) {
     if (!mun) mun = await resolveMunicipioPorCodigo(codigoIbge)
     if (!mun) {
       return reply.status(404).send({
-        erro: 'Municipio nao encontrado',
-        mensagem: `Codigo IBGE ${codigoIbge} nao foi localizado no IBGE.`,
+        erro: 'Município não encontrado',
+        mensagem: `Código IBGE ${codigoIbge} não foi localizado no IBGE.`,
       })
     }
 
@@ -547,7 +547,7 @@ export default async function climaRoutes(app: FastifyInstance) {
     const lat = parseFloat(request.query.lat)
     const lon = parseFloat(request.query.lon)
     if (isNaN(lat) || isNaN(lon)) {
-      return reply.status(400).send({ erro: 'Coordenadas invalidas', mensagem: 'lat e lon obrigatorios.' })
+      return reply.status(400).send({ erro: 'Coordenadas inválidas', mensagem: 'lat e lon obrigatórios.' })
     }
 
     const mun: Municipio = {
@@ -572,12 +572,12 @@ export default async function climaRoutes(app: FastifyInstance) {
     const q = (request.query.q || '').trim().toLowerCase()
     const uf = (request.query.uf || '').toUpperCase()
     if (q.length < 2) {
-      return reply.status(400).send({ erro: 'Query muito curta', mensagem: 'Minimo de 2 caracteres.' })
+      return reply.status(400).send({ erro: 'Query muito curta', mensagem: 'Mínimo de 2 caracteres.' })
     }
 
     const all = await loadAllMunicipios()
     if (!all) {
-      return { total: 0, resultados: [], erro: 'Lista IBGE indisponivel' }
+      return { total: 0, resultados: [], erro: 'Lista IBGE indisponível' }
     }
 
     const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -603,12 +603,12 @@ export default async function climaRoutes(app: FastifyInstance) {
     const { codigoCidade, dias: diasStr } = request.params
     const dias = parseInt(diasStr, 10)
     if (isNaN(dias) || dias < 1 || dias > 15) {
-      return reply.status(400).send({ erro: 'Parametro invalido', mensagem: 'dias entre 1 e 15.' })
+      return reply.status(400).send({ erro: 'Parâmetro inválido', mensagem: 'dias entre 1 e 15.' })
     }
 
     let mun: Municipio | null = MUNICIPIOS_AGRO[codigoCidade] || null
     if (!mun) mun = await resolveMunicipioPorCodigo(codigoCidade)
-    if (!mun) return reply.status(404).send({ erro: 'Municipio nao encontrado' })
+    if (!mun) return reply.status(404).send({ erro: 'Município não encontrado' })
 
     const full = await buildMunicipioResponse(mun, dsm)
     return {
@@ -631,13 +631,13 @@ export default async function climaRoutes(app: FastifyInstance) {
   ) => {
     const { lat: latStr, lon: lonStr, inicio, fim } = request.query
     const lat = parseFloat(latStr), lon = parseFloat(lonStr)
-    if (isNaN(lat) || isNaN(lon)) return reply.status(400).send({ erro: 'Coordenadas invalidas' })
+    if (isNaN(lat) || isNaN(lon)) return reply.status(400).send({ erro: 'Coordenadas inválidas' })
     if (!/^\d{4}-\d{2}-\d{2}$/.test(inicio) || !/^\d{4}-\d{2}-\d{2}$/.test(fim)) {
-      return reply.status(400).send({ erro: 'Formato de data invalido', mensagem: 'Use YYYY-MM-DD.' })
+      return reply.status(400).send({ erro: 'Formato de data inválido', mensagem: 'Use YYYY-MM-DD.' })
     }
     const diffDays = Math.ceil((new Date(fim).getTime() - new Date(inicio).getTime()) / 86_400_000)
     if (diffDays < 0 || diffDays > 365) {
-      return reply.status(400).send({ erro: 'Periodo invalido', mensagem: 'Max 365 dias.' })
+      return reply.status(400).send({ erro: 'Período inválido', mensagem: 'Max 365 dias.' })
     }
 
     // Try Open-Meteo Archive first
@@ -766,7 +766,7 @@ export default async function climaRoutes(app: FastifyInstance) {
     const uf = request.params.estado.toUpperCase()
     const ESTADOS_VALIDOS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO']
     if (uf.length !== 2 || !ESTADOS_VALIDOS.includes(uf)) {
-      return reply.status(400).send({ erro: 'UF invalida', mensagem: `"${request.params.estado}" nao e UF valida.` })
+      return reply.status(400).send({ erro: 'UF inválida', mensagem: `"${request.params.estado}" não é UF válida.` })
     }
 
     let fonteOrigem: 'api' | 'cache' | 'fallback' = 'fallback'
@@ -789,7 +789,7 @@ export default async function climaRoutes(app: FastifyInstance) {
           totalAlertas: combined.length + agroAlertas.length,
           alertas: [...combined, ...agroAlertas],
           fonteOrigem, consultadoEm: new Date().toISOString(),
-          fonte: 'CPTEC/INPE + Alertas agroclimaticos ALETIS',
+          fonte: 'CPTEC/INPE + Alertas agroclimáticos ALETIS',
         }
       }
     } catch { /* fall through */ }
@@ -799,7 +799,7 @@ export default async function climaRoutes(app: FastifyInstance) {
       estado: uf, totalAlertas: alertas.length, alertas,
       fonteOrigem: 'fallback' as const,
       consultadoEm: new Date().toISOString(),
-      fonte: 'Alertas agroclimaticos ALETIS (referencia)',
+      fonte: 'Alertas agroclimáticos ALETIS (referência)',
     }
   })
 

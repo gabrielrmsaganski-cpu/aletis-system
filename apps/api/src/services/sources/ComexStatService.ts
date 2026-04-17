@@ -272,18 +272,18 @@ export class ComexStatService {
     }
 
     const NCM_LABEL: Record<string, string> = {
-      '1201': 'Soja em grao',
+      '1201': 'Soja em grão',
       '1005': 'Milho',
-      '0901': 'Cafe verde',
+      '0901': 'Café verde',
       '0201': 'Carne bovina (fresca)',
       '0202': 'Carne bovina (congelada)',
       '0207': 'Carne frango',
-      '1701': 'Acucar',
-      '5201': 'Algodao nao cardado',
-      '5203': 'Algodao cardado',
+      '1701': 'Açúcar',
+      '5201': 'Algodão não cardado',
+      '5203': 'Algodão cardado',
       '4703': 'Celulose',
       '2304': 'Farelo de soja',
-      '1507': 'Oleo de soja',
+      '1507': 'Óleo de soja',
     };
 
     const porProduto = [...porNcm.entries()]

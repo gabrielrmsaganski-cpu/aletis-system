@@ -248,8 +248,8 @@ function CardAlongamento() {
   return (
     <PremiumCalculatorCard
       icon={Sprout}
-      title="Alongamento - Sumula 298 STJ"
-      subtitle="Proporcional a perda declarada. MCR 2-6-4 e TRF-4 Apelacao 5008203-86.2016."
+      title="Alongamento - Súmula 298 STJ"
+      subtitle="Proporcional à perda declarada. MCR 2-6-4 e TRF-4 Apelação 5008203-86.2016."
       badge="PREMIUM"
     >
       {({ loading, execute }) => (
@@ -275,16 +275,16 @@ function CardAlongamento() {
             <Input label="Prazo original" value={prazo} onChange={setPrazo} suffix="meses" />
             <Input label="% perda da safra" value={perda} onChange={setPerda} suffix="%" />
             <Select
-              label="Tipo credito"
+              label="Tipo crédito"
               value={tipo}
               onChange={v => setTipo(v as typeof tipo)}
               options={[
                 { value: 'custeio', label: 'Custeio' },
                 { value: 'investimento', label: 'Investimento' },
-                { value: 'comercializacao', label: 'Comercializacao' },
+                { value: 'comercializacao', label: 'Comercialização' },
               ]}
             />
-            <Input label="Numero de safras" value={safras} onChange={setSafras} suffix="safras" />
+            <Input label="Número de safras" value={safras} onChange={setSafras} suffix="safras" />
             <div className="col-span-2 lg:col-span-3">
               <RunButton loading={loading} label="Simular alongamento" />
             </div>
@@ -292,7 +292,7 @@ function CardAlongamento() {
 
           {result && (
             <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <Metric label="Valor alongavel" value={fmtBRL(result.valorAlongavel)} variant="gold" />
+              <Metric label="Valor alongável" value={fmtBRL(result.valorAlongavel)} variant="gold" />
               <Metric label="Prazo novo" value={`${result.prazoAlongadoMeses} meses`} />
               <Metric label="Economia" value={fmtBRL(result.economiaFinanceira)} variant="positive" />
               <Metric
@@ -314,7 +314,7 @@ function CardAlongamento() {
                 </div>
               )}
               <div className="col-span-2 lg:col-span-4 rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
-                <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Fundamentacao juridica</p>
+                <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Fundamentação jurídica</p>
                 <p className="text-xs font-body text-aletis-grafite-escuro">{result.fundamentacaoJuridica}</p>
               </div>
             </div>
@@ -351,8 +351,8 @@ function CardDescaracterizacao() {
   return (
     <PremiumCalculatorCard
       icon={ShieldAlert}
-      title="Descaracterizacao de Credito Rural"
-      subtitle="Detecta migracao de custeio rural para credito pessoal. CDC art. 42, Sumula 322 STJ."
+      title="Descaracterização de Crédito Rural"
+      subtitle="Detecta migração de custeio rural para crédito pessoal. CDC art. 42, Súmula 322 STJ."
       badge="JUDICIAL"
     >
       {({ loading, execute }) => (
@@ -385,7 +385,7 @@ function CardDescaracterizacao() {
           >
             <Input label="Valor original custeio" value={valorOrig} onChange={setValorOrig} suffix="R$" />
             <Input label="Taxa original" value={taxaOrig} onChange={setTaxaOrig} suffix="% a.a." />
-            <Input label="Valor renegociacao" value={valorReneg} onChange={setValorReneg} suffix="R$" />
+            <Input label="Valor renegociação" value={valorReneg} onChange={setValorReneg} suffix="R$" />
             <Input label="Taxa renegociada" value={taxaReneg} onChange={setTaxaReneg} suffix="% a.a." />
             <Input label="CET atual" value={cetReneg} onChange={setCetReneg} suffix="% a.a." />
             <Select
@@ -393,34 +393,34 @@ function CardDescaracterizacao() {
               value={finalidade}
               onChange={setFinalidade}
               options={[
-                { value: 'pessoal', label: 'Credito pessoal' },
+                { value: 'pessoal', label: 'Crédito pessoal' },
                 { value: 'capital_giro', label: 'Capital de giro' },
-                { value: 'consolidacao', label: 'Consolidacao de dividas' },
+                { value: 'consolidacao', label: 'Consolidação de dívidas' },
                 { value: 'custeio', label: 'Custeio rural' },
               ]}
             />
             <div className="col-span-2 lg:col-span-3">
-              <RunButton loading={loading} label="Detectar descaracterizacao" />
+              <RunButton loading={loading} label="Detectar descaracterização" />
             </div>
           </form>
 
           {result && (
             <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
               <Metric
-                label="Descaracterizacao"
-                value={result.houveDescaracterizacao ? 'SIM' : 'NAO'}
+                label="Descaracterização"
+                value={result.houveDescaracterizacao ? 'SIM' : 'NÃO'}
                 variant={result.houveDescaracterizacao ? 'alert' : 'positive'}
               />
               <Metric label="Spread cobrado" value={fmtPct(result.spreadCobrado)} variant="alert" />
               <Metric label="Excesso sobre original" value={fmtPct(result.excessoSobreOriginal)} variant="gold" />
               <Metric
-                label="Restituicao estimada"
+                label="Restituição estimada"
                 value={fmtBRL(result.valorRestituicaoEstimada)}
                 variant="positive"
               />
               {result.indicios.length > 0 && (
                 <div className="col-span-2 lg:col-span-4 rounded-lg bg-alerta/5 border border-alerta/20 p-3">
-                  <p className="text-[10px] uppercase tracking-wide text-alerta mb-1">Indicios detectados</p>
+                  <p className="text-[10px] uppercase tracking-wide text-alerta mb-1">Indícios detectados</p>
                   <ul className="text-xs font-body text-aletis-grafite-escuro list-disc list-inside space-y-0.5">
                     {result.indicios.map((i, idx) => <li key={idx}>{i}</li>)}
                   </ul>
@@ -471,7 +471,7 @@ function CardCapitalizacao() {
   return (
     <PremiumCalculatorCard
       icon={Layers}
-      title="Capitalizacao de Despesas"
+      title="Capitalização de Despesas"
       subtitle="Detecta abuso quando IOF, seguro, tarifas inflam saldo. Multiplicador e CDC art. 51."
       badge="REVISIONAL"
     >
@@ -499,13 +499,13 @@ function CardCapitalizacao() {
             <Input label="Valor solicitado" value={valor} onChange={setValor} suffix="R$" />
             <Input label="IOF" value={iof} onChange={setIof} suffix="R$" />
             <Input label="Seguro prestamista" value={seguro} onChange={setSeguro} suffix="R$" />
-            <Input label="Cartorio" value={cartorio} onChange={setCartorio} suffix="R$" />
-            <Input label="Tarifa estruturacao" value={estrutura} onChange={setEstrutura} suffix="R$" />
-            <Input label="Avaliacao garantia" value={avaliacao} onChange={setAvaliacao} suffix="R$" />
+            <Input label="Cartório" value={cartorio} onChange={setCartorio} suffix="R$" />
+            <Input label="Tarifa estruturação" value={estrutura} onChange={setEstrutura} suffix="R$" />
+            <Input label="Avaliação garantia" value={avaliacao} onChange={setAvaliacao} suffix="R$" />
             <Input label="Taxa mensal" value={taxaMensal} onChange={setTaxaMensal} suffix="% a.m." />
             <Input label="Prazo" value={prazo} onChange={setPrazo} suffix="meses" />
             <div className="col-span-2 lg:col-span-4">
-              <RunButton loading={loading} label="Analisar capitalizacao" />
+              <RunButton loading={loading} label="Analisar capitalização" />
             </div>
           </form>
 
@@ -513,7 +513,7 @@ function CardCapitalizacao() {
             <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
               <Metric
                 label="Abusividade"
-                value={result.abusividadeDetectada ? 'DETECTADA' : 'NAO'}
+                value={result.abusividadeDetectada ? 'DETECTADA' : 'NÃO'}
                 variant={result.abusividadeDetectada ? 'alert' : 'positive'}
               />
               <Metric label="Multiplicador" value={`${fmtNum(result.multiplicadorFinal)}x`} variant="gold" />
@@ -539,14 +539,14 @@ function CardCapitalizacao() {
               />
               {result.fundamentosContestacao.length > 0 && (
                 <div className="col-span-2 lg:col-span-4 rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
-                  <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Fundamentos para contestacao</p>
+                  <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Fundamentos para contestação</p>
                   <ul className="text-xs font-body text-aletis-grafite-escuro list-disc list-inside space-y-0.5">
                     {result.fundamentosContestacao.map((f, i) => <li key={i}>{f}</li>)}
                   </ul>
                 </div>
               )}
               <div className="col-span-2 lg:col-span-4 rounded-lg bg-aletis-dourado/5 border border-aletis-dourado/20 p-3">
-                <p className="text-[10px] uppercase tracking-wide text-aletis-dourado-escuro mb-1">Recomendacao ALETIS</p>
+                <p className="text-[10px] uppercase tracking-wide text-aletis-dourado-escuro mb-1">Recomendação ALETIS</p>
                 <p className="text-xs font-body text-aletis-grafite-escuro">{result.recomendacaoAletis}</p>
               </div>
             </div>
@@ -591,7 +591,7 @@ function CardParcelamentoSafra() {
     <PremiumCalculatorCard
       icon={CalendarClock}
       title="Parcelamento por Safra"
-      subtitle="Estrutura similar ao caso Paulo Luciano: entrada + N safras alinhadas a colheita."
+      subtitle="Estrutura similar ao caso Paulo Luciano: entrada + N safras alinhadas à colheita."
       badge="CASO REAL"
     >
       {({ loading, execute }) => (
@@ -613,10 +613,10 @@ function CardParcelamentoSafra() {
           >
             <Input label="Saldo devedor" value={saldo} onChange={setSaldo} suffix="R$" />
             <Input label="Taxa" value={taxa} onChange={setTaxa} suffix="% a.a." />
-            <Input label="Numero de safras" value={safras} onChange={setSafras} suffix="safras" />
+            <Input label="Número de safras" value={safras} onChange={setSafras} suffix="safras" />
             <Input label="% entrada" value={entrada} onChange={setEntrada} suffix="%" />
-            <Input label="Inicio da safra" value={inicio} onChange={setInicio} type="date" />
-            <Input label="Mes da colheita" value={mes} onChange={setMes} suffix="1-12" />
+            <Input label="Início da safra" value={inicio} onChange={setInicio} type="date" />
+            <Input label="Mês da colheita" value={mes} onChange={setMes} suffix="1-12" />
             <div className="col-span-2 lg:col-span-3">
               <RunButton loading={loading} label="Simular parcelamento" />
             </div>
@@ -626,7 +626,7 @@ function CardParcelamentoSafra() {
             <div className="mt-5 space-y-3">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <Metric label="Entrada" value={fmtBRL(result.valorEntrada)} variant="gold" />
-                <Metric label="Saldo apos entrada" value={fmtBRL(result.saldoAposEntrada)} />
+                <Metric label="Saldo após entrada" value={fmtBRL(result.saldoAposEntrada)} />
                 <Metric label="Total pago" value={fmtBRL(result.totalPago)} />
                 <Metric label="Economia" value={fmtBRL(result.economiaVsConvencional)} variant="positive" />
               </div>
@@ -637,7 +637,7 @@ function CardParcelamentoSafra() {
                     <tr className="text-aletis-grafite-claro">
                       <th className="text-left py-1">Safra</th>
                       <th className="text-left py-1">Data</th>
-                      <th className="text-right py-1">Amortizacao</th>
+                      <th className="text-right py-1">Amortização</th>
                       <th className="text-right py-1">Juros</th>
                       <th className="text-right py-1">Total</th>
                       <th className="text-right py-1">Saldo</th>
@@ -658,7 +658,7 @@ function CardParcelamentoSafra() {
                 </table>
               </div>
               <div className="rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
-                <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Fundamentacao</p>
+                <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Fundamentação</p>
                 <p className="text-xs font-body text-aletis-grafite-escuro">{result.fundamentacao}</p>
               </div>
             </div>
@@ -696,8 +696,8 @@ function CardStressTest() {
   return (
     <PremiumCalculatorCard
       icon={Gauge}
-      title="Stress Test de Preco"
-      subtitle="Testa quedas de 10-50% na commodity. Identifica breakeven de custeio e divida."
+      title="Stress Test de Preço"
+      subtitle="Testa quedas de 10-50% na commodity. Identifica breakeven de custeio e dívida."
       badge="RISCO"
     >
       {({ loading, execute }) => (
@@ -715,10 +715,10 @@ function CardStressTest() {
             }}
             className="grid grid-cols-2 lg:grid-cols-4 gap-3"
           >
-            <Input label="Producao" value={producao} onChange={setProducao} suffix="sacas" />
-            <Input label="Preco base" value={preco} onChange={setPreco} suffix="R$/saca" />
+            <Input label="Produção" value={producao} onChange={setProducao} suffix="sacas" />
+            <Input label="Preço base" value={preco} onChange={setPreco} suffix="R$/saca" />
             <Input label="Custo total" value={custo} onChange={setCusto} suffix="R$" />
-            <Input label="Divida atual" value={divida} onChange={setDivida} suffix="R$" />
+            <Input label="Dívida atual" value={divida} onChange={setDivida} suffix="R$" />
             <div className="col-span-2 lg:col-span-4">
               <RunButton loading={loading} label="Executar stress test" />
             </div>
@@ -728,12 +728,12 @@ function CardStressTest() {
             <div className="mt-5 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <Metric
-                  label="Preco breakeven custeio"
+                  label="Preço breakeven custeio"
                   value={fmtBRL(result.precoBreakEvenPara.custeio) + '/saca'}
                   variant="gold"
                 />
                 <Metric
-                  label="Preco breakeven divida"
+                  label="Preço breakeven dívida"
                   value={fmtBRL(result.precoBreakEvenPara.divida) + '/saca'}
                   variant="gold"
                 />
@@ -743,10 +743,10 @@ function CardStressTest() {
                   <thead>
                     <tr className="text-aletis-grafite-claro">
                       <th className="text-left py-1">Queda</th>
-                      <th className="text-right py-1">Preco stress</th>
+                      <th className="text-right py-1">Preço stress</th>
                       <th className="text-right py-1">Receita</th>
                       <th className="text-right py-1">Margem</th>
-                      <th className="text-right py-1">Saldo p/divida</th>
+                      <th className="text-right py-1">Saldo p/dívida</th>
                       <th className="text-center py-1">Status</th>
                     </tr>
                   </thead>
@@ -769,7 +769,7 @@ function CardStressTest() {
                 </table>
               </div>
               <div className="rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
-                <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Recomendacao</p>
+                <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Recomendação</p>
                 <p className="text-xs font-body text-aletis-grafite-escuro">{result.recomendacao}</p>
               </div>
             </div>
@@ -816,8 +816,8 @@ function CardMultiCredor() {
     <PremiumCalculatorCard
       icon={Users}
       title="Comparador Multi-Credor"
-      subtitle="Score de prioridade waterfall. Estrategia por credor, economia potencial."
-      badge="ESTRATEGIA"
+      subtitle="Score de prioridade waterfall. Estratégia por credor, economia potencial."
+      badge="ESTRATÉGIA"
     >
       {({ loading, execute }) => (
         <>
@@ -877,7 +877,7 @@ function CardMultiCredor() {
                     onChange={v => setCredores(cs => cs.map((x, j) => j === i ? { ...x, garantia: v as CredorRow['garantia'] } : x))}
                     options={[
                       { value: 'real', label: 'Real' },
-                      { value: 'fiduciaria', label: 'Fiduciaria' },
+                      { value: 'fiduciaria', label: 'Fiduciária' },
                       { value: 'pessoal', label: 'Pessoal' },
                       { value: 'sem_garantia', label: 'Sem garantia' },
                     ]}
@@ -901,7 +901,7 @@ function CardMultiCredor() {
                   onClick={() => setCredores(cs => cs.slice(0, -1))}
                   className="text-xs font-body text-alerta hover:underline"
                 >
-                  - Remover ultimo
+                  - Remover último
                 </button>
               )}
             </div>
@@ -911,11 +911,11 @@ function CardMultiCredor() {
           {result && (
             <div className="mt-5 space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <Metric label="Divida total" value={fmtBRL(result.totalDivida)} variant="gold" />
+                <Metric label="Dívida total" value={fmtBRL(result.totalDivida)} variant="gold" />
                 <Metric label="Custo anual" value={fmtBRL(result.custoAnualTotal)} variant="alert" />
               </div>
               <div className="space-y-2">
-                <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-claro">Prioridade de renegociacao</p>
+                <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-claro">Prioridade de renegociação</p>
                 {result.prioridadeRenegociacao.map((p, i) => (
                   <div key={i} className="rounded-lg bg-aletis-bege p-3 border border-aletis-grafite-claro/10">
                     <div className="flex justify-between items-start gap-2">
@@ -928,7 +928,7 @@ function CardMultiCredor() {
                           <span className="text-[10px] font-body text-aletis-grafite-claro">score: {fmtNum(p.score, 0)}</span>
                         </div>
                         <p className="text-xs font-body text-aletis-grafite-medio mt-1">{p.justificativa}</p>
-                        <p className="text-xs font-body text-aletis-verde mt-1">Estrategia: {p.estrategiaSugerida}</p>
+                        <p className="text-xs font-body text-aletis-verde mt-1">Estratégia: {p.estrategiaSugerida}</p>
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-[10px] text-aletis-grafite-claro">Economia potencial</p>
@@ -974,8 +974,8 @@ function CardEnquadramento() {
     <PremiumCalculatorCard
       icon={CheckCircle}
       title="Enquadramento Pronaf / Pronamp / Empresarial"
-      subtitle="Identifica o programa correto e taxa subsidiada elegivel. Plano Safra 2025/26."
-      badge="SUBSIDIO"
+      subtitle="Identifica o programa correto e taxa subsidiada elegível. Plano Safra 2025/26."
+      badge="SUBSÍDIO"
     >
       {({ loading, execute }) => (
         <>
@@ -994,7 +994,7 @@ function CardEnquadramento() {
             className="grid grid-cols-2 lg:grid-cols-3 gap-3"
           >
             <Input label="Renda bruta anual" value={renda} onChange={setRenda} suffix="R$" />
-            <Input label="Area explorada" value={area} onChange={setArea} suffix="ha" />
+            <Input label="Área explorada" value={area} onChange={setArea} suffix="ha" />
             <Input label="Atividade principal" value={atividade} onChange={setAtividade} />
             <label className="flex items-center gap-2 text-xs font-body text-aletis-grafite-medio">
               <input type="checkbox" checked={possuiCaf} onChange={e => setPossuiCaf(e.target.checked)} />
@@ -1013,7 +1013,7 @@ function CardEnquadramento() {
             <div className="mt-5 space-y-3">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                 <Metric label="Programa" value={result.programaSugerido} variant="positive" />
-                <Metric label="Taxa elegivel" value={fmtPct(result.taxaSugeridaAA)} variant="gold" />
+                <Metric label="Taxa elegível" value={fmtPct(result.taxaSugeridaAA)} variant="gold" />
                 <Metric label="Limite" value={fmtBRL(result.limiteSugerido)} variant="gold" />
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
@@ -1024,13 +1024,13 @@ function CardEnquadramento() {
                   </ul>
                 </div>
                 <div className="rounded-lg bg-aletis-bege p-3 border border-aletis-grafite-claro/10">
-                  <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-claro mb-1">Documentacao</p>
+                  <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-claro mb-1">Documentação</p>
                   <ul className="text-xs font-body text-aletis-grafite-escuro list-disc list-inside space-y-0.5">
                     {result.documentacaoNecessaria.map((d, i) => <li key={i}>{d}</li>)}
                   </ul>
                 </div>
                 <div className="rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
-                  <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Proximos passos</p>
+                  <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Próximos passos</p>
                   <ul className="text-xs font-body text-aletis-grafite-escuro list-disc list-inside space-y-0.5">
                     {result.proximosPassos.map((p, i) => <li key={i}>{p}</li>)}
                   </ul>
@@ -1070,8 +1070,8 @@ function CardDacao() {
   return (
     <PremiumCalculatorCard
       icon={HandCoins}
-      title="Dacao em Pagamento"
-      subtitle="Quita divida transferindo bem (matricula, maquina, semoventes). Art. 356-359 CC."
+      title="Dação em Pagamento"
+      subtitle="Quita dívida transferindo bem (matrícula, máquina, semoventes). Art. 356-359 CC."
       badge="CASO REAL"
     >
       {({ loading, execute }) => (
@@ -1092,16 +1092,16 @@ function CardDacao() {
             }}
             className="grid grid-cols-2 lg:grid-cols-3 gap-3"
           >
-            <Input label="Divida atual" value={divida} onChange={setDivida} suffix="R$" />
-            <Input label="Valor avaliacao bem" value={valorBem} onChange={setValorBem} suffix="R$" />
+            <Input label="Dívida atual" value={divida} onChange={setDivida} suffix="R$" />
+            <Input label="Valor avaliação bem" value={valorBem} onChange={setValorBem} suffix="R$" />
             <Select
               label="Tipo do bem"
               value={tipo}
               onChange={v => setTipo(v as typeof tipo)}
               options={[
-                { value: 'imovel_rural', label: 'Imovel rural' },
-                { value: 'imovel_urbano', label: 'Imovel urbano' },
-                { value: 'maquinario', label: 'Maquinario' },
+                { value: 'imovel_rural', label: 'Imóvel rural' },
+                { value: 'imovel_urbano', label: 'Imóvel urbano' },
+                { value: 'maquinario', label: 'Maquinário' },
                 { value: 'semovente', label: 'Semovente' },
                 { value: 'cota_cooperativa', label: 'Cota cooperativa' },
               ]}
@@ -1112,7 +1112,7 @@ function CardDacao() {
               onChange={v => setLiquidez(v as typeof liquidez)}
               options={[
                 { value: 'alta', label: 'Alta' },
-                { value: 'media', label: 'Media' },
+                { value: 'media', label: 'Média' },
                 { value: 'baixa', label: 'Baixa' },
               ]}
             />
@@ -1121,7 +1121,7 @@ function CardDacao() {
               Credor sinalizou abertura
             </label>
             <div className="col-span-2 lg:col-span-3">
-              <RunButton loading={loading} label="Simular dacao" />
+              <RunButton loading={loading} label="Simular dação" />
             </div>
           </form>
 
@@ -1129,12 +1129,12 @@ function CardDacao() {
             <div className="mt-5 space-y-3">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <Metric label="Valor aceito" value={fmtBRL(result.valorAceito)} variant="gold" />
-                <Metric label="Desagio aplicado" value={fmtPct(result.desagioAplicado)} variant="alert" />
-                <Metric label="Custos transferencia" value={fmtBRL(result.custosTransferencia)} />
+                <Metric label="Deságio aplicado" value={fmtPct(result.desagioAplicado)} variant="alert" />
+                <Metric label="Custos transferência" value={fmtBRL(result.custosTransferencia)} />
                 <Metric label="Economia financeira" value={fmtBRL(result.economiaFinanceira)} variant="positive" />
-                <Metric label="Prazo conclusao" value={result.prazoEstimadoConclusao} />
+                <Metric label="Prazo conclusão" value={result.prazoEstimadoConclusao} />
                 <Metric
-                  label="Viabilidade juridica"
+                  label="Viabilidade jurídica"
                   value={result.viabilidadeJuridica.toUpperCase()}
                   variant={result.viabilidadeJuridica === 'alta' ? 'positive' : result.viabilidadeJuridica === 'media' ? 'gold' : 'alert'}
                 />
@@ -1148,7 +1148,7 @@ function CardDacao() {
                 </div>
               )}
               <div className="rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
-                <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Fundamentacao</p>
+                <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Fundamentação</p>
                 <p className="text-xs font-body text-aletis-grafite-escuro">{result.fundamentacao}</p>
               </div>
             </div>
@@ -1171,11 +1171,11 @@ export default function CreditoPremium() {
             Calculadoras Premium
           </h2>
           <p className="text-xs font-body text-aletis-grafite-claro mt-0.5">
-            Analises avancadas para reestruturacao com base em MCR, Sumulas STJ e Plano Safra 2025/26
+            Análises avançadas para reestruturação com base em MCR, Súmulas STJ e Plano Safra 2025/26
           </p>
         </div>
         <div className="text-[11px] font-body text-aletis-grafite-claro hidden sm:block">
-          8 calculadoras juridico-financeiras
+          8 calculadoras jurídico-financeiras
         </div>
       </div>
 

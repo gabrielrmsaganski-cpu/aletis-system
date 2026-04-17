@@ -258,7 +258,7 @@ export default async function prospeccaoRoutes(app: FastifyInstance) {
         l.uf,
         l.totalDivida.toFixed(2),
         l.qtdInscricoes,
-        l.temAjuizada ? 'sim' : 'nao',
+        l.temAjuizada ? 'sim' : 'não',
         l.area.hectaresEstimados,
         l.area.confidence,
         l.score.total,

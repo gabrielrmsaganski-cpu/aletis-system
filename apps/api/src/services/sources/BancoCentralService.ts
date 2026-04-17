@@ -101,7 +101,7 @@ export class BancoCentralService {
 
     const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serie}/dados?formato=json&dataInicial=${dataInicial}&dataFinal=${dataFinal}`;
 
-    console.log(`[BCB] Buscando serie ${serie} (${sourceName}): ${dataInicial} a ${dataFinal}`);
+    console.log(`[BCB] Buscando série ${serie} (${sourceName}): ${dataInicial} a ${dataFinal}`);
 
     const startTime = Date.now();
     try {
@@ -110,7 +110,7 @@ export class BancoCentralService {
 
       if (response.data && response.data.length > 0) {
         this.manager.updateSourceStatus(sourceName, 'online', latencia);
-        console.log(`[BCB] Serie ${serie} OK: ${response.data.length} registros em ${latencia}ms`);
+        console.log(`[BCB] Série ${serie} OK: ${response.data.length} registros em ${latencia}ms`);
         return response.data;
       }
 
@@ -120,7 +120,7 @@ export class BancoCentralService {
       const latencia = Date.now() - startTime;
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       this.manager.updateSourceStatus(sourceName, 'offline', latencia, msg);
-      console.warn(`[BCB] Erro na serie ${serie} (${sourceName}): ${msg}`);
+      console.warn(`[BCB] Erro na série ${serie} (${sourceName}): ${msg}`);
       throw error;
     }
   }
@@ -312,7 +312,7 @@ export class BancoCentralService {
     }
   }
 
-  // ── Public: Dolar PTAX ───────────────────────────────────
+  // ── Public: Dólar PTAX ───────────────────────────────────
 
   async fetchDolarPTAX(): Promise<CotacaoPTAX> {
     const cacheKey = 'bcb_dolar_ptax';
@@ -356,7 +356,7 @@ export class BancoCentralService {
         }
       }
 
-      throw new Error('Nenhuma cotacao encontrada nos ultimos 3 dias uteis');
+      throw new Error('Nenhuma cotação encontrada nos últimos 3 dias úteis');
     } catch (error) {
       const latencia = Date.now() - startTime;
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
@@ -396,7 +396,7 @@ export class BancoCentralService {
       }));
 
       const result: IndicadorBCB = {
-        nome: 'IC-Br Agropecuario',
+        nome: 'IC-Br Agropecuário',
         serie: 27574,
         valor: parseFloat(ultimo.valor),
         data: this.parseDateBR(ultimo.data),
@@ -414,7 +414,7 @@ export class BancoCentralService {
       this.manager.updateSourceStatus('bcb_icbr_agro', 'degraded', Date.now() - start, msg);
 
       return {
-        nome: 'IC-Br Agropecuario',
+        nome: 'IC-Br Agropecuário',
         serie: 27574,
         valor: 446.0,
         data: '2026-03-01',
@@ -444,7 +444,7 @@ export class BancoCentralService {
     ]);
 
     const agro = agroResult.status === 'fulfilled' ? agroResult.value
-      : { nome: 'IC-Br Agropecuario', serie: 27574, valor: 446.0, data: '2026-03-01', unidade: 'indice', fonte: 'fallback' as const };
+      : { nome: 'IC-Br Agropecuário', serie: 27574, valor: 446.0, data: '2026-03-01', unidade: 'indice', fonte: 'fallback' as const };
     const energia = energiaResult.status === 'fulfilled' ? energiaResult.value
       : { nome: 'IC-Br Energia', serie: 27575, valor: 433.17, data: '2026-03-01', unidade: 'indice', fonte: 'fallback' as const };
     const metal = metalResult.status === 'fulfilled' ? metalResult.value
@@ -513,7 +513,7 @@ export class BancoCentralService {
       }));
 
       const result: IndicadorBCB = {
-        nome: 'EMBI+ Brasil (Risco Pais)',
+        nome: 'EMBI+ Brasil (Risco País)',
         serie: 21340,
         valor: parseFloat(ultimo.valor),
         data: this.parseDateBR(ultimo.data),
@@ -531,7 +531,7 @@ export class BancoCentralService {
       this.manager.updateSourceStatus('bcb_embi', 'degraded', Date.now() - start, msg);
 
       return {
-        nome: 'EMBI+ Brasil (Risco Pais)',
+        nome: 'EMBI+ Brasil (Risco País)',
         serie: 21340,
         valor: 758.10,
         data: '2025-12-01',
@@ -541,13 +541,13 @@ export class BancoCentralService {
     }
   }
 
-  // ── Public: Credito Rural (SGS 25469) ────────────────────
+  // ── Public: Crédito Rural (SGS 25469) ────────────────────
 
   async fetchCreditoRural(): Promise<CreditoRuralData> {
     const cacheKey = 'bcb_credito_rural';
     const cached = this.cache.get<CreditoRuralData>(cacheKey);
     if (cached) {
-      console.log('[BCB] Credito Rural retornado do cache');
+      console.log('[BCB] Crédito Rural retornado do cache');
       return { ...cached, fonte: 'cache' };
     }
 
@@ -569,7 +569,7 @@ export class BancoCentralService {
       this.cache.set(cacheKey, result, 7200);
       return result;
     } catch {
-      console.warn('[BCB] Usando fallback para Credito Rural');
+      console.warn('[BCB] Usando fallback para Crédito Rural');
       const fallback: CreditoRuralData = {
         volume: FALLBACK_DATA.creditoRural.volume,
         periodo: FALLBACK_DATA.creditoRural.periodo,

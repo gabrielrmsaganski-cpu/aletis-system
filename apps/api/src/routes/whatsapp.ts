@@ -145,7 +145,7 @@ export default async function whatsappRoutes(fastify: FastifyInstance): Promise<
     reply: FastifyReply,
   ) => {
     const s = await brain!.getSession(request.params.waId)
-    if (!s) return reply.status(404).send({ success: false, error: 'Sessao nao encontrada' })
+    if (!s) return reply.status(404).send({ success: false, error: 'Sessão não encontrada' })
     return reply.send({ success: true, data: s })
   })
 
@@ -155,7 +155,7 @@ export default async function whatsappRoutes(fastify: FastifyInstance): Promise<
     reply: FastifyReply,
   ) => {
     const ok = await brain!.resetSession(request.params.waId)
-    if (!ok) return reply.status(404).send({ success: false, error: 'Sessao nao encontrada' })
+    if (!ok) return reply.status(404).send({ success: false, error: 'Sessão não encontrada' })
     return reply.send({ success: true, data: { reset: request.params.waId } })
   })
 
@@ -166,7 +166,7 @@ export default async function whatsappRoutes(fastify: FastifyInstance): Promise<
     reply: FastifyReply,
   ) => {
     const { to, text, previewUrl } = request.body || {}
-    if (!to || !text) return reply.status(400).send({ success: false, error: 'Campos "to" e "text" obrigatorios' })
+    if (!to || !text) return reply.status(400).send({ success: false, error: 'Campos "to" e "text" obrigatórios' })
     try {
       const r = await wa!.sendText(to, text, previewUrl || false)
       return reply.send({ success: true, data: r })
@@ -183,7 +183,7 @@ export default async function whatsappRoutes(fastify: FastifyInstance): Promise<
     reply: FastifyReply,
   ) => {
     const { to, text, voice, style } = request.body || {}
-    if (!to || !text) return reply.status(400).send({ success: false, error: 'Campos "to" e "text" obrigatorios' })
+    if (!to || !text) return reply.status(400).send({ success: false, error: 'Campos "to" e "text" obrigatórios' })
     try {
       const audio = await speech!.textToSpeech(text, { voice, style: style as any })
       const r = await wa!.sendAudio(to, audio, 'audio/ogg')
@@ -201,7 +201,7 @@ export default async function whatsappRoutes(fastify: FastifyInstance): Promise<
     reply: FastifyReply,
   ) => {
     const { text, voice, style, format } = request.body || {}
-    if (!text) return reply.status(400).send({ success: false, error: 'Campo "text" obrigatorio' })
+    if (!text) return reply.status(400).send({ success: false, error: 'Campo "text" obrigatório' })
     try {
       const buf = await speech!.textToSpeech(text, { voice, style: style as any, outputFormat: format })
       return reply
@@ -221,7 +221,7 @@ export default async function whatsappRoutes(fastify: FastifyInstance): Promise<
     reply: FastifyReply,
   ) => {
     const { waId, texto, nomeContato, kind } = request.body || {}
-    if (!waId || !texto) return reply.status(400).send({ success: false, error: 'Campos "waId" e "texto" obrigatorios' })
+    if (!waId || !texto) return reply.status(400).send({ success: false, error: 'Campos "waId" e "texto" obrigatórios' })
     try {
       const out = await brain!.responder({ waId, texto, nomeContato, kind: kind || 'text' })
       return reply.send({
@@ -270,7 +270,7 @@ async function handleInbound(
     try {
       const { buffer, mimeType } = await wa.downloadMedia(msg.audio.mediaId)
       if (!speech.isConfigured()) {
-        await wa.sendText(from, 'Recebi seu audio, mas nossa transcricao nao esta configurada agora. Pode escrever por favor?')
+        await wa.sendText(from, 'Recebi seu áudio, mas nossa transcrição não está configurada agora. Pode escrever por favor?')
         return
       }
       const stt = await speech.speechToText(buffer, mimeType || msg.audio.mimeType, 'pt-BR')
@@ -278,22 +278,22 @@ async function handleInbound(
       audioTranscricao = texto
       fastify.log.info({ from, confianca: stt.confianca, duracaoMs: stt.duracaoMs }, '[WhatsApp] STT result')
       if (!texto.trim()) {
-        await wa.sendText(from, 'Nao consegui entender o audio. Pode repetir ou escrever?')
+        await wa.sendText(from, 'Não consegui entender o áudio. Pode repetir ou escrever?')
         return
       }
     } catch (err) {
       fastify.log.error({ err, from }, '[WhatsApp] STT falhou')
-      await wa.sendText(from, 'Tive um problema pra ouvir seu audio. Pode escrever por favor?')
+      await wa.sendText(from, 'Tive um problema pra ouvir seu áudio. Pode escrever por favor?')
       return
     }
   } else if (msg.type === 'interactive' && msg.buttonReply) {
     kind = 'button'
     texto = msg.buttonReply.title
   } else if (msg.type === 'image') {
-    await wa.sendText(from, 'Recebi sua imagem. No momento trabalho melhor com texto ou audio. Pode me descrever o que e?')
+    await wa.sendText(from, 'Recebi sua imagem. No momento trabalho melhor com texto ou áudio. Pode me descrever o que é?')
     return
   } else {
-    await wa.sendText(from, 'Recebi sua mensagem, mas esse tipo de conteudo ainda nao e suportado. Pode mandar como texto ou audio?')
+    await wa.sendText(from, 'Recebi sua mensagem, mas esse tipo de conteúdo ainda não é suportado. Pode mandar como texto ou áudio?')
     return
   }
 

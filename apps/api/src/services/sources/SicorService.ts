@@ -1,6 +1,6 @@
 // ============================================================
 // ALETIS — BCB SICOR Service
-// Sistema de Operacoes do Credito Rural (OData)
+// Sistema de Operações do Crédito Rural (OData)
 // Granular rural credit data — contracts, volumes, crops, states
 // https://olinda.bcb.gov.br/olinda/servico/SICOR/versao/v2
 // ============================================================
@@ -65,8 +65,8 @@ const FALLBACK_AGREGADO: Omit<SicorAgregado, 'fonte' | 'atualizadoEm'> = {
   porFinalidade: [
     { finalidade: 'Custeio', valor: 245_000_000_000, participacao: 53.3 },
     { finalidade: 'Investimento', valor: 112_000_000_000, participacao: 24.3 },
-    { finalidade: 'Comercializacao', valor: 68_000_000_000, participacao: 14.8 },
-    { finalidade: 'Industrializacao', valor: 35_000_000_000, participacao: 7.6 },
+    { finalidade: 'Comercialização', valor: 68_000_000_000, participacao: 14.8 },
+    { finalidade: 'Industrialização', valor: 35_000_000_000, participacao: 7.6 },
   ],
 };
 

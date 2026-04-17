@@ -48,7 +48,7 @@ export interface NASAPowerData {
   periodoFim: string;
   parametros: {
     T2M: Record<string, number>;       // Temperatura 2m (C)
-    PRECTOTCORR: Record<string, number>; // Precipitacao (mm/dia)
+    PRECTOTCORR: Record<string, number>; // Precipitação (mm/dia)
     RH2M: Record<string, number>;      // Umidade relativa 2m (%)
   };
   resumo: {
@@ -73,7 +73,7 @@ export interface AlertaClima {
 
 const FALLBACK_PREVISAO: PrevisaoDia[] = [
   { data: '2026-04-16', condicao: 'ps', condicaoDesc: 'Parcialmente Nublado', min: 18, max: 29, indiceUv: 8 },
-  { data: '2026-04-17', condicao: 'cl', condicaoDesc: 'Ceu Limpo', min: 17, max: 31, indiceUv: 10 },
+  { data: '2026-04-17', condicao: 'cl', condicaoDesc: 'Céu Limpo', min: 17, max: 31, indiceUv: 10 },
   { data: '2026-04-18', condicao: 'c', condicaoDesc: 'Chuva', min: 19, max: 26, indiceUv: 4 },
   { data: '2026-04-19', condicao: 'ps', condicaoDesc: 'Parcialmente Nublado', min: 16, max: 27, indiceUv: 7 },
 ];
@@ -95,7 +95,7 @@ const FALLBACK_ALERTAS: AlertaClima[] = [
     estado: 'MS',
     tipo: 'Chuva Intensa',
     severidade: 'media',
-    descricao: 'Previsao de chuvas intensas nas proximas 24h com acumulado entre 50 e 100mm',
+    descricao: 'Previsão de chuvas intensas nas próximas 24h com acumulado entre 50 e 100mm',
     dataInicio: '2026-04-16T00:00:00',
     dataFim: '2026-04-17T23:59:59',
     fonte: 'fallback',
@@ -104,7 +104,7 @@ const FALLBACK_ALERTAS: AlertaClima[] = [
     estado: 'GO',
     tipo: 'Onda de Calor',
     severidade: 'alta',
-    descricao: 'Temperaturas acima de 38C previstas para os proximos 3 dias',
+    descricao: 'Temperaturas acima de 38°C previstas para os próximos 3 dias',
     dataInicio: '2026-04-16T00:00:00',
     dataFim: '2026-04-19T23:59:59',
     fonte: 'fallback',
@@ -148,24 +148,24 @@ export class ClimaService {
     });
   }
 
-  // ── Public: Previsao do Tempo (CPTEC/BrasilAPI) ──────────
+  // ── Public: Previsão do Tempo (CPTEC/BrasilAPI) ──────────
 
   async getPrevisao(codigoCidade: string, dias: number = 4): Promise<PrevisaoClima> {
     const cacheKey = `clima_previsao_${codigoCidade}_${dias}`;
     const cached = this.cache.get<PrevisaoClima>(cacheKey);
     if (cached) {
-      console.log(`[Clima] Previsao ${codigoCidade} retornada do cache`);
+      console.log(`[Clima] Previsão ${codigoCidade} retornada do cache`);
       return { ...cached, fonte: 'cache' };
     }
 
     const startTime = Date.now();
     try {
-      console.log(`[Clima] Buscando previsao CPTEC para cidade ${codigoCidade}, ${dias} dias`);
+      console.log(`[Clima] Buscando previsão CPTEC para cidade ${codigoCidade}, ${dias} dias`);
       const response = await this.httpBrasilAPI.get(`/clima/previsao/${dias}/${codigoCidade}`);
       const latencia = Date.now() - startTime;
 
       if (!response.data || !response.data.clima) {
-        throw new Error('Resposta invalida da BrasilAPI');
+        throw new Error('Resposta inválida da BrasilAPI');
       }
 
       this.manager.updateSourceStatus('cptec_previsao', 'online', latencia);
@@ -186,7 +186,7 @@ export class ClimaService {
       };
 
       this.cache.set(cacheKey, result, 3600);
-      console.log(`[Clima] Previsao ${codigoCidade} OK em ${latencia}ms`);
+      console.log(`[Clima] Previsão ${codigoCidade} OK em ${latencia}ms`);
       return result;
     } catch (error) {
       const latencia = Date.now() - startTime;
@@ -207,13 +207,13 @@ export class ClimaService {
     }
   }
 
-  // ── Public: Dados de Estacao INMET ───────────────────────
+  // ── Public: Dados de Estação INMET ───────────────────────
 
   async getEstacaoData(codigoEstacao: string): Promise<EstacaoDados> {
     const cacheKey = `clima_estacao_${codigoEstacao}`;
     const cached = this.cache.get<EstacaoDados>(cacheKey);
     if (cached) {
-      console.log(`[Clima] Estacao ${codigoEstacao} retornada do cache`);
+      console.log(`[Clima] Estação ${codigoEstacao} retornada do cache`);
       return { ...cached, fonte: 'cache' };
     }
 
@@ -226,7 +226,7 @@ export class ClimaService {
       const latencia = Date.now() - startTime;
 
       if (!response.data || (Array.isArray(response.data) && response.data.length === 0)) {
-        throw new Error('Sem dados para estacao');
+        throw new Error('Sem dados para estação');
       }
 
       this.manager.updateSourceStatus('inmet_estacao', 'online', latencia);
@@ -251,17 +251,17 @@ export class ClimaService {
       };
 
       this.cache.set(cacheKey, result, 1800);
-      console.log(`[Clima] Estacao ${codigoEstacao} OK em ${latencia}ms`);
+      console.log(`[Clima] Estação ${codigoEstacao} OK em ${latencia}ms`);
       return result;
     } catch (error) {
       const latencia = Date.now() - startTime;
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       this.manager.updateSourceStatus('inmet_estacao', 'offline', latencia, msg);
-      console.warn(`[Clima] Erro estacao ${codigoEstacao}: ${msg}. Usando fallback.`);
+      console.warn(`[Clima] Erro estação ${codigoEstacao}: ${msg}. Usando fallback.`);
 
       const fallback: EstacaoDados = {
         codigo: codigoEstacao,
-        nome: `Estacao ${codigoEstacao}`,
+        nome: `Estação ${codigoEstacao}`,
         uf: '',
         ...FALLBACK_ESTACAO,
       };
@@ -307,7 +307,7 @@ export class ClimaService {
       const latencia = Date.now() - startTime;
 
       if (!response.data?.properties?.parameter) {
-        throw new Error('Resposta invalida da NASA POWER');
+        throw new Error('Resposta inválida da NASA POWER');
       }
 
       this.manager.updateSourceStatus('nasa_power', 'online', latencia);
@@ -375,7 +375,7 @@ export class ClimaService {
     }
   }
 
-  // ── Public: Alertas por Regiao ───────────────────────────
+  // ── Public: Alertas por Região ───────────────────────────
 
   async getAlertasRegiao(estado: string): Promise<AlertaClima[]> {
     const cacheKey = `clima_alertas_${estado}`;
@@ -393,7 +393,7 @@ export class ClimaService {
       const latencia = Date.now() - startTime;
 
       if (!response.data || !Array.isArray(response.data)) {
-        throw new Error('Resposta invalida');
+        throw new Error('Resposta inválida');
       }
 
       // Filter for the requested state if the data supports it
@@ -405,7 +405,7 @@ export class ClimaService {
         .slice(0, 10)
         .map((a: Record<string, unknown>) => ({
           estado: (a.estado as string) || estado,
-          tipo: (a.descricao as string) || 'Alerta meteorologico',
+          tipo: (a.descricao as string) || 'Alerta meteorológico',
           severidade: this.mapSeveridade(a.aviso as string),
           descricao: (a.descricao as string) || '',
           dataInicio: (a.data_inicio as string) || new Date().toISOString(),

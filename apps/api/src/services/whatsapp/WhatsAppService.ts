@@ -68,7 +68,7 @@ export class WhatsAppService {
   constructor() {
     this.config = readConfig()
     if (!this.config) {
-      console.warn('[WhatsApp] Credenciais Meta nao configuradas — webhook aceita verify mas send esta desabilitado')
+      console.warn('[WhatsApp] Credenciais Meta não configuradas — webhook aceita verify mas send está desabilitado')
     } else {
       console.log(`[WhatsApp] Inicializado: phoneNumberId=${this.config.phoneNumberId} apiVersion=${this.config.apiVersion}`)
     }
@@ -88,7 +88,7 @@ export class WhatsAppService {
   }
 
   private baseUrl(): string {
-    if (!this.config) throw new Error('WhatsApp nao configurado')
+    if (!this.config) throw new Error('WhatsApp não configurado')
     return `https://graph.facebook.com/${this.config.apiVersion}`
   }
 
@@ -168,7 +168,7 @@ export class WhatsAppService {
   // ── Send: text ──────────────────────────────────────────
 
   async sendText(to: string, body: string, previewUrl: boolean = false): Promise<{ messageId: string }> {
-    if (!this.config) throw new Error('WhatsApp nao configurado')
+    if (!this.config) throw new Error('WhatsApp não configurado')
     const url = `${this.baseUrl()}/${this.config.phoneNumberId}/messages`
     const payload = {
       messaging_product: 'whatsapp',
@@ -214,7 +214,7 @@ export class WhatsAppService {
   // ── Send: audio via uploaded media ──────────────────────
 
   async uploadAudio(audioBuffer: Buffer, mimeType: string = 'audio/ogg'): Promise<string> {
-    if (!this.config) throw new Error('WhatsApp nao configurado')
+    if (!this.config) throw new Error('WhatsApp não configurado')
     const url = `${this.baseUrl()}/${this.config.phoneNumberId}/media`
 
     const fd = new FormData()
@@ -236,7 +236,7 @@ export class WhatsAppService {
   }
 
   async sendAudio(to: string, audioBuffer: Buffer, mimeType: string = 'audio/ogg'): Promise<{ messageId: string; mediaId: string }> {
-    if (!this.config) throw new Error('WhatsApp nao configurado')
+    if (!this.config) throw new Error('WhatsApp não configurado')
     const mediaId = await this.uploadAudio(audioBuffer, mimeType)
 
     const url = `${this.baseUrl()}/${this.config.phoneNumberId}/messages`
@@ -268,7 +268,7 @@ export class WhatsAppService {
     body: string,
     buttons: Array<{ id: string; title: string }>,
   ): Promise<{ messageId: string }> {
-    if (!this.config) throw new Error('WhatsApp nao configurado')
+    if (!this.config) throw new Error('WhatsApp não configurado')
     const url = `${this.baseUrl()}/${this.config.phoneNumberId}/messages`
 
     const payload = {
@@ -305,7 +305,7 @@ export class WhatsAppService {
   // ── Download inbound media ──────────────────────────────
 
   async downloadMedia(mediaId: string): Promise<{ buffer: Buffer; mimeType: string }> {
-    if (!this.config) throw new Error('WhatsApp nao configurado')
+    if (!this.config) throw new Error('WhatsApp não configurado')
     // 1. Resolve media URL
     const infoUrl = `${this.baseUrl()}/${mediaId}`
     const infoRes = await fetch(infoUrl, {

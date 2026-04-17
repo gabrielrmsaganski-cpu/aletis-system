@@ -1,3 +1,12 @@
+/**
+ * Header (Barra Superior)
+ *
+ * Barra superior global do sistema ALETIS com ticker de cotacoes
+ * (soja, milho, boi, cafe, dolar, Selic) consumido de
+ * /api/mercado/precos e /api/mercado/indicadores, campo de busca,
+ * toggle de tema claro/escuro, notificacoes e menu do usuario
+ * (perfil, configuracoes, sair).
+ */
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -25,8 +34,8 @@ const FALLBACK_TICKER: TickerItem[] = [
   { label: 'Soja', value: 'R$128,50', change: '+1.2%', positive: true },
   { label: 'Milho', value: 'R$58,20', change: '-0.8%', positive: false },
   { label: 'Boi', value: 'R$295,00', change: '+0.5%', positive: true },
-  { label: 'Cafe', value: 'R$1.420', change: '+2.1%', positive: true },
-  { label: 'Dolar', value: 'R$5,78', change: '-0.3%', positive: false },
+  { label: 'Café', value: 'R$1.420', change: '+2.1%', positive: true },
+  { label: 'Dólar', value: 'R$5,78', change: '-0.3%', positive: false },
   { label: 'Selic', value: '14,75%', change: '', positive: true },
 ]
 
@@ -60,7 +69,7 @@ function useTickerData(): TickerItem[] {
         const selic = indRes.data.find((i: any) => i.sigla === 'SELIC' || i.nome?.includes('Selic'))
         if (dolar) {
           const ch = dolar.variacao ?? 0
-          result.push({ label: 'Dolar', value: `R$${dolar.valor.toFixed(2).replace('.', ',')}`, change: ch ? `${ch >= 0 ? '+' : ''}${ch.toFixed(1)}%` : '', positive: ch >= 0 })
+          result.push({ label: 'Dólar', value: `R$${dolar.valor.toFixed(2).replace('.', ',')}`, change: ch ? `${ch >= 0 ? '+' : ''}${ch.toFixed(1)}%` : '', positive: ch >= 0 })
         }
         if (selic) {
           result.push({ label: 'Selic', value: `${selic.valor.toFixed(2).replace('.', ',')}%`, change: '', positive: true })
@@ -155,7 +164,7 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
       {/* Market ticker bar */}
       <div className="bg-aletis-bege dark:bg-aletis-grafite-escuro border-b border-aletis-borda dark:border-white/10 overflow-hidden">
         <div className="ticker-wrapper h-8 flex items-center">
-          <div className="ticker-content" aria-label="Cotacoes do mercado">
+          <div className="ticker-content" aria-label="Cotações do mercado">
             {/* Render twice for seamless loop */}
             {[...tickerData, ...tickerData].map((item, idx) => (
               <TickerBadge key={`${item.label}-${idx}`} item={item} />
@@ -209,14 +218,14 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
           {/* Notifications */}
           <button
             className="relative p-2 rounded-lg text-aletis-grafite-medio dark:text-white/60 hover:bg-aletis-bege dark:hover:bg-white/10 transition-colors"
-            aria-label="Notificacoes"
-            title="Notificacoes"
+            aria-label="Notificações"
+            title="Notificações"
           >
             <Bell size={20} />
             {/* Red badge dot */}
             <span
               className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-alerta ring-2 ring-white dark:ring-aletis-grafite-escuro"
-              aria-label="Novas notificacoes"
+              aria-label="Novas notificações"
             />
           </button>
 
@@ -240,7 +249,7 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
               className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-aletis-bege dark:hover:bg-white/10 transition-colors"
               aria-expanded={userMenuOpen}
               aria-haspopup="true"
-              aria-label="Menu do usuario"
+              aria-label="Menu do usuário"
             >
               <div className="w-8 h-8 rounded-full bg-aletis-verde/10 dark:bg-aletis-verde/30 border border-aletis-verde/20 flex items-center justify-center">
                 <span className="text-aletis-verde dark:text-white text-xs font-semibold">
@@ -276,7 +285,7 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
                     Christian Kohler
                   </p>
                   <p className="text-xs text-aletis-grafite-claro dark:text-white/50">
-                    Consultor Senior
+                    Consultor Sênior
                   </p>
                 </div>
                 <button
@@ -293,7 +302,7 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
                   role="menuitem"
                 >
                   <Settings size={16} />
-                  Configuracoes
+                  Configurações
                 </button>
                 <div className="border-t border-aletis-borda dark:border-white/10 mt-1 pt-1">
                   <button

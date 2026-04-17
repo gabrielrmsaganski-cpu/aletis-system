@@ -97,7 +97,7 @@ function greeting(): string {
 }
 
 function parseValorBRL(texto: string): number | null {
-  // Handles: "R$ 1.250.000,00", "1.2 mi", "1,5 milhoes", "500 mil", "800000"
+  // Handles: "R$ 1.250.000,00", "1.2 mi", "1,5 milhões", "500 mil", "800000"
   const t = norm(texto).replace(/r\$/g, '').trim()
 
   // With a suffix (mi / milh / mil), the prefix number is a small magnitude,
@@ -113,7 +113,7 @@ function parseValorBRL(texto: string): number | null {
       normalized = cleaned.replace(',', '.')
     } else if (dots === 1 && commas === 0) {
       // "1.2" in pt-BR could be thousand separator, but with a "mi/mil" suffix
-      // the value is small enough that it's clearly decimal (e.g. "1.2 milhao")
+      // the value is small enough that it's clearly decimal (e.g. "1.2 milhão")
       normalized = cleaned
     } else {
       // "1.250,00" or "1,250.00" etc.: strip dots, normalize comma
@@ -186,7 +186,7 @@ function resumoCurto(s: string, max: number = 900): string {
   if (clean.length <= max) return clean
   const cut = clean.slice(0, max)
   const lastDot = cut.lastIndexOf('. ')
-  return (lastDot > max * 0.6 ? cut.slice(0, lastDot + 1) : cut) + '\n\n(Posso detalhar qualquer ponto - e so pedir.)'
+  return (lastDot > max * 0.6 ? cut.slice(0, lastDot + 1) : cut) + '\n\n(Posso detalhar qualquer ponto — é só pedir.)'
 }
 
 // ── Intent classifier (WhatsApp-specific) ────────────────────
@@ -432,18 +432,18 @@ export class WhatsAppBrain {
     if (session.etapa === 'coletando_nome' && intent.tipo === 'apresenta_nome') {
       session.lead.nome = intent.nome
       session.etapa = 'coletando_cidade'
-      return { reply: `Prazer, ${intent.nome.split(' ')[0]}. De qual cidade e estado voce fala comigo? (ex: Toledo - PR)` }
+      return { reply: `Prazer, ${intent.nome.split(' ')[0]}. De qual cidade e estado você fala comigo? (ex: Toledo - PR)` }
     }
     if (session.etapa === 'coletando_cidade' && intent.tipo === 'apresenta_cidade') {
       session.lead.cidade = intent.cidade
       if (intent.uf) session.lead.uf = intent.uf
       session.etapa = 'coletando_credor'
-      return { reply: `Anotado, ${intent.cidade}${intent.uf ? ' - ' + intent.uf : ''}. Agora me conta: com qual banco ou credor a divida esta hoje? (Banco do Brasil, Sicredi, Bradesco, ou outro)` }
+      return { reply: `Anotado, ${intent.cidade}${intent.uf ? ' - ' + intent.uf : ''}. Agora me conta: com qual banco ou credor a dívida está hoje? (Banco do Brasil, Sicredi, Bradesco, ou outro)` }
     }
     if (session.etapa === 'coletando_credor' && intent.tipo === 'apresenta_credor') {
       session.lead.credor = intent.credor
       session.etapa = 'coletando_valor'
-      return { reply: `Ok, ${intent.credor}. E qual o valor aproximado da divida total? (pode ser uma estimativa - ex: 500 mil, 1.2 milhao)` }
+      return { reply: `Ok, ${intent.credor}. E qual o valor aproximado da dívida total? (pode ser uma estimativa - ex: 500 mil, 1.2 milhão)` }
     }
     if (session.etapa === 'coletando_valor' && intent.tipo === 'apresenta_valor') {
       session.lead.valorDivida = intent.valor
@@ -454,13 +454,13 @@ export class WhatsAppBrain {
         session.etapa = 'aguardando_humano'
         session.tagsDeEscalada.push('valor_alto')
         return {
-          reply: `Entendi. Com ${fmt} em ${session.lead.credor}, o caso merece analise tecnica detalhada. Vou avisar nosso consultor principal, ${HANDOFF_CONTATOS.consultorPrincipal}, que fala diretamente com voce em breve. Enquanto isso: voce ja recebeu alguma notificacao judicial ou extrajudicial sobre essa divida?`,
+          reply: `Entendi. Com ${fmt} em ${session.lead.credor}, o caso merece análise técnica detalhada. Vou avisar nosso consultor principal, ${HANDOFF_CONTATOS.consultorPrincipal}, que fala diretamente com você em breve. Enquanto isso: você já recebeu alguma notificação judicial ou extrajudicial sobre essa dívida?`,
           escalated: true,
           toolsUsed: ['qualificacao', 'escalada'],
         }
       }
       return {
-        reply: `Perfeito. Com ${fmt}, consigo te passar um panorama inicial aqui mesmo. A ALETIS trabalha com reestruturacao de divida rural usando base normativa (MCR, Plano Safra, Resolucao 4966) e jurisprudencia do STJ (sumula 603, juros abusivos, capitalizacao).\n\nPosso te explicar as estrategias possiveis para o seu caso, ou voce prefere ja agendar uma conversa com nosso consultor?`,
+        reply: `Perfeito. Com ${fmt}, consigo te passar um panorama inicial aqui mesmo. A ALETIS trabalha com reestruturação de dívida rural usando base normativa (MCR, Plano Safra, Resolução 4966) e jurisprudência do STJ (súmula 603, juros abusivos, capitalização).\n\nPosso te explicar as estratégias possíveis para o seu caso, ou você prefere já agendar uma conversa com nosso consultor?`,
         toolsUsed: ['qualificacao'],
       }
     }
@@ -471,17 +471,17 @@ export class WhatsAppBrain {
         session.etapa = 'coletando_nome'
         const nomeSugerido = session.nomeContato ? ` ${session.nomeContato.split(' ')[0]}` : ''
         return {
-          reply: `${greeting()}${nomeSugerido}! Aqui e a Alix, assistente virtual da ALETIS - consultoria especializada em reestruturacao de divida rural.\n\nPra te ajudar melhor, como posso te chamar?`,
+          reply: `${greeting()}${nomeSugerido}! Aqui é a Alix, assistente virtual da ALETIS — consultoria especializada em reestruturação de dívida rural.\n\nPra te ajudar melhor, como posso te chamar?`,
         }
       }
-      return { reply: `${greeting()}${session.lead.nome ? ', ' + session.lead.nome.split(' ')[0] : ''}! Bom ter voce de volta. Como posso ajudar hoje?` }
+      return { reply: `${greeting()}${session.lead.nome ? ', ' + session.lead.nome.split(' ')[0] : ''}! Bom ter você de volta. Como posso ajudar hoje?` }
     }
 
     if (intent.tipo === 'despedida') {
-      return { reply: 'Tchau! Quando precisar, e so mandar mensagem. ALETIS esta aqui.' }
+      return { reply: 'Tchau! Quando precisar, é só mandar mensagem. ALETIS está aqui.' }
     }
     if (intent.tipo === 'agradecimento') {
-      return { reply: 'Imagina, estou aqui pra isso. Alguma outra duvida?' }
+      return { reply: 'Imagina, estou aqui pra isso. Alguma outra dúvida?' }
     }
 
     // 5. Business/market/legal questions — delegate to ALIX
@@ -497,7 +497,7 @@ export class WhatsAppBrain {
         }
       } catch (err) {
         return {
-          reply: 'Nao consegui consultar nossas fontes agora. Pode tentar de novo ou reformular? Se for urgente, digita "falar com consultor" que te encaminho para um humano.',
+          reply: 'Não consegui consultar nossas fontes agora. Pode tentar de novo ou reformular? Se for urgente, digita "falar com consultor" que te encaminho para um humano.',
         }
       }
     }
@@ -508,16 +508,16 @@ export class WhatsAppBrain {
 
     // 6. Stage-specific re-prompts (when user drifts from capture flow)
     if (session.etapa === 'coletando_nome') {
-      return { reply: 'Pra continuar, preciso saber como te chamar. Qual seu nome?' }
+      return { reply: 'Pra continuar, preciso saber como te chamar. Qual é o seu nome?' }
     }
     if (session.etapa === 'coletando_cidade') {
-      return { reply: 'Qual cidade e estado voce esta? (ex: Cascavel - PR)' }
+      return { reply: 'Qual cidade e estado você está? (ex: Cascavel - PR)' }
     }
     if (session.etapa === 'coletando_credor') {
-      return { reply: 'Com qual banco ou credor esta a divida? (Banco do Brasil, Sicredi, Bradesco, etc.)' }
+      return { reply: 'Com qual banco ou credor está a dívida? (Banco do Brasil, Sicredi, Bradesco, etc.)' }
     }
     if (session.etapa === 'coletando_valor') {
-      return { reply: 'Qual o valor aproximado da divida? Pode escrever como preferir (ex: 800 mil, 1.5 milhao).' }
+      return { reply: 'Qual o valor aproximado da dívida? Pode escrever como preferir (ex: 800 mil, 1.5 milhão).' }
     }
 
     // 7. Qualified — open-ended support
@@ -533,22 +533,22 @@ export class WhatsAppBrain {
       }
       if (session.etapa === 'novo') {
         session.etapa = 'coletando_nome'
-        return { reply: `${greeting()}! Aqui e a Alix, da ALETIS. Antes de continuar, como posso te chamar?` }
+        return { reply: `${greeting()}! Aqui é a Alix, da ALETIS. Antes de continuar, como posso te chamar?` }
       }
       return {
-        reply: `Estou aqui${session.lead.nome ? ', ' + session.lead.nome.split(' ')[0] : ''}. Posso te ajudar com:\n\n- Estrategias pra renegociar sua divida (${session.lead.credor || 'seu credor'})\n- Duvidas sobre Plano Safra 2025/26, PRONAF, PRONAMP\n- Questoes juridicas (sumulas STJ, MCR, juros abusivos)\n- Dados de mercado (dolar, soja, selic, clima)\n\nO que voce precisa agora?`,
+        reply: `Estou aqui${session.lead.nome ? ', ' + session.lead.nome.split(' ')[0] : ''}. Posso te ajudar com:\n\n- Estratégias pra renegociar sua dívida (${session.lead.credor || 'seu credor'})\n- Dúvidas sobre Plano Safra 2025/26, PRONAF, PRONAMP\n- Questões jurídicas (súmulas STJ, MCR, juros abusivos)\n- Dados de mercado (dólar, soja, selic, clima)\n\nO que você precisa agora?`,
       }
     }
 
     // 8. Already with human
     if (session.etapa === 'aguardando_humano') {
       return {
-        reply: `Recebi sua mensagem e ja esta na fila pro ${HANDOFF_CONTATOS.consultorPrincipal}. Se for algo novo e urgente, me diz que eu sinalizo. Caso contrario, a resposta humana chega em breve.`,
+        reply: `Recebi sua mensagem e já está na fila pro ${HANDOFF_CONTATOS.consultorPrincipal}. Se for algo novo e urgente, me diz que eu sinalizo. Caso contrário, a resposta humana chega em breve.`,
       }
     }
 
     // Default fallback
-    return { reply: 'Nao entendi completamente. Pode reformular? Ou digita "ajuda" pra eu te mostrar o que posso fazer.' }
+    return { reply: 'Não entendi completamente. Pode reformular? Ou digita "ajuda" pra eu te mostrar o que posso fazer.' }
   }
 
   // ── Response templates ──────────────────────────────────
@@ -556,34 +556,34 @@ export class WhatsAppBrain {
   private respostaSobreALETIS(session: WhatsAppSession): string {
     const nome = session.lead.nome ? session.lead.nome.split(' ')[0] : ''
     const cab = nome ? `${nome}, ` : ''
-    return `${cab}a ALETIS e uma consultoria tecnica especializada em reestruturacao de divida rural.
+    return `${cab}a ALETIS é uma consultoria técnica especializada em reestruturação de dívida rural.
 
 O que a gente faz:
-- Analise juridica e financeira do contrato de credito rural
-- Aplicacao de sumulas do STJ (603, 322, 288) contra juros abusivos e capitalizacao indevida
-- Estrategias de alongamento, prorrogacao e refinanciamento pelo Plano Safra (PRONAF, PRONAMP, empresarial)
-- Uso do PROAGRO para frustracao de safra elegivel
-- Classificacao contabil pela Resolucao 4966 (estagios ECL)
-- Negociacao direta com o banco com base tecnica, nao apenas comercial
+- Análise jurídica e financeira do contrato de crédito rural
+- Aplicação de súmulas do STJ (603, 322, 288) contra juros abusivos e capitalização indevida
+- Estratégias de alongamento, prorrogação e refinanciamento pelo Plano Safra (PRONAF, PRONAMP, empresarial)
+- Uso do PROAGRO para frustração de safra elegível
+- Classificação contábil pela Resolução 4966 (estágios ECL)
+- Negociação direta com o banco com base técnica, não apenas comercial
 
-Resultado tipico: reducao de 20% a 40% do valor total da divida, prazos estendidos, parcelas compativeis com o fluxo de caixa da propriedade.
+Resultado típico: redução de 20% a 40% do valor total da dívida, prazos estendidos, parcelas compatíveis com o fluxo de caixa da propriedade.
 
-Quer que eu ${session.etapa === 'novo' ? 'comece uma analise do seu caso' : 'continue a analise do seu caso'}?`
+Quer que eu ${session.etapa === 'novo' ? 'comece uma análise do seu caso' : 'continue a análise do seu caso'}?`
   }
 
   private respostaEmergencia(session: WhatsAppSession): string {
     const nome = session.lead.nome ? ', ' + session.lead.nome.split(' ')[0] : ''
     const motivo = session.lead.motivoUrgencia ? ` (${session.lead.motivoUrgencia})` : ''
-    return `Entendi${nome}. Situacao de urgencia judicial${motivo} precisa de atencao humana imediata.
+    return `Entendi${nome}. Situação de urgência judicial${motivo} precisa de atenção humana imediata.
 
-Vou acionar nosso consultor principal, ${HANDOFF_CONTATOS.consultorPrincipal}, agora. Ele entra em contato com voce o mais rapido possivel.
+Vou acionar nosso consultor principal, ${HANDOFF_CONTATOS.consultorPrincipal}, agora. Ele entra em contato com você o mais rápido possível.
 
 Enquanto isso, me responde aqui mesmo:
-1. Voce recebeu algum documento oficial? (mandado, citacao, intimacao)
+1. Você recebeu algum documento oficial? (mandado, citação, intimação)
 2. Qual a data que aparece no documento?
 3. Qual o banco/credor envolvido?
 
-Essas informacoes aceleram nossa resposta.`
+Essas informações aceleram nossa resposta.`
   }
 
   private respostaHandoff(session: WhatsAppSession): string {
@@ -593,7 +593,7 @@ Essas informacoes aceleram nossa resposta.`
 
 ${resumo}
 
-Ele recebe a notificacao e retorna por aqui mesmo ou pelo telefone. Se preferir, tambem pode contatar direto:
+Ele recebe a notificação e retorna por aqui mesmo ou pelo telefone. Se preferir, também pode contatar direto:
 - E-mail: ${HANDOFF_CONTATOS.email}${HANDOFF_CONTATOS.telefone ? `\n- Telefone: ${HANDOFF_CONTATOS.telefone}` : ''}
 
 Posso ajudar com mais alguma coisa enquanto isso?`
@@ -608,7 +608,7 @@ Posso ajudar com mais alguma coisa enquanto isso?`
       const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(lead.valorDivida)
       linhas.push(`Valor aprox.: ${fmt}`)
     }
-    if (lead.urgencia && lead.urgencia !== 'baixa') linhas.push(`Urgencia: ${lead.urgencia}${lead.motivoUrgencia ? ' - ' + lead.motivoUrgencia : ''}`)
+    if (lead.urgencia && lead.urgencia !== 'baixa') linhas.push(`Urgência: ${lead.urgencia}${lead.motivoUrgencia ? ' - ' + lead.motivoUrgencia : ''}`)
     if (linhas.length === 0) return 'Contato novo, ainda sem ficha completa.'
     return 'Resumo do lead:\n' + linhas.map((l) => `- ${l}`).join('\n')
   }
@@ -616,10 +616,10 @@ Posso ajudar com mais alguma coisa enquanto isso?`
   private maybeCtaAfter(session: WhatsAppSession): string {
     // After a market/legal answer, gently nudge lead capture if incomplete
     if (session.etapa === 'novo' || session.etapa === 'coletando_nome') {
-      return '\n\nA proposito, se voce quiser que eu analise seu caso especifico, me conta rapidinho seu nome pra eu te acompanhar.'
+      return '\n\nA propósito, se você quiser que eu analise seu caso específico, me conta rapidinho seu nome pra eu te acompanhar.'
     }
     if (!session.lead.valorDivida && (session.etapa === 'coletando_credor' || session.etapa === 'coletando_valor')) {
-      return '\n\nSeguindo nossa conversa - me passa o valor aproximado da divida que eu consigo ser mais especifica pro seu caso.'
+      return '\n\nSeguindo nossa conversa — me passa o valor aproximado da dívida que eu consigo ser mais específica pro seu caso.'
     }
     return ''
   }

@@ -33,9 +33,9 @@ const formatDate = (iso: string): string => {
 };
 
 const TIPO_LABELS: Record<string, string> = {
-  liquidacao: 'Liquidacao Antecipada',
-  renegociacao: 'Renegociacao de Divida',
-  memoria_calculo: 'Memoria de Calculo',
+  liquidacao: 'Liquidação Antecipada',
+  renegociacao: 'Renegociação de Dívida',
+  memoria_calculo: 'Memória de Cálculo',
   parcelamento: 'Parcelamento',
   acordo_judicial: 'Acordo Judicial',
 };
@@ -57,7 +57,7 @@ function buildHtml(p: PropostaData): string {
 
   const condicoesList = p.condicoes.length > 0
     ? p.condicoes.map(c => `<li>${c}</li>`).join('')
-    : '<li>Condicoes a serem definidas em comum acordo entre as partes.</li>';
+    : '<li>Condições a serem definidas em comum acordo entre as partes.</li>';
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -171,19 +171,19 @@ function buildHtml(p: PropostaData): string {
   <div class="subtitle">${tipoLabel}</div>
   <div class="meta">
     <span>Doc: ${p.id.toUpperCase()}</span>
-    <span>Emissao: ${formatDate(p.dataCriacao)}</span>
+    <span>Emissão: ${formatDate(p.dataCriacao)}</span>
     <span>Validade: ${formatDate(p.dataValidade)}</span>
   </div>
 </div>
 
 <div class="content">
   <div class="section">
-    <div class="section-title">Informacoes Gerais</div>
+    <div class="section-title">Informações Gerais</div>
     <div class="info-grid">
       <div class="info-item"><label>Cliente / Devedor</label><p>${p.clienteNome}</p></div>
-      <div class="info-item"><label>Credor / Instituicao</label><p>${p.credor}</p></div>
+      <div class="info-item"><label>Credor / Instituição</label><p>${p.credor}</p></div>
       <div class="info-item"><label>Tipo de Proposta</label><p>${tipoLabel}</p></div>
-      <div class="info-item"><label>Data de Emissao</label><p>${formatDate(p.dataCriacao)}</p></div>
+      <div class="info-item"><label>Data de Emissão</label><p>${formatDate(p.dataCriacao)}</p></div>
     </div>
   </div>
 
@@ -192,7 +192,7 @@ function buildHtml(p: PropostaData): string {
     <div class="values-box">
       <div class="value-card">
         <div class="amount divida">${formatBRL(p.valorDivida)}</div>
-        <div class="label">Valor da Divida</div>
+        <div class="label">Valor da Dívida</div>
       </div>
       <div class="value-card">
         <div class="amount proposta">${formatBRL(p.valorProposta)}</div>
@@ -209,26 +209,26 @@ function buildHtml(p: PropostaData): string {
     <div class="section-title">Detalhamento</div>
     <table>
       <thead>
-        <tr><th>Descricao</th><th class="right">Valor</th><th>Tipo</th><th>Data</th></tr>
+        <tr><th>Descrição</th><th class="right">Valor</th><th>Tipo</th><th>Data</th></tr>
       </thead>
       <tbody>${itensRows}</tbody>
     </table>
   </div>
 
   <div class="section condicoes">
-    <div class="section-title">Condicoes</div>
+    <div class="section-title">Condições</div>
     <ul>${condicoesList}</ul>
   </div>
 
   ${p.fundamentacao ? `
   <div class="section">
-    <div class="section-title">Fundamentacao</div>
+    <div class="section-title">Fundamentação</div>
     <div class="fundamentacao">${p.fundamentacao}</div>
   </div>` : ''}
 
   ${p.observacoes ? `
   <div class="section">
-    <div class="section-title">Observacoes</div>
+    <div class="section-title">Observações</div>
     <p style="font-size:11px; color:#6B7280;">${p.observacoes}</p>
   </div>` : ''}
 </div>
@@ -238,16 +238,16 @@ function buildHtml(p: PropostaData): string {
     <div class="sig-line">${p.clienteNome}<br/>Cliente / Devedor</div>
   </div>
   <div class="sig">
-    <div class="sig-line">${p.credor}<br/>Credor / Instituicao</div>
+    <div class="sig-line">${p.credor}<br/>Credor / Instituição</div>
   </div>
   <div class="sig">
-    <div class="sig-line">ALETIS Assessoria<br/>Consultor Responsavel</div>
+    <div class="sig-line">ALETIS Assessoria<br/>Consultor Responsável</div>
   </div>
 </div>
 
 <div class="confidential">
-  DOCUMENTO CONFIDENCIAL — Gerado pelo sistema ALETIS em ${new Date().toLocaleDateString('pt-BR')} as ${new Date().toLocaleTimeString('pt-BR')}.
-  Este documento e valido ate ${formatDate(p.dataValidade)}. Uso exclusivo das partes envolvidas.
+  DOCUMENTO CONFIDENCIAL — Gerado pelo sistema ALETIS em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}.
+  Este documento é válido até ${formatDate(p.dataValidade)}. Uso exclusivo das partes envolvidas.
 </div>
 
 </body>

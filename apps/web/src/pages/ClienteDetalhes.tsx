@@ -115,13 +115,13 @@ interface ClienteData {
 // ────────────────────────────────────────────────────────────
 const STAGE_CONFIG: Record<Estagio, { label: string; color: string }> = {
   lead: { label: 'Lead', color: '#6B7280' },
-  qualificacao: { label: 'Qualificacao', color: '#3B82F6' },
-  analise: { label: 'Analise', color: '#8B5CF6' },
+  qualificacao: { label: 'Qualificação', color: '#3B82F6' },
+  analise: { label: 'Análise', color: '#8B5CF6' },
   proposta: { label: 'Proposta', color: '#C9A84C' },
-  negociacao: { label: 'Negociacao', color: '#E67E22' },
+  negociacao: { label: 'Negociação', color: '#E67E22' },
   acordo: { label: 'Acordo', color: '#27AE60' },
   acompanhamento: { label: 'Acompanhamento', color: '#0F4C35' },
-  concluido: { label: 'Concluido', color: '#1B6B4A' },
+  concluido: { label: 'Concluído', color: '#1B6B4A' },
 }
 
 // ────────────────────────────────────────────────────────────
@@ -154,7 +154,7 @@ const ailtonData: ClienteData = {
     nome: 'Fazenda Santa Clara',
     area: '480 hectares',
     culturas: ['Soja', 'Milho safrinha', 'Trigo'],
-    condicao: 'Produtiva com restricoes hidricas pontuais na safrinha 2025',
+    condicao: 'Produtiva com restrições hídricas pontuais na safrinha 2025',
   },
   resumoFinanceiro: {
     totalDivida: 2_200_000,
@@ -166,7 +166,7 @@ const ailtonData: ClienteData = {
       id: 'div-01',
       credor: 'Sicoob',
       contrato: 'CRE-2022/04512',
-      modalidade: 'Custeio Agricola',
+      modalidade: 'Custeio Agrícola',
       valorOriginal: 850_000,
       valorAtual: 1_020_000,
       taxa: 'INPC + 5,5% a.a.',
@@ -195,10 +195,10 @@ const ailtonData: ClienteData = {
       id: 'div-03',
       credor: 'Banco do Brasil',
       contrato: 'BB-2021/78943',
-      modalidade: 'Comercializacao',
+      modalidade: 'Comercialização',
       valorOriginal: 320_000,
       valorAtual: 410_000,
-      taxa: '8,75% a.a. pre-fixada',
+      taxa: '8,75% a.a. pré-fixada',
       status: 'atrasada',
       historicoPagamentos: [
         { data: '20/07/2022', valor: 47_500, tipo: 'Parcela' },
@@ -208,7 +208,7 @@ const ailtonData: ClienteData = {
       id: 'div-04',
       credor: 'Fertipar',
       contrato: 'FERT-2024/00231',
-      modalidade: 'Credito Fornecedor (Insumos)',
+      modalidade: 'Crédito Fornecedor (Insumos)',
       valorOriginal: 180_000,
       valorAtual: 195_000,
       taxa: 'IPCA + 4,0% a.a.',
@@ -248,52 +248,52 @@ const ailtonData: ClienteData = {
       data: '12/01/2025',
       titulo: 'Primeiro contato realizado',
       descricao:
-        'Cliente fez contato via indicacao do Sicoob Toledo. Relata dificuldades em honrar parcelas desde a safrinha 2024.',
+        'Cliente fez contato via indicação do Sicoob Toledo. Relata dificuldades em honrar parcelas desde a safrinha 2024.',
       usuario: 'Christian Kohler',
     },
     {
       id: 'ev-02',
       tipo: 'documento_recebido',
       data: '20/01/2025',
-      titulo: 'Documentacao recebida',
+      titulo: 'Documentação recebida',
       descricao:
-        'Recebidos 5 contratos, extrato patrimonial, CCIR e declaracao de ITR. Pendente: balancete da cooperativa.',
+        'Recebidos 5 contratos, extrato patrimonial, CCIR e declaração de ITR. Pendente: balancete da cooperativa.',
       usuario: 'Ana Beatriz Lima',
     },
     {
       id: 'ev-03',
       tipo: 'reuniao',
       data: '05/02/2025',
-      titulo: 'Reuniao presencial em Toledo/PR',
+      titulo: 'Reunião presencial em Toledo/PR',
       descricao:
-        'Visita a Fazenda Santa Clara. Constatada boa infraestrutura, com silos proprios e mecanizacao completa. Area irrigada: 120ha.',
+        'Visita à Fazenda Santa Clara. Constatada boa infraestrutura, com silos próprios e mecanização completa. Área irrigada: 120ha.',
       usuario: 'Christian Kohler',
     },
     {
       id: 'ev-04',
       tipo: 'analise',
       data: '18/02/2025',
-      titulo: 'Analise financeira concluida',
+      titulo: 'Análise financeira concluída',
       descricao:
-        'Divida total apurada: R$ 2,2M. Capacidade de pagamento estimada: R$ 35K/mes em periodo de entressafra, R$ 90K/mes apos colheita.',
+        'Dívida total apurada: R$ 2,2M. Capacidade de pagamento estimada: R$ 35K/mês em período de entressafra, R$ 90K/mês após colheita.',
       usuario: 'Rafael Teixeira',
     },
     {
       id: 'ev-05',
       tipo: 'proposta_gerada',
       data: '10/03/2025',
-      titulo: 'Proposta de reestruturacao gerada',
+      titulo: 'Proposta de reestruturação gerada',
       descricao:
-        'Proposta contempla consolidacao das dividas Sicoob + BB com prazo de 8 anos, carencia de 12 meses e taxa renegociada a INPC + 3,8% a.a.',
+        'Proposta contempla consolidação das dívidas Sicoob + BB com prazo de 8 anos, carência de 12 meses e taxa renegociada a INPC + 3,8% a.a.',
       usuario: 'Christian Kohler',
     },
     {
       id: 'ev-06',
       tipo: 'reuniao',
       data: '25/03/2025',
-      titulo: 'Reuniao com gerente Sicoob',
+      titulo: 'Reunião com gerente Sicoob',
       descricao:
-        'Apresentacao da proposta ao gerente regional. Feedback positivo. Pendente: aprovacao do comite de credito.',
+        'Apresentação da proposta ao gerente regional. Feedback positivo. Pendente: aprovação do comitê de crédito.',
       usuario: 'Christian Kohler',
     },
     {
@@ -302,7 +302,7 @@ const ailtonData: ClienteData = {
       data: '02/04/2025',
       titulo: 'Pagamento parcial efetuado',
       descricao:
-        'Cliente efetuou pagamento de R$ 47.500 referente a parcela atrasada do contrato BB-2021/78943, demonstrando boa-fe na negociacao.',
+        'Cliente efetuou pagamento de R$ 47.500 referente a parcela atrasada do contrato BB-2021/78943, demonstrando boa-fé na negociação.',
       usuario: 'Ana Beatriz Lima',
     },
   ],
@@ -335,7 +335,7 @@ const genericData: ClienteData = {
       id: 'div-gen-01',
       credor: 'Banco X',
       contrato: 'CTR-001',
-      modalidade: 'Custeio Agricola',
+      modalidade: 'Custeio Agrícola',
       valorOriginal: 300_000,
       valorAtual: 350_000,
       taxa: '10% a.a.',
@@ -348,7 +348,7 @@ const genericData: ClienteData = {
       id: 'div-gen-02',
       credor: 'Fornecedor Y',
       contrato: 'CTR-002',
-      modalidade: 'Credito Fornecedor',
+      modalidade: 'Crédito Fornecedor',
       valorOriginal: 200_000,
       valorAtual: 150_000,
       taxa: '8% a.a.',
@@ -416,7 +416,7 @@ function HealthGauge({ value, size = 80 }: { value: number; size?: number }) {
         <span className="text-lg font-display font-bold" style={{ color }}>
           {value}
         </span>
-        <span className="text-[9px] font-body text-aletis-grafite-claro -mt-0.5">saude</span>
+        <span className="text-[9px] font-body text-aletis-grafite-claro -mt-0.5">saúde</span>
       </div>
     </div>
   )
@@ -508,8 +508,8 @@ function ChartTooltip({ active, payload, label }: any) {
 // Tab Definitions
 // ────────────────────────────────────────────────────────────
 const TABS: { id: TabId; label: string }[] = [
-  { id: 'visao-geral', label: 'Visao Geral' },
-  { id: 'dividas', label: 'Dividas' },
+  { id: 'visao-geral', label: 'Visão Geral' },
+  { id: 'dividas', label: 'Dívidas' },
   { id: 'propostas', label: 'Propostas' },
   { id: 'documentos', label: 'Documentos' },
   { id: 'fluxo-caixa', label: 'Fluxo de Caixa' },
@@ -548,7 +548,7 @@ export default function ClienteDetalhes() {
             email: data.email || '',
             estagio: data.estagio || 'lead',
             saudeFinanceira: data.saudeFinanceira ?? 50,
-            consultor: data.consultor || 'Nao atribuido',
+            consultor: data.consultor || 'Não atribuído',
             propriedade: data.propriedade || { nome: data.nome, area: `${data.areaTotalHa || 0} ha`, culturas: data.culturas || [], condicao: 'Boa' },
             resumoFinanceiro: data.resumoFinanceiro || {
               totalDivida: data.valorTotalDivida || 0,
@@ -582,7 +582,7 @@ export default function ClienteDetalhes() {
   const handleEnviarWhatsApp = useCallback(() => {
     const phone = cliente.telefone.replace(/\D/g, '')
     const fullPhone = phone.startsWith('55') ? phone : `55${phone}`
-    const msg = encodeURIComponent(`Ola ${cliente.nome}, aqui e a ALETIS Assessoria. Gostaríamos de conversar sobre sua reestruturacao financeira.`)
+    const msg = encodeURIComponent(`Olá ${cliente.nome}, aqui é a ALETIS Assessoria. Gostaríamos de conversar sobre sua reestruturação financeira.`)
     window.open(`https://wa.me/${fullPhone}?text=${msg}`, '_blank')
     showToast(`WhatsApp aberto para ${cliente.nome}`, 'success')
   }, [cliente, showToast])
@@ -799,7 +799,7 @@ export default function ClienteDetalhes() {
                 </div>
                 <div>
                   <p className="text-[11px] font-body text-aletis-grafite-claro uppercase tracking-wider">
-                    Area
+                    Área
                   </p>
                   <p className="text-sm font-body font-medium text-aletis-grafite-escuro">
                     {cliente.propriedade.area}
@@ -823,7 +823,7 @@ export default function ClienteDetalhes() {
                 </div>
                 <div>
                   <p className="text-[11px] font-body text-aletis-grafite-claro uppercase tracking-wider">
-                    Condicao
+                    Condição
                   </p>
                   <p className="text-sm font-body text-aletis-grafite-medio leading-relaxed">
                     {cliente.propriedade.condicao}
@@ -847,7 +847,7 @@ export default function ClienteDetalhes() {
                   <div className="flex items-center gap-2">
                     <TrendingDown className="w-4 h-4 text-alerta" />
                     <span className="text-sm font-body text-aletis-grafite-medio">
-                      Total Divida
+                      Total Dívida
                     </span>
                   </div>
                   <span className="text-lg font-display font-bold text-alerta">
@@ -885,7 +885,7 @@ export default function ClienteDetalhes() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h3 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
-                  Evolucao da Divida
+                  Evolução da Dívida
                 </h3>
                 <p className="text-xs font-body text-aletis-grafite-claro mt-0.5">
                   Saldo devedor acumulado ao longo do tempo
@@ -1025,7 +1025,7 @@ export default function ClienteDetalhes() {
                               <div className="mb-2">
                                 <h4 className="text-sm font-body font-semibold text-aletis-grafite-escuro flex items-center gap-2">
                                   <CreditCard className="w-4 h-4 text-aletis-verde" />
-                                  Historico de Pagamentos
+                                  Histórico de Pagamentos
                                 </h4>
                               </div>
                               {d.historicoPagamentos.length > 0 ? (
@@ -1084,7 +1084,7 @@ export default function ClienteDetalhes() {
               </div>
               <div>
                 <p className="text-[11px] font-body text-aletis-grafite-claro uppercase tracking-wider">
-                  Acrescimo
+                  Acréscimo
                 </p>
                 <p className="text-lg font-display font-bold text-ambar">
                   +
@@ -1112,11 +1112,11 @@ export default function ClienteDetalhes() {
             <FileText className="w-8 h-8 text-aletis-dourado" />
           </div>
           <h3 className="text-lg font-display font-semibold text-aletis-grafite-escuro mb-2">
-            Propostas de Reestruturacao
+            Propostas de Reestruturação
           </h3>
           <p className="text-sm font-body text-aletis-grafite-claro max-w-md mx-auto">
-            As propostas geradas para este cliente serao exibidas aqui. Clique em "Gerar Proposta"
-            para iniciar uma nova analise de reestruturacao.
+            As propostas geradas para este cliente serão exibidas aqui. Clique em "Gerar Proposta"
+            para iniciar uma nova análise de reestruturação.
           </p>
           <button onClick={handleGerarProposta} className="btn-gold mt-6 inline-flex items-center gap-2 text-sm">
             <Send className="w-4 h-4" />
@@ -1137,8 +1137,8 @@ export default function ClienteDetalhes() {
             Documentos do Cliente
           </h3>
           <p className="text-sm font-body text-aletis-grafite-claro max-w-md mx-auto">
-            Contratos, extratos, CCIR, ITR e demais documentos do cliente serao gerenciados nesta
-            area.
+            Contratos, extratos, CCIR, ITR e demais documentos do cliente serão gerenciados nesta
+            área.
           </p>
         </div>
       )}
@@ -1155,7 +1155,7 @@ export default function ClienteDetalhes() {
             Fluxo de Caixa
           </h3>
           <p className="text-sm font-body text-aletis-grafite-claro max-w-md mx-auto">
-            Projecao de receitas da safra versus obrigacoes financeiras. Em desenvolvimento.
+            Projeção de receitas da safra versus obrigações financeiras. Em desenvolvimento.
           </p>
         </div>
       )}
@@ -1236,7 +1236,7 @@ export default function ClienteDetalhes() {
                 <input type="email" value={editForm.email} onChange={e => setEditForm(prev => ({ ...prev, email: e.target.value }))} className="input-field py-2.5 text-sm" />
               </div>
               <div>
-                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Estagio</label>
+                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Estágio</label>
                 <select value={editForm.estagio} onChange={e => setEditForm(prev => ({ ...prev, estagio: e.target.value }))} className="input-field py-2.5 text-sm appearance-none cursor-pointer">
                   {Object.entries(STAGE_CONFIG).map(([key, cfg]) => (
                     <option key={key} value={key}>{cfg.label}</option>

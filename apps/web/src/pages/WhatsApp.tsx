@@ -1,3 +1,13 @@
+/**
+ * WhatsApp (Central de Mensagens)
+ *
+ * Interface de conversas com clientes integrada ao WhatsApp.
+ * Contem lista de contatos, painel de chat com bolhas (texto,
+ * audio com playback real), indicadores de leitura, rotulo
+ * especial para mensagens da IA Alix e acoes de chamada/video.
+ * Dados mockados (contacts + chatData) substituidos quando o
+ * backend WhatsApp Business estiver conectado.
+ */
 import React, { useState, useRef, useEffect } from 'react'
 import {
   Search,
@@ -79,7 +89,7 @@ function AudioBubble({ url, fallbackDuration }: { url?: string; fallbackDuration
         onClick={toggle}
         disabled={!url}
         className="w-9 h-9 rounded-full bg-aletis-verde flex items-center justify-center flex-shrink-0 hover:bg-aletis-verde-escuro transition-colors disabled:opacity-50"
-        aria-label={playing ? 'Pausar audio' : 'Reproduzir audio'}
+        aria-label={playing ? 'Pausar áudio' : 'Reproduzir áudio'}
       >
         {playing ? <Pause className="w-4 h-4 text-white" /> : <Play className="w-4 h-4 text-white ml-0.5" />}
       </button>
@@ -129,7 +139,7 @@ const contacts: Contact[] = [
   {
     id: 7,
     name: 'Ricardo Silva',
-    lastMessage: '\uD83C\uDFA4 Alix enviou um audio',
+    lastMessage: '\uD83C\uDFA4 Alix enviou um áudio',
     time: 'agora',
     unread: 1,
     avatar: 'RS',
@@ -147,7 +157,7 @@ const contacts: Contact[] = [
   {
     id: 2,
     name: 'Paulo Luciano',
-    lastMessage: 'O boleto do sinal ja foi pago',
+    lastMessage: 'O boleto do sinal já foi pago',
     time: '11:45',
     unread: 0,
     avatar: 'PL',
@@ -156,7 +166,7 @@ const contacts: Contact[] = [
   {
     id: 3,
     name: 'Maria Santos',
-    lastMessage: 'Quando posso agendar a reuniao?',
+    lastMessage: 'Quando posso agendar a reunião?',
     time: '09:20',
     unread: 1,
     avatar: 'MS',
@@ -164,8 +174,8 @@ const contacts: Contact[] = [
   },
   {
     id: 4,
-    name: 'Joao Silva',
-    lastMessage: 'Vim por indicacao do Paulo...',
+    name: 'João Silva',
+    lastMessage: 'Vim por indicação do Paulo...',
     time: 'Ontem',
     unread: 3,
     avatar: 'JS',
@@ -199,21 +209,21 @@ const chatData: Record<number, ChatMessage[]> = {
     {
       id: 1,
       from: 'consultant',
-      text: 'Boa tarde Ailton! Tudo bem? Acabamos de finalizar a analise completa do seu caso junto ao Sicoob.',
+      text: 'Boa tarde Ailton! Tudo bem? Acabamos de finalizar a análise completa do seu caso junto ao Sicoob.',
       time: '13:15',
       read: true,
     },
     {
       id: 2,
       from: 'consultant',
-      text: 'Preparamos uma proposta de dacao em pagamento no valor de R$ 2.049.802,53. Vou enviar o documento completo aqui.',
+      text: 'Preparamos uma proposta de dação em pagamento no valor de R$ 2.049.802,53. Vou enviar o documento completo aqui.',
       time: '13:16',
       read: true,
     },
     {
       id: 3,
       from: 'consultant',
-      text: 'A proposta inclui a memoria de calculo detalhada e os termos da negociacao. Qualquer duvida, estou a disposicao.',
+      text: 'A proposta inclui a memória de cálculo detalhada e os termos da negociação. Qualquer dúvida, estou à disposição.',
       time: '13:18',
       read: true,
     },
@@ -227,28 +237,28 @@ const chatData: Record<number, ChatMessage[]> = {
     {
       id: 5,
       from: 'client',
-      text: 'Recebi o documento. Estou analisando com calma aqui. Mas ja quero dizer que achei os valores muito justos.',
+      text: 'Recebi o documento. Estou analisando com calma aqui. Mas já quero dizer que achei os valores muito justos.',
       time: '14:10',
       read: true,
     },
     {
       id: 6,
       from: 'consultant',
-      text: 'Fico feliz em ouvir isso! Trabalhamos bastante para chegar no melhor cenario possivel pra voce. O recalculo removeu os juros compostos indevidos e aplicou a taxa correta do contrato original.',
+      text: 'Fico feliz em ouvir isso! Trabalhamos bastante para chegar no melhor cenário possível pra você. O recálculo removeu os juros compostos indevidos e aplicou a taxa correta do contrato original.',
       time: '14:15',
       read: true,
     },
     {
       id: 7,
       from: 'client',
-      text: 'Boa tarde Christian, recebi a proposta e estou revisando com meu contador. A principio concordo com os termos.',
+      text: 'Boa tarde Christian, recebi a proposta e estou revisando com meu contador. A princípio concordo com os termos.',
       time: '14:30',
       read: false,
     },
     {
       id: 8,
       from: 'client',
-      text: 'Uma pergunta: o prazo para aceite e de quantos dias?',
+      text: 'Uma pergunta: o prazo para aceite é de quantos dias?',
       time: '14:32',
       read: false,
     },
@@ -264,42 +274,42 @@ const chatData: Record<number, ChatMessage[]> = {
     {
       id: 2,
       from: 'client',
-      text: 'Bom dia Christian! Otima noticia! Quanto tempo para ter resposta?',
+      text: 'Bom dia Christian! Ótima notícia! Quanto tempo para ter resposta?',
       time: '09:15',
       read: true,
     },
     {
       id: 3,
       from: 'consultant',
-      text: 'O prazo usual da Fertiflora e de 5 a 7 dias uteis. Mas vou acompanhar de perto e te dou retorno assim que tiver novidades.',
+      text: 'O prazo usual da Fertiflora é de 5 a 7 dias úteis. Mas vou acompanhar de perto e te dou retorno assim que tiver novidades.',
       time: '09:18',
       read: true,
     },
     {
       id: 4,
       from: 'client',
-      text: 'Perfeito. Enquanto isso, ja fiz o pagamento do sinal conforme combinado.',
+      text: 'Perfeito. Enquanto isso, já fiz o pagamento do sinal conforme combinado.',
       time: '11:30',
       read: true,
     },
     {
       id: 5,
       from: 'client',
-      text: 'O boleto do sinal ja foi pago',
+      text: 'O boleto do sinal já foi pago',
       time: '11:45',
       read: true,
     },
     {
       id: 6,
       from: 'consultant',
-      text: 'Excelente Paulo! Ja confirmei o recebimento aqui no sistema. Muito obrigado pela agilidade!',
+      text: 'Excelente Paulo! Já confirmei o recebimento aqui no sistema. Muito obrigado pela agilidade!',
       time: '11:50',
       read: true,
     },
     {
       id: 7,
       from: 'consultant',
-      text: 'O comprovante ja esta disponivel no seu portal do cliente tambem, caso precise acessar.',
+      text: 'O comprovante já está disponível no seu portal do cliente também, caso precise acessar.',
       time: '11:51',
       read: true,
     },
@@ -308,28 +318,28 @@ const chatData: Record<number, ChatMessage[]> = {
     {
       id: 1,
       from: 'client',
-      text: 'Boa tarde! Gostaria de saber como esta o andamento do meu processo.',
+      text: 'Boa tarde! Gostaria de saber como está o andamento do meu processo.',
       time: '08:30',
       read: true,
     },
     {
       id: 2,
       from: 'consultant',
-      text: 'Boa tarde Maria! Seu acordo com o Banco do Brasil foi formalizado com sucesso. As parcelas estao todas programadas.',
+      text: 'Boa tarde Maria! Seu acordo com o Banco do Brasil foi formalizado com sucesso. As parcelas estão todas programadas.',
       time: '08:45',
       read: true,
     },
     {
       id: 3,
       from: 'client',
-      text: 'Que bom! E sobre aquela reuniao que comentei semana passada?',
+      text: 'Que bom! E sobre aquela reunião que comentei semana passada?',
       time: '09:10',
       read: true,
     },
     {
       id: 4,
       from: 'client',
-      text: 'Quando posso agendar a reuniao?',
+      text: 'Quando posso agendar a reunião?',
       time: '09:20',
       read: false,
     },
@@ -338,28 +348,28 @@ const chatData: Record<number, ChatMessage[]> = {
     {
       id: 1,
       from: 'client',
-      text: 'Boa tarde! Meu nome e Joao Silva, sou produtor de soja em Uberaba/MG.',
+      text: 'Boa tarde! Meu nome é João Silva, sou produtor de soja em Uberaba/MG.',
       time: '16:00',
       read: true,
     },
     {
       id: 2,
       from: 'client',
-      text: 'Vim por indicacao do Paulo Luciano. Ele falou muito bem do trabalho de voces.',
+      text: 'Vim por indicação do Paulo Luciano. Ele falou muito bem do trabalho de vocês.',
       time: '16:01',
       read: false,
     },
     {
       id: 3,
       from: 'client',
-      text: 'Tenho uma divida com o Bradesco que esta me preocupando. Podem me ajudar?',
+      text: 'Tenho uma dívida com o Bradesco que está me preocupando. Podem me ajudar?',
       time: '16:02',
       read: false,
     },
     {
       id: 4,
       from: 'client',
-      text: 'O valor e de aproximadamente R$ 185 mil. Preciso renegociar urgente.',
+      text: 'O valor é de aproximadamente R$ 185 mil. Preciso renegociar urgente.',
       time: '16:05',
       read: false,
     },
@@ -368,7 +378,7 @@ const chatData: Record<number, ChatMessage[]> = {
     {
       id: 1,
       from: 'consultant',
-      text: 'Carlos, parabens! Seu acordo foi concluido com sucesso. Todas as 12 parcelas estao programadas.',
+      text: 'Carlos, parabéns! Seu acordo foi concluído com sucesso. Todas as 12 parcelas estão programadas.',
       time: '10:00',
       read: true,
     },
@@ -382,14 +392,14 @@ const chatData: Record<number, ChatMessage[]> = {
     {
       id: 3,
       from: 'client',
-      text: 'Voces foram excelentes. Vou indicar para outros produtores da regiao.',
+      text: 'Vocês foram excelentes. Vou indicar para outros produtores da região.',
       time: '10:31',
       read: true,
     },
     {
       id: 4,
       from: 'consultant',
-      text: 'Agradecemos muito a confianca Carlos! Conte sempre conosco. Qualquer necessidade futura e so entrar em contato.',
+      text: 'Agradecemos muito a confiança Carlos! Conte sempre conosco. Qualquer necessidade futura é só entrar em contato.',
       time: '10:35',
       read: true,
     },
@@ -398,7 +408,7 @@ const chatData: Record<number, ChatMessage[]> = {
     {
       id: 1,
       from: 'client',
-      text: 'Ola, boa tarde!',
+      text: 'Olá, boa tarde!',
       time: '14:00',
       read: true,
     },
@@ -414,7 +424,7 @@ const chatData: Record<number, ChatMessage[]> = {
     {
       id: 3,
       from: 'consultant',
-      text: 'Ola Ana! Recebi seu audio. Vou analisar o que voce descreveu e retorno em breve com mais informacoes sobre o processo.',
+      text: 'Olá Ana! Recebi seu áudio. Vou analisar o que você descreveu e retorno em breve com mais informações sobre o processo.',
       time: '14:20',
       read: true,
     },
@@ -431,14 +441,14 @@ const chatData: Record<number, ChatMessage[]> = {
       id: 2,
       from: 'consultant',
       senderLabel: 'Alix',
-      text: 'Boa tarde Ricardo! Aqui e a Alix, assistente da ALETIS. Pra te ajudar melhor, como posso te chamar?',
+      text: 'Boa tarde Ricardo! Aqui é a Alix, assistente da ALETIS. Pra te ajudar melhor, como posso te chamar?',
       time: '13:48',
       read: true,
     },
     {
       id: 3,
       from: 'client',
-      text: 'Ricardo Silva, de Cascavel PR. Tenho uma divida de 1.2 milhao no Banco do Brasil e to preocupado.',
+      text: 'Ricardo Silva, de Cascavel PR. Tenho uma dívida de 1.2 milhão no Banco do Brasil e tô preocupado.',
       time: '13:49',
       read: true,
     },
@@ -531,7 +541,7 @@ export default function WhatsApp() {
           WhatsApp
         </h1>
         <p className="text-aletis-grafite-claro font-body mt-1 text-sm">
-          Central de mensagens e comunicacao com clientes
+          Central de mensagens e comunicação com clientes
         </p>
       </header>
 
@@ -691,7 +701,7 @@ export default function WhatsApp() {
                       {currentContact.name}
                     </p>
                     <p className="text-xs font-body text-aletis-grafite-claro">
-                      {currentContact.online ? 'online' : 'visto por ultimo recentemente'}
+                      {currentContact.online ? 'online' : 'visto por último recentemente'}
                     </p>
                   </div>
 
@@ -823,7 +833,7 @@ export default function WhatsApp() {
                   ALETIS WhatsApp
                 </h2>
                 <p className="text-sm font-body text-center max-w-sm">
-                  Selecione uma conversa para iniciar a comunicacao com seus clientes.
+                  Selecione uma conversa para iniciar a comunicação com seus clientes.
                 </p>
               </div>
             )}

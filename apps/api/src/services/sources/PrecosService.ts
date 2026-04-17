@@ -1,5 +1,5 @@
 // ============================================================
-// ALETIS — Precos Service
+// ALETIS — Preços Service
 // Commodity prices: CEPEA/ESALQ scraping, B3, CONAB
 // ============================================================
 
@@ -53,7 +53,7 @@ const FALLBACK_COTACOES: Record<string, Omit<CotacaoCommodity, 'fonte'>> = {
     variacao: -0.72,
     data: '2026-04-15',
     moeda: 'BRL',
-    descricao: 'Indicador Soja CEPEA/ESALQ - Parana',
+    descricao: 'Indicador Soja CEPEA/ESALQ — Paraná',
   },
   milho: {
     commodity: 'milho',
@@ -62,7 +62,7 @@ const FALLBACK_COTACOES: Record<string, Omit<CotacaoCommodity, 'fonte'>> = {
     variacao: 1.15,
     data: '2026-04-15',
     moeda: 'BRL',
-    descricao: 'Indicador Milho CEPEA/ESALQ - Campinas',
+    descricao: 'Indicador Milho CEPEA/ESALQ — Campinas',
   },
   boi: {
     commodity: 'boi_gordo',
@@ -71,7 +71,7 @@ const FALLBACK_COTACOES: Record<string, Omit<CotacaoCommodity, 'fonte'>> = {
     variacao: 0.33,
     data: '2026-04-15',
     moeda: 'BRL',
-    descricao: 'Indicador Boi Gordo CEPEA/ESALQ - Sao Paulo',
+    descricao: 'Indicador Boi Gordo CEPEA/ESALQ — São Paulo',
   },
   cafe: {
     commodity: 'cafe_arabica',
@@ -80,7 +80,7 @@ const FALLBACK_COTACOES: Record<string, Omit<CotacaoCommodity, 'fonte'>> = {
     variacao: 2.18,
     data: '2026-04-15',
     moeda: 'BRL',
-    descricao: 'Indicador Cafe Arabica CEPEA/ESALQ',
+    descricao: 'Indicador Café Arábica CEPEA/ESALQ',
   },
   algodao: {
     commodity: 'algodao',
@@ -89,7 +89,7 @@ const FALLBACK_COTACOES: Record<string, Omit<CotacaoCommodity, 'fonte'>> = {
     variacao: -0.45,
     data: '2026-04-15',
     moeda: 'BRL',
-    descricao: 'Indicador Algodao CEPEA/ESALQ',
+    descricao: 'Indicador Algodão CEPEA/ESALQ',
   },
 };
 
@@ -97,10 +97,10 @@ const FALLBACK_SAFRA: PrevisaoSafra = {
   safra: '2025/2026',
   culturas: [
     { cultura: 'Soja', areaPlantada: 47200, producao: 167500, produtividade: 3548, variacaoProducao: 3.2 },
-    { cultura: 'Milho (1a safra)', areaPlantada: 4450, producao: 28500, produtividade: 6404, variacaoProducao: 1.8 },
-    { cultura: 'Milho (2a safra)', areaPlantada: 17800, producao: 98200, produtividade: 5517, variacaoProducao: 5.1 },
-    { cultura: 'Algodao', areaPlantada: 2050, producao: 3650, produtividade: 1780, variacaoProducao: 2.5 },
-    { cultura: 'Cafe (total)', areaPlantada: 2120, producao: 62800, produtividade: 29622, variacaoProducao: -8.3 },
+    { cultura: 'Milho (1ª safra)', areaPlantada: 4450, producao: 28500, produtividade: 6404, variacaoProducao: 1.8 },
+    { cultura: 'Milho (2ª safra)', areaPlantada: 17800, producao: 98200, produtividade: 5517, variacaoProducao: 5.1 },
+    { cultura: 'Algodão', areaPlantada: 2050, producao: 3650, produtividade: 1780, variacaoProducao: 2.5 },
+    { cultura: 'Café (total)', areaPlantada: 2120, producao: 62800, produtividade: 29622, variacaoProducao: -8.3 },
     { cultura: 'Trigo', areaPlantada: 3200, producao: 10500, produtividade: 3281, variacaoProducao: 6.7 },
     { cultura: 'Arroz', areaPlantada: 1680, producao: 11200, produtividade: 6666, variacaoProducao: 0.9 },
   ],
@@ -156,20 +156,20 @@ export class PrecosService {
 
   private async scrapeCEPEA(commodity: string): Promise<CotacaoCommodity> {
     const url = CEPEA_URLS[commodity];
-    if (!url) throw new Error(`Commodity ${commodity} nao suportada para scraping CEPEA`);
+    if (!url) throw new Error(`Commodity ${commodity} não suportada para scraping CEPEA`);
 
     const sourceName = `cepea_${commodity}`;
     const cacheKey = `precos_${commodity}`;
 
     const cached = this.cache.get<CotacaoCommodity>(cacheKey);
     if (cached) {
-      console.log(`[Precos] ${commodity} retornado do cache`);
+      console.log(`[Preços] ${commodity} retornado do cache`);
       return { ...cached, fonte: 'cache' };
     }
 
     const startTime = Date.now();
     try {
-      console.log(`[Precos] Scraping CEPEA ${commodity}: ${url}`);
+      console.log(`[Preços] Scraping CEPEA ${commodity}: ${url}`);
       const response = await this.httpScraper.get(url);
       const latencia = Date.now() - startTime;
 
@@ -231,7 +231,7 @@ export class PrecosService {
       }
 
       if (!preco || isNaN(preco)) {
-        throw new Error(`Nao foi possivel extrair preco de ${commodity}`);
+        throw new Error(`Não foi possível extrair preço de ${commodity}`);
       }
 
       this.manager.updateSourceStatus(sourceName, 'online', latencia);
@@ -249,13 +249,13 @@ export class PrecosService {
       };
 
       this.cache.set(cacheKey, result, 1800);
-      console.log(`[Precos] ${commodity} OK em ${latencia}ms: R$ ${preco}`);
+      console.log(`[Preços] ${commodity} OK em ${latencia}ms: R$ ${preco}`);
       return result;
     } catch (error) {
       const latencia = Date.now() - startTime;
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       this.manager.updateSourceStatus(sourceName, 'offline', latencia, msg);
-      console.warn(`[Precos] Erro CEPEA ${commodity}: ${msg}. Usando fallback.`);
+      console.warn(`[Preços] Erro CEPEA ${commodity}: ${msg}. Usando fallback.`);
 
       const fb = FALLBACK_COTACOES[commodity];
       if (!fb) {
@@ -327,7 +327,7 @@ export class PrecosService {
     const cacheKey = `precos_historico_${commodity}_${dias}`;
     const cached = this.cache.get<HistoricoCommodity>(cacheKey);
     if (cached) {
-      console.log(`[Precos] Historico ${commodity} retornado do cache`);
+      console.log(`[Preços] Histórico ${commodity} retornado do cache`);
       return { ...cached, fonte: 'cache' };
     }
 
@@ -372,13 +372,13 @@ export class PrecosService {
     const cacheKey = 'precos_safra_conab';
     const cached = this.cache.get<PrevisaoSafra>(cacheKey);
     if (cached) {
-      console.log('[Precos] Previsao safra retornada do cache');
+      console.log('[Preços] Previsão safra retornada do cache');
       return { ...cached, fonte: 'cache' };
     }
 
     const startTime = Date.now();
     try {
-      console.log('[Precos] Buscando previsao de safra CONAB');
+      console.log('[Preços] Buscando previsão de safra CONAB');
       // CONAB's API requires specific endpoints that may change
       // We attempt to fetch the latest crop survey data
       const response = await this.httpCONAB.get('/api/safras/graos', {
@@ -416,13 +416,13 @@ export class PrecosService {
       };
 
       this.cache.set(cacheKey, result, 86400);
-      console.log(`[Precos] Safra CONAB OK em ${latencia}ms: ${result.culturas.length} culturas`);
+      console.log(`[Preços] Safra CONAB OK em ${latencia}ms: ${result.culturas.length} culturas`);
       return result;
     } catch (error) {
       const latencia = Date.now() - startTime;
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       this.manager.updateSourceStatus('conab_safra', 'offline', latencia, msg);
-      console.warn(`[Precos] Erro CONAB: ${msg}. Usando fallback.`);
+      console.warn(`[Preços] Erro CONAB: ${msg}. Usando fallback.`);
 
       this.cache.set(cacheKey, FALLBACK_SAFRA, 300);
       return FALLBACK_SAFRA;

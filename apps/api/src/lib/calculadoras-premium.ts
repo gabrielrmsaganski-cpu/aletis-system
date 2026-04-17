@@ -1,12 +1,12 @@
 /**
  * ALETIS - Calculadoras Premium
  *
- * Motor matematico completo inspirado nas propostas reais:
- *  - PAULO LUCIANO x FERTIFLORA (recalculo CCB + plano pagamento semestral)
- *  - AILTON x SICOOB (descaracterizacao + dacao em pagamento + acordo tripartite)
+ * Motor matemático completo inspirado nas propostas reais:
+ *  - PAULO LUCIANO x FERTIFLORA (recálculo CCB + plano pagamento semestral)
+ *  - AILTON x SICOOB (descaracterização + dação em pagamento + acordo tripartite)
  *
- * Todas as calculadoras produzem MEMORIA DE CALCULO auditavel e TEXTO DE FUNDAMENTACAO
- * pronto para inclusao em propostas de renegociacao.
+ * Todas as calculadoras produzem MEMÓRIA DE CÁLCULO auditável e TEXTO DE FUNDAMENTAÇÃO
+ * pronto para inclusão em propostas de renegociação.
  */
 
 import {
@@ -22,8 +22,8 @@ import {
 } from './financeiro.js'
 
 /* ================================================================
- *  1. MEMORIA DE CALCULO COMPLETA
- *  (Auditavel, demonstra juros mes a mes, pagamentos e saldo final)
+ *  1. MEMÓRIA DE CÁLCULO COMPLETA
+ *  (Auditável, demonstra juros mês a mês, pagamentos e saldo final)
  * ================================================================ */
 
 export interface MemoriaCalculoParams {
@@ -93,19 +93,19 @@ export function calcularMemoriaCompleta(p: MemoriaCalculoParams): MemoriaCalculo
   const taxaNominalAnual = (Math.pow(1 + p.taxaNominalMensal / 100, 12) - 1) * 100
   const multiplicador = despesas > 0 ? (recalc.totalJuros + recalc.saldoAtualizado) / valorLiquido : 1
 
-  // 3. Fundamentacao textual
+  // 3. Fundamentação textual
   const fundamentacao = [
-    `MEMORIA DE CALCULO - Art. 320 e 322 CC, Decreto-Lei 167/67 (cedulas rurais).`,
+    `MEMÓRIA DE CÁLCULO - Art. 320 e 322 CC, Decreto-Lei 167/67 (cédulas rurais).`,
     `Valor contratado: R$ ${p.valorOriginal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
     despesas > 0
       ? `Despesas capitalizadas (IOF R$ ${(p.iofTotal || 0).toLocaleString('pt-BR')} + seguro R$ ${(p.seguroPrestamista || 0).toLocaleString('pt-BR')} + tarifas R$ ${(p.tarifasDiversas || 0).toLocaleString('pt-BR')}): R$ ${despesas.toLocaleString('pt-BR')}`
       : `Sem despesas capitalizadas informadas.`,
-    `Valor liquido recebido: R$ ${valorLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+    `Valor líquido recebido: R$ ${valorLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
     `Taxa contratual nominal: ${p.taxaNominalMensal.toFixed(4)}% a.m. (${taxaNominalAnual.toFixed(2)}% a.a.)`,
     `CET efetivo (TIR sobre fluxos reais): ${cet.mensal.toFixed(4)}% a.m. (${cet.anual.toFixed(2)}% a.a.)`,
     `Spread efetiva vs nominal: ${(cet.anual - taxaNominalAnual).toFixed(2)} p.p. a.a.`,
     multiplicador > 2
-      ? `ALERTA: despesas capitalizadas multiplicam a divida em ${multiplicador.toFixed(2)}x - indicio de abusividade (cfr. caso AILTON 3,4x).`
+      ? `ALERTA: despesas capitalizadas multiplicam a dívida em ${multiplicador.toFixed(2)}x - indício de abusividade (cfr. caso AILTON 3,4x).`
       : '',
     `Saldo atualizado em ${p.dataCorte}: R$ ${recalc.saldoAtualizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
   ].filter(Boolean).join('\n')
@@ -129,8 +129,8 @@ export function calcularMemoriaCompleta(p: MemoriaCalculoParams): MemoriaCalculo
 }
 
 /* ================================================================
- *  2. DACAO EM PAGAMENTO
- *  (Extincao de divida via entrega de bem imovel/movel)
+ *  2. DAÇÃO EM PAGAMENTO
+ *  (Extinção de dívida via entrega de bem imóvel/móvel)
  * ================================================================ */
 
 export interface DacaoParams {
@@ -165,7 +165,7 @@ export interface DacaoResultado {
 
 export function simularDacao(p: DacaoParams): DacaoResultado {
   const desagio = p.desagioCredorPct ?? 10
-  const custosPct = p.custosTransacaoPct ?? 4 // 2% ITBI + 2% cartorio (media)
+  const custosPct = p.custosTransacaoPct ?? 4 // 2% ITBI + 2% cartório (média)
 
   const valorTotal = p.bensOferecidos.reduce((s, b) => s + b.valorAvaliacao, 0)
   const valorPosDesagio = valorTotal * (1 - desagio / 100)
@@ -182,20 +182,20 @@ export function simularDacao(p: DacaoParams): DacaoResultado {
   }))
 
   const propostaLiquidacao = suficiente
-    ? `DACAO QUITA INTEGRALMENTE a divida. Sobra R$ ${(valorLiquido - p.saldoDevedor).toLocaleString('pt-BR')} em favor do devedor.`
-    : `DACAO COBRE ${((valorLiquido / p.saldoDevedor) * 100).toFixed(1)}% da divida. Remanescente R$ ${saldoRemanescente.toLocaleString('pt-BR')} a ser ` +
-      `parcelado em condicoes convencionais (sugerido: 24-48 meses, carencia 12 meses).`
+    ? `DAÇÃO QUITA INTEGRALMENTE a dívida. Sobra R$ ${(valorLiquido - p.saldoDevedor).toLocaleString('pt-BR')} em favor do devedor.`
+    : `DAÇÃO COBRE ${((valorLiquido / p.saldoDevedor) * 100).toFixed(1)}% da dívida. Remanescente R$ ${saldoRemanescente.toLocaleString('pt-BR')} a ser ` +
+      `parcelado em condições convencionais (sugerido: 24-48 meses, carência 12 meses).`
 
   const fundamentacao = [
-    `DACAO EM PAGAMENTO - Arts. 356 a 359 do Codigo Civil (extincao obrigacional).`,
+    `DAÇÃO EM PAGAMENTO - Arts. 356 a 359 do Código Civil (extinção obrigacional).`,
     `Precedente: STJ REsp 1.429.461/RJ (Min. Paulo de Tarso Sanseverino).`,
     `Saldo devedor: R$ ${p.saldoDevedor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
     `Total bens ofertados: R$ ${valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${p.bensOferecidos.length} bem/bens)`,
-    `Desagio pactuado: ${desagio}% => R$ ${valorPosDesagio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-    `Custos transacao (${custosPct}%): R$ ${custosTrans.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-    `Valor liquido ao credor: R$ ${valorLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-    `Cobertura da divida: ${((valorLiquido / p.saldoDevedor) * 100).toFixed(1)}%`,
-    suficiente ? 'DACAO SUFICIENTE - quitacao integral' : `Remanescente R$ ${saldoRemanescente.toLocaleString('pt-BR')}`,
+    `Deságio pactuado: ${desagio}% => R$ ${valorPosDesagio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+    `Custos transação (${custosPct}%): R$ ${custosTrans.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+    `Valor líquido ao credor: R$ ${valorLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+    `Cobertura da dívida: ${((valorLiquido / p.saldoDevedor) * 100).toFixed(1)}%`,
+    suficiente ? 'DAÇÃO SUFICIENTE - quitação integral' : `Remanescente R$ ${saldoRemanescente.toLocaleString('pt-BR')}`,
   ].join('\n')
 
   return {
@@ -213,7 +213,7 @@ export function simularDacao(p: DacaoParams): DacaoResultado {
 }
 
 /* ================================================================
- *  3. ALONGAMENTO - SUMULA 298 STJ + MCR 2-6-4
+ *  3. ALONGAMENTO - SÚMULA 298 STJ + MCR 2-6-4
  * ================================================================ */
 
 export interface AlongamentoParams {
@@ -290,18 +290,18 @@ export function simularAlongamento(p: AlongamentoParams): AlongamentoResultado {
     p.percentualPerdaSafra >= 40 ? 'alta' : p.percentualPerdaSafra >= 20 ? 'media' : 'baixa'
 
   const fundamentacao = [
-    `ALONGAMENTO DE DIVIDA RURAL`,
-    `Base legal: Lei 9.138/95 + MCR 2-6-4 + Resolucao CMN 5.229/2025`,
-    `Sumula 298 STJ: "alongamento nao e faculdade da instituicao financeira, mas direito do devedor"`,
-    `Precedente recente: TJGO 2a Vara Civel Uruacu - Juiza Leticia Brum (2025) - 62% perda soja`,
-    `Precedente do proporcional: TRF-4 Apelacao 5008203-86.2016.4.04.7005`,
+    `ALONGAMENTO DE DÍVIDA RURAL`,
+    `Base legal: Lei 9.138/95 + MCR 2-6-4 + Resolução CMN 5.229/2025`,
+    `Súmula 298 STJ: "alongamento não é faculdade da instituição financeira, mas direito do devedor"`,
+    `Precedente recente: TJGO 2a Vara Cível Uruaçu - Juíza Letícia Brum (2025) - 62% perda soja`,
+    `Precedente do proporcional: TRF-4 Apelação 5008203-86.2016.4.04.7005`,
     ``,
     `Perda documentada: ${p.percentualPerdaSafra}% da safra`,
-    `Valor alongavel (proporcional): R$ ${valorAlongavel.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-    `Valor mantido em condicoes originais: R$ ${valorMantido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-    `Taxa mantida: ${novaTaxaAA}% a.a. (mesma do contrato original - Sumula 298)`,
-    `Prazo novo: ${prazoNovo} meses (${numSafras} safras + carencia ${carencia} meses)`,
-    `Economia estimada vs nao alongar: R$ ${economia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+    `Valor alongável (proporcional): R$ ${valorAlongavel.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+    `Valor mantido em condições originais: R$ ${valorMantido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+    `Taxa mantida: ${novaTaxaAA}% a.a. (mesma do contrato original - Súmula 298)`,
+    `Prazo novo: ${prazoNovo} meses (${numSafras} safras + carência ${carencia} meses)`,
+    `Economia estimada vs não alongar: R$ ${economia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
   ].join('\n')
 
   return {
@@ -317,7 +317,7 @@ export function simularAlongamento(p: AlongamentoParams): AlongamentoResultado {
 }
 
 /* ================================================================
- *  4. CAPITALIZACAO DE DESPESAS - ANALISE ABUSIVIDADE
+ *  4. CAPITALIZAÇÃO DE DESPESAS - ANÁLISE ABUSIVIDADE
  *  (Caso AILTON: R$ 76mil em seguros viraram R$ 276mil no saldo)
  * ================================================================ */
 
@@ -366,20 +366,20 @@ export function analisarCapitalizacaoDespesas(p: CapitalizacaoParams): Capitaliz
 
   const fundamentos: string[] = []
   if (abusividade) {
-    fundamentos.push('CDC art. 39, V - vedacao de vantagem exagerada')
-    fundamentos.push('CDC art. 51, IV - clausulas abusivas')
+    fundamentos.push('CDC art. 39, V - vedação de vantagem exagerada')
+    fundamentos.push('CDC art. 51, IV - cláusulas abusivas')
     fundamentos.push('STJ Tema 1.118 - seguro prestamista: venda casada vedada')
-    fundamentos.push('CMN 3.518/2007 - limita tarifas em credito rural')
+    fundamentos.push('CMN 3.518/2007 - limita tarifas em crédito rural')
   }
   if (pctDespesas > 15) {
-    fundamentos.push('MCR 2-6-4: capitalizacao limitada ao principal originalmente devido')
+    fundamentos.push('MCR 2-6-4: capitalização limitada ao principal originalmente devido')
   }
 
   const recomendacao = abusividade
-    ? `CONTESTAR capitalizacao. Pleitear exclusao das despesas (R$ ${despesas.toLocaleString('pt-BR')}) ` +
-      `e recalculo sobre valor liquido (R$ ${valorLiquido.toLocaleString('pt-BR')}). ` +
+    ? `CONTESTAR capitalização. Pleitear exclusão das despesas (R$ ${despesas.toLocaleString('pt-BR')}) ` +
+      `e recálculo sobre valor líquido (R$ ${valorLiquido.toLocaleString('pt-BR')}). ` +
       `Economia total R$ ${impactoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
-    : `Capitalizacao dentro de padroes aceitaveis. Seguir com proposta padrao.`
+    : `Capitalização dentro de padrões aceitáveis. Seguir com proposta padrão.`
 
   return {
     valorRecebidoPeloCliente: Number(valorLiquido.toFixed(2)),
@@ -395,7 +395,7 @@ export function analisarCapitalizacaoDespesas(p: CapitalizacaoParams): Capitaliz
 }
 
 /* ================================================================
- *  5. DESCARACTERIZACAO DE CREDITO RURAL
+ *  5. DESCARACTERIZAÇÃO DE CRÉDITO RURAL
  *  (Custeio equalizado virou pessoal - caso AILTON)
  * ================================================================ */
 
@@ -451,27 +451,27 @@ export function detectarDescaracterizacao(p: DescaracterizacaoParams): Descaract
     ((Math.pow(1 + p.contratoRenegociacao.cet / 100, anosVida) - Math.pow(1 + taxaMediaOrig / 100, anosVida)))
 
   const indicios: string[] = []
-  if (percentualRural > 50) indicios.push(`${percentualRural.toFixed(0)}% dos contratos originais eram credito rural`)
-  if (spreadPct > 50) indicios.push(`Spread de ${spreadPct.toFixed(0)}% sobre taxa media ponderada - indicio de descaracterizacao`)
+  if (percentualRural > 50) indicios.push(`${percentualRural.toFixed(0)}% dos contratos originais eram crédito rural`)
+  if (spreadPct > 50) indicios.push(`Spread de ${spreadPct.toFixed(0)}% sobre taxa média ponderada - indício de descaracterização`)
   if (!p.contratoRenegociacao.finalidadeInformada.toLowerCase().includes('rural'))
-    indicios.push(`Finalidade informada na renegociacao ("${p.contratoRenegociacao.finalidadeInformada}") nao e rural`)
+    indicios.push(`Finalidade informada na renegociação ("${p.contratoRenegociacao.finalidadeInformada}") não é rural`)
 
   const basesLegais = [
-    'MCR 2-1 - finalidades do credito rural devem ser mantidas em renegociacoes',
-    'MCR 2-6-4 - alongamento nao autoriza descaracterizacao',
-    'Lei 4.829/65 - natureza juridica do credito rural e imutavel durante a vida do contrato',
-    'STJ - REsp 1.251.331/RS (Tema 247) - manutencao de equiparacao tarifaria',
-    'TJMG Agravo 1944978-17.2022 - descaracterizacao gera recalculo com taxa original',
+    'MCR 2-1 - finalidades do crédito rural devem ser mantidas em renegociações',
+    'MCR 2-6-4 - alongamento não autoriza descaracterização',
+    'Lei 4.829/65 - natureza jurídica do crédito rural é imutável durante a vida do contrato',
+    'STJ - REsp 1.251.331/RS (Tema 247) - manutenção de equiparação tarifária',
+    'TJMG Agravo 1944978-17.2022 - descaracterização gera recálculo com taxa original',
   ]
 
   const proximos: string[] = houveDescarac ? [
-    '1. Levantar cedulas originais e identificar finalidade em clausula primeira',
-    '2. Consultar SGS/Bacen para taxa media do MCR na data das contratacoes',
+    '1. Levantar cédulas originais e identificar finalidade em cláusula primeira',
+    '2. Consultar SGS/Bacen para taxa média do MCR na data das contratações',
     '3. Montar planilha comparativa: taxa original x taxa renegociada x CET efetivo',
-    '4. Propor recalculo com taxa original equalizada',
-    '5. Se banco recusar extrajudicialmente, ajuizar acao revisional',
+    '4. Propor recálculo com taxa original equalizada',
+    '5. Se banco recusar extrajudicialmente, ajuizar ação revisional',
   ] : [
-    'Nao ha descaracterizacao caracterizada. Seguir com renegociacao convencional.',
+    'Não há descaracterização caracterizada. Seguir com renegociação convencional.',
   ]
 
   return {
@@ -586,9 +586,9 @@ export function projetarFluxoPlurianual(p: FluxoPlurianualParams): FluxoPlurianu
 
   const recomendacoes: string[] = []
   if (anosCriticos.length > 0)
-    recomendacoes.push(`Anos criticos identificados: ${anosCriticos.join(', ')} - considerar alongamento ou carencia`)
+    recomendacoes.push(`Anos críticos identificados: ${anosCriticos.join(', ')} - considerar alongamento ou carência`)
   if (vpl < 0)
-    recomendacoes.push('VPL negativo - reestruturacao e imprescindivel (alongamento + carencia + desagio)')
+    recomendacoes.push('VPL negativo - reestruturação é imprescindível (alongamento + carência + deságio)')
   if ((p.arrendamentoHa || 0) > 8)
     recomendacoes.push('Custo de arrendamento elevado (>8 sacas/ha) - renegociar com arrendador')
   if (anosResult[0].margemBruta / anosResult[0].receitaBruta < 0.25)
@@ -604,7 +604,7 @@ export function projetarFluxoPlurianual(p: FluxoPlurianualParams): FluxoPlurianu
 }
 
 /* ================================================================
- *  7. EQUIVALENCIA EM SACAS (hedge natural para dividas rurais)
+ *  7. EQUIVALÊNCIA EM SACAS (hedge natural para dívidas rurais)
  * ================================================================ */
 
 export interface EquivalenciaSacasParams {
@@ -656,15 +656,15 @@ export function calcularEquivalenciaSacas(p: EquivalenciaSacasParams): Equivalen
       },
     },
     recomendacao:
-      `Converter divida em ${sacas.toFixed(0)} sacas de ${p.cultura} proporciona HEDGE NATURAL: ` +
-      `se preco sobe ${vol}%, divida aumenta proporcionalmente mas receita da venda da safra tambem. ` +
-      `Se preco cai ${vol}%, divida reduz na mesma proporcao. ` +
-      `Recomendado em contratos de longo prazo com variacao de preco esperada > 15% a.a.`,
+      `Converter dívida em ${sacas.toFixed(0)} sacas de ${p.cultura} proporciona HEDGE NATURAL: ` +
+      `se preço sobe ${vol}%, dívida aumenta proporcionalmente mas receita da venda da safra também. ` +
+      `Se preço cai ${vol}%, dívida reduz na mesma proporção. ` +
+      `Recomendado em contratos de longo prazo com variação de preço esperada > 15% a.a.`,
   }
 }
 
 /* ================================================================
- *  8. STRESS TEST DE PRECO
+ *  8. STRESS TEST DE PREÇO
  * ================================================================ */
 
 export interface StressTestParams {
@@ -718,9 +718,9 @@ export function executarStressTest(p: StressTestParams): StressTestResultado {
 
   const primeiroInviavel = cenarios.find(c => c.statusDivida === 'INVIAVEL')
   const recomendacao = primeiroInviavel
-    ? `ALERTA: queda de ${primeiroInviavel.queda}% no preco torna divida inviavel (gap R$ ${primeiroInviavel.gapDivida.toLocaleString('pt-BR')}). ` +
+    ? `ALERTA: queda de ${primeiroInviavel.queda}% no preço torna dívida inviável (gap R$ ${primeiroInviavel.gapDivida.toLocaleString('pt-BR')}). ` +
       `Recomenda-se contratar hedge (CPR, futuros B3) ou solicitar alongamento proativo antes da colheita.`
-    : `Divida suportavel mesmo em cenario de queda de 50%. Margem de seguranca confortavel.`
+    : `Dívida suportável mesmo em cenário de queda de 50%. Margem de segurança confortável.`
 
   return {
     cenarios,
@@ -767,7 +767,7 @@ export function compararMultiCredores(p: MultiCredorParams): MultiCredorResultad
   const custoAnual = p.credores.reduce((s, c) => s + c.saldoDevedor * (c.taxaAA / 100), 0)
 
   // Score de prioridade (1-100):
-  // + taxa alta, + saldo alto, + garantia menor, + aberto ao dialogo, - proximidade vencimento
+  // + taxa alta, + saldo alto, + garantia menor, + aberto ao diálogo, - proximidade vencimento
   const prioridades = p.credores
     .map(c => {
       const scoreTaxa = Math.min(c.taxaAA / 30, 1) * 30
@@ -776,20 +776,20 @@ export function compararMultiCredores(p: MultiCredorParams): MultiCredorResultad
       const scoreDialogo = c.abertoAoDialogo ? 15 : 0
 
       const score = scoreTaxa + scoreSaldo + scoreGarantia + scoreDialogo
-      const taxaNovaAlvo = Math.max(c.taxaAA * 0.6, 10) // 40% reducao ou 10% piso
+      const taxaNovaAlvo = Math.max(c.taxaAA * 0.6, 10) // 40% redução ou 10% piso
       const economia = c.saldoDevedor * ((c.taxaAA - taxaNovaAlvo) / 100) * 3 // 3 anos
 
       const estrategia =
-        c.tipo === 'bancario' ? 'Revisional + alongamento (Sumula 298 STJ)'
-          : c.tipo === 'cooperativa' ? 'Acordo extrajudicial com dacao/acordo tripartite'
-            : c.tipo === 'insumos' ? 'Novacao com plano safra 2-3 anos'
-              : c.tipo === 'tradings' ? 'Cessao de CPR para quitacao com desagio'
-                : 'Acordo com desagio (30-50%)'
+        c.tipo === 'bancario' ? 'Revisional + alongamento (Súmula 298 STJ)'
+          : c.tipo === 'cooperativa' ? 'Acordo extrajudicial com dação/acordo tripartite'
+            : c.tipo === 'insumos' ? 'Novação com plano safra 2-3 anos'
+              : c.tipo === 'tradings' ? 'Cessão de CPR para quitação com deságio'
+                : 'Acordo com deságio (30-50%)'
 
       const justificativa = `Taxa ${c.taxaAA}% a.a. (score ${scoreTaxa.toFixed(0)}) | ` +
         `Saldo R$ ${c.saldoDevedor.toLocaleString('pt-BR')} (score ${scoreSaldo.toFixed(0)}) | ` +
         `Garantia ${c.garantia} (score ${scoreGarantia}) | ` +
-        `${c.abertoAoDialogo ? 'Aberto' : 'Fechado'} dialogo (score ${scoreDialogo})`
+        `${c.abertoAoDialogo ? 'Aberto' : 'Fechado'} diálogo (score ${scoreDialogo})`
 
       return {
         credor: c.nome,
@@ -802,9 +802,9 @@ export function compararMultiCredores(p: MultiCredorParams): MultiCredorResultad
     .sort((a, b) => b.score - a.score)
 
   const plano = prioridades.length > 0
-    ? `ESTRATEGIA: ${prioridades[0].credor} primeiro (score ${prioridades[0].score}). ` +
+    ? `ESTRATÉGIA: ${prioridades[0].credor} primeiro (score ${prioridades[0].score}). ` +
       `Economia potencial total: R$ ${prioridades.reduce((s, p) => s + p.valorEconomiaPotencial, 0).toLocaleString('pt-BR')} ` +
-      `em 3 anos se executar todas as renegociacoes.`
+      `em 3 anos se executar todas as renegociações.`
     : 'Nenhum credor cadastrado.'
 
   return {
@@ -853,34 +853,34 @@ export function enquadrarProdutorPronaf(p: EnquadramentoPronafParams): Enquadram
     programa = 'Empresarial'; taxa = 14.0; limite = 5_000_000
   }
 
-  // Exception: se area <= 4 modulos fiscais e atividade principal agropecuaria familiar
+  // Exception: se área <= 4 módulos fiscais e atividade principal agropecuária familiar
   if (p.rendaBrutaAnual <= 500_000 && p.areaHa <= 240 && (p.percRendaFamiliar || 0) >= 70) {
     programa = 'Pronaf Mais Alimentos'; taxa = 4.0; limite = 250_000
   }
 
   const requisitos = [
-    programa.includes('Pronaf') ? 'DAP (Declaracao de Aptidao Pronaf) ou CAF (Cadastro da Agricultura Familiar) ativa' : '',
-    programa === 'Pronamp' ? 'Declaracao de renda anual ate R$ 4,8 mi' : '',
+    programa.includes('Pronaf') ? 'DAP (Declaração de Aptidão Pronaf) ou CAF (Cadastro da Agricultura Familiar) ativa' : '',
+    programa === 'Pronamp' ? 'Declaração de renda anual até R$ 4,8 mi' : '',
     'CAR - Cadastro Ambiental Rural ativo',
     'Zarc - plantio dentro da janela recomendada',
-    'Plano de aplicacao tecnico (para investimento)',
+    'Plano de aplicação técnico (para investimento)',
   ].filter(Boolean) as string[]
 
   const documentacao = [
     'RG e CPF',
-    'Comprovante de residencia (rural)',
-    programa.includes('Pronaf') ? 'DAP/CAF emitido por sindicato ou entidade credenciada' : 'IRPF ultimos 2 anos',
-    'Escritura/contrato arrendamento do imovel rural',
+    'Comprovante de residência (rural)',
+    programa.includes('Pronaf') ? 'DAP/CAF emitido por sindicato ou entidade credenciada' : 'IRPF últimos 2 anos',
+    'Escritura/contrato arrendamento do imóvel rural',
     'CAR atualizado',
-    'Projeto tecnico (investimento) ou orcamento (custeio)',
+    'Projeto técnico (investimento) ou orçamento (custeio)',
   ]
 
   const proximos = [
-    `Buscar agente financeiro credenciado no ${programa} (BB, Caixa, BNB, Sicoob, Sicredi, Banco da Amazonia)`,
-    'Verificar janela do Plano Safra 2025/26 (ate junho/2026)',
+    `Buscar agente financeiro credenciado no ${programa} (BB, Caixa, BNB, Sicoob, Sicredi, Banco da Amazônia)`,
+    'Verificar janela do Plano Safra 2025/26 (até junho/2026)',
     'Consultar Zarc para cultura pretendida',
-    'Contratar Proagro (adicional sobre o valor) se nao houver seguro rural',
-    programa === 'Pronaf B' || programa === 'Pronaf Custeio' ? 'Verificar se cliente ja usou limite anual' : '',
+    'Contratar Proagro (adicional sobre o valor) se não houver seguro rural',
+    programa === 'Pronaf B' || programa === 'Pronaf Custeio' ? 'Verificar se cliente já usou limite anual' : '',
   ].filter(Boolean) as string[]
 
   return {
@@ -903,7 +903,7 @@ export interface ArrendamentoParams {
   produtividadeSacasHa: number
   precoSacaAtual: number
   custoHa: number
-  /** % da producao pago em sacas (pratica comum Sul/Centro-Oeste: 5-12 sacas/ha) */
+  /** % da produção pago em sacas (prática comum Sul/Centro-Oeste: 5-12 sacas/ha) */
   valorArrendamentoSacasHa?: number
   /** valor em R$/ha se pago em dinheiro */
   valorArrendamentoReaisHa?: number
@@ -916,8 +916,8 @@ export interface ArrendamentoResultado {
   valorTotalArrendamentoAno: number
   percentualDaReceita: number
   margemBrutaHa: number
-  margemLiquidaHa: number // apos arrendamento
-  breakEvenProdutividade: number // sacas/ha minimo
+  margemLiquidaHa: number // após arrendamento
+  breakEvenProdutividade: number // sacas/ha mínimo
   viabilidadeFinanceira: 'alta' | 'media' | 'baixa'
   recomendacoes: string[]
 }
@@ -944,10 +944,10 @@ export function analisarArrendamento(p: ArrendamentoParams): ArrendamentoResulta
     margemLiquidaHa / receitaHa > 0.25 ? 'alta' : margemLiquidaHa / receitaHa > 0.1 ? 'media' : 'baixa'
 
   const recomendacoes: string[] = []
-  if (pctReceita > 30) recomendacoes.push(`Arrendamento representa ${pctReceita.toFixed(1)}% da receita - acima de 30% e critico`)
-  if (p.valorArrendamentoSacasHa && p.valorArrendamentoSacasHa > 12) recomendacoes.push(`Arrendamento > 12 sacas/ha - renegociar com base em media regional`)
-  if (breakEven > p.produtividadeSacasHa * 0.9) recomendacoes.push(`Break-even muito proximo da produtividade real - risco alto em ano de frustacao`)
-  if (p.contratoVigente && (p.prazoContratoMeses || 0) < 12) recomendacoes.push('Prazo curto restante - renegociar antes da proxima safra')
+  if (pctReceita > 30) recomendacoes.push(`Arrendamento representa ${pctReceita.toFixed(1)}% da receita - acima de 30% é crítico`)
+  if (p.valorArrendamentoSacasHa && p.valorArrendamentoSacasHa > 12) recomendacoes.push(`Arrendamento > 12 sacas/ha - renegociar com base em média regional`)
+  if (breakEven > p.produtividadeSacasHa * 0.9) recomendacoes.push(`Break-even muito próximo da produtividade real - risco alto em ano de frustração`)
+  if (p.contratoVigente && (p.prazoContratoMeses || 0) < 12) recomendacoes.push('Prazo curto restante - renegociar antes da próxima safra')
 
   return {
     tipoValor: tipo,
@@ -1014,7 +1014,7 @@ export function simularParcelamentoSafra(p: ParcelamentoSafraParams): Parcelamen
 
   for (let s = 0; s < p.numeroSafras; s++) {
     for (let n = 0; n < parcelasSafra; n++) {
-      // Alinhar com colheita: 6 meses apos inicio da safra para safra de verao
+      // Alinhar com colheita: 6 meses após início da safra para safra de verão
       const mesesAcum = s * 12 + (parcelasSafra === 1 ? 6 : (n + 1) * (12 / parcelasSafra))
       const data = new Date(inicio)
       data.setUTCMonth(data.getUTCMonth() + mesesAcum)
@@ -1046,12 +1046,12 @@ export function simularParcelamentoSafra(p: ParcelamentoSafraParams): Parcelamen
 
   const fundamentacao = [
     `PARCELAMENTO ALINHADO COM CICLO DA SAFRA`,
-    `Vantagens vs parcela mensal: sem pressao de caixa em entressafra, uso de receita da colheita para quitar parcelas`,
+    `Vantagens vs parcela mensal: sem pressão de caixa em entressafra, uso de receita da colheita para quitar parcelas`,
     `Estrutura: ${pctEntrada}% entrada + ${p.numeroSafras} safras x ${parcelasSafra} parcela(s)/safra`,
     `Taxa: ${p.taxaAA}% a.a. (${(taxaAM * 100).toFixed(4)}% a.m.)`,
     `Pagamento total: R$ ${totalPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
     `Economia vs parcelamento convencional mensal: R$ ${economia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-    `Caso PAULO LUCIANO: entrada 21,63% + 4 parcelas semestrais alinhadas a soja/safrinha`,
+    `Caso PAULO LUCIANO: entrada 21,63% + 4 parcelas semestrais alinhadas à soja/safrinha`,
   ].join('\n')
 
   return {
@@ -1066,7 +1066,7 @@ export function simularParcelamentoSafra(p: ParcelamentoSafraParams): Parcelamen
 }
 
 /* ================================================================
- *  13. CPR - CEDULA DE PRODUTO RURAL
+ *  13. CPR - CÉDULA DE PRODUTO RURAL
  * ================================================================ */
 
 export interface CPRSimulacaoParams {
@@ -1075,9 +1075,9 @@ export interface CPRSimulacaoParams {
   unidade: 'sacas60kg' | 'arrobas' | 'kg'
   precoAtualUnidade: number
   dataVencimento: string
-  /** juros remuneratorios (0% em CPR fisica pura) */
+  /** juros remuneratórios (0% em CPR física pura) */
   taxaAA?: number
-  /** desagio oferecido pelo tomador */
+  /** deságio oferecido pelo tomador */
   desagioPercentual?: number
 }
 
@@ -1096,21 +1096,21 @@ export interface CPRSimulacaoResultado {
 
 export function simularCPR(p: CPRSimulacaoParams): CPRSimulacaoResultado {
   const valorFace = p.quantidade * p.precoAtualUnidade
-  const desagio = p.desagioPercentual ?? 8 // padrao mercado 6-12%
+  const desagio = p.desagioPercentual ?? 8 // padrão mercado 6-12%
   const valorLiberado = valorFace * (1 - desagio / 100)
 
   const dataEmissao = new Date()
   const venc = toDate(p.dataVencimento)
   const meses = diffDias(dataEmissao, venc) / 30
 
-  // CET do emissor = desagio anualizado
+  // CET do emissor = deságio anualizado
   const cet = meses > 0 ? (Math.pow(valorFace / valorLiberado, 12 / meses) - 1) * 100 : 0
 
   const garantias = [
-    'Penhor agricola da lavoura a formar ou formada',
-    'Aval de conjuge (se casado) - obrigatorio',
+    'Penhor agrícola da lavoura a formar ou formada',
+    'Aval de cônjuge (se casado) - obrigatório',
     'Seguro rural ou Proagro vinculado ao financiamento',
-    'Cedencia fiduciaria de recebiveis de outras vendas (opcional, reforca)',
+    'Cedência fiduciária de recebíveis de outras vendas (opcional, reforça)',
   ]
 
   return {
@@ -1130,18 +1130,18 @@ export function simularCPR(p: CPRSimulacaoParams): CPRSimulacaoResultado {
       },
     },
     fundamentacao: [
-      'CPR - Lei 8.929/94 (titulo cartular + hedge natural)',
-      'Sumula 596 STJ: CPR com liquidacao financeira mantem natureza do titulo',
+      'CPR - Lei 8.929/94 (título cartular + hedge natural)',
+      'Súmula 596 STJ: CPR com liquidação financeira mantém natureza do título',
       `Valor da face: R$ ${valorFace.toLocaleString('pt-BR')} (${p.quantidade} ${p.unidade} x R$ ${p.precoAtualUnidade})`,
-      `Desagio ${desagio}% => recebe R$ ${valorLiberado.toLocaleString('pt-BR')}`,
-      `Prazo ${meses.toFixed(1)} meses => CET implicito ${cet.toFixed(2)}% a.a.`,
-      `Hedge natural: se preco sobe, valor do bem sobe; se cai, divida fica proporcionalmente menor`,
+      `Deságio ${desagio}% => recebe R$ ${valorLiberado.toLocaleString('pt-BR')}`,
+      `Prazo ${meses.toFixed(1)} meses => CET implícito ${cet.toFixed(2)}% a.a.`,
+      `Hedge natural: se preço sobe, valor do bem sobe; se cai, dívida fica proporcionalmente menor`,
     ].join('\n'),
   }
 }
 
 /* ================================================================
- *  14. PERICIA REVISIONAL - Simulador Anatocismo
+ *  14. PERÍCIA REVISIONAL - Simulador Anatocismo
  * ================================================================ */
 
 export interface PericiaRevisionalParams {
@@ -1163,7 +1163,7 @@ export interface PericiaRevisionalResultado {
   comissaoPermanenciaIndevida: boolean
   tarifasIndevidas: Array<{ descricao: string; valor: number }>
   valorRestituicaoSimples: number
-  valorRestituicaoDobro: number // CDC art. 42 paragrafo unico
+  valorRestituicaoDobro: number // CDC art. 42 parágrafo único
   fundamentacaoPericial: string
   sumulasAplicaveis: string[]
 }
@@ -1172,26 +1172,26 @@ export function executarPericiaRevisional(p: PericiaRevisionalParams): PericiaRe
   const sumulas: string[] = []
   const capAbusiva: string[] = []
 
-  // Capitalizacao
+  // Capitalização
   const anatocismoDet = p.capitalizacaoPactuada === 'diaria' ||
     (p.capitalizacaoPactuada === 'mensal' && toDate(p.dataContratacao) < new Date('2001-03-30'))
 
   if (anatocismoDet) {
     capAbusiva.push(p.capitalizacaoPactuada)
-    sumulas.push('Sumula 93 STJ - capitalizacao mensal so permitida se expressa')
-    sumulas.push('MP 2.170-36/2001 - capitalizacao mensal apos 31/03/2000 em credito')
+    sumulas.push('Súmula 93 STJ - capitalização mensal só permitida se expressa')
+    sumulas.push('MP 2.170-36/2001 - capitalização mensal após 31/03/2000 em crédito')
   }
 
-  // Comissao de permanencia
+  // Comissão de permanência
   const cp = p.encargosCobrados.find(e => e.tipo === 'comissao_permanencia')
   const cpCumulativa = cp && p.encargosCobrados.some(e => e.tipo === 'multa' || e.tipo === 'mora' || e.tipo === 'juros')
   if (cpCumulativa) {
-    sumulas.push('Sumula 472 STJ - cumulacao de comissao de permanencia com outros encargos e vedada')
-    sumulas.push('Sumula 294 STJ - comissao limitada a taxa media de mercado do Bacen')
-    sumulas.push('Sumula 296 STJ - nao cumulacao com juros remuneratorios')
+    sumulas.push('Súmula 472 STJ - cumulação de comissão de permanência com outros encargos é vedada')
+    sumulas.push('Súmula 294 STJ - comissão limitada à taxa média de mercado do Bacen')
+    sumulas.push('Súmula 296 STJ - não cumulação com juros remuneratórios')
   }
 
-  // Tarifas indevidas (apos 30/04/2008)
+  // Tarifas indevidas (após 30/04/2008)
   const tarifasIndevidas: PericiaRevisionalResultado['tarifasIndevidas'] = []
   if (toDate(p.dataContratacao) >= new Date('2008-04-30')) {
     const tarifasVedadas = ['TAC', 'TEC', 'emissao', 'carne', 'boleto', 'abertura', 'estruturacao']
@@ -1200,25 +1200,25 @@ export function executarPericiaRevisional(p: PericiaRevisionalParams): PericiaRe
         tarifasIndevidas.push({ descricao: e.descricao, valor: e.valor })
       }
     }
-    if (tarifasIndevidas.length > 0) sumulas.push('STJ Tema 247 - TAC/TEC vedadas apos 30/04/2008')
+    if (tarifasIndevidas.length > 0) sumulas.push('STJ Tema 247 - TAC/TEC vedadas após 30/04/2008')
   }
 
-  // Calculo restituicao
+  // Cálculo restituição
   const valorTarifas = tarifasIndevidas.reduce((s, t) => s + t.valor, 0)
   const valorCpIndevida = cpCumulativa ? (cp?.valor || 0) * 0.3 : 0 // estima 30% indevido
   const valorRestituicao = valorTarifas + valorCpIndevida
 
   const fundamentacao = [
-    `PERICIA REVISIONAL - Auditoria Tecnico-Financeira`,
+    `PERÍCIA REVISIONAL - Auditoria Técnico-Financeira`,
     `Valor original: R$ ${p.valorOriginal.toLocaleString('pt-BR')}`,
-    `Contratacao em ${p.dataContratacao}, corte em ${p.dataCorte}`,
-    `Capitalizacao pactuada: ${p.capitalizacaoPactuada}`,
-    anatocismoDet ? `ANATOCISMO: capitalizacao ${p.capitalizacaoPactuada} sem previsao legal expressa` : 'Capitalizacao dentro dos limites',
-    cpCumulativa ? 'COMISSAO DE PERMANENCIA CUMULADA com outros encargos - VEDADO' : 'Sem irregularidade em comissao de permanencia',
+    `Contratação em ${p.dataContratacao}, corte em ${p.dataCorte}`,
+    `Capitalização pactuada: ${p.capitalizacaoPactuada}`,
+    anatocismoDet ? `ANATOCISMO: capitalização ${p.capitalizacaoPactuada} sem previsão legal expressa` : 'Capitalização dentro dos limites',
+    cpCumulativa ? 'COMISSÃO DE PERMANÊNCIA CUMULADA com outros encargos - VEDADO' : 'Sem irregularidade em comissão de permanência',
     tarifasIndevidas.length > 0 ? `Tarifas indevidas: ${tarifasIndevidas.map(t => t.descricao).join(', ')}` : 'Sem tarifas vedadas',
     ``,
-    `RESTITUICAO SIMPLES: R$ ${valorRestituicao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-    `RESTITUICAO EM DOBRO (CDC 42 p.u.): R$ ${(valorRestituicao * 2).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+    `RESTITUIÇÃO SIMPLES: R$ ${valorRestituicao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+    `RESTITUIÇÃO EM DOBRO (CDC 42 p.u.): R$ ${(valorRestituicao * 2).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
   ].join('\n')
 
   return {

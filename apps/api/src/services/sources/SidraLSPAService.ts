@@ -1,7 +1,7 @@
 // ============================================================
 // ALETIS — IBGE SIDRA LSPA Service
-// Monthly crop production estimates (Levantamento Sistematico)
-// Table 6588 — area, production, yield for 45+ crops
+// Monthly crop production estimates (Levantamento Sistemático)
+// Table 6588 — área, produção, rendimento for 45+ crops
 // ============================================================
 
 import axios, { type AxiosInstance } from 'axios';
@@ -31,32 +31,32 @@ export interface LSPAResponse {
 // SIDRA crop codes (c48 classification)
 const CULTURAS_PRINCIPAIS: Record<string, string> = {
   '39443': 'Soja',
-  '39441': 'Milho 1a safra',
-  '39442': 'Milho 2a safra',
-  '40372': 'Algodao herbaceo',
+  '39441': 'Milho 1ª safra',
+  '39442': 'Milho 2ª safra',
+  '40372': 'Algodão herbáceo',
   '40236': 'Arroz',
-  '40282': 'Feijao',
-  '40216': 'Cana-de-acucar',
-  '40309': 'Cafe',
+  '40282': 'Feijão',
+  '40216': 'Cana-de-açúcar',
+  '40309': 'Café',
   '109187': 'Trigo',
   '40478': 'Sorgo',
 };
 
 // Variable IDs in SIDRA table 6588
-// v/109 = Area plantada, v/216 = Area colhida, v/35 = Producao, v/36 = Rendimento medio
+// v/109 = Área plantada, v/216 = Área colhida, v/35 = Produção, v/36 = Rendimento médio
 const VARIABLES = '109,216,35,36';
 
 // ── Fallback Data (real values from March 2026 LSPA) ─────────
 
 const FALLBACK_BRASIL: SafraCultura[] = [
   { codigo: '39443', nome: 'Soja', areaPlantada: 48270000, areaColhida: 47800000, producao: 173700000, rendimentoMedio: 3603, periodo: '2026-03' },
-  { codigo: '39441', nome: 'Milho 1a safra', areaPlantada: 4960000, areaColhida: 4800000, producao: 29300000, rendimentoMedio: 6021, periodo: '2026-03' },
-  { codigo: '39442', nome: 'Milho 2a safra', areaPlantada: 18170000, areaColhida: 0, producao: 109000000, rendimentoMedio: 6010, periodo: '2026-03' },
-  { codigo: '40372', nome: 'Algodao herbaceo', areaPlantada: 2100000, areaColhida: 0, producao: 3800000, rendimentoMedio: 1810, periodo: '2026-03' },
+  { codigo: '39441', nome: 'Milho 1ª safra', areaPlantada: 4960000, areaColhida: 4800000, producao: 29300000, rendimentoMedio: 6021, periodo: '2026-03' },
+  { codigo: '39442', nome: 'Milho 2ª safra', areaPlantada: 18170000, areaColhida: 0, producao: 109000000, rendimentoMedio: 6010, periodo: '2026-03' },
+  { codigo: '40372', nome: 'Algodão herbáceo', areaPlantada: 2100000, areaColhida: 0, producao: 3800000, rendimentoMedio: 1810, periodo: '2026-03' },
   { codigo: '40236', nome: 'Arroz', areaPlantada: 1580000, areaColhida: 1500000, producao: 11200000, rendimentoMedio: 7467, periodo: '2026-03' },
-  { codigo: '40282', nome: 'Feijao', areaPlantada: 2900000, areaColhida: 1200000, producao: 3200000, rendimentoMedio: 1103, periodo: '2026-03' },
-  { codigo: '40309', nome: 'Cafe', areaPlantada: 2200000, areaColhida: 2200000, producao: 58000000, rendimentoMedio: 26364, periodo: '2026-03' },
-  { codigo: '40216', nome: 'Cana-de-acucar', areaPlantada: 8600000, areaColhida: 8400000, producao: 685000000, rendimentoMedio: 81548, periodo: '2026-03' },
+  { codigo: '40282', nome: 'Feijão', areaPlantada: 2900000, areaColhida: 1200000, producao: 3200000, rendimentoMedio: 1103, periodo: '2026-03' },
+  { codigo: '40309', nome: 'Café', areaPlantada: 2200000, areaColhida: 2200000, producao: 58000000, rendimentoMedio: 26364, periodo: '2026-03' },
+  { codigo: '40216', nome: 'Cana-de-açúcar', areaPlantada: 8600000, areaColhida: 8400000, producao: 685000000, rendimentoMedio: 81548, periodo: '2026-03' },
 ];
 
 // ── Service Class ───────────────────────────────────────────
