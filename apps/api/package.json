@@ -8,7 +8,9 @@
     "build": "tsc",
     "start": "node --env-file=../../.env dist/server.js",
     "ingest:pgfn": "tsx scripts/ingest-pgfn.ts",
-    "ingest:sicar": "tsx scripts/ingest-sicar.ts"
+    "ingest:sicar": "tsx scripts/ingest-sicar.ts",
+    "download:sicar": "tsx --env-file=../../.env scripts/download-sicar.ts",
+    "refresh:sicar": "tsx --env-file=../../.env scripts/refresh-sicar.ts"
   },
   "dependencies": {
     "fastify": "^5.2.1",

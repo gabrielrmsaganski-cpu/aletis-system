@@ -101,6 +101,18 @@ export class SICARIndex {
     }
   }
 
+  /**
+   * Re-lê o arquivo de índice do disco. Usado pelo endpoint de reload após
+   * o cron de refresh rodar o ingest — evita restart da API.
+   */
+  reload(): SicarIndexStats {
+    this.dump = null
+    this.loaded = false
+    this.loadedAt = null
+    this.ensureLoaded()
+    return this.stats()
+  }
+
   isAvailable(): boolean {
     this.ensureLoaded()
     return this.dump !== null

@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
+import https from 'https'
 import { CaptchaSolver, CaptchaSolverError, getCaptchaSolver } from '../captcha/CaptchaSolver'
 import type { CarConsultaResult } from './types'
 
@@ -56,6 +57,10 @@ export class SICARClient {
 
   constructor(captcha: CaptchaSolver) {
     this.captcha = captcha
+    // SICAR tem histórico de cadeia TLS incompleta (falta cert intermediário).
+    // Em dev/prod, permitimos bypass via env SICAR_INSECURE_TLS=1 para não
+    // perder o serviço em dias de "UNABLE_TO_VERIFY_LEAF_SIGNATURE".
+    const insecure = process.env.SICAR_INSECURE_TLS === '1'
     this.http = axios.create({
       baseURL: SICAR_BASE_URL,
       timeout: 30_000,
@@ -66,6 +71,9 @@ export class SICARClient {
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
       },
+      httpsAgent: insecure
+        ? new https.Agent({ rejectUnauthorized: false, keepAlive: true })
+        : new https.Agent({ keepAlive: true }),
       // Não joga para catch em 4xx — queremos inspecionar o status
       validateStatus: () => true,
     })
@@ -100,11 +108,16 @@ export class SICARClient {
 
   private describeNetworkError(err: any): string {
     const code = err?.code
+    const msg = String(err?.message || '')
     if (code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || code === 'CERT_HAS_EXPIRED' || code === 'SELF_SIGNED_CERT_IN_CHAIN') {
-      return `TLS/certificado SICAR fora do ar (${code})`
+      return `TLS/certificado SICAR fora do ar (${code}) — habilite SICAR_INSECURE_TLS=1`
     }
     if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'ETIMEDOUT' || code === 'ECONNRESET') {
       return `Rede indisponível (${code})`
+    }
+    if (msg.includes('Maximum number of redirects')) {
+      // SICAR redireciona em loop para portal3.dataprev (aviso_seguranca) durante manutenção
+      return 'SICAR em manutenção — portal redirecionando para aviso Dataprev (loop)'
     }
     return err?.message || 'Falha ao acessar SICAR'
   }

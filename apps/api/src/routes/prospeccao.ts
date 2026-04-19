@@ -120,6 +120,16 @@ export default async function prospeccaoRoutes(app: FastifyInstance) {
     return { success: true, data: service.stats() }
   })
 
+  /**
+   * Hot-swap do índice SICAR — usado pelo orquestrador `refresh-sicar` depois
+   * do ingest. Relê `sicar-imoveis.json` do disco sem restart da API.
+   * Resposta inclui stats novas (pro cron logar delta).
+   */
+  app.post('/api/prospeccao/sicar/reload', async () => {
+    const stats = service.reloadSicarIndex()
+    return { success: true, data: { stats, reloadedAt: new Date().toISOString() } }
+  })
+
   // ─── Exclusão (soft-delete / blacklist) ─────────────────────
 
   app.delete(

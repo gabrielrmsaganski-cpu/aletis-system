@@ -41,6 +41,21 @@ export class BrasilAPISource {
           }))
         : []
 
+      const telNormalize = (v: unknown): string | undefined => {
+        const digits = String(v ?? '').replace(/\D/g, '')
+        return digits.length >= 8 ? digits : undefined
+      }
+      const emailNormalize = (v: unknown): string | undefined => {
+        const s = String(v ?? '').trim()
+        return s && s.includes('@') ? s.toLowerCase() : undefined
+      }
+      const boolOrNull = (v: unknown): boolean | null => {
+        if (v === true || v === false) return v
+        if (v === 'S' || v === 'SIM') return true
+        if (v === 'N' || v === 'NAO' || v === 'NÃO') return false
+        return null
+      }
+
       const result: CnpjEnrichment = {
         razaoSocial: data.razao_social ?? '',
         nomeFantasia: data.nome_fantasia || undefined,
@@ -48,18 +63,29 @@ export class BrasilAPISource {
         cnaeFiscalDescricao: data.cnae_fiscal_descricao ?? '',
         cnaesSecundarios,
         situacaoCadastral: data.descricao_situacao_cadastral ?? '',
+        motivoSituacaoCadastral: data.descricao_motivo_situacao_cadastral || undefined,
+        situacaoEspecial: data.situacao_especial || undefined,
         dataAbertura: data.data_inicio_atividade ?? '',
         capitalSocial: Number(data.capital_social ?? 0),
         porte: data.porte ?? data.descricao_porte,
         naturezaJuridica: data.natureza_juridica,
+        enteFederativoResponsavel: data.ente_federativo_responsavel || undefined,
+        optantePeloSimples: boolOrNull(data.opcao_pelo_simples),
+        optantePeloMei: boolOrNull(data.opcao_pelo_mei),
         endereco: {
           logradouro: data.logradouro ?? '',
           numero: data.numero ?? '',
+          complemento: data.complemento || undefined,
           bairro: data.bairro ?? '',
           municipio: data.municipio ?? '',
           uf: data.uf ?? '',
-          cep: data.cep ?? '',
+          cep: String(data.cep ?? '').replace(/\D/g, ''),
+          codigoMunicipioIbge: data.codigo_municipio_ibge ? Number(data.codigo_municipio_ibge) : undefined,
         },
+        telefone1: telNormalize(data.ddd_telefone_1),
+        telefone2: telNormalize(data.ddd_telefone_2),
+        fax: telNormalize(data.ddd_fax),
+        email: emailNormalize(data.email),
         socios,
         enriquecidoEm: new Date().toISOString(),
       }

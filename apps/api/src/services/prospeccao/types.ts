@@ -45,24 +45,71 @@ export interface CnpjEnrichment {
   cnaeFiscalDescricao: string
   cnaesSecundarios: Array<{ codigo: string; descricao: string }>
   situacaoCadastral: string
+  /** Motivo da situação cadastral (SEM MOTIVO, BAIXADA, INAPTA, etc). */
+  motivoSituacaoCadastral?: string
+  /** Situação especial (FALIDA, LIQUIDAÇÃO JUDICIAL, RECUPERAÇÃO JUDICIAL etc). */
+  situacaoEspecial?: string
   dataAbertura: string
   capitalSocial: number
   porte?: string
   naturezaJuridica?: string
+  /** Ente federativo (p/ órgãos públicos). */
+  enteFederativoResponsavel?: string
+  /** true = optou pelo Simples Nacional (útil p/ restrições tributárias de custeio). */
+  optantePeloSimples?: boolean | null
+  /** true = MEI (limites específicos no Crédito Rural). */
+  optantePeloMei?: boolean | null
   endereco: {
     logradouro: string
     numero: string
+    complemento?: string
     bairro: string
     municipio: string
     uf: string
     cep: string
+    /** Código IBGE do município (7 dígitos) — chave p/ cruzar com CONAB/PAM. */
+    codigoMunicipioIbge?: number
   }
+  /** Telefone principal (somente dígitos, com DDD). */
+  telefone1?: string
+  /** Telefone secundário. */
+  telefone2?: string
+  /** Fax (ainda aparece em muitos CNPJs agro). */
+  fax?: string
+  /** Email da RFB (quando declarado). */
+  email?: string
   socios: Array<{
     nome: string
     qualificacao: string
     dataEntrada?: string
     faixaEtaria?: string
   }>
+  enriquecidoEm: string
+}
+
+/**
+ * Endereço validado + geocodificado.
+ * - Dados textuais vêm do ViaCEP (fonte oficial Correios).
+ * - Coordenadas vêm do Nominatim (OpenStreetMap) — útil p/ mapa na UI e para
+ *   cruzar com clima/safra na região do imóvel.
+ */
+export interface GeoEnrichment {
+  cep: string
+  logradouro?: string
+  complemento?: string
+  bairro?: string
+  cidade: string
+  uf: string
+  /** Código IBGE do município (7 dígitos). */
+  codigoIbge?: number
+  /** Região do município (Norte, Nordeste, Sul etc.). */
+  regiao?: string
+  /** DDD principal do município (quando ViaCEP retorna). */
+  ddd?: string
+  /** Coordenadas geográficas (Nominatim). null se não encontrou. */
+  coordenadas?: { lat: number; lng: number; source: 'nominatim' | 'ibge' } | null
+  /** Endereço formatado pronto para exibir. */
+  enderecoFormatado?: string
   enriquecidoEm: string
 }
 

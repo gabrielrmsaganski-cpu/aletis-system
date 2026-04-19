@@ -5,10 +5,13 @@ import { AreaEstimator } from './AreaEstimator'
 import { ScoringEngine } from './ScoringEngine'
 import { SICARClient, SICARError, getSICARClient } from './SICARClient'
 import { SICARIndex, SicarIndexStats } from './SICARIndex'
+import { GeoEnrichmentSource, getGeoEnrichmentSource } from './GeoEnrichmentSource'
 import { LeadsRepository, BlacklistEntry } from './LeadsRepository'
 import type {
   AreaEstimation,
   CarConsultaResult,
+  CnpjEnrichment,
+  GeoEnrichment,
   LeadFull,
   LeadRaw,
   LeadStatus,
@@ -28,6 +31,7 @@ export class ProspeccaoService {
   private scorer: ScoringEngine
   private sicar: SICARClient
   private sicarIndex: SICARIndex
+  private geo: GeoEnrichmentSource
   private repo: LeadsRepository
 
   /** Controle de lotes em execução (key = batchId). */
@@ -40,6 +44,7 @@ export class ProspeccaoService {
     this.scorer = new ScoringEngine()
     this.sicar = getSICARClient()
     this.sicarIndex = new SICARIndex(storageDir)
+    this.geo = getGeoEnrichmentSource()
     this.repo = new LeadsRepository(storageDir)
   }
 
@@ -242,6 +247,161 @@ export class ProspeccaoService {
 
     this.repo.saveEnriched(full)
     return this.withStatus(full, 'completa')
+  }
+
+  /**
+   * Enriquecimento CAR ad-hoc — não depende de lead PGFN existente. Usado
+   * pelo CRM de clientes cadastrados manualmente. Estratégia:
+   *  1. Se `codImovel` for informado → consulta live (SICAR + 2captcha)
+   *  2. Senão, tenta o índice offline por CPF/CNPJ e nome (se disponível)
+   *  3. Caso contrário retorna `{ car: null }` — não quebra o fluxo.
+   *
+   * Erros de rede/captcha são capturados e reportados em `error` — o chamador
+   * decide se mostra ao usuário ou agenda retry.
+   */
+  async enriquecerCAR(params: {
+    cpfCnpj: string
+    nome: string
+    uf?: string | null
+    municipio?: string | null
+    codImovel?: string
+  }): Promise<{
+    car?: CarConsultaResult
+    carSource?: 'offline' | 'live'
+    carOutrosImoveis?: CarConsultaResult[]
+    totalHectares?: number
+    error?: string
+    errorCode?: string
+  }> {
+    const cpfCnpjClean = (params.cpfCnpj || '').replace(/\D/g, '')
+    if (!cpfCnpjClean) {
+      return { error: 'cpfCnpj inválido', errorCode: 'INVALID_CPF_CNPJ' }
+    }
+
+    // 1. Live scraping quando codImovel explícito
+    if (params.codImovel) {
+      try {
+        const car = await this.sicar.consultarPorCodigo(params.codImovel)
+        return { car, carSource: 'live', totalHectares: car.areaImovel }
+      } catch (err: any) {
+        const code = err instanceof SICARError ? err.code : 'SICAR_UNKNOWN'
+        return { error: err?.message || 'falha na consulta SICAR', errorCode: code }
+      }
+    }
+
+    // 2. Índice offline (SICARIndex)
+    if (this.sicarIndex.isAvailable()) {
+      const hit = this.sicarIndex.deepLookup(cpfCnpjClean, params.nome, {
+        uf: params.uf || null,
+        municipio: params.municipio || null,
+      })
+      if (hit) {
+        const carInfo = hit.principal
+        ;(carInfo as any)._matchEstrategia = hit.estrategia
+        ;(carInfo as any)._matchConfidence = hit.confidence
+        return {
+          car: carInfo,
+          carSource: 'offline',
+          carOutrosImoveis: hit.imoveis.length > 1 ? hit.imoveis : undefined,
+          totalHectares: hit.totalHectares,
+        }
+      }
+    }
+
+    // 3. Nada encontrado — sinaliza para UI oferecer consulta manual por código
+    return { errorCode: 'NO_MATCH', error: 'imóvel não encontrado no índice offline; informe o código CAR para consulta live' }
+  }
+
+  /**
+   * Enriquecimento COMPLETO de um cliente — orquestra as 3 fontes em paralelo:
+   *   • CAR        (SICAR offline + live) — área, código imóvel, módulos fiscais
+   *   • CNPJ       (BrasilAPI)            — razão social, QSA, CNAE, tel, email
+   *   • Geo        (ViaCEP + Nominatim)   — endereço canônico + coordenadas
+   *
+   * Qualquer fonte pode falhar independente; retorna o que deu certo. Sempre
+   * combinamos o CEP vindo do BrasilAPI (mais preciso p/ matriz) com fallback
+   * ao CEP/cidade informado manualmente — máxima cobertura.
+   *
+   * Campo `carCodigoImovel` sobrescreve a detecção automática pelo índice.
+   */
+  async enriquecerCliente(params: {
+    cpfCnpj: string
+    nome: string
+    uf?: string | null
+    cidade?: string | null
+    cep?: string | null
+    /** Código CAR para forçar consulta live (ignorado se offline achar). */
+    codImovel?: string
+  }): Promise<{
+    car?: CarConsultaResult
+    carSource?: 'offline' | 'live'
+    carOutrosImoveis?: CarConsultaResult[]
+    totalHectares?: number
+    cnpj?: CnpjEnrichment
+    geo?: GeoEnrichment
+    errors: { car?: string; cnpj?: string; geo?: string }
+    enriquecidoEm: string
+  }> {
+    const cpfCnpjClean = (params.cpfCnpj || '').replace(/\D/g, '')
+    const isPJ = cpfCnpjClean.length === 14
+
+    // Dispara as 3 fontes em paralelo. CNPJ ativa o ViaCEP melhor (traz CEP RFB).
+    const [carRes, cnpjRes] = await Promise.all([
+      this.enriquecerCAR({
+        cpfCnpj: params.cpfCnpj,
+        nome: params.nome,
+        uf: params.uf,
+        municipio: params.cidade,
+        codImovel: params.codImovel,
+      }).catch((err) => ({ error: err?.message || 'falha CAR', errorCode: 'CAR_THROW' })),
+      isPJ
+        ? this.brasil.enrichCnpj(cpfCnpjClean).catch((err) => ({ __err: err?.message || 'falha BrasilAPI' } as any))
+        : Promise.resolve(null),
+    ])
+
+    // CNPJ pode ter vindo com erro sinalizado; separa o happy path
+    let cnpj: CnpjEnrichment | undefined
+    let cnpjError: string | undefined
+    if (cnpjRes && typeof cnpjRes === 'object' && '__err' in cnpjRes) {
+      cnpjError = (cnpjRes as any).__err
+    } else if (cnpjRes) {
+      cnpj = cnpjRes as CnpjEnrichment
+    }
+
+    // Geo — usa CEP do BrasilAPI (matriz) ou CEP manual; fallback p/ cidade+UF
+    const cepPref = cnpj?.endereco?.cep || (params.cep || '').replace(/\D/g, '')
+    let geo: GeoEnrichment | undefined
+    let geoError: string | undefined
+    try {
+      const geoRes = await this.geo.enrich(cepPref || '', {
+        logradouro: cnpj?.endereco?.logradouro || undefined,
+        numero: cnpj?.endereco?.numero || undefined,
+        bairro: cnpj?.endereco?.bairro || undefined,
+        cidade: cnpj?.endereco?.municipio || params.cidade || undefined,
+        uf: cnpj?.endereco?.uf || params.uf || undefined,
+      })
+      if (geoRes) geo = geoRes
+      else geoError = 'CEP/endereço não localizado'
+    } catch (err: any) {
+      geoError = err?.message || 'falha Geo'
+    }
+
+    const carOk = 'car' in carRes && carRes.car
+    const errors: { car?: string; cnpj?: string; geo?: string } = {}
+    if (!carOk && 'error' in carRes && carRes.error) errors.car = carRes.error
+    if (cnpjError) errors.cnpj = cnpjError
+    if (geoError) errors.geo = geoError
+
+    return {
+      car: carOk ? carRes.car : undefined,
+      carSource: carOk ? (carRes as any).carSource : undefined,
+      carOutrosImoveis: carOk ? (carRes as any).carOutrosImoveis : undefined,
+      totalHectares: carOk ? (carRes as any).totalHectares : undefined,
+      cnpj,
+      geo,
+      errors,
+      enriquecidoEm: new Date().toISOString(),
+    }
   }
 
   /** Consulta SICAR (live) e já persiste como lead enriquecido. */
@@ -467,6 +627,11 @@ export class ProspeccaoService {
   /** Stats do índice offline SICAR. */
   sicarIndexStats(): SicarIndexStats {
     return this.sicarIndex.stats()
+  }
+
+  /** Recarrega o índice offline do disco (sem restart da API). */
+  reloadSicarIndex(): SicarIndexStats {
+    return this.sicarIndex.reload()
   }
 
   private buildAreaExplicacao(

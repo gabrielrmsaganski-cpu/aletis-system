@@ -1,8 +1,110 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import { getProspeccaoService } from '../services/prospeccao/ProspeccaoService'
+import type { CarConsultaResult, CnpjEnrichment, GeoEnrichment } from '../services/prospeccao/types'
 
 /* ========================================================================
  *  Tipos
  * ======================================================================== */
+
+/**
+ * Snapshot CAR anexado ao cliente — subset relevante do `CarConsultaResult`
+ * persistido junto do cliente para exibição no CRM sem depender da rota de
+ * prospecção. Preenchido automaticamente pelo enriquecimento on-create/patch.
+ */
+interface ClienteCarInfo {
+  codImovel: string
+  areaImovel: number
+  municipio: string
+  uf: string
+  condicaoCadastro: string
+  statusAnalise?: string
+  modulosFiscais?: number
+  areaAntropizada?: number
+  areaReservaLegal?: number
+  areaPreservacaoPermanente?: number
+  areaVegetacaoNativa?: number
+  tipoImovel?: 'IRU' | 'AST' | 'PCT'
+  source: 'offline' | 'live'
+  estrategiaMatch?: string
+  confidenceMatch?: number
+  outrosImoveis?: number
+  totalHectares?: number
+  enriquecidoEm: string
+}
+
+interface ClienteCarStatus {
+  status: 'pendente' | 'ok' | 'nao_encontrado' | 'erro'
+  mensagem?: string
+  errorCode?: string
+  tentadoEm?: string
+}
+
+/**
+ * Endereço canônico do cliente — composto de ViaCEP (Correios) + BrasilAPI (RFB)
+ * + fallback manual. Em geral o CEP e o município são autoritativos via RFB
+ * para PJ, e via ViaCEP para PF sem CNPJ.
+ */
+interface ClienteEnderecoEnriquecido {
+  cep?: string
+  logradouro?: string
+  numero?: string
+  complemento?: string
+  bairro?: string
+  cidade?: string
+  uf?: string
+  /** Código IBGE do município (7 dígitos). Chave p/ cruzar com CONAB/PAM. */
+  codigoMunicipioIbge?: number
+  /** Região administrativa (Norte, Nordeste, Sul etc.) */
+  regiao?: string
+  /** DDD principal do município (dígitos). */
+  ddd?: string
+  /** Endereço completo formatado — pronto p/ exibir. */
+  formatado?: string
+  /** Coordenadas (Nominatim OSM). */
+  coordenadas?: { lat: number; lng: number; source: 'nominatim' | 'ibge' }
+  fonte: 'brasilapi' | 'viacep' | 'manual' | 'composto'
+  enriquecidoEm: string
+}
+
+/** Informações RFB resumidas + QSA — subset do CnpjEnrichment relevante no CRM. */
+interface ClienteCnpjInfo {
+  razaoSocial: string
+  nomeFantasia?: string
+  cnaeFiscal: string
+  cnaeFiscalDescricao: string
+  cnaesSecundarios: Array<{ codigo: string; descricao: string }>
+  situacaoCadastral: string
+  motivoSituacaoCadastral?: string
+  situacaoEspecial?: string
+  dataAbertura?: string
+  capitalSocial?: number
+  porte?: string
+  naturezaJuridica?: string
+  optantePeloSimples?: boolean | null
+  optantePeloMei?: boolean | null
+  socios: Array<{
+    nome: string
+    qualificacao: string
+    dataEntrada?: string
+    faixaEtaria?: string
+  }>
+  enriquecidoEm: string
+}
+
+/** Canal de contato descoberto via enriquecimento (pode haver vários). */
+interface ContatoDescoberto {
+  tipo: 'telefone' | 'email' | 'fax'
+  valor: string
+  fonte: 'brasilapi' | 'manual' | 'outro'
+  label?: string // ex.: 'Principal', 'Secundário', 'Fax RFB'
+}
+
+interface ClienteEnrichStatus {
+  cnpj?: 'ok' | 'erro' | 'nao_aplicavel' | 'pendente'
+  geo?: 'ok' | 'erro' | 'nao_encontrado' | 'pendente'
+  mensagem?: string
+  tentadoEm?: string
+}
 
 interface Divida {
   contrato: string
@@ -49,6 +151,22 @@ interface Cliente {
   dataCadastro: string
   ultimaAtualizacao: string
   observacoes: string
+  /** Dados do Cadastro Ambiental Rural — enriquecido automaticamente no create/update. */
+  car?: ClienteCarInfo
+  /** Último resultado do enriquecimento CAR (sucesso, falha, pendente). */
+  carStatus?: ClienteCarStatus
+  /** Código CAR (principal ou informado manualmente) — usado para re-enriquecer. */
+  carCodigoImovel?: string
+  /** Endereço completo canônico (Correios + RFB + geo). */
+  endereco?: ClienteEnderecoEnriquecido
+  /** Dados RFB/CNPJ — só para PJ. */
+  cnpjInfo?: ClienteCnpjInfo
+  /** Todos os canais de contato descobertos (BrasilAPI + manual). */
+  contatos?: ContatoDescoberto[]
+  /** CEP (dígitos). Deriva do endereço; mantido flat p/ filtros. */
+  cep?: string
+  /** Status dos enriquecimentos secundários (CNPJ, Geo). CAR fica em carStatus. */
+  enrichStatus?: ClienteEnrichStatus
 }
 
 /* ========================================================================
@@ -412,10 +530,318 @@ function seed() {
 seed()
 
 /* ========================================================================
+ *  Enriquecimento CAR automático
+ * ======================================================================== */
+
+/**
+ * Dispara enriquecimento CAR em background para todos os clientes seed
+ * ainda sem `car` — limite 1/s para não sobrecarregar. Fire-and-forget:
+ * erros viram `carStatus.erro` e não interrompem o boot.
+ */
+function backfillSeedEnrichment(): void {
+  const pendentes = Array.from(clientes.values()).filter((c) => !c.car && !c.carStatus)
+  if (pendentes.length === 0) return
+  setImmediate(async () => {
+    for (const c of pendentes) {
+      c.carStatus = { status: 'pendente', tentadoEm: new Date().toISOString() }
+      try {
+        await enrichAndApply(c, { motivo: 'backfill boot' })
+      } catch {
+        // Silencioso — status já foi preenchido por enrichAndApply
+      }
+      // Throttle suave entre enriquecimentos
+      await new Promise((r) => setTimeout(r, 250))
+    }
+  })
+}
+
+function mapCarInfo(
+  car: CarConsultaResult,
+  source: 'offline' | 'live',
+  outrosImoveis: number | undefined,
+  totalHectares: number | undefined,
+): ClienteCarInfo {
+  return {
+    codImovel: car.codImovel,
+    areaImovel: car.areaImovel,
+    municipio: car.municipio,
+    uf: car.uf,
+    condicaoCadastro: car.condicaoCadastro,
+    statusAnalise: car.statusAnalise,
+    modulosFiscais: car.modulosFiscais,
+    areaAntropizada: car.areaAntropizada,
+    areaReservaLegal: car.areaReservaLegal,
+    areaPreservacaoPermanente: car.areaPreservacaoPermanente,
+    areaVegetacaoNativa: car.areaVegetacaoNativa,
+    tipoImovel: car.tipoImovel,
+    source,
+    estrategiaMatch: (car as any)._matchEstrategia,
+    confidenceMatch: (car as any)._matchConfidence,
+    outrosImoveis: outrosImoveis && outrosImoveis > 1 ? outrosImoveis - 1 : undefined,
+    totalHectares,
+    enriquecidoEm: new Date().toISOString(),
+  }
+}
+
+function mapCnpjInfo(c: CnpjEnrichment): ClienteCnpjInfo {
+  return {
+    razaoSocial: c.razaoSocial,
+    nomeFantasia: c.nomeFantasia,
+    cnaeFiscal: c.cnaeFiscal,
+    cnaeFiscalDescricao: c.cnaeFiscalDescricao,
+    cnaesSecundarios: c.cnaesSecundarios,
+    situacaoCadastral: c.situacaoCadastral,
+    motivoSituacaoCadastral: c.motivoSituacaoCadastral,
+    situacaoEspecial: c.situacaoEspecial,
+    dataAbertura: c.dataAbertura,
+    capitalSocial: c.capitalSocial,
+    porte: c.porte,
+    naturezaJuridica: c.naturezaJuridica,
+    optantePeloSimples: c.optantePeloSimples,
+    optantePeloMei: c.optantePeloMei,
+    socios: c.socios,
+    enriquecidoEm: c.enriquecidoEm,
+  }
+}
+
+/**
+ * Funde CEP/endereço vindos de 3 fontes numa estrutura única. Prioridade:
+ *   RFB (BrasilAPI) > Correios (ViaCEP/Geo) > manual informado no cadastro.
+ * Campos ausentes em fontes mais confiáveis caem na próxima.
+ */
+function mapEndereco(
+  cnpj: CnpjEnrichment | undefined,
+  geo: GeoEnrichment | undefined,
+  manual: { cidade?: string; uf?: string; cep?: string },
+): ClienteEnderecoEnriquecido | undefined {
+  const rfb = cnpj?.endereco
+  const hasAny = rfb || geo || manual.cep
+  if (!hasAny) return undefined
+
+  const cep = (rfb?.cep || geo?.cep || manual.cep || '').replace(/\D/g, '') || undefined
+  const logradouro = rfb?.logradouro || geo?.logradouro
+  const numero = rfb?.numero || undefined
+  const complemento = rfb?.complemento || geo?.complemento
+  const bairro = rfb?.bairro || geo?.bairro
+  const cidade = rfb?.municipio || geo?.cidade || manual.cidade
+  const uf = (rfb?.uf || geo?.uf || manual.uf || '').toUpperCase() || undefined
+  const codigoMunicipioIbge = rfb?.codigoMunicipioIbge ?? geo?.codigoIbge
+
+  const formatadoParts = [
+    logradouro && numero ? `${logradouro}, ${numero}` : logradouro,
+    complemento,
+    bairro,
+    cidade && uf ? `${cidade}/${uf}` : cidade || uf,
+    cep ? `CEP ${cep.slice(0, 5)}-${cep.slice(5)}` : null,
+  ].filter(Boolean)
+
+  const fonte: ClienteEnderecoEnriquecido['fonte'] =
+    rfb && geo ? 'composto' : rfb ? 'brasilapi' : geo ? 'viacep' : 'manual'
+
+  return {
+    cep,
+    logradouro: logradouro || undefined,
+    numero,
+    complemento: complemento || undefined,
+    bairro: bairro || undefined,
+    cidade,
+    uf,
+    codigoMunicipioIbge,
+    regiao: geo?.regiao,
+    ddd: geo?.ddd,
+    formatado: formatadoParts.length > 0 ? formatadoParts.join(' · ') : undefined,
+    coordenadas: geo?.coordenadas || undefined,
+    fonte,
+    enriquecidoEm: new Date().toISOString(),
+  }
+}
+
+/**
+ * Lista de contatos = tudo que a BrasilAPI trouxer + o que o usuário digitou
+ * manualmente. Deduplica por (tipo, valor normalizado).
+ */
+function buildContatos(
+  cnpj: CnpjEnrichment | undefined,
+  manual: { telefone?: string; email?: string },
+): ContatoDescoberto[] {
+  const out: ContatoDescoberto[] = []
+  const seen = new Set<string>()
+
+  const addPhone = (raw: string | undefined, fonte: 'brasilapi' | 'manual', label?: string, tipo: 'telefone' | 'fax' = 'telefone') => {
+    if (!raw) return
+    const digits = String(raw).replace(/\D/g, '')
+    if (digits.length < 8) return
+    const key = tipo + ':' + digits
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push({ tipo, valor: digits, fonte, label })
+  }
+  const addEmail = (raw: string | undefined, fonte: 'brasilapi' | 'manual', label?: string) => {
+    if (!raw) return
+    const v = String(raw).trim().toLowerCase()
+    if (!v.includes('@')) return
+    const key = 'email:' + v
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push({ tipo: 'email', valor: v, fonte, label })
+  }
+
+  // RFB/BrasilAPI — costuma ser o telefone da matriz
+  addPhone(cnpj?.telefone1, 'brasilapi', 'RFB principal')
+  addPhone(cnpj?.telefone2, 'brasilapi', 'RFB secundário')
+  addPhone(cnpj?.fax, 'brasilapi', 'RFB fax', 'fax')
+  addEmail(cnpj?.email, 'brasilapi', 'RFB')
+
+  // Manual — o que já estava no cadastro
+  addPhone(manual.telefone, 'manual', 'Cadastro')
+  addEmail(manual.email, 'manual', 'Cadastro')
+
+  return out
+}
+
+/**
+ * Aplica o resultado do enriquecimento COMPLETO ao cliente (in-place):
+ *   • CAR     → `car`, `carStatus`, `areaTotalHa` (se área SICAR confiável)
+ *   • CNPJ    → `cnpjInfo`, `atividade` (se vazia)
+ *   • Geo     → `endereco` (com coordenadas e IBGE) + `cep`
+ *   • Contato → `contatos[]` (merge RFB + manual)
+ *   • `enrichStatus` — resumo dos passos secundários
+ *
+ * Timeline recebe um único evento consolidado descrevendo o que foi descoberto.
+ * Campos preenchidos manualmente no cadastro nunca são sobrescritos (exceto quando estão vazios).
+ */
+async function enrichAndApply(
+  cliente: Cliente,
+  opts: { codImovel?: string; motivo?: string } = {},
+): Promise<void> {
+  const agora = new Date().toISOString()
+  const agoraDia = agora.slice(0, 10)
+  try {
+    const service = getProspeccaoService()
+    const res = await service.enriquecerCliente({
+      cpfCnpj: cliente.cpfCnpj,
+      nome: cliente.nome,
+      uf: cliente.uf,
+      cidade: cliente.cidade,
+      cep: cliente.cep,
+      codImovel: opts.codImovel || cliente.carCodigoImovel,
+    })
+
+    // ---- CAR ----
+    const resumo: string[] = []
+    if (res.car && res.carSource) {
+      const info = mapCarInfo(res.car, res.carSource, res.carOutrosImoveis?.length, res.totalHectares)
+      cliente.car = info
+      cliente.carCodigoImovel = info.codImovel
+      cliente.carStatus = {
+        status: 'ok',
+        mensagem: `CAR ${info.codImovel} · ${info.areaImovel.toLocaleString('pt-BR')} ha em ${info.municipio}/${info.uf}`,
+        tentadoEm: agora,
+      }
+      const sicarTotal = res.totalHectares ?? info.areaImovel
+      if ((!cliente.areaTotalHa || cliente.areaTotalHa <= 0) && sicarTotal > 0) {
+        cliente.areaTotalHa = Math.round(sicarTotal)
+      }
+      resumo.push(`CAR ${info.codImovel} (${info.areaImovel.toLocaleString('pt-BR')} ha)`)
+    } else {
+      const carErr = res.errors.car
+      const noMatch = !!carErr && /não encontrado|NO_MATCH/i.test(carErr)
+      cliente.carStatus = {
+        status: noMatch ? 'nao_encontrado' : carErr ? 'erro' : cliente.carStatus?.status || 'nao_encontrado',
+        mensagem: carErr,
+        errorCode: noMatch ? 'NO_MATCH' : undefined,
+        tentadoEm: agora,
+      }
+    }
+
+    // ---- CNPJ ----
+    if (res.cnpj) {
+      cliente.cnpjInfo = mapCnpjInfo(res.cnpj)
+      if (!cliente.atividade && res.cnpj.cnaeFiscalDescricao) {
+        cliente.atividade = res.cnpj.cnaeFiscalDescricao
+      }
+      resumo.push(`RFB: ${res.cnpj.razaoSocial}`)
+    }
+
+    // ---- Endereço + Geo ----
+    const endereco = mapEndereco(res.cnpj || undefined, res.geo || undefined, {
+      cidade: cliente.cidade,
+      uf: cliente.uf,
+      cep: cliente.cep,
+    })
+    if (endereco) {
+      cliente.endereco = endereco
+      if (endereco.cep) cliente.cep = endereco.cep
+      // Preenche cidade/uf se vieram vazios no cadastro
+      if (!cliente.cidade && endereco.cidade) cliente.cidade = endereco.cidade
+      if (!cliente.uf && endereco.uf) cliente.uf = endereco.uf
+      if (endereco.coordenadas) resumo.push(`geo: ${endereco.coordenadas.lat.toFixed(4)}, ${endereco.coordenadas.lng.toFixed(4)}`)
+      else if (endereco.formatado) resumo.push('endereço canônico')
+    }
+
+    // ---- Contatos (merge RFB + manual) ----
+    const contatos = buildContatos(res.cnpj || undefined, {
+      telefone: cliente.telefone,
+      email: cliente.email,
+    })
+    if (contatos.length > 0) {
+      cliente.contatos = contatos
+      // Preenche telefone/email flat se vazios, usando RFB
+      if (!cliente.telefone) {
+        const tel = contatos.find((c) => c.tipo === 'telefone' && c.fonte === 'brasilapi')
+        if (tel) cliente.telefone = tel.valor
+      }
+      if (!cliente.email) {
+        const em = contatos.find((c) => c.tipo === 'email' && c.fonte === 'brasilapi')
+        if (em) cliente.email = em.valor
+      }
+      const rfbTel = contatos.filter((c) => c.fonte === 'brasilapi' && c.tipo === 'telefone').length
+      const rfbEmail = contatos.some((c) => c.fonte === 'brasilapi' && c.tipo === 'email')
+      if (rfbTel > 0 || rfbEmail) {
+        resumo.push(`${rfbTel} tel${rfbEmail ? ' + email' : ''} RFB`)
+      }
+    }
+
+    // ---- Status resumo dos enriquecimentos ----
+    cliente.enrichStatus = {
+      cnpj: res.cnpj ? 'ok' : res.errors.cnpj ? 'erro' : cliente.cpfCnpj.replace(/\D/g, '').length === 14 ? 'nao_aplicavel' : 'nao_aplicavel',
+      geo: res.geo ? 'ok' : res.errors.geo ? 'nao_encontrado' : 'nao_encontrado',
+      mensagem: [res.errors.cnpj, res.errors.geo].filter(Boolean).join(' · ') || undefined,
+      tentadoEm: agora,
+    }
+
+    // ---- Timeline consolidada ----
+    if (resumo.length > 0) {
+      cliente.timeline.push({
+        data: agoraDia,
+        tipo: 'documento',
+        descricao: 'Enriquecimento automático concluído',
+        detalhes: resumo.join(' · ') + (opts.motivo ? ` · ${opts.motivo}` : ''),
+      })
+    }
+  } catch (err: any) {
+    cliente.carStatus = {
+      status: 'erro',
+      mensagem: err?.message || 'falha desconhecida',
+      errorCode: err?.code || 'UNKNOWN',
+      tentadoEm: agora,
+    }
+    cliente.enrichStatus = {
+      mensagem: err?.message || 'falha desconhecida',
+      tentadoEm: agora,
+    }
+  }
+  cliente.ultimaAtualizacao = agoraDia
+}
+
+/* ========================================================================
  *  Roteador
  * ======================================================================== */
 
 export default async function (fastify: FastifyInstance) {
+  // Backfill seed clients with CAR data when the module registers.
+  backfillSeedEnrichment()
+
   /* ---- LIST ---- */
   fastify.get('/api/clientes', async (request: FastifyRequest, _reply: FastifyReply) => {
     const { estagio, consultor, search } = request.query as {
@@ -520,11 +946,36 @@ export default async function (fastify: FastifyInstance) {
       dataCadastro: agora,
       ultimaAtualizacao: agora,
       observacoes: (body.observacoes as string) || '',
+      carCodigoImovel: (body.carCodigoImovel as string) || (body.codImovel as string) || undefined,
+      cep: typeof body.cep === 'string' ? (body.cep as string).replace(/\D/g, '') || undefined : undefined,
+      carStatus: { status: 'pendente', tentadoEm: new Date().toISOString() },
+      enrichStatus: { cnpj: 'pendente', geo: 'pendente', tentadoEm: new Date().toISOString() },
     }
 
     clientes.set(id, novo)
+
+    // Enriquecimento CAR — async, com timeout curto para offline; falha não bloqueia cadastro.
+    // Se offline não achar, retorna imediatamente; live (codImovel) pode levar 15-30s.
+    const enrichPromise = enrichAndApply(novo, {
+      codImovel: novo.carCodigoImovel,
+      motivo: 'cadastro inicial',
+    }).catch((err) => {
+      request.log.warn({ err, clienteId: id }, 'falha no enriquecimento CAR automático')
+    })
+
+    // Aguarda até 3s para incluir CAR offline na resposta — se não concluir,
+    // devolve cliente e o enriquecimento continua em background.
+    const waitResult = await Promise.race([
+      enrichPromise.then(() => 'done' as const),
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 3000)),
+    ])
+
     reply.status(201)
-    return { success: true, data: novo }
+    return {
+      success: true,
+      data: clientes.get(id),
+      carEnrichment: waitResult === 'done' ? 'applied' : 'pending',
+    }
   })
 
   /* ---- UPDATE ---- */
@@ -542,8 +993,12 @@ export default async function (fastify: FastifyInstance) {
       'nome', 'cpfCnpj', 'cidade', 'uf', 'telefone', 'email', 'atividade',
       'areaTotalHa', 'culturas', 'estagio', 'consultor', 'credor',
       'valorTotalDivida', 'valorTotalPago', 'dividas', 'pagamentos',
-      'observacoes',
+      'observacoes', 'carCodigoImovel', 'cep',
     ]
+
+    const cpfAntes = cliente.cpfCnpj
+    const nomeAntes = cliente.nome
+    const codCarAntes = cliente.carCodigoImovel
 
     for (const key of updatable) {
       if (body[key] !== undefined) {
@@ -562,9 +1017,115 @@ export default async function (fastify: FastifyInstance) {
       })
     }
 
+    // Re-enriquece CAR se o cpfCnpj, nome, ou código CAR mudaram — ou se
+    // o cliente ainda não tem CAR carregado (tentativa oportunística).
+    const precisaReenriquecer =
+      cliente.cpfCnpj !== cpfAntes ||
+      cliente.nome !== nomeAntes ||
+      cliente.carCodigoImovel !== codCarAntes ||
+      !cliente.car
+
+    let carEnrichmentStatus: 'applied' | 'pending' | 'skipped' = 'skipped'
+    if (precisaReenriquecer) {
+      cliente.carStatus = { status: 'pendente', tentadoEm: new Date().toISOString() }
+      const enrichPromise = enrichAndApply(cliente, {
+        codImovel: cliente.carCodigoImovel,
+        motivo: cpfAntes !== cliente.cpfCnpj ? 'cpfCnpj atualizado' : 'reavaliação CAR',
+      }).catch((err) => {
+        request.log.warn({ err, clienteId: id }, 'falha no enriquecimento CAR no update')
+      })
+      const waitResult = await Promise.race([
+        enrichPromise.then(() => 'done' as const),
+        new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 3000)),
+      ])
+      carEnrichmentStatus = waitResult === 'done' ? 'applied' : 'pending'
+    }
+
     clientes.set(id, cliente)
-    return { success: true, data: cliente }
+    return { success: true, data: cliente, carEnrichment: carEnrichmentStatus }
   })
+
+  /* ---- MANUAL CAR ENRICH (force) ---- */
+  fastify.post('/api/clientes/:id/enriquecer-car', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string }
+    const cliente = clientes.get(id)
+
+    if (!cliente) {
+      reply.status(404)
+      return { success: false, error: 'Cliente não encontrado' }
+    }
+
+    const body = (request.body as { codImovel?: string } | undefined) || {}
+    const codImovel = body.codImovel || cliente.carCodigoImovel
+
+    if (codImovel) cliente.carCodigoImovel = codImovel
+    cliente.carStatus = { status: 'pendente', tentadoEm: new Date().toISOString() }
+
+    await enrichAndApply(cliente, {
+      codImovel,
+      motivo: codImovel ? `live via código ${codImovel}` : 'reconsulta manual',
+    })
+    clientes.set(id, cliente)
+
+    return {
+      success: true,
+      data: {
+        id: cliente.id,
+        car: cliente.car,
+        carStatus: cliente.carStatus,
+        carCodigoImovel: cliente.carCodigoImovel,
+        areaTotalHa: cliente.areaTotalHa,
+      },
+    }
+  })
+
+  /**
+   * Backfill em massa — re-enriquece clientes que ainda estão sem CAR válido.
+   * Útil depois do cron `refresh-sicar` popular o índice com dados novos.
+   * Roda sequencial com throttle para não sobrecarregar captcha/SICAR.
+   */
+  fastify.post(
+    '/api/clientes/enriquecer-car/backfill',
+    async (request: FastifyRequest, _reply: FastifyReply) => {
+      const body = (request.body as { force?: boolean; delayMs?: number } | undefined) || {}
+      const force = body.force === true
+      const delayMs = Math.max(0, Math.min(2000, body.delayMs ?? 250))
+
+      const alvos = Array.from(clientes.values()).filter((c) => {
+        if (force) return true
+        if (!c.carStatus) return true
+        return c.carStatus.status !== 'ok'
+      })
+
+      if (alvos.length === 0) {
+        return { success: true, data: { processed: 0, ok: 0, pendentes: 0, total: clientes.size } }
+      }
+
+      // Fire-and-forget: responde rápido, processa em background. Cron do
+      // refresh-sicar não precisa aguardar todos os enriquecimentos.
+      setImmediate(async () => {
+        for (const c of alvos) {
+          c.carStatus = { status: 'pendente', tentadoEm: new Date().toISOString() }
+          try {
+            await enrichAndApply(c, { motivo: 'backfill pós-refresh SICAR' })
+          } catch {
+            // carStatus já atualizado com erro dentro de enrichAndApply
+          }
+          if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs))
+        }
+      })
+
+      return {
+        success: true,
+        data: {
+          scheduled: alvos.length,
+          total: clientes.size,
+          throttleMs: delayMs,
+          startedAt: new Date().toISOString(),
+        },
+      }
+    },
+  )
 
   /* ---- TIMELINE ---- */
   fastify.get('/api/clientes/:id/timeline', async (request: FastifyRequest, reply: FastifyReply) => {
