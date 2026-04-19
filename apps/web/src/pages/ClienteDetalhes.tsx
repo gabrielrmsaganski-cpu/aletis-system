@@ -53,6 +53,9 @@ type Estagio =
   | 'acordo'
   | 'acompanhamento'
   | 'concluido'
+  // Aliases do backend — api/routes/clientes.ts usa outro vocabulário
+  | 'prospeccao'
+  | 'encerrado'
 
 type TabId = 'visao-geral' | 'dividas' | 'propostas' | 'documentos' | 'fluxo-caixa' | 'timeline'
 
@@ -113,7 +116,7 @@ interface ClienteData {
 // ────────────────────────────────────────────────────────────
 // Stage Config
 // ────────────────────────────────────────────────────────────
-const STAGE_CONFIG: Record<Estagio, { label: string; color: string }> = {
+const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
   lead: { label: 'Lead', color: '#6B7280' },
   qualificacao: { label: 'Qualificação', color: '#3B82F6' },
   analise: { label: 'Análise', color: '#8B5CF6' },
@@ -122,7 +125,12 @@ const STAGE_CONFIG: Record<Estagio, { label: string; color: string }> = {
   acordo: { label: 'Acordo', color: '#27AE60' },
   acompanhamento: { label: 'Acompanhamento', color: '#0F4C35' },
   concluido: { label: 'Concluído', color: '#1B6B4A' },
+  // Aliases do backend (api/routes/clientes.ts usa outro vocabulário)
+  prospeccao: { label: 'Prospecção', color: '#6B7280' },
+  encerrado: { label: 'Encerrado', color: '#1B6B4A' },
 }
+
+const FALLBACK_STAGE = { label: 'Lead', color: '#6B7280' }
 
 // ────────────────────────────────────────────────────────────
 // Currency Helpers
@@ -426,7 +434,7 @@ function HealthGauge({ value, size = 80 }: { value: number; size?: number }) {
 // Stage Badge
 // ────────────────────────────────────────────────────────────
 function StageBadge({ estagio, large }: { estagio: Estagio; large?: boolean }) {
-  const cfg = STAGE_CONFIG[estagio]
+  const cfg = STAGE_CONFIG[estagio] || FALLBACK_STAGE
   return (
     <span
       className={`inline-flex items-center rounded-full font-semibold font-body ${
@@ -538,6 +546,50 @@ export default function ClienteDetalhes() {
     apiFetch<any>(`/clientes/${apiId}`)
       .then(data => {
         if (data && data.nome) {
+          // Backend usa vocabulário diferente para status de dívida; mapeia p/ o do UI.
+          const debtStatusMap: Record<string, Divida['status']> = {
+            ativa: 'atrasada',
+            em_acordo: 'renegociada',
+            renegociada: 'renegociada',
+            paga: 'quitada',
+            em_dia: 'em_dia',
+            atrasada: 'atrasada',
+            quitada: 'quitada',
+          }
+          const mappedDividas: Divida[] = Array.isArray(data.dividas)
+            ? data.dividas.map((d: any, idx: number): Divida => ({
+                id: d.id || `div-${idx}`,
+                credor: d.credor || '—',
+                contrato: d.contrato || '—',
+                modalidade: d.modalidade || 'Crédito Rural',
+                valorOriginal: Number(d.valorOriginal) || 0,
+                // Backend grava `valorAtualizado`, UI espera `valorAtual`
+                valorAtual: Number(d.valorAtual ?? d.valorAtualizado) || 0,
+                taxa: d.taxa || '—',
+                status: debtStatusMap[d.status] || 'em_dia',
+                historicoPagamentos: Array.isArray(d.historicoPagamentos) ? d.historicoPagamentos : [],
+              }))
+            : []
+
+          // Backend timeline: {data, tipo, descricao, detalhes?}; UI espera {id, titulo, usuario, ...}
+          const mappedTimeline: TimelineEvent[] = Array.isArray(data.timeline)
+            ? data.timeline.map((t: any, idx: number): TimelineEvent => ({
+                id: t.id || `ev-${idx}`,
+                tipo: t.tipo || 'analise',
+                data: t.data || '',
+                titulo: t.titulo || (t.descricao ? String(t.descricao).slice(0, 80) : 'Evento'),
+                descricao: t.detalhes || t.descricao || '',
+                usuario: t.usuario || data.consultor || 'Sistema',
+              }))
+            : []
+
+          const areaLabel = data.car?.areaImovel
+            ? `${Number(data.car.areaImovel).toLocaleString('pt-BR')} ha`
+            : data.areaTotalHa
+              ? `${data.areaTotalHa} hectares`
+              : '—'
+          const condicao = data.observacoes || data.car?.condicaoCadastro || 'Em análise'
+
           const mapped: ClienteData = {
             id: data.id,
             nome: data.nome,
@@ -549,15 +601,20 @@ export default function ClienteDetalhes() {
             estagio: data.estagio || 'lead',
             saudeFinanceira: data.saudeFinanceira ?? 50,
             consultor: data.consultor || 'Não atribuído',
-            propriedade: data.propriedade || { nome: data.nome, area: `${data.areaTotalHa || 0} ha`, culturas: data.culturas || [], condicao: 'Boa' },
-            resumoFinanceiro: data.resumoFinanceiro || {
-              totalDivida: data.valorTotalDivida || 0,
-              totalPago: data.valorTotalPago || 0,
-              pendente: (data.valorTotalDivida || 0) - (data.valorTotalPago || 0),
+            propriedade: data.propriedade || {
+              nome: data.car?.codImovel ? `CAR ${data.car.codImovel}` : data.nome,
+              area: areaLabel,
+              culturas: Array.isArray(data.culturas) ? data.culturas : [],
+              condicao,
             },
-            dividas: data.dividas || [],
-            evolucaoDivida: data.evolucaoDivida || [],
-            timeline: data.timeline || [],
+            resumoFinanceiro: data.resumoFinanceiro || {
+              totalDivida: Number(data.valorTotalDivida) || 0,
+              totalPago: Number(data.valorTotalPago) || 0,
+              pendente: (Number(data.valorTotalDivida) || 0) - (Number(data.valorTotalPago) || 0),
+            },
+            dividas: mappedDividas,
+            evolucaoDivida: Array.isArray(data.evolucaoDivida) ? data.evolucaoDivida : [],
+            timeline: mappedTimeline,
           }
           setApiCliente(mapped)
         }
@@ -572,7 +629,7 @@ export default function ClienteDetalhes() {
     return { ...genericData, id: id || 'unknown' }
   }, [id, apiCliente])
 
-  const stageCfg = STAGE_CONFIG[cliente.estagio]
+  const stageCfg = STAGE_CONFIG[cliente.estagio] || FALLBACK_STAGE
 
   // ── Action Handlers (defined after cliente is available) ──
   const handleGerarProposta = useCallback(() => {
