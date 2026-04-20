@@ -153,6 +153,9 @@ export class CaptchaSolver {
     if (req.dataS) params['data-s'] = req.dataS
     if (req.cookies) params.cookies = req.cookies
     if (req.userAgent) params.userAgent = req.userAgent
+    // 2captcha v1 API aceita 'userAgent' (camelCase). Mantemos também a forma
+    // lowercase 'useragent' que alguns workers exigem em tasks Turnstile.
+    if (req.userAgent) params.useragent = req.userAgent
     if (req.proxy) {
       params.proxy = req.proxy
       params.proxytype = req.proxyType || 'HTTP'
@@ -171,6 +174,9 @@ export class CaptchaSolver {
     }
     if (req.cookies) params.cookies = req.cookies
     if (req.userAgent) params.userAgent = req.userAgent
+    // 2captcha v1 API aceita 'userAgent' (camelCase). Mantemos também a forma
+    // lowercase 'useragent' que alguns workers exigem em tasks Turnstile.
+    if (req.userAgent) params.useragent = req.userAgent
     if (req.proxy) {
       params.proxy = req.proxy
       params.proxytype = req.proxyType || 'HTTP'
@@ -187,6 +193,9 @@ export class CaptchaSolver {
     if (req.invisible) params.invisible = 1
     if (req.cookies) params.cookies = req.cookies
     if (req.userAgent) params.userAgent = req.userAgent
+    // 2captcha v1 API aceita 'userAgent' (camelCase). Mantemos também a forma
+    // lowercase 'useragent' que alguns workers exigem em tasks Turnstile.
+    if (req.userAgent) params.useragent = req.userAgent
     if (req.proxy) {
       params.proxy = req.proxy
       params.proxytype = req.proxyType || 'HTTP'
@@ -203,6 +212,9 @@ export class CaptchaSolver {
     if (req.action) params.action = req.action
     if (req.cData) params.data = req.cData
     if (req.userAgent) params.userAgent = req.userAgent
+    // 2captcha v1 API aceita 'userAgent' (camelCase). Mantemos também a forma
+    // lowercase 'useragent' que alguns workers exigem em tasks Turnstile.
+    if (req.userAgent) params.useragent = req.userAgent
     return this.submitAndPoll(params, 'turnstile')
   }
 
