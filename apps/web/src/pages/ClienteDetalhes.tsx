@@ -63,7 +63,7 @@ type Estagio =
   | 'prospeccao'
   | 'encerrado'
 
-type TabId = 'visao-geral' | 'dividas' | 'propostas' | 'documentos' | 'fluxo-caixa' | 'timeline'
+type TabId = 'visao-geral' | 'dividas' | 'risco' | 'exposicao' | 'visitas' | 'propostas' | 'documentos' | 'fluxo-caixa' | 'timeline'
 
 interface Divida {
   id: string
@@ -155,6 +155,97 @@ interface ClienteData {
   producaoMunicipal?: ProducaoMunicipal
   areaTotalHa?: number
   car?: { areaImovel?: number; codImovel?: string; municipio?: string; uf?: string }
+}
+
+// ── Tipos auxiliares (novos endpoints) ──────────────────────
+interface SraiResult {
+  scoreTotal: number
+  classificacao: 'baixo' | 'moderado' | 'alto' | 'critico'
+  componentes: { financeiro: number; operacional: number; climatico: number; relacionamento: number }
+  alertas: string[]
+  recomendacoes: string[]
+  versao: string
+}
+
+interface AbsResult {
+  elegivel: boolean
+  nivelElegibilidade: 'integral' | 'parcial' | 'condicional' | 'inelegivel'
+  scorePercentual: number
+  checkpoints: Array<{
+    item: string
+    descricao: string
+    status: 'ok' | 'pendente' | 'falha' | 'nao_aplicavel'
+    detalhes?: string
+    fundamentacao: string
+  }>
+  taxasEstimadasPct: { min: number; max: number }
+  acoesRecomendadas: string[]
+  fundamentacaoGeral: string
+  versao: string
+}
+
+interface ExposicaoItem {
+  commodity: string
+  areaHa: number
+  produtividade: number
+  unidadeProdutividade: string
+  precoReferencia: number
+  unidadePreco: string
+  pctReceita?: number
+  atualizadoEm?: string
+  observacoes?: string
+}
+
+interface VisitaChecklist {
+  infraestruturaOk?: boolean
+  maquinarioOk?: boolean
+  lavouraOk?: boolean
+  armazenagemOk?: boolean
+  ambientalOk?: boolean
+  documentacaoOk?: boolean
+  receptividadeOk?: boolean
+}
+
+interface VisitaTecnica {
+  id: string
+  data: string
+  consultor: string
+  duracaoMinutos?: number
+  checklist: VisitaChecklist
+  observacoesGerais?: string
+  riscos?: string[]
+  oportunidades?: string[]
+  criadoEm: string
+}
+
+interface VisitaForm {
+  data: string
+  consultor: string
+  duracaoMinutos: number
+  checklist: VisitaChecklist
+  observacoesGerais: string
+  riscos: string
+  oportunidades: string
+}
+
+function defaultVisitaForm(): VisitaForm {
+  return {
+    data: new Date().toISOString().slice(0, 10),
+    consultor: '',
+    duracaoMinutos: 60,
+    checklist: {
+      infraestruturaOk: false,
+      maquinarioOk: false,
+      lavouraOk: false,
+      armazenagemOk: false,
+      ambientalOk: false,
+      documentacaoOk: false,
+      receptividadeOk: false,
+    },
+    observacoesGerais: '',
+    riscos: '',
+    oportunidades: '',
+  }
 }
 
 // ────────────────────────────────────────────────────────────
@@ -562,6 +653,9 @@ function ChartTooltip({ active, payload, label }: any) {
 const TABS: { id: TabId; label: string }[] = [
   { id: 'visao-geral', label: 'Visão Geral' },
   { id: 'dividas', label: 'Dívidas' },
+  { id: 'risco', label: 'Risco & AB+S' },
+  { id: 'exposicao', label: 'Exposição' },
+  { id: 'visitas', label: 'Visitas' },
   { id: 'propostas', label: 'Propostas' },
   { id: 'documentos', label: 'Documentos' },
   { id: 'fluxo-caixa', label: 'Fluxo de Caixa' },
@@ -588,6 +682,18 @@ export default function ClienteDetalhes() {
   const [proximaAcao, setProximaAcao] = useState<{ data: string; descricao: string } | null>(null)
   const [proximaAcaoForm, setProximaAcaoForm] = useState({ data: '', descricao: '' })
   const [editingProxAcao, setEditingProxAcao] = useState(false)
+  // SRAI + AB+S
+  const [srai, setSrai] = useState<SraiResult | null>(null)
+  const [abs, setAbs] = useState<AbsResult | null>(null)
+  const [loadingRisco, setLoadingRisco] = useState(false)
+  const [absQuery, setAbsQuery] = useState({ plantioDireto: false, ilpf: false, prada: false })
+  // Exposição por commodity
+  const [exposicao, setExposicao] = useState<ExposicaoItem[]>([])
+  const [savingExposicao, setSavingExposicao] = useState(false)
+  // Visitas técnicas
+  const [visitas, setVisitas] = useState<VisitaTecnica[]>([])
+  const [novaVisita, setNovaVisita] = useState<VisitaForm>(defaultVisitaForm())
+  const [savingVisita, setSavingVisita] = useState(false)
   const navigate = useNavigate()
   const { toasts, show: showToast, dismiss: dismissToast } = useToast()
 
@@ -691,6 +797,29 @@ export default function ClienteDetalhes() {
       .catch(() => { /* fallback to inline data */ })
   }, [id])
 
+  // Load SRAI + ABS + exposicao + visitas
+  useEffect(() => {
+    if (!id) return
+    const apiId = id === 'ailton-caeiro' ? 'cli-001' : id === 'paulo-luciano' ? 'cli-002' : id
+    setLoadingRisco(true)
+    Promise.all([
+      apiFetch<{ success: boolean; data: SraiResult }>(`/clientes/${apiId}/srai`).catch(() => null),
+      apiFetch<{ success: boolean; data: AbsResult }>(
+        `/clientes/${apiId}/abs?plantioDireto=${absQuery.plantioDireto}&ilpf=${absQuery.ilpf}&prada=${absQuery.prada}`,
+      ).catch(() => null),
+      apiFetch<any>(`/clientes/${apiId}`).catch(() => null),
+    ])
+      .then(([sraiRes, absRes, clienteRes]) => {
+        if (sraiRes?.success) setSrai(sraiRes.data)
+        if (absRes?.success) setAbs(absRes.data)
+        if (clienteRes) {
+          setExposicao(Array.isArray(clienteRes.exposicaoCommodity) ? clienteRes.exposicaoCommodity : [])
+          setVisitas(Array.isArray(clienteRes.visitasTecnicas) ? clienteRes.visitasTecnicas : [])
+        }
+      })
+      .finally(() => setLoadingRisco(false))
+  }, [id, absQuery])
+
   const apiIdResolved = useMemo(
     () => (id === 'ailton-caeiro' ? 'cli-001' : id === 'paulo-luciano' ? 'cli-002' : id),
     [id],
@@ -769,6 +898,78 @@ export default function ClienteDetalhes() {
       showToast('Falha ao salvar ação', 'error')
     }
   }, [apiIdResolved, proximaAcaoForm, showToast])
+
+  // Exposição commodity — salvar lista inteira via PUT
+  const handleSalvarExposicao = useCallback(async (lista: ExposicaoItem[]) => {
+    if (!apiIdResolved) return
+    setSavingExposicao(true)
+    try {
+      const res = await apiFetch<{ success: boolean; data: ExposicaoItem[] }>(
+        `/clientes/${apiIdResolved}/exposicao`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ exposicao: lista }),
+        },
+      )
+      if (res.success) {
+        setExposicao(res.data)
+        showToast('Exposição atualizada', 'success')
+      }
+    } catch {
+      showToast('Falha ao salvar exposição', 'error')
+    } finally {
+      setSavingExposicao(false)
+    }
+  }, [apiIdResolved, showToast])
+
+  // Visita técnica — criar
+  const handleCriarVisita = useCallback(async () => {
+    if (!apiIdResolved) return
+    if (!novaVisita.consultor.trim() || !novaVisita.data) {
+      showToast('Informe consultor e data', 'error')
+      return
+    }
+    setSavingVisita(true)
+    try {
+      const res = await apiFetch<{ success: boolean; data: VisitaTecnica }>(
+        `/clientes/${apiIdResolved}/visitas`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            data: novaVisita.data,
+            consultor: novaVisita.consultor.trim(),
+            duracaoMinutos: novaVisita.duracaoMinutos || undefined,
+            checklist: novaVisita.checklist,
+            observacoesGerais: novaVisita.observacoesGerais.trim() || undefined,
+            riscos: novaVisita.riscos.split('\n').map((r) => r.trim()).filter(Boolean),
+            oportunidades: novaVisita.oportunidades.split('\n').map((o) => o.trim()).filter(Boolean),
+          }),
+        },
+      )
+      if (res.success) {
+        setVisitas((prev) => [...prev, res.data])
+        setNovaVisita(defaultVisitaForm())
+        showToast('Visita registrada', 'success')
+      }
+    } catch {
+      showToast('Falha ao registrar visita', 'error')
+    } finally {
+      setSavingVisita(false)
+    }
+  }, [apiIdResolved, novaVisita, showToast])
+
+  const handleRemoverVisita = useCallback(async (visitaId: string) => {
+    if (!apiIdResolved) return
+    try {
+      await apiFetch(`/clientes/${apiIdResolved}/visitas/${visitaId}`, { method: 'DELETE' })
+      setVisitas((prev) => prev.filter((v) => v.id !== visitaId))
+      showToast('Visita removida', 'success')
+    } catch {
+      showToast('Falha ao remover visita', 'error')
+    }
+  }, [apiIdResolved, showToast])
 
   // Resolve client data — prefer API, fallback to inline
   const cliente: ClienteData = useMemo(() => {
@@ -1897,6 +2098,408 @@ export default function ClienteDetalhes() {
               </div>
             )
           })()}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════
+           TAB: RISCO & AB+S
+           ════════════════════════════════════════════════════════ */}
+      {activeTab === 'risco' && (
+        <div className="space-y-6 animate-fade-in">
+          {loadingRisco && <p className="text-sm text-aletis-grafite-claro">Carregando análise de risco…</p>}
+
+          {srai && (
+            <div className="card-premium p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-display font-bold text-aletis-grafite-escuro">Score SRAI (Risco Agrícola Integrado)</h3>
+                  <p className="text-[11px] font-body text-aletis-grafite-claro mt-0.5">{srai.versao}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className={`text-3xl font-display font-bold ${
+                      srai.classificacao === 'baixo' ? 'text-positivo' :
+                      srai.classificacao === 'moderado' ? 'text-amber-600' :
+                      srai.classificacao === 'alto' ? 'text-orange-600' : 'text-red-600'
+                    }`}>
+                      {srai.scoreTotal}
+                    </p>
+                    <p className={`text-xs font-body font-semibold uppercase tracking-wider ${
+                      srai.classificacao === 'baixo' ? 'text-positivo' :
+                      srai.classificacao === 'moderado' ? 'text-amber-600' :
+                      srai.classificacao === 'alto' ? 'text-orange-600' : 'text-red-600'
+                    }`}>
+                      risco {srai.classificacao}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                {Object.entries(srai.componentes).map(([k, v]) => (
+                  <div key={k} className="rounded-lg bg-aletis-bege/40 border border-aletis-borda/50 p-3">
+                    <p className="text-[10px] font-body uppercase tracking-wider text-aletis-grafite-claro">{k}</p>
+                    <p className="text-xl font-display font-bold text-aletis-grafite-escuro mt-1">{v}</p>
+                    <div className="h-1.5 bg-aletis-borda/40 rounded-full mt-2 overflow-hidden">
+                      <div className="h-full bg-aletis-dourado" style={{ width: `${v}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {srai.alertas.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-body font-semibold uppercase tracking-wider text-aletis-grafite-medio mb-2">Alertas ({srai.alertas.length})</p>
+                  <ul className="space-y-1">
+                    {srai.alertas.map((a, i) => (
+                      <li key={i} className="text-xs font-body text-aletis-grafite-medio flex items-start gap-2">
+                        <span className="text-red-500 mt-0.5">•</span>{a}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div>
+                <p className="text-xs font-body font-semibold uppercase tracking-wider text-aletis-grafite-medio mb-2">Recomendações</p>
+                <ul className="space-y-1">
+                  {srai.recomendacoes.map((r, i) => (
+                    <li key={i} className="text-xs font-body text-aletis-grafite-medio flex items-start gap-2">
+                      <span className="text-aletis-dourado mt-0.5">→</span>{r}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {abs && (
+            <div className="card-premium p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-display font-bold text-aletis-grafite-escuro">Elegibilidade AB+S</h3>
+                  <p className="text-[11px] font-body text-aletis-grafite-claro mt-0.5">{abs.versao}</p>
+                </div>
+                <div className="text-right">
+                  <p className={`text-xs font-body font-semibold uppercase tracking-wider ${
+                    abs.nivelElegibilidade === 'integral' ? 'text-positivo' :
+                    abs.nivelElegibilidade === 'parcial' ? 'text-amber-600' :
+                    abs.nivelElegibilidade === 'condicional' ? 'text-orange-600' : 'text-red-600'
+                  }`}>
+                    {abs.nivelElegibilidade}
+                  </p>
+                  <p className="text-xl font-display font-bold text-aletis-grafite-escuro">{abs.scorePercentual}%</p>
+                  {abs.taxasEstimadasPct.max > 0 && (
+                    <p className="text-[11px] font-body text-aletis-grafite-claro">
+                      Taxas: {abs.taxasEstimadasPct.min}%-{abs.taxasEstimadasPct.max}% a.a.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-3 flex-wrap mb-4 p-3 bg-aletis-bege/30 rounded-lg">
+                <label className="text-xs font-body flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={absQuery.plantioDireto}
+                    onChange={(e) => setAbsQuery((q) => ({ ...q, plantioDireto: e.target.checked }))}
+                  />
+                  Plantio direto
+                </label>
+                <label className="text-xs font-body flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={absQuery.ilpf}
+                    onChange={(e) => setAbsQuery((q) => ({ ...q, ilpf: e.target.checked }))}
+                  />
+                  iLPF
+                </label>
+                <label className="text-xs font-body flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={absQuery.prada}
+                    onChange={(e) => setAbsQuery((q) => ({ ...q, prada: e.target.checked }))}
+                  />
+                  PRADA
+                </label>
+              </div>
+
+              <div className="space-y-2 mb-4">
+                {abs.checkpoints.map((c) => (
+                  <div key={c.item} className="flex items-start gap-3 p-3 rounded-lg border border-aletis-borda/50">
+                    <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                      c.status === 'ok' ? 'bg-positivo/15 text-positivo' :
+                      c.status === 'pendente' ? 'bg-amber-100 text-amber-700' :
+                      c.status === 'falha' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {c.status === 'ok' ? '✓' : c.status === 'falha' ? '✕' : c.status === 'pendente' ? '!' : '—'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-body font-semibold text-aletis-grafite-escuro">{c.descricao}</p>
+                      {c.detalhes && <p className="text-xs font-body text-aletis-grafite-medio mt-0.5">{c.detalhes}</p>}
+                      <p className="text-[10px] font-body text-aletis-grafite-claro mt-1 italic">{c.fundamentacao}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t border-aletis-borda/60 pt-3">
+                <p className="text-xs font-body font-semibold uppercase tracking-wider text-aletis-grafite-medio mb-2">Ações Recomendadas</p>
+                <ul className="space-y-1">
+                  {abs.acoesRecomendadas.map((a, i) => (
+                    <li key={i} className="text-xs font-body text-aletis-grafite-medio flex items-start gap-2">
+                      <span className="text-aletis-dourado mt-0.5">→</span>{a}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {!loadingRisco && !srai && !abs && (
+            <div className="card-premium p-12 text-center text-sm text-aletis-grafite-claro">
+              Não foi possível carregar análise de risco.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════
+           TAB: EXPOSIÇÃO COMMODITY
+           ════════════════════════════════════════════════════════ */}
+      {activeTab === 'exposicao' && (
+        <div className="space-y-4 animate-fade-in">
+          <div className="card-premium p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-display font-bold text-aletis-grafite-escuro">Exposição por Commodity</h3>
+                <p className="text-[11px] font-body text-aletis-grafite-claro mt-0.5">
+                  Base para simulador multi-cenário e score SRAI
+                </p>
+              </div>
+              <button
+                className="px-3 py-1.5 text-xs font-body font-semibold rounded-lg bg-aletis-verde text-white hover:bg-aletis-verde/90"
+                onClick={() =>
+                  setExposicao((prev) => [
+                    ...prev,
+                    {
+                      commodity: 'soja',
+                      areaHa: 0,
+                      produtividade: 60,
+                      unidadeProdutividade: 'sc/ha',
+                      precoReferencia: 140,
+                      unidadePreco: 'R$/sc',
+                    },
+                  ])
+                }
+              >
+                + Adicionar
+              </button>
+            </div>
+
+            {exposicao.length === 0 && (
+              <p className="text-sm text-aletis-grafite-claro py-8 text-center">
+                Nenhuma commodity cadastrada. Adicione a primeira linha acima.
+              </p>
+            )}
+
+            {exposicao.map((e, idx) => (
+              <div key={idx} className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-3 p-3 rounded-lg border border-aletis-borda/50 bg-aletis-bege/20">
+                <input
+                  className="input-field py-2 text-sm"
+                  placeholder="commodity"
+                  value={e.commodity}
+                  onChange={(ev) => setExposicao((prev) => prev.map((x, i) => i === idx ? { ...x, commodity: ev.target.value } : x))}
+                />
+                <input
+                  className="input-field py-2 text-sm"
+                  type="number"
+                  placeholder="área (ha)"
+                  value={e.areaHa}
+                  onChange={(ev) => setExposicao((prev) => prev.map((x, i) => i === idx ? { ...x, areaHa: Number(ev.target.value) } : x))}
+                />
+                <input
+                  className="input-field py-2 text-sm"
+                  type="number"
+                  placeholder="produtividade"
+                  value={e.produtividade}
+                  onChange={(ev) => setExposicao((prev) => prev.map((x, i) => i === idx ? { ...x, produtividade: Number(ev.target.value) } : x))}
+                />
+                <input
+                  className="input-field py-2 text-sm"
+                  placeholder="unid. prod."
+                  value={e.unidadeProdutividade}
+                  onChange={(ev) => setExposicao((prev) => prev.map((x, i) => i === idx ? { ...x, unidadeProdutividade: ev.target.value } : x))}
+                />
+                <input
+                  className="input-field py-2 text-sm"
+                  type="number"
+                  placeholder="preço ref."
+                  value={e.precoReferencia}
+                  onChange={(ev) => setExposicao((prev) => prev.map((x, i) => i === idx ? { ...x, precoReferencia: Number(ev.target.value) } : x))}
+                />
+                <div className="flex items-center gap-1">
+                  <input
+                    className="input-field py-2 text-sm flex-1"
+                    placeholder="unid. preço"
+                    value={e.unidadePreco}
+                    onChange={(ev) => setExposicao((prev) => prev.map((x, i) => i === idx ? { ...x, unidadePreco: ev.target.value } : x))}
+                  />
+                  <button
+                    className="px-2 py-2 rounded text-red-600 hover:bg-red-50"
+                    onClick={() => setExposicao((prev) => prev.filter((_, i) => i !== idx))}
+                    title="Remover"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {exposicao.length > 0 && (
+              <div className="flex justify-end pt-3 border-t border-aletis-borda/60">
+                <button
+                  disabled={savingExposicao}
+                  onClick={() => handleSalvarExposicao(exposicao)}
+                  className="px-4 py-2 rounded-lg text-sm font-body font-semibold bg-aletis-dourado text-aletis-grafite-escuro hover:bg-aletis-dourado/90 disabled:opacity-50"
+                >
+                  {savingExposicao ? 'Salvando…' : 'Salvar Exposição'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════
+           TAB: VISITAS TÉCNICAS
+           ════════════════════════════════════════════════════════ */}
+      {activeTab === 'visitas' && (
+        <div className="space-y-4 animate-fade-in">
+          {/* Form nova visita */}
+          <div className="card-premium p-6">
+            <h3 className="text-base font-display font-bold text-aletis-grafite-escuro mb-3">Nova Visita Técnica</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+              <input
+                type="date"
+                className="input-field py-2 text-sm"
+                value={novaVisita.data}
+                onChange={(e) => setNovaVisita((v) => ({ ...v, data: e.target.value }))}
+              />
+              <input
+                type="text"
+                placeholder="Consultor"
+                className="input-field py-2 text-sm"
+                value={novaVisita.consultor}
+                onChange={(e) => setNovaVisita((v) => ({ ...v, consultor: e.target.value }))}
+              />
+              <input
+                type="number"
+                placeholder="Duração (min)"
+                className="input-field py-2 text-sm"
+                value={novaVisita.duracaoMinutos}
+                onChange={(e) => setNovaVisita((v) => ({ ...v, duracaoMinutos: Number(e.target.value) }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3 p-3 rounded-lg bg-aletis-bege/20">
+              {(Object.keys(novaVisita.checklist) as Array<keyof VisitaChecklist>).map((k) => (
+                <label key={k} className="text-xs font-body flex items-center gap-1.5 cursor-pointer capitalize">
+                  <input
+                    type="checkbox"
+                    checked={!!novaVisita.checklist[k]}
+                    onChange={(e) =>
+                      setNovaVisita((v) => ({
+                        ...v,
+                        checklist: { ...v.checklist, [k]: e.target.checked },
+                      }))
+                    }
+                  />
+                  {k.replace(/Ok$/, '').replace(/([A-Z])/g, ' $1').trim()}
+                </label>
+              ))}
+            </div>
+            <textarea
+              className="input-field py-2 text-sm w-full mb-2"
+              rows={2}
+              placeholder="Observações gerais"
+              value={novaVisita.observacoesGerais}
+              onChange={(e) => setNovaVisita((v) => ({ ...v, observacoesGerais: e.target.value }))}
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+              <textarea
+                className="input-field py-2 text-sm"
+                rows={3}
+                placeholder="Riscos identificados (um por linha)"
+                value={novaVisita.riscos}
+                onChange={(e) => setNovaVisita((v) => ({ ...v, riscos: e.target.value }))}
+              />
+              <textarea
+                className="input-field py-2 text-sm"
+                rows={3}
+                placeholder="Oportunidades (uma por linha)"
+                value={novaVisita.oportunidades}
+                onChange={(e) => setNovaVisita((v) => ({ ...v, oportunidades: e.target.value }))}
+              />
+            </div>
+            <button
+              disabled={savingVisita}
+              onClick={handleCriarVisita}
+              className="px-4 py-2 rounded-lg text-sm font-body font-semibold bg-aletis-verde text-white hover:bg-aletis-verde/90 disabled:opacity-50"
+            >
+              {savingVisita ? 'Salvando…' : 'Registrar Visita'}
+            </button>
+          </div>
+
+          {/* Histórico */}
+          {visitas.length > 0 && (
+            <div className="card-premium p-6">
+              <h3 className="text-base font-display font-bold text-aletis-grafite-escuro mb-3">
+                Histórico ({visitas.length})
+              </h3>
+              <div className="space-y-3">
+                {[...visitas].reverse().map((v) => {
+                  const okCount = Object.values(v.checklist).filter(Boolean).length
+                  const totalCount = Object.keys(v.checklist).length
+                  return (
+                    <div key={v.id} className="p-4 rounded-lg border border-aletis-borda/50 bg-aletis-bege/20">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <p className="text-sm font-body font-semibold text-aletis-grafite-escuro">
+                            {v.data} · {v.consultor}
+                          </p>
+                          <p className="text-[11px] font-body text-aletis-grafite-claro">
+                            {v.duracaoMinutos ? `${v.duracaoMinutos} min · ` : ''}Checklist {okCount}/{totalCount}
+                          </p>
+                        </div>
+                        <button
+                          className="text-xs text-red-600 hover:underline"
+                          onClick={() => handleRemoverVisita(v.id)}
+                        >
+                          Remover
+                        </button>
+                      </div>
+                      {v.observacoesGerais && (
+                        <p className="text-xs font-body text-aletis-grafite-medio mt-1">{v.observacoesGerais}</p>
+                      )}
+                      {v.riscos && v.riscos.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-[10px] font-body font-semibold uppercase tracking-wider text-red-600">Riscos</p>
+                          <ul className="list-disc list-inside text-xs font-body text-aletis-grafite-medio">
+                            {v.riscos.map((r, i) => <li key={i}>{r}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                      {v.oportunidades && v.oportunidades.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-[10px] font-body font-semibold uppercase tracking-wider text-positivo">Oportunidades</p>
+                          <ul className="list-disc list-inside text-xs font-body text-aletis-grafite-medio">
+                            {v.oportunidades.map((o, i) => <li key={i}>{o}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

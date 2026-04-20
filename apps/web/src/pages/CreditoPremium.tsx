@@ -13,6 +13,7 @@ import {
   Loader2,
   AlertTriangle,
   CheckCircle,
+  Activity,
 } from 'lucide-react'
 import { apiFetch } from '../hooks/useApi'
 
@@ -1265,6 +1266,154 @@ function CardDacao() {
 }
 
 // ════════════════════════════════════════════════════════════
+// Card — Simulador Multi-Cenário (shocks preço/produtividade/Selic)
+// ════════════════════════════════════════════════════════════
+interface MultiCenarioResult {
+  parametros: {
+    saldoDevedor: number
+    taxaAnualBase: number
+    prazoMeses: number
+    receitaBaseAnual: number
+  }
+  cenarios: Array<{
+    nome: string
+    shocks: { precoPct: number; produtividadePct: number; taxaPp: number }
+    taxaAnualCenario: number
+    parcelaMensal: number
+    totalPago: number
+    jurosTotais: number
+    receitaAnualCenario: number
+    servicoAnualDivida: number
+    dscr: number
+    classificacao: 'saudavel' | 'atencao' | 'critico' | 'insolvente'
+  }>
+  resumo: {
+    dscrRealista: number
+    dscrPessimista: number
+    alertaInsolvencia: boolean
+    alertaCritico: boolean
+  }
+  fundamentacao: string
+}
+
+function CardMultiCenario() {
+  const [saldo, setSaldo] = useState('500000')
+  const [taxa, setTaxa] = useState('14')
+  const [prazo, setPrazo] = useState('24')
+  const [commodity, setCommodity] = useState('soja')
+  const [area, setArea] = useState('100')
+  const [prod, setProd] = useState('60')
+  const [preco, setPreco] = useState('140')
+  const [result, setResult] = useState<MultiCenarioResult | null>(null)
+
+  return (
+    <PremiumCalculatorCard
+      icon={Activity}
+      title="Simulador Multi-Cenário"
+      subtitle="DSCR sob shocks de preço, produtividade e Selic — base: MCR 2-6-4 BCB, CMN 5.152/2024."
+      badge="PREMIUM"
+    >
+      {({ loading, execute }) => (
+        <>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault()
+              const r = await execute<{ success: boolean; data: MultiCenarioResult }>(
+                '/credito/simulador-multi-cenario',
+                {
+                  saldoDevedor: Number(saldo),
+                  taxaAnualBase: Number(taxa) / 100,
+                  prazoMeses: Number(prazo),
+                  exposicaoCommodity:
+                    Number(area) > 0 && Number(prod) > 0 && Number(preco) > 0
+                      ? [{ commodity, areaHa: Number(area), produtividade: Number(prod), precoReferencia: Number(preco) }]
+                      : [],
+                },
+              )
+              if (r && (r as any).data) setResult((r as any).data as MultiCenarioResult)
+            }}
+            className="grid grid-cols-2 lg:grid-cols-4 gap-3"
+          >
+            <Input label="Saldo devedor" value={saldo} onChange={setSaldo} suffix="R$" />
+            <Input label="Taxa base" value={taxa} onChange={setTaxa} suffix="% a.a." />
+            <Input label="Prazo" value={prazo} onChange={setPrazo} suffix="meses" />
+            <Input label="Commodity" value={commodity} onChange={setCommodity} />
+            <Input label="Área" value={area} onChange={setArea} suffix="ha" />
+            <Input label="Produtividade" value={prod} onChange={setProd} suffix="sc/ha" />
+            <Input label="Preço ref." value={preco} onChange={setPreco} suffix="R$/sc" />
+            <div className="col-span-2 lg:col-span-4">
+              <RunButton loading={loading} label="Rodar 4 cenários" />
+            </div>
+          </form>
+
+          {result && (
+            <div className="mt-5 space-y-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {result.cenarios.map((c) => (
+                  <div
+                    key={c.nome}
+                    className={`rounded-lg p-3 border ${
+                      c.classificacao === 'saudavel' ? 'bg-positivo/5 border-positivo/30' :
+                      c.classificacao === 'atencao' ? 'bg-amber-50 border-amber-200' :
+                      c.classificacao === 'critico' ? 'bg-orange-50 border-orange-200' :
+                      'bg-red-50 border-red-200'
+                    }`}
+                  >
+                    <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-claro capitalize">{c.nome}</p>
+                    <p className="text-xl font-display font-bold text-aletis-grafite-escuro mt-1">
+                      DSCR {c.dscr.toFixed(2)}
+                    </p>
+                    <p className={`text-[11px] font-body font-semibold mt-0.5 capitalize ${
+                      c.classificacao === 'saudavel' ? 'text-positivo' :
+                      c.classificacao === 'atencao' ? 'text-amber-700' :
+                      c.classificacao === 'critico' ? 'text-orange-700' : 'text-red-700'
+                    }`}>
+                      {c.classificacao}
+                    </p>
+                    <div className="mt-2 pt-2 border-t border-current/10 space-y-0.5 text-[10px] text-aletis-grafite-medio">
+                      <p>Parcela: <strong>{fmtBRL(c.parcelaMensal)}</strong></p>
+                      <p>Receita: <strong>{fmtBRL(c.receitaAnualCenario)}</strong></p>
+                      <p>Taxa: {fmtPct(c.taxaAnualCenario)}</p>
+                      <p className="text-aletis-grafite-claro">
+                        Δ preço {c.shocks.precoPct > 0 ? '+' : ''}{c.shocks.precoPct}%
+                        {' · '}Δ prod {c.shocks.produtividadePct > 0 ? '+' : ''}{c.shocks.produtividadePct}%
+                        {' · '}Δ Selic {c.shocks.taxaPp > 0 ? '+' : ''}{c.shocks.taxaPp}pp
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {(result.resumo.alertaInsolvencia || result.resumo.alertaCritico) && (
+                <div className={`p-3 rounded-lg border ${
+                  result.resumo.alertaInsolvencia ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200'
+                }`}>
+                  <p className={`text-xs font-body font-semibold ${
+                    result.resumo.alertaInsolvencia ? 'text-red-700' : 'text-orange-700'
+                  }`}>
+                    {result.resumo.alertaInsolvencia
+                      ? '⚠ Insolvência detectada em pelo menos um cenário'
+                      : '⚠ Cenário crítico detectado — monitorar'}
+                  </p>
+                  <p className="text-[11px] font-body text-aletis-grafite-medio mt-1">
+                    DSCR realista: {result.resumo.dscrRealista.toFixed(2)} · pessimista: {result.resumo.dscrPessimista.toFixed(2)}
+                  </p>
+                </div>
+              )}
+
+              <div className="rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
+                <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Fundamentação</p>
+                <p className="text-xs font-body text-aletis-grafite-escuro">{result.fundamentacao}</p>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </PremiumCalculatorCard>
+  )
+}
+
+// ════════════════════════════════════════════════════════════
 // MAIN — Premium section container
 // ════════════════════════════════════════════════════════════
 export default function CreditoPremium() {
@@ -1280,11 +1429,12 @@ export default function CreditoPremium() {
           </p>
         </div>
         <div className="text-[11px] font-body text-aletis-grafite-claro hidden sm:block">
-          8 calculadoras jurídico-financeiras
+          9 calculadoras jurídico-financeiras
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3">
+        <CardMultiCenario />
         <CardAlongamento />
         <CardDescaracterizacao />
         <CardCapitalizacao />

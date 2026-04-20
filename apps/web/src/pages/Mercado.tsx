@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   AreaChart,
   Area,
@@ -452,13 +452,14 @@ function PriceTooltip({ active, payload, label }: any) {
 // ════════════════════════════════════════════════════════════
 // MAIN PAGE
 // ════════════════════════════════════════════════════════════
-type MercadoTab = 'graos' | 'indicadores' | 'safra' | 'combustiveis' | 'cambio' | 'riscos'
+type MercadoTab = 'graos' | 'indicadores' | 'safra' | 'basis' | 'combustiveis' | 'cambio' | 'riscos'
 
 const MERCADO_TABS: { id: MercadoTab; label: string; icon: React.ElementType; description: string }[] = [
   { id: 'graos', label: 'Grãos & Commodities', icon: Wheat, description: 'Cotações de soja, milho, café, boi, etc.' },
   { id: 'indicadores', label: 'Indicadores Macro', icon: BarChart3, description: 'Selic, IPCA, CDI, IGP-M, IC-Br' },
   { id: 'cambio', label: 'Câmbio', icon: Globe, description: 'USD, EUR, CNY - cotações em tempo real' },
   { id: 'safra', label: 'Safra 2025/26', icon: Calendar, description: 'Produção, área, produtividade CONAB' },
+  { id: 'basis', label: 'Basis & Frete', icon: Fuel, description: 'Diferencial de preço porto ↔ interior + frete' },
   { id: 'combustiveis', label: 'Combustíveis & Insumos', icon: Fuel, description: 'Diesel, gasolina, etanol (ANP)' },
   { id: 'riscos', label: 'Riscos Agroclimáticos', icon: AlertTriangle, description: 'Incêndios, secas, NDVI' },
 ]
@@ -942,6 +943,11 @@ export default function Mercado() {
           <ExportacaoAgroSection />
         </>
       )}
+
+      {/* ═══════════════════════════════════════════════════════
+           TAB: BASIS — Diferencial porto ↔ interior + frete
+           ═══════════════════════════════════════════════════════ */}
+      {activeTab === 'basis' && <BasisSection />}
 
       {/* ═══════════════════════════════════════════════════════
            TAB: COMBUSTIVEIS — ANP + Diesel + Etanol + Insumos
@@ -2983,5 +2989,202 @@ function RiscosComplementaresSection() {
         </section>
       )}
     </>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+//  BASIS — Diferencial porto ↔ interior + frete estimado
+// ════════════════════════════════════════════════════════════════
+interface BasisResult {
+  commodity: string
+  ufOrigem: string
+  destino: string
+  praçaReferencia: string
+  precoPorto: number
+  basisPct: number
+  basisAbsoluto: number
+  precoInteriorEstimado: number
+  freteRSporTon: number
+  freteUnidade: number
+  unidade: string
+  precoLiquidoProdutor: number
+  atualizacao: string
+}
+
+function BasisSection() {
+  const [commodity, setCommodity] = useState('soja')
+  const [ufOrigem, setUfOrigem] = useState('MT')
+  const [destino, setDestino] = useState('paranagua')
+  const [result, setResult] = useState<BasisResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  const calcular = async () => {
+    setLoading(true)
+    setErro(null)
+    try {
+      const res = await fetch(
+        `/api/mercado/basis?commodity=${commodity}&ufOrigem=${ufOrigem}&destino=${destino}`,
+      )
+      const json = await res.json()
+      if (json.success) {
+        setResult(json.data)
+      } else {
+        setResult(null)
+        setErro(json.error || 'Rota não suportada')
+      }
+    } catch {
+      setErro('Erro de rede')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { calcular() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const COMMODITIES = ['soja', 'milho', 'algodao', 'cafe', 'boi', 'arroz', 'trigo']
+  const UFS = ['MT', 'MS', 'GO', 'MG', 'SP', 'PR', 'RS', 'BA', 'MA', 'TO', 'PI', 'RO']
+  const DESTINOS = [
+    { id: 'paranagua', label: 'Paranaguá (PR)' },
+    { id: 'santos', label: 'Santos (SP)' },
+    { id: 'itaqui', label: 'Itaqui (MA)' },
+  ]
+
+  return (
+    <section className="card-premium p-6 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-display font-bold text-aletis-grafite-escuro">Basis Regional + Frete</h2>
+          <p className="text-[11px] font-body text-aletis-grafite-claro">
+            Diferencial de preço porto ↔ interior e custo de frete estimado
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
+        <div>
+          <label className="block text-[10px] font-body font-semibold uppercase tracking-wider text-aletis-grafite-claro mb-1">
+            Commodity
+          </label>
+          <select
+            value={commodity}
+            onChange={(e) => setCommodity(e.target.value)}
+            className="input-field py-2 text-sm w-full"
+          >
+            {COMMODITIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-body font-semibold uppercase tracking-wider text-aletis-grafite-claro mb-1">
+            UF de origem
+          </label>
+          <select
+            value={ufOrigem}
+            onChange={(e) => setUfOrigem(e.target.value)}
+            className="input-field py-2 text-sm w-full"
+          >
+            {UFS.map((u) => (
+              <option key={u} value={u}>{u}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-body font-semibold uppercase tracking-wider text-aletis-grafite-claro mb-1">
+            Destino
+          </label>
+          <select
+            value={destino}
+            onChange={(e) => setDestino(e.target.value)}
+            className="input-field py-2 text-sm w-full"
+          >
+            {DESTINOS.map((d) => (
+              <option key={d.id} value={d.id}>{d.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-end">
+          <button
+            onClick={calcular}
+            disabled={loading}
+            className="w-full px-4 py-2 rounded-lg text-sm font-body font-semibold bg-aletis-dourado text-aletis-grafite-escuro hover:bg-aletis-dourado/90 disabled:opacity-50"
+          >
+            {loading ? 'Calculando…' : 'Calcular Basis'}
+          </button>
+        </div>
+      </div>
+
+      {erro && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-body text-red-700">
+          {erro}
+        </div>
+      )}
+
+      {result && !erro && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <MetricCard
+              label="Preço no porto"
+              value={`R$ ${result.precoPorto.toFixed(2)}`}
+              sub={result.praçaReferencia}
+            />
+            <MetricCard
+              label="Basis"
+              value={`${result.basisPct > 0 ? '+' : ''}${result.basisPct.toFixed(2)}%`}
+              sub={`R$ ${result.basisAbsoluto.toFixed(2)}`}
+              tone={result.basisPct >= 0 ? 'positive' : 'warning'}
+            />
+            <MetricCard
+              label="Frete estimado"
+              value={`R$ ${result.freteUnidade.toFixed(2)}`}
+              sub={`${result.freteRSporTon} R$/ton · ${result.ufOrigem}→${result.destino}`}
+            />
+            <MetricCard
+              label="Preço líquido produtor"
+              value={`R$ ${result.precoLiquidoProdutor.toFixed(2)}`}
+              sub={result.unidade}
+              tone="positive"
+            />
+          </div>
+          <div className="rounded-lg bg-aletis-bege/30 border border-aletis-borda/60 p-4 text-xs font-body text-aletis-grafite-medio">
+            <p className="mb-1">
+              <strong>Preço interior estimado:</strong> R$ {result.precoInteriorEstimado.toFixed(2)} — após basis típico aplicado ao preço porto.
+            </p>
+            <p>
+              <strong>Preço líquido produtor:</strong> R$ {result.precoLiquidoProdutor.toFixed(2)} — descontando frete unitário de R$ {result.freteUnidade.toFixed(2)}.
+            </p>
+            <p className="mt-2 italic text-aletis-grafite-claro">
+              Fontes: cotação CEPEA (porto), tabela estimativa ALETIS (basis + frete ANTT/IMEA/ABIOVE 2024-2026). Valores referenciais.
+            </p>
+          </div>
+        </>
+      )}
+    </section>
+  )
+}
+
+function MetricCard({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string
+  value: string
+  sub?: string
+  tone?: 'positive' | 'warning'
+}) {
+  const toneCls = tone === 'positive'
+    ? 'text-positivo'
+    : tone === 'warning'
+      ? 'text-red-600'
+      : 'text-aletis-grafite-escuro'
+  return (
+    <div className="rounded-lg bg-aletis-bege/40 border border-aletis-borda/50 p-3">
+      <p className="text-[10px] font-body uppercase tracking-wider text-aletis-grafite-claro">{label}</p>
+      <p className={`text-xl font-display font-bold mt-1 ${toneCls}`}>{value}</p>
+      {sub && <p className="text-[10px] font-body text-aletis-grafite-claro mt-0.5 truncate">{sub}</p>}
+    </div>
   )
 }
