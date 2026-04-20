@@ -48,6 +48,7 @@ import {
   Briefcase,
   PieChart as PieIcon,
   Clock,
+  FileText,
 } from 'lucide-react'
 import { useApiFull } from '../hooks/useApi'
 import { DataSourceBadge } from '../components/DataSourceBadge'
@@ -452,15 +453,17 @@ function PriceTooltip({ active, payload, label }: any) {
 // ════════════════════════════════════════════════════════════
 // MAIN PAGE
 // ════════════════════════════════════════════════════════════
-type MercadoTab = 'graos' | 'indicadores' | 'safra' | 'basis' | 'combustiveis' | 'cambio' | 'riscos'
+type MercadoTab = 'brief' | 'graos' | 'indicadores' | 'safra' | 'basis' | 'combustiveis' | 'cambio' | 'riscos' | 'sazonalidade'
 
 const MERCADO_TABS: { id: MercadoTab; label: string; icon: React.ElementType; description: string }[] = [
+  { id: 'brief', label: 'Panorama do Dia', icon: Zap, description: 'Brief executivo: top altas/baixas, macro, alertas — síntese do dia' },
   { id: 'graos', label: 'Grãos & Commodities', icon: Wheat, description: 'Cotações de soja, milho, café, boi, etc.' },
   { id: 'indicadores', label: 'Indicadores Macro', icon: BarChart3, description: 'Selic, IPCA, CDI, IGP-M, IC-Br' },
   { id: 'cambio', label: 'Câmbio', icon: Globe, description: 'USD, EUR, CNY - cotações em tempo real' },
   { id: 'safra', label: 'Safra 2025/26', icon: Calendar, description: 'Produção, área, produtividade CONAB' },
   { id: 'basis', label: 'Basis & Frete', icon: Fuel, description: 'Diferencial de preço porto ↔ interior + frete' },
   { id: 'combustiveis', label: 'Combustíveis & Insumos', icon: Fuel, description: 'Diesel, gasolina, etanol (ANP)' },
+  { id: 'sazonalidade', label: 'Sazonalidade', icon: Calendar, description: 'Padrões históricos mensais — quando vender vs. segurar' },
   { id: 'riscos', label: 'Riscos Agroclimáticos', icon: AlertTriangle, description: 'Incêndios, secas, NDVI' },
 ]
 
@@ -992,9 +995,309 @@ export default function Mercado() {
         </>
       )}
 
+      {/* ═══════════════════════════════════════════════════════
+           TAB: BRIEF — Panorama executivo do dia
+           ═══════════════════════════════════════════════════════ */}
+      {activeTab === 'brief' && <BriefSection />}
+
+      {/* ═══════════════════════════════════════════════════════
+           TAB: SAZONALIDADE — Padrões históricos mensais
+           ═══════════════════════════════════════════════════════ */}
+      {activeTab === 'sazonalidade' && <SazonalidadeSection />}
+
       {/* Bottom spacer */}
       <div className="h-8" />
     </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────
+// SECTION: Brief — Panorama do Dia
+// ────────────────────────────────────────────────────────────
+interface BriefData {
+  data: string
+  geradoEm: string
+  macro: {
+    selic: number | null
+    ipca12m: number | null
+    cdi: number | null
+    igpm12m: number | null
+    dolar: number | null
+    euro: number | null
+    dolarVariacao24h: number | null
+  }
+  topAltas: Array<{ simbolo: string; nome: string; preco: number; variacao7d: number; unidade: string; fonte: string }>
+  topBaixas: Array<{ simbolo: string; nome: string; preco: number; variacao7d: number; unidade: string; fonte: string }>
+  commodities: Array<{ simbolo: string; nome: string; preco: number; variacao7d: number; unidade: string; fonte: string }>
+  cambio: { usd: number | null; eur: number | null; cny: number | null; varUsd24h: number | null }
+  expectativasAno: { selic: number | null; ipca: number | null; pib: number | null; dolar: number | null }
+  alertas: Array<{ tipo: string; severidade: 'info' | 'atencao' | 'critico'; titulo: string; detalhe: string }>
+  narrativaCurta: string
+  narrativaExecutiva: string
+  fonteOrigem: 'api' | 'cache' | 'mixed'
+}
+
+function BriefSection() {
+  const { data, error } = useApiFull<{ success: boolean; data: BriefData }>(
+    '/mercado/brief',
+    { success: false, data: null as any }
+  )
+  const brief = data?.data
+  if (error || !brief) {
+    return (
+      <section className="rounded-xl border border-aletis-borda/60 bg-white p-8 text-center">
+        <p className="text-sm font-body text-aletis-grafite-medio">Carregando panorama do dia…</p>
+      </section>
+    )
+  }
+
+  const sevColor = (s: string) =>
+    s === 'critico' ? 'bg-red-50 border-red-300 text-red-800'
+      : s === 'atencao' ? 'bg-amber-50 border-amber-300 text-amber-800'
+      : 'bg-blue-50 border-blue-300 text-blue-800'
+
+  return (
+    <>
+      {/* Narrativa curta — destaque */}
+      <section className="mb-6 rounded-2xl border border-aletis-verde/20 bg-gradient-to-br from-aletis-verde via-aletis-verde to-aletis-grafite-escuro p-6 text-white shadow-lg">
+        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-aletis-dourado/40 bg-aletis-dourado/10 px-3 py-1">
+          <Zap className="h-3 w-3 text-aletis-dourado" />
+          <span className="text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-aletis-dourado">
+            Panorama — {new Date(brief.geradoEm).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+        <p className="font-display text-xl lg:text-2xl font-semibold leading-snug">
+          {brief.narrativaCurta}
+        </p>
+        <p className="mt-2 text-xs text-white/60">
+          Fontes: CEPEA/CONAB · BCB · AwesomeAPI · NASA FIRMS · BCB Focus
+        </p>
+      </section>
+
+      {/* Top Altas / Baixas */}
+      <section className="mb-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="rounded-xl border border-green-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-green-600" />
+            <h3 className="font-display text-sm font-semibold text-aletis-grafite-escuro">Top Altas (7d)</h3>
+          </div>
+          {brief.topAltas.length === 0 ? (
+            <p className="text-xs font-body text-aletis-grafite-claro">Sem altas relevantes hoje.</p>
+          ) : (
+            <ul className="space-y-2">
+              {brief.topAltas.map((c) => (
+                <li key={c.simbolo} className="flex items-center justify-between rounded-lg bg-green-50/50 px-3 py-2">
+                  <div>
+                    <p className="font-display text-sm font-semibold text-aletis-grafite-escuro">{c.nome}</p>
+                    <p className="text-[11px] text-aletis-grafite-claro">{fmtBRL(c.preco)} / {c.unidade}</p>
+                  </div>
+                  <span className="text-sm font-display font-bold text-green-700">+{c.variacao7d.toFixed(2).replace('.', ',')}%</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-red-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <TrendingDown className="h-4 w-4 text-red-600" />
+            <h3 className="font-display text-sm font-semibold text-aletis-grafite-escuro">Top Baixas (7d)</h3>
+          </div>
+          {brief.topBaixas.length === 0 ? (
+            <p className="text-xs font-body text-aletis-grafite-claro">Sem quedas relevantes hoje.</p>
+          ) : (
+            <ul className="space-y-2">
+              {brief.topBaixas.map((c) => (
+                <li key={c.simbolo} className="flex items-center justify-between rounded-lg bg-red-50/50 px-3 py-2">
+                  <div>
+                    <p className="font-display text-sm font-semibold text-aletis-grafite-escuro">{c.nome}</p>
+                    <p className="text-[11px] text-aletis-grafite-claro">{fmtBRL(c.preco)} / {c.unidade}</p>
+                  </div>
+                  <span className="text-sm font-display font-bold text-red-700">{c.variacao7d.toFixed(2).replace('.', ',')}%</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      {/* Macro Snapshot */}
+      <section className="mb-6 rounded-xl border border-aletis-borda/60 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-center gap-2">
+          <BarChart3 className="h-4 w-4 text-aletis-dourado" />
+          <h3 className="font-display text-sm font-semibold text-aletis-grafite-escuro">Macro & Câmbio</h3>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: 'Selic', value: brief.macro.selic != null ? brief.macro.selic.toFixed(2).replace('.', ',') + '%' : '—' },
+            { label: 'IPCA 12m', value: brief.macro.ipca12m != null ? brief.macro.ipca12m.toFixed(2).replace('.', ',') + '%' : '—' },
+            { label: 'CDI', value: brief.macro.cdi != null ? brief.macro.cdi.toFixed(2).replace('.', ',') + '%' : '—' },
+            { label: 'IGP-M 12m', value: brief.macro.igpm12m != null ? brief.macro.igpm12m.toFixed(2).replace('.', ',') + '%' : '—' },
+            { label: 'USD', value: brief.cambio.usd != null ? fmtBRL(brief.cambio.usd) : '—', sub: brief.cambio.varUsd24h != null ? fmtPct(brief.cambio.varUsd24h) : null },
+            { label: 'EUR', value: brief.cambio.eur != null ? fmtBRL(brief.cambio.eur) : '—' },
+            { label: 'Focus IPCA', value: brief.expectativasAno.ipca != null ? brief.expectativasAno.ipca.toFixed(2).replace('.', ',') + '%' : '—' },
+            { label: 'Gerado', value: new Date(brief.geradoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) },
+          ].map((m) => (
+            <div key={m.label} className="rounded-lg bg-aletis-bege/50 p-3">
+              <p className="text-[10px] font-body uppercase tracking-wider text-aletis-grafite-claro">{m.label}</p>
+              <p className="mt-0.5 font-display text-lg font-semibold text-aletis-grafite-escuro">{m.value}</p>
+              {m.sub && (
+                <p className={`text-[11px] font-display ${m.sub.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>{m.sub}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Alertas */}
+      {brief.alertas.length > 0 && (
+        <section className="mb-6 rounded-xl border border-aletis-borda/60 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <h3 className="font-display text-sm font-semibold text-aletis-grafite-escuro">
+              Alertas ({brief.alertas.length})
+            </h3>
+          </div>
+          <div className="space-y-2">
+            {brief.alertas.map((a, i) => (
+              <div key={i} className={`rounded-lg border px-3 py-2 ${sevColor(a.severidade)}`}>
+                <p className="font-display text-sm font-semibold">{a.titulo}</p>
+                <p className="mt-0.5 text-xs font-body opacity-80">{a.detalhe}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Narrativa Executiva (markdown-like plain text) */}
+      <section className="mb-6 rounded-xl border border-aletis-borda/60 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-center gap-2">
+          <FileText className="h-4 w-4 text-aletis-verde" />
+          <h3 className="font-display text-sm font-semibold text-aletis-grafite-escuro">Narrativa Executiva</h3>
+        </div>
+        <pre className="whitespace-pre-wrap font-body text-sm text-aletis-grafite-escuro leading-relaxed">
+          {brief.narrativaExecutiva}
+        </pre>
+      </section>
+    </>
+  )
+}
+
+// ────────────────────────────────────────────────────────────
+// SECTION: Sazonalidade — Padrões históricos mensais
+// ────────────────────────────────────────────────────────────
+interface SazonalPerfil {
+  commodity: string
+  nome: string
+  unidade: string
+  indicesMensais: number[]
+  safraPico: string
+  observacao: string
+  fundamentoAgronomico: string
+  fonteSerie: string
+}
+
+function SazonalidadeSection() {
+  const { data } = useApiFull<{ success: boolean; data: SazonalPerfil[] }>(
+    '/mercado/sazonalidade',
+    { success: false, data: [] }
+  )
+  const perfis = data?.data || []
+  const [selecionado, setSelecionado] = useState<string>('soja')
+  const atual = perfis.find((p) => p.commodity === selecionado) || perfis[0]
+
+  const mesAtual = new Date().getMonth()
+  const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
+  if (perfis.length === 0) {
+    return (
+      <section className="rounded-xl border border-aletis-borda/60 bg-white p-8 text-center">
+        <p className="text-sm font-body text-aletis-grafite-medio">Carregando padrões sazonais…</p>
+      </section>
+    )
+  }
+
+  const recomendacao = atual?.indicesMensais[mesAtual] ?? 100
+  const acao = recomendacao >= 103 ? 'Vender (preço alto no ciclo)'
+    : recomendacao <= 97 ? 'Segurar (preço baixo no ciclo)'
+    : 'Neutro'
+  const acaoCor = recomendacao >= 103 ? 'bg-green-50 border-green-300 text-green-800'
+    : recomendacao <= 97 ? 'bg-red-50 border-red-300 text-red-800'
+    : 'bg-blue-50 border-blue-300 text-blue-800'
+
+  return (
+    <>
+      <section className="mb-6 rounded-xl border border-aletis-borda/60 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-aletis-verde" />
+          <h3 className="font-display text-sm font-semibold text-aletis-grafite-escuro">
+            Sazonalidade de preços — padrão histórico (base 100 = média anual)
+          </h3>
+        </div>
+        <div className="mb-4 flex flex-wrap gap-2">
+          {perfis.map((p) => (
+            <button
+              key={p.commodity}
+              onClick={() => setSelecionado(p.commodity)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-display font-semibold transition ${
+                selecionado === p.commodity
+                  ? 'bg-aletis-verde text-white'
+                  : 'bg-aletis-bege text-aletis-grafite-medio hover:bg-aletis-borda/50'
+              }`}
+            >
+              {p.nome}
+            </button>
+          ))}
+        </div>
+
+        {atual && (
+          <>
+            <div className={`mb-4 rounded-lg border px-4 py-3 ${acaoCor}`}>
+              <p className="text-[10px] font-body uppercase tracking-wider opacity-70">
+                Recomendação para {MESES[mesAtual]}
+              </p>
+              <p className="mt-0.5 font-display text-base font-semibold">
+                {acao} — índice {recomendacao} (pico histórico {Math.max(...atual.indicesMensais)}, vale {Math.min(...atual.indicesMensais)})
+              </p>
+            </div>
+
+            <div className="mb-3">
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={atual.indicesMensais.map((v, i) => ({ mes: MESES[i], indice: v, destacar: i === mesAtual }))}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+                  <YAxis domain={[90, 115]} tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(v: number) => `${v} (base 100)`} />
+                  <Bar dataKey="indice" radius={[4, 4, 0, 0]}>
+                    {atual.indicesMensais.map((_, i) => (
+                      <Cell key={i} fill={i === mesAtual ? '#C9A84C' : i < mesAtual ? '#d1d5db' : '#0F4C35'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-body">
+              <div className="rounded-lg bg-aletis-bege/50 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-claro">Safra / Pico</p>
+                <p className="mt-0.5 font-display font-semibold text-aletis-grafite-escuro">{atual.safraPico}</p>
+              </div>
+              <div className="rounded-lg bg-aletis-bege/50 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-claro">Observação</p>
+                <p className="mt-0.5 text-aletis-grafite-escuro">{atual.observacao}</p>
+              </div>
+              <div className="rounded-lg bg-aletis-bege/50 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-claro">Fundamento agronômico</p>
+                <p className="mt-0.5 text-aletis-grafite-escuro">{atual.fundamentoAgronomico}</p>
+              </div>
+            </div>
+            <p className="mt-2 text-[10px] font-body text-aletis-grafite-claro">
+              Fonte série histórica: {atual.fonteSerie}
+            </p>
+          </>
+        )}
+      </section>
+    </>
   )
 }
 

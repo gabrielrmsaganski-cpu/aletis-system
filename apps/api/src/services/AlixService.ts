@@ -117,6 +117,11 @@ type Intent =
   | { tipo: 'proagro' }
   | { tipo: 'precedentes'; termo?: string }
   | { tipo: 'busca_geral'; termo: string }
+  // Novos: brief de mercado, sazonalidade e contratos
+  | { tipo: 'market_brief' }
+  | { tipo: 'sazonalidade'; commodity: string }
+  | { tipo: 'contratos_tipos' }
+  | { tipo: 'contrato_orientacao'; tipoContrato: string }
   | { tipo: 'generico' };
 
 // ── Intent classifier ────────────────────────────────────────
@@ -133,6 +138,37 @@ function classify(input: string): Intent {
   if (/\b(ajuda|help|comandos|o que posso perguntar|como funciona)\b/.test(q)) return { tipo: 'ajuda' };
   if (/(fontes|status.*fonte|apis.*funcionando|quais fontes|dados.*on-?line)/.test(q)) return { tipo: 'fontes_status' };
   if (/(resumir.*conversa|resume.*sessao|o que conversamos|sumarize)/.test(q)) return { tipo: 'resumo_sessao' };
+
+  // Brief / panorama do mercado
+  if (/(panorama|brief|resumo).*(mercado|hoje|dia|dia de hoje)|^(?:como (?:esta|está)|como anda).*mercado|mercado.*hoje|resumo do dia/.test(q)) {
+    return { tipo: 'market_brief' };
+  }
+
+  // Sazonalidade (quando vender / quando segurar)
+  const sazMatch = q.match(/(sazonalidade|padrao sazonal|quando vender|melhor mes|melhor (?:momento|mes) (?:de |para )?vender|epoca de vender).*(soja|milho|boi|cafe|arabica|algodao|trigo)|(soja|milho|boi|cafe|arabica|algodao|trigo).*(sazonalidade|quando vender|melhor mes|melhor (?:momento|mes) (?:de |para )?vender)/);
+  if (sazMatch) {
+    const commodity = (sazMatch[2] || sazMatch[3] || '').toLowerCase().replace('arabica', 'cafe');
+    return { tipo: 'sazonalidade', commodity };
+  }
+
+  // Tipos de contrato disponíveis
+  if (/(quais contratos|tipos de contrato|quais tipos.*contrato|contratos disponiveis|o que (?:voce )?gera.*contrato)/.test(q)) {
+    return { tipo: 'contratos_tipos' };
+  }
+
+  // Orientação para gerar contrato específico
+  const contratoOrientMatch = q.match(/(gerar|criar|fazer|preparar|montar|emitir).*(cpr|cedula.*produto.*rural|confissao.*divida|termo.*renegociacao|acordo.*extrajudicial|transacao.*excepcional|desenrola rural)/);
+  if (contratoOrientMatch) {
+    let tipoContrato = 'cpr_financeira';
+    const s = q;
+    if (/cpr.*fisic|cedula.*fisic/.test(s)) tipoContrato = 'cpr_fisica';
+    else if (/cpr/.test(s)) tipoContrato = 'cpr_financeira';
+    else if (/confissao/.test(s)) tipoContrato = 'confissao_divida';
+    else if (/renegoci|termo de renegoci/.test(s)) tipoContrato = 'termo_renegociacao';
+    else if (/acordo.*extrajudicial/.test(s)) tipoContrato = 'acordo_extrajudicial';
+    else if (/transacao.*excepcional|desenrola rural/.test(s)) tipoContrato = 'transacao_excepcional';
+    return { tipo: 'contrato_orientacao', tipoContrato };
+  }
 
   // Fires
   if (/(incendio|queimada|foco de calor|nasa firms)/.test(q)) return { tipo: 'incendios' };
@@ -463,6 +499,11 @@ export class AlixService {
       case 'proagro': return this.proagro();
       case 'precedentes': return this.precedentes(intent.termo);
       case 'busca_geral': return this.buscaGeral(intent.termo);
+
+      case 'market_brief': return this.marketBrief();
+      case 'sazonalidade': return this.sazonalidade(intent.commodity);
+      case 'contratos_tipos': return this.contratosTipos();
+      case 'contrato_orientacao': return this.contratoOrientacao(intent.tipoContrato);
 
       case 'generico':
       default:
@@ -969,6 +1010,155 @@ Posso responder tudo em segundos. Manda.`;
       content: `Busca na base sobre "${termo}" — ${hits.totalMatches} resultado(s):\n\n${partes.join('\n\n')}`,
       sources: ['@aletis/knowledge-base'],
       toolsUsed: ['knowledge.buscarConhecimento'],
+    };
+  }
+
+  // ── Market brief, sazonalidade, contratos ─────────────
+
+  private async marketBrief(): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    const { MarketBriefService } = await import('./MarketBriefService.js');
+    const svc = new MarketBriefService(this.dsm);
+    const brief = await svc.generateBrief();
+    return {
+      content: brief.narrativaExecutiva,
+      sources: ['CEPEA/CONAB', 'BCB SGS', 'AwesomeAPI', 'BCB Focus', 'NASA FIRMS'],
+      toolsUsed: ['MarketBriefService.generateBrief'],
+    };
+  }
+
+  private async sazonalidade(commodity: string): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    const { SazonalidadeService } = await import('./SazonalidadeService.js');
+    const svc = new SazonalidadeService();
+    const perfil = svc.getPerfil(commodity);
+    if (!perfil) {
+      return {
+        content: `Sazonalidade não disponível pra "${commodity}". Tenho perfis de: soja, milho, boi, cafe, algodao, trigo.`,
+        sources: [],
+        toolsUsed: [],
+      };
+    }
+    const rec = svc.recomendacaoMesAtual(commodity);
+    const meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+    const linhas = perfil.indicesMensais.map((v, i) => `${meses[i]}: ${v}`).join('  ·  ');
+
+    const content = `**Padrão sazonal — ${perfil.nomeExibicao}**
+
+Índices mensais (base 100 = média anual, observado em 2015-2024):
+${linhas}
+
+• **Melhor mês pra vender:** ${perfil.melhorMesVenda.mes} (índice ${perfil.melhorMesVenda.indice})
+• **Pior mês pra vender:** ${perfil.piorMesVenda.mes} (índice ${perfil.piorMesVenda.indice})
+• **Pico de safra:** ${perfil.safraPico}
+
+**Leitura prática:** ${perfil.observacao}
+
+**Fundamento agronômico:** ${perfil.fundamentoAgronomico}
+
+${rec ? `\n**Recomendação pra ${rec.mes}:** ${rec.acao.toUpperCase()} — ${rec.justificativa}` : ''}
+
+_Fonte: ${perfil.fonteSerie}._`;
+    return {
+      content,
+      sources: [perfil.fonteSerie],
+      toolsUsed: ['SazonalidadeService.getPerfil'],
+    };
+  }
+
+  private async contratosTipos(): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    const { contratoGenerator } = await import('./ContratoGenerator.js');
+    const tipos = contratoGenerator.listarTipos();
+    const linhas = tipos.map((t, i) =>
+      `${i + 1}. **${t.titulo}** (\`${t.tipo}\`)\n   _Quando usar:_ ${t.quando}\n   _Fundamento:_ ${t.fundamento.join(', ')}`
+    );
+    const content = `**Tipos de contrato que posso gerar**
+
+${linhas.join('\n\n')}
+
+Pra gerar, vá em **/contratos** no sistema ou me diga: "gerar CPR para João Silva, 1.000 sacas de soja, vencimento jun/2026".
+
+_Todos os contratos são minutas pra revisão jurídica — não substituem advogado._`;
+    return {
+      content,
+      sources: ['ContratoGenerator'],
+      toolsUsed: ['ContratoGenerator.listarTipos'],
+    };
+  }
+
+  private async contratoOrientacao(tipoContrato: string): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    const { contratoGenerator } = await import('./ContratoGenerator.js');
+    const tipos = contratoGenerator.listarTipos();
+    const t = tipos.find((x) => x.tipo === tipoContrato);
+    if (!t) {
+      return {
+        content: `Tipo de contrato "${tipoContrato}" não reconhecido. Digita "tipos de contrato" pra ver a lista.`,
+        sources: [],
+        toolsUsed: [],
+      };
+    }
+    const camposObrigatorios: Record<string, string[]> = {
+      cpr_financeira: [
+        'Devedor (nome completo, CPF/CNPJ, endereço)',
+        'Credor (nome, CPF/CNPJ, endereço)',
+        'Produto vinculado (ex: SOJA EM GRÃOS)',
+        'Quantidade e unidade (ex: 1.000 sacas 60kg)',
+        'Valor total da CPR',
+        'Data de vencimento',
+        'Imóvel rural (matrícula, cartório, área)',
+        'Safra (ex: 2025/26)',
+      ],
+      cpr_fisica: [
+        'Devedor e credor (qualificação completa)',
+        'Produto, quantidade, padrão de qualidade',
+        'Local de entrega',
+        'Data de entrega',
+        'Valor recebido pelo produtor',
+        'Imóvel rural',
+      ],
+      confissao_divida: [
+        'Devedor e credor',
+        'Contratos/títulos originais (números, datas, valores)',
+        'Valor total atualizado',
+        'Cronograma de parcelas',
+        'Eventuais dações em pagamento',
+      ],
+      termo_renegociacao: [
+        'Banco credor e mutuário',
+        'Operação originária (CCB/contrato, número, valor)',
+        'Saldo devedor consolidado',
+        'Nova taxa, prazo e cronograma',
+        'Garantias mantidas',
+      ],
+      acordo_extrajudicial: [
+        'Partes e qualificação completa',
+        'Descrição do litígio (ação em curso ou pretensão)',
+        'Valor transacionado',
+        'Forma de pagamento',
+      ],
+      transacao_excepcional: [
+        'Produtor e instituição credora',
+        'Operação originária e saldo atualizado',
+        'Desconto concedido pela instituição (se houver)',
+        'Entrada + cronograma',
+        'Declaração de adesão à modalidade',
+      ],
+    };
+    const campos = camposObrigatorios[tipoContrato] ?? [];
+    const content = `**Como gerar: ${t.titulo}**
+
+**Quando usar:** ${t.quando}
+
+**Fundamento legal:** ${t.fundamento.join(', ')}
+
+**Informações necessárias:**
+${campos.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+
+**Próximo passo:** vá em **/contratos → Novo contrato → ${t.titulo}** no sistema. A minuta é preenchida automaticamente e exportada em PDF A4 formal.
+
+_Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
+    return {
+      content,
+      sources: ['ContratoGenerator'],
+      toolsUsed: ['ContratoGenerator.listarTipos'],
     };
   }
 

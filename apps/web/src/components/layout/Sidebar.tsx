@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   Users,
   FileText,
+  FileCheck,
   TrendingUp,
   Cloud,
   CreditCard,
@@ -45,6 +46,7 @@ const navSections: NavSection[] = [
       { label: 'Prospecção', path: '/prospeccao', icon: Target },
       { label: 'CRM', path: '/crm', icon: Users },
       { label: 'Propostas', path: '/propostas', icon: FileText },
+      { label: 'Contratos', path: '/contratos', icon: FileCheck },
     ],
   },
   {

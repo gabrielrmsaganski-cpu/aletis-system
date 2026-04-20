@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { DataSourceManager } from '../services/DataSourceManager.js'
+import { MarketBriefService } from '../services/MarketBriefService.js'
+import { SazonalidadeService } from '../services/SazonalidadeService.js'
 
 /* ========================================================================
  *  Tipos (mantidos para compatibilidade com frontend)
@@ -1137,4 +1139,47 @@ export default async function (fastify: FastifyInstance) {
       }
     },
   )
+
+  /* ------------------------------------------------------------------
+   * GET /api/mercado/brief
+   * Sintetiza o panorama do dia — commodities, macro, câmbio, alertas
+   * e narrativa em texto (curta + executiva). Ideal pra Alix e ticker
+   * de destaques.
+   * ------------------------------------------------------------------ */
+  const briefService = new MarketBriefService(dsm)
+  fastify.get('/api/mercado/brief', async () => {
+    const brief = await briefService.generateBrief()
+    return { success: true, data: brief }
+  })
+
+  /* ------------------------------------------------------------------
+   * GET /api/mercado/sazonalidade/:commodity
+   * Perfil sazonal histórico + recomendação contextual do mês atual
+   * (vender / segurar / neutro) com justificativa.
+   * ------------------------------------------------------------------ */
+  const sazonalService = new SazonalidadeService()
+  fastify.get(
+    '/api/mercado/sazonalidade/:commodity',
+    async (request: FastifyRequest<{ Params: { commodity: string } }>) => {
+      const { commodity } = request.params
+      const perfil = sazonalService.getPerfil(commodity)
+      if (!perfil) {
+        return {
+          success: false,
+          error: `Sazonalidade não disponível para "${commodity}". Suportadas: soja, milho, boi, cafe, algodao, trigo.`,
+        }
+      }
+      const recomendacao = sazonalService.recomendacaoMesAtual(commodity)
+      return { success: true, data: { perfil, recomendacao } }
+    },
+  )
+
+  /* ------------------------------------------------------------------
+   * GET /api/mercado/sazonalidade
+   * Listagem completa dos perfis sazonais disponíveis.
+   * ------------------------------------------------------------------ */
+  fastify.get('/api/mercado/sazonalidade', async () => {
+    const todos = sazonalService.getTodos()
+    return { success: true, data: todos, total: todos.length }
+  })
 }

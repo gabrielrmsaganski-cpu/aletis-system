@@ -16,6 +16,7 @@ import CRM from './pages/CRM'
 // só chegam ao cliente quando a rota correspondente é visitada.
 const ClienteDetalhes = lazy(() => import('./pages/ClienteDetalhes'))
 const Propostas = lazy(() => import('./pages/Propostas'))
+const Contratos = lazy(() => import('./pages/Contratos'))
 const Mercado = lazy(() => import('./pages/Mercado'))
 const Credito = lazy(() => import('./pages/Credito'))
 const WhatsApp = lazy(() => import('./pages/WhatsApp'))
@@ -58,6 +59,7 @@ export default function App() {
                 <Route path="/crm" element={<CRM />} />
                 <Route path="/clientes/:id" element={<ClienteDetalhes />} />
                 <Route path="/propostas" element={<Propostas />} />
+                <Route path="/contratos" element={<Contratos />} />
                 <Route path="/mercado" element={<Mercado />} />
                 <Route path="/credito" element={<Credito />} />
                 <Route path="/whatsapp" element={<WhatsApp />} />
