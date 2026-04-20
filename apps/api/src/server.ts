@@ -1,5 +1,6 @@
 import Fastify, { FastifyServerOptions } from 'fastify'
 import cors from '@fastify/cors'
+import jwt from '@fastify/jwt'
 import { join, dirname } from 'path'
 import { readdirSync } from 'fs'
 import { fileURLToPath } from 'url'
@@ -32,6 +33,12 @@ async function buildApp() {
 
   // --- CORS ---
   await fastify.register(cors, { origin: true, credentials: true })
+
+  // --- JWT (Portal do Cliente) ---
+  await fastify.register(jwt, {
+    secret: process.env.JWT_SECRET || 'aletis-portal-dev-secret-change-me-in-prod',
+    sign: { expiresIn: '12h' },
+  })
 
   // --- Request logging hook ---
   fastify.addHook('onRequest', async (request) => {

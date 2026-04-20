@@ -21,12 +21,40 @@ import {
   HelpCircle,
   RefreshCw,
   Save,
+  ShieldCheck,
+  KeyRound,
+  Copy,
+  Trash2,
+  Power,
+  UserPlus,
+  Search,
+  MailOpen,
 } from 'lucide-react'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
 
 // ── Types ────────────────────────────────────────────────────
-type TabId = 'perfil' | 'aparencia' | 'fontes' | 'preferencias'
+type TabId = 'perfil' | 'aparencia' | 'fontes' | 'preferencias' | 'acessos'
+
+interface PortalClienteRow {
+  id: string
+  nome: string
+  cpfCnpj: string
+  email: string
+  cidade: string
+  uf: string
+  estagio: string
+  consultor: string
+  portal: null | {
+    usuario: string
+    ativo: boolean
+    criadoEm: string
+    atualizadoEm: string
+    ultimoLoginEm?: string
+    forcaTrocaSenha: boolean
+  }
+  mensagensNaoLidas: number
+}
 
 interface FonteEntry {
   nome: string
@@ -156,6 +184,18 @@ export default function Configuracoes() {
   const [fontes, setFontes] = useState<FontesStatus | null>(null)
   const [fontesLoading, setFontesLoading] = useState(false)
 
+  // ── Acessos Portal Cliente state ──
+  const [clientesPortal, setClientesPortal] = useState<PortalClienteRow[]>([])
+  const [acessosLoading, setAcessosLoading] = useState(false)
+  const [buscaAcessos, setBuscaAcessos] = useState('')
+  const [filtroAcessos, setFiltroAcessos] = useState<'todos' | 'com' | 'sem' | 'inativos'>('todos')
+  const [modalSenha, setModalSenha] = useState<{
+    cliente: PortalClienteRow
+    usuario: string
+    senhaTemporaria: string
+  } | null>(null)
+  const [acaoPendente, setAcaoPendente] = useState<string | null>(null)
+
   // Tab param sync
   useEffect(() => {
     if (params.get('tab') !== activeTab) {
@@ -188,6 +228,122 @@ export default function Configuracoes() {
   useEffect(() => {
     if (activeTab === 'fontes' && !fontes) loadFontes()
   }, [activeTab])
+
+  // ── Acessos Portal Cliente ────────────────────────────────────
+  const loadClientesPortal = async () => {
+    setAcessosLoading(true)
+    try {
+      const res = await fetch('/api/portal-admin/clientes')
+      const json = await res.json()
+      if (json.success) setClientesPortal(json.data as PortalClienteRow[])
+      else showToast(json.error || 'Falha ao carregar', 'warning')
+    } catch (err) {
+      showToast(`Erro: ${(err as Error).message}`, 'warning')
+    } finally {
+      setAcessosLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'acessos' && clientesPortal.length === 0) loadClientesPortal()
+  }, [activeTab])
+
+  const criarOuResetarAcesso = async (cli: PortalClienteRow) => {
+    setAcaoPendente(cli.id)
+    try {
+      const res = await fetch(`/api/clientes/${cli.id}/portal-access`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const json = await res.json()
+      if (!json.success) {
+        showToast(json.error || 'Falha ao criar acesso', 'error')
+        return
+      }
+      setModalSenha({
+        cliente: cli,
+        usuario: json.data.usuario,
+        senhaTemporaria: json.data.senhaTemporaria,
+      })
+      await loadClientesPortal()
+      showToast(cli.portal ? 'Senha resetada' : 'Acesso criado', 'success')
+    } finally {
+      setAcaoPendente(null)
+    }
+  }
+
+  const toggleAtivo = async (cli: PortalClienteRow) => {
+    if (!cli.portal) return
+    setAcaoPendente(cli.id)
+    try {
+      const res = await fetch(`/api/clientes/${cli.id}/portal-access`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ativo: !cli.portal.ativo }),
+      })
+      const json = await res.json()
+      if (!json.success) {
+        showToast(json.error || 'Falha', 'error')
+        return
+      }
+      await loadClientesPortal()
+      showToast(json.data.ativo ? 'Acesso ativado' : 'Acesso desativado', 'success')
+    } finally {
+      setAcaoPendente(null)
+    }
+  }
+
+  const revogarAcesso = async (cli: PortalClienteRow) => {
+    if (!cli.portal) return
+    if (!window.confirm(`Revogar acesso de ${cli.nome}? O cliente precisará de nova senha.`)) return
+    setAcaoPendente(cli.id)
+    try {
+      const res = await fetch(`/api/clientes/${cli.id}/portal-access`, { method: 'DELETE' })
+      const json = await res.json()
+      if (!json.success) {
+        showToast(json.error || 'Falha', 'error')
+        return
+      }
+      await loadClientesPortal()
+      showToast('Acesso revogado', 'success')
+    } finally {
+      setAcaoPendente(null)
+    }
+  }
+
+  const copiarParaClipboard = async (texto: string) => {
+    try {
+      await navigator.clipboard.writeText(texto)
+      showToast('Copiado', 'success')
+    } catch {
+      showToast('Não foi possível copiar', 'warning')
+    }
+  }
+
+  const clientesFiltrados = useMemo(() => {
+    const q = buscaAcessos.trim().toLowerCase()
+    return clientesPortal.filter((c) => {
+      if (filtroAcessos === 'com' && !c.portal) return false
+      if (filtroAcessos === 'sem' && c.portal) return false
+      if (filtroAcessos === 'inativos' && (!c.portal || c.portal.ativo)) return false
+      if (!q) return true
+      return (
+        c.nome.toLowerCase().includes(q) ||
+        c.cpfCnpj.toLowerCase().includes(q) ||
+        c.email.toLowerCase().includes(q) ||
+        (c.portal?.usuario.toLowerCase().includes(q) ?? false)
+      )
+    })
+  }, [clientesPortal, buscaAcessos, filtroAcessos])
+
+  const resumoAcessos = useMemo(() => {
+    const total = clientesPortal.length
+    const com = clientesPortal.filter((c) => c.portal).length
+    const ativos = clientesPortal.filter((c) => c.portal?.ativo).length
+    const mensagens = clientesPortal.reduce((acc, c) => acc + c.mensagensNaoLidas, 0)
+    return { total, com, sem: total - com, ativos, mensagens }
+  }, [clientesPortal])
 
   const fontesPorCategoria = useMemo(() => {
     if (!fontes) return new Map<string, FonteEntry[]>()
@@ -237,6 +393,7 @@ export default function Configuracoes() {
           {([
             { id: 'perfil', label: 'Perfil', icon: UserIcon },
             { id: 'aparencia', label: 'Aparência', icon: Palette },
+            { id: 'acessos', label: 'Acessos Portal Cliente', icon: ShieldCheck },
             { id: 'fontes', label: 'Fontes de Dados', icon: Database },
             { id: 'preferencias', label: 'Preferências', icon: SlidersHorizontal },
           ] as const).map(tab => {
@@ -418,6 +575,280 @@ export default function Configuracoes() {
               <button onClick={handleSavePrefs} className="btn-primary inline-flex items-center gap-2 text-sm px-5 py-2.5">
                 <Save className="w-4 h-4" />
                 Salvar Preferências
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Acessos Portal Cliente ── */}
+      {activeTab === 'acessos' && (
+        <div className="animate-fade-in space-y-5">
+          {/* Cabeçalho com ações */}
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
+                Acessos Portal Cliente
+              </h2>
+              <p className="text-sm font-body text-aletis-grafite-claro mt-0.5">
+                Gerencie logins e senhas que os clientes usam no Portal (/portal-cliente).
+              </p>
+            </div>
+            <button
+              onClick={loadClientesPortal}
+              disabled={acessosLoading}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-aletis-borda text-sm font-body text-aletis-grafite-medio hover:bg-aletis-bege self-start"
+            >
+              <RefreshCw className={`w-4 h-4 ${acessosLoading ? 'animate-spin' : ''}`} />
+              Atualizar
+            </button>
+          </div>
+
+          {/* Resumo */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <ResumoCard label="Clientes" valor={resumoAcessos.total} cor="text-aletis-grafite-escuro" />
+            <ResumoCard label="Com acesso" valor={resumoAcessos.com} cor="text-aletis-verde" />
+            <ResumoCard label="Sem acesso" valor={resumoAcessos.sem} cor="text-aletis-grafite-medio" />
+            <ResumoCard label="Ativos" valor={resumoAcessos.ativos} cor="text-positivo" />
+            <ResumoCard label="Msg não lidas" valor={resumoAcessos.mensagens} cor="text-aletis-dourado" />
+          </div>
+
+          {/* Filtros + busca */}
+          <div className="card-premium p-4 flex flex-col md:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-grafite-claro" />
+              <input
+                type="text"
+                value={buscaAcessos}
+                onChange={(e) => setBuscaAcessos(e.target.value)}
+                placeholder="Buscar por nome, CPF/CNPJ, email ou usuário…"
+                className="input-field pl-10 py-2.5 text-sm w-full"
+              />
+            </div>
+            <select
+              value={filtroAcessos}
+              onChange={(e) => setFiltroAcessos(e.target.value as typeof filtroAcessos)}
+              className="input-field py-2.5 text-sm md:w-56"
+            >
+              <option value="todos">Todos</option>
+              <option value="com">Com acesso criado</option>
+              <option value="sem">Sem acesso</option>
+              <option value="inativos">Somente inativos</option>
+            </select>
+          </div>
+
+          {/* Tabela */}
+          <div className="card-premium overflow-hidden">
+            {acessosLoading && clientesPortal.length === 0 ? (
+              <div className="p-10 text-center text-sm font-body text-aletis-grafite-claro">
+                <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />
+                Carregando clientes…
+              </div>
+            ) : clientesFiltrados.length === 0 ? (
+              <div className="p-10 text-center text-sm font-body text-aletis-grafite-claro">
+                Nenhum cliente encontrado com esses filtros.
+              </div>
+            ) : (
+              <div className="divide-y divide-aletis-borda/60">
+                {clientesFiltrados.map((cli) => (
+                  <div
+                    key={cli.id}
+                    className="px-4 sm:px-6 py-4 flex flex-col lg:flex-row lg:items-center gap-4"
+                  >
+                    {/* Identificação */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-body font-semibold text-aletis-grafite-escuro">
+                          {cli.nome}
+                        </p>
+                        {cli.portal ? (
+                          cli.portal.ativo ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-positivo/10 text-positivo border border-positivo/30">
+                              <CheckCircle2 className="w-3 h-3" /> Ativo
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-alerta/10 text-alerta border border-alerta/30">
+                              <XCircle className="w-3 h-3" /> Inativo
+                            </span>
+                          )
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-aletis-bege text-aletis-grafite-medio border border-aletis-borda">
+                            Sem acesso
+                          </span>
+                        )}
+                        {cli.portal?.forcaTrocaSenha && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-aletis-dourado/10 text-aletis-dourado-escuro border border-aletis-dourado/30">
+                            <KeyRound className="w-3 h-3" /> Trocar senha
+                          </span>
+                        )}
+                        {cli.mensagensNaoLidas > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-aletis-verde/10 text-aletis-verde border border-aletis-verde/30">
+                            <MailOpen className="w-3 h-3" /> {cli.mensagensNaoLidas} msg
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-body text-aletis-grafite-claro mt-0.5">
+                        {cli.cpfCnpj} · {cli.cidade}/{cli.uf} · {cli.estagio}
+                      </p>
+                      {cli.portal && (
+                        <p className="text-xs font-body text-aletis-grafite-medio mt-1 flex items-center gap-1 flex-wrap">
+                          <span className="font-mono bg-aletis-bege px-1.5 py-0.5 rounded">
+                            {cli.portal.usuario}
+                          </span>
+                          {cli.portal.ultimoLoginEm && (
+                            <span>
+                              último login: {fmtAgo(cli.portal.ultimoLoginEm)}
+                            </span>
+                          )}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Ações */}
+                    <div className="flex flex-wrap gap-2">
+                      {!cli.portal ? (
+                        <button
+                          onClick={() => criarOuResetarAcesso(cli)}
+                          disabled={acaoPendente === cli.id}
+                          className="btn-primary inline-flex items-center gap-1.5 text-xs px-3 py-2 disabled:opacity-60"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          Criar acesso
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => criarOuResetarAcesso(cli)}
+                            disabled={acaoPendente === cli.id}
+                            className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-aletis-dourado/10 text-aletis-dourado-escuro border border-aletis-dourado/30 hover:bg-aletis-dourado/20 disabled:opacity-60"
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                            Resetar senha
+                          </button>
+                          <button
+                            onClick={() => toggleAtivo(cli)}
+                            disabled={acaoPendente === cli.id}
+                            className={`inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border disabled:opacity-60 ${
+                              cli.portal.ativo
+                                ? 'bg-aletis-bege text-aletis-grafite-medio border-aletis-borda hover:bg-aletis-bege/70'
+                                : 'bg-positivo/10 text-positivo border-positivo/30 hover:bg-positivo/20'
+                            }`}
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                            {cli.portal.ativo ? 'Desativar' : 'Ativar'}
+                          </button>
+                          <button
+                            onClick={() => revogarAcesso(cli)}
+                            disabled={acaoPendente === cli.id}
+                            className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-alerta/5 text-alerta border border-alerta/30 hover:bg-alerta/10 disabled:opacity-60"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Revogar
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Info */}
+          <div className="rounded-xl border border-aletis-borda/60 bg-aletis-bege/40 p-4 text-xs font-body text-aletis-grafite-medio leading-relaxed">
+            <strong className="text-aletis-grafite-escuro">Como funciona:</strong> ao criar o
+            acesso, o sistema gera uma senha temporária de uso único.{' '}
+            <strong>Copie e envie ao cliente com segurança</strong> (WhatsApp, email); no primeiro
+            login, o cliente será obrigado a definir uma nova senha. Se o cliente esquecer a senha,
+            basta clicar em <em>Resetar senha</em> — uma nova senha temporária será gerada. Você
+            pode <em>desativar</em> o acesso temporariamente (o login passa a ser recusado) ou{' '}
+            <em>revogar</em> (apaga a credencial).
+          </div>
+        </div>
+      )}
+
+      {/* Modal: senha temporária */}
+      {modalSenha && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 sm:p-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-aletis-dourado/15 flex items-center justify-center">
+                <KeyRound className="w-5 h-5 text-aletis-dourado-escuro" />
+              </div>
+              <div>
+                <h2 className="text-lg font-display font-bold text-aletis-grafite-escuro">
+                  Senha temporária gerada
+                </h2>
+                <p className="text-xs text-aletis-grafite-claro font-body">
+                  Copie agora — não será exibida novamente
+                </p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="p-3 rounded-xl bg-aletis-bege border border-aletis-borda">
+                <p className="text-[11px] uppercase tracking-wider text-aletis-grafite-claro font-body mb-1">
+                  Cliente
+                </p>
+                <p className="text-sm font-body font-semibold text-aletis-grafite-escuro">
+                  {modalSenha.cliente.nome}
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-aletis-bege border border-aletis-borda flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-wider text-aletis-grafite-claro font-body mb-1">
+                    Usuário
+                  </p>
+                  <p className="text-sm font-mono font-semibold text-aletis-grafite-escuro break-all">
+                    {modalSenha.usuario}
+                  </p>
+                </div>
+                <button
+                  onClick={() => copiarParaClipboard(modalSenha.usuario)}
+                  className="p-2 rounded-lg hover:bg-aletis-borda flex-shrink-0"
+                  title="Copiar"
+                >
+                  <Copy className="w-4 h-4 text-aletis-grafite-medio" />
+                </button>
+              </div>
+              <div className="p-3 rounded-xl bg-aletis-dourado/10 border border-aletis-dourado/30 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-wider text-aletis-dourado-escuro font-body mb-1">
+                    Senha temporária
+                  </p>
+                  <p className="text-lg font-mono font-bold text-aletis-grafite-escuro tracking-wider break-all">
+                    {modalSenha.senhaTemporaria}
+                  </p>
+                </div>
+                <button
+                  onClick={() => copiarParaClipboard(modalSenha.senhaTemporaria)}
+                  className="p-2 rounded-lg hover:bg-aletis-dourado/20 flex-shrink-0"
+                  title="Copiar"
+                >
+                  <Copy className="w-4 h-4 text-aletis-dourado-escuro" />
+                </button>
+              </div>
+              <p className="text-xs text-aletis-grafite-medio font-body">
+                Envie as credenciais ao cliente por canal seguro. Ele será forçado a trocar a senha
+                no primeiro login.
+              </p>
+            </div>
+            <div className="flex gap-3 pt-5">
+              <button
+                onClick={() =>
+                  copiarParaClipboard(
+                    `ALETIS — Portal do Cliente\nAcesse: ${window.location.origin}/portal-cliente\nUsuário: ${modalSenha.usuario}\nSenha temporária: ${modalSenha.senhaTemporaria}\n(Você será solicitado a criar uma nova senha no primeiro acesso.)`
+                  )
+                }
+                className="flex-1 py-2.5 rounded-xl border border-aletis-borda text-aletis-grafite-medio hover:bg-aletis-bege text-sm font-body font-medium inline-flex items-center justify-center gap-1.5"
+              >
+                <Copy className="w-4 h-4" />
+                Copiar mensagem pronta
+              </button>
+              <button
+                onClick={() => setModalSenha(null)}
+                className="btn-primary flex-1 py-2.5 text-sm"
+              >
+                Fechar
               </button>
             </div>
           </div>

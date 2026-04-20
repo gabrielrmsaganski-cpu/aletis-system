@@ -63,7 +63,7 @@ type Estagio =
   | 'prospeccao'
   | 'encerrado'
 
-type TabId = 'visao-geral' | 'dividas' | 'risco' | 'exposicao' | 'visitas' | 'propostas' | 'documentos' | 'fluxo-caixa' | 'timeline'
+type TabId = 'visao-geral' | 'dividas' | 'risco' | 'exposicao' | 'visitas' | 'propostas' | 'documentos' | 'fluxo-caixa' | 'timeline' | 'portal-chat'
 
 interface Divida {
   id: string
@@ -660,6 +660,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'documentos', label: 'Documentos' },
   { id: 'fluxo-caixa', label: 'Fluxo de Caixa' },
   { id: 'timeline', label: 'Timeline' },
+  { id: 'portal-chat', label: 'Chat Portal' },
 ]
 
 // ────────────────────────────────────────────────────────────
@@ -694,6 +695,18 @@ export default function ClienteDetalhes() {
   const [visitas, setVisitas] = useState<VisitaTecnica[]>([])
   const [novaVisita, setNovaVisita] = useState<VisitaForm>(defaultVisitaForm())
   const [savingVisita, setSavingVisita] = useState(false)
+  // Portal Cliente — mensagens (consultor responde pelo sistema)
+  const [portalMensagens, setPortalMensagens] = useState<Array<{
+    id: string
+    de: 'cliente' | 'consultor' | 'sistema'
+    autorNome: string
+    texto: string
+    criadoEm: string
+    lidaEm?: string
+  }>>([])
+  const [portalChatInput, setPortalChatInput] = useState('')
+  const [enviandoMsgPortal, setEnviandoMsgPortal] = useState(false)
+  const [portalStatus, setPortalStatus] = useState<{ ativo: boolean; usuario: string } | null>(null)
   const navigate = useNavigate()
   const { toasts, show: showToast, dismiss: dismissToast } = useToast()
 
@@ -815,6 +828,12 @@ export default function ClienteDetalhes() {
         if (clienteRes) {
           setExposicao(Array.isArray(clienteRes.exposicaoCommodity) ? clienteRes.exposicaoCommodity : [])
           setVisitas(Array.isArray(clienteRes.visitasTecnicas) ? clienteRes.visitasTecnicas : [])
+          setPortalMensagens(Array.isArray(clienteRes.portalMensagens) ? clienteRes.portalMensagens : [])
+          setPortalStatus(
+            clienteRes.portalAcesso
+              ? { ativo: !!clienteRes.portalAcesso.ativo, usuario: clienteRes.portalAcesso.usuario }
+              : null,
+          )
         }
       })
       .finally(() => setLoadingRisco(false))
@@ -824,6 +843,27 @@ export default function ClienteDetalhes() {
     () => (id === 'ailton-caeiro' ? 'cli-001' : id === 'paulo-luciano' ? 'cli-002' : id),
     [id],
   )
+
+  // Polling de mensagens do portal (10s) quando a aba está aberta
+  useEffect(() => {
+    if (!apiIdResolved || activeTab !== 'portal-chat') return
+    let cancelado = false
+    const fetchMsgs = async () => {
+      try {
+        const res = await apiFetch<{ success: boolean; data: typeof portalMensagens }>(
+          `/clientes/${apiIdResolved}/portal-mensagens`,
+        )
+        if (!cancelado && res?.success) setPortalMensagens(res.data)
+        await apiFetch(`/clientes/${apiIdResolved}/portal-mensagens/marcar-lidas`, { method: 'PATCH' }).catch(() => null)
+      } catch { /* ignore */ }
+    }
+    fetchMsgs()
+    const h = window.setInterval(fetchMsgs, 10000)
+    return () => {
+      cancelado = true
+      window.clearInterval(h)
+    }
+  }, [activeTab, apiIdResolved])
 
   const handleAddNota = useCallback(async () => {
     if (!novaNota.trim() || !apiIdResolved) return
@@ -970,6 +1010,26 @@ export default function ClienteDetalhes() {
       showToast('Falha ao remover visita', 'error')
     }
   }, [apiIdResolved, showToast])
+
+  const handleEnviarMsgPortal = useCallback(async () => {
+    const texto = portalChatInput.trim()
+    if (!texto || !apiIdResolved || enviandoMsgPortal) return
+    setEnviandoMsgPortal(true)
+    try {
+      const res = await apiFetch<{ success: boolean; data: (typeof portalMensagens)[number] }>(
+        `/clientes/${apiIdResolved}/portal-mensagens`,
+        { method: 'POST', body: JSON.stringify({ texto }) },
+      )
+      if (res?.success) {
+        setPortalMensagens((prev) => [...prev, res.data])
+        setPortalChatInput('')
+      }
+    } catch {
+      showToast('Falha ao enviar mensagem', 'error')
+    } finally {
+      setEnviandoMsgPortal(false)
+    }
+  }, [portalChatInput, apiIdResolved, enviandoMsgPortal, showToast])
 
   // Resolve client data — prefer API, fallback to inline
   const cliente: ClienteData = useMemo(() => {
@@ -2500,6 +2560,122 @@ export default function ClienteDetalhes() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════
+           TAB: CHAT PORTAL (consultor ↔ cliente)
+           ════════════════════════════════════════════════════════ */}
+      {activeTab === 'portal-chat' && (
+        <div className="space-y-4 animate-fade-in">
+          {/* Status do acesso */}
+          <div className="card-premium p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h3 className="text-base font-display font-bold text-aletis-grafite-escuro">
+                Mensagens do Portal do Cliente
+              </h3>
+              <p className="text-xs font-body text-aletis-grafite-claro mt-1">
+                {portalStatus
+                  ? `Usuário: ${portalStatus.usuario} · ${portalStatus.ativo ? 'ativo' : 'inativo'}`
+                  : 'Cliente ainda sem acesso ao Portal. Crie a credencial em Configurações → Acessos Portal Cliente.'}
+              </p>
+            </div>
+            {!portalStatus && (
+              <button
+                onClick={() => navigate('/configuracoes?tab=acessos')}
+                className="btn-primary text-xs px-4 py-2"
+              >
+                Criar acesso
+              </button>
+            )}
+          </div>
+
+          {/* Chat */}
+          <div className="card-premium overflow-hidden">
+            <div className="px-5 py-3 bg-gradient-to-r from-aletis-verde to-aletis-verde-medio flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white font-display font-bold text-xs">
+                {cliente.nome.slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <p className="text-white font-body font-semibold text-sm">{cliente.nome}</p>
+                <p className="text-white/60 text-xs font-body">
+                  Responda diretamente — o cliente verá no Portal em tempo real
+                </p>
+              </div>
+            </div>
+
+            <div className="px-5 py-5 space-y-3 max-h-[520px] overflow-y-auto custom-scrollbar bg-aletis-bege/30">
+              {portalMensagens.length === 0 ? (
+                <p className="text-center text-sm font-body text-aletis-grafite-claro py-8">
+                  Nenhuma mensagem trocada ainda.
+                </p>
+              ) : (
+                portalMensagens.map((msg) => {
+                  const meu = msg.de === 'consultor'
+                  return (
+                    <div key={msg.id} className={`flex ${meu ? 'justify-end' : 'justify-start'}`}>
+                      <div
+                        className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
+                          meu
+                            ? 'bg-aletis-verde text-white rounded-br-md'
+                            : 'bg-white border border-aletis-borda text-aletis-grafite-escuro rounded-bl-md shadow-sm'
+                        }`}
+                      >
+                        <p className="text-sm font-body leading-relaxed whitespace-pre-wrap">
+                          {msg.texto}
+                        </p>
+                        <p
+                          className={`text-[10px] font-body mt-1 flex items-center gap-1 ${
+                            meu ? 'text-white/70' : 'text-aletis-grafite-claro'
+                          }`}
+                        >
+                          {msg.autorNome} ·{' '}
+                          {new Date(msg.criadoEm).toLocaleString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                          {meu && msg.lidaEm && <span className="ml-1">✓✓</span>}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            <div className="px-5 py-3 border-t border-aletis-borda/60 bg-white">
+              <div className="flex items-center gap-3">
+                <textarea
+                  value={portalChatInput}
+                  onChange={(e) => setPortalChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      handleEnviarMsgPortal()
+                    }
+                  }}
+                  placeholder={
+                    portalStatus
+                      ? 'Digite sua resposta ao cliente…'
+                      : 'Cliente sem acesso ao Portal — crie a credencial para ativar o canal.'
+                  }
+                  disabled={!portalStatus}
+                  rows={2}
+                  className="input-field py-2.5 text-sm flex-1 resize-none"
+                  maxLength={2000}
+                />
+                <button
+                  onClick={handleEnviarMsgPortal}
+                  disabled={!portalChatInput.trim() || enviandoMsgPortal || !portalStatus}
+                  className="btn-primary px-4 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {enviandoMsgPortal ? '…' : 'Enviar'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

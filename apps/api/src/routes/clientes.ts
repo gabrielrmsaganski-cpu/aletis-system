@@ -3,6 +3,29 @@ import { getProspeccaoService } from '../services/prospeccao/ProspeccaoService'
 import type { CarConsultaResult, ClimaAgro, CnpjEnrichment, GeoEnrichment, LeadFull, ProducaoMunicipal } from '../services/prospeccao/types'
 import { calcularSRAI, type SraiInput } from '../services/ScoreSRAI.js'
 import { verificarABS, type AbsInput } from '../services/VerificadorABS.js'
+import {
+  criarAcessoPortal,
+  hashSenha,
+  normalizarUsuario,
+  type PortalAcesso,
+} from '../services/PortalAuthService.js'
+
+/* ========================================================================
+ *  Portal do Cliente — tipos anexados
+ * ======================================================================== */
+
+/** Mensagem trocada entre cliente e consultor via Portal. */
+export interface PortalMensagem {
+  id: string
+  /** Remetente: 'cliente' (via portal) ou 'consultor' (via sistema). */
+  de: 'cliente' | 'consultor' | 'sistema'
+  /** Nome exibido do autor (ex: "Paulo Luciano" ou "Christian Kohler"). */
+  autorNome: string
+  texto: string
+  criadoEm: string
+  /** Foi lida pela contraparte? */
+  lidaEm?: string
+}
 
 /* ========================================================================
  *  Tipos
@@ -272,6 +295,10 @@ interface Cliente {
   exposicaoCommodity?: ExposicaoCommodity[]
   /** Checklists de visitas técnicas realizadas. */
   visitasTecnicas?: VisitaTecnica[]
+  /** Credencial do Portal do Cliente (hash scrypt + metadados). */
+  portalAcesso?: PortalAcesso
+  /** Histórico de mensagens do Portal do Cliente (cliente ↔ consultor). */
+  portalMensagens?: PortalMensagem[]
 }
 
 /* ========================================================================
@@ -1397,4 +1424,183 @@ export default async function (fastify: FastifyInstance) {
       },
     }
   })
+
+  /* ======================================================================
+   *  PORTAL DO CLIENTE — gestão de acessos (consultor em Configurações)
+   * ==================================================================== */
+
+  /** Listagem resumida de todos os clientes + status do portalAcesso. */
+  fastify.get('/api/portal-admin/clientes', async () => {
+    const lista = Array.from(clientes.values()).map((c) => ({
+      id: c.id,
+      nome: c.nome,
+      cpfCnpj: c.cpfCnpj,
+      email: c.email,
+      cidade: c.cidade,
+      uf: c.uf,
+      estagio: c.estagio,
+      consultor: c.consultor,
+      portal: c.portalAcesso
+        ? {
+            usuario: c.portalAcesso.usuario,
+            ativo: c.portalAcesso.ativo,
+            criadoEm: c.portalAcesso.criadoEm,
+            atualizadoEm: c.portalAcesso.atualizadoEm,
+            ultimoLoginEm: c.portalAcesso.ultimoLoginEm,
+            forcaTrocaSenha: c.portalAcesso.forcaTrocaSenha,
+          }
+        : null,
+      mensagensNaoLidas:
+        c.portalMensagens?.filter((m) => m.de === 'cliente' && !m.lidaEm).length ?? 0,
+    }))
+    return { success: true, data: lista }
+  })
+
+  /** Cria ou reseta o acesso portal. Retorna senha temporária UMA vez. */
+  fastify.post(
+    '/api/clientes/:id/portal-access',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string }
+      const cliente = clientes.get(id)
+      if (!cliente) {
+        reply.status(404)
+        return { success: false, error: 'Cliente não encontrado' }
+      }
+      const body = request.body as { usuario?: string; senhaInicial?: string } | undefined
+      const usuarioInput =
+        body?.usuario?.trim() ||
+        cliente.email?.trim() ||
+        cliente.cpfCnpj.replace(/\D/g, '')
+      if (!usuarioInput) {
+        reply.status(400)
+        return { success: false, error: 'Informe usuário, email ou CPF/CNPJ no cliente' }
+      }
+      const usuarioNorm = normalizarUsuario(usuarioInput)
+      // Verifica colisão de usuário em outros clientes
+      for (const outro of clientes.values()) {
+        if (outro.id === id) continue
+        if (outro.portalAcesso?.usuario === usuarioNorm) {
+          reply.status(409)
+          return { success: false, error: `Usuário já está em uso por ${outro.nome}` }
+        }
+      }
+      const { acesso, senhaTemporaria } = criarAcessoPortal({
+        usuario: usuarioNorm,
+        senhaInicial: body?.senhaInicial,
+      })
+      cliente.portalAcesso = acesso
+      cliente.ultimaAtualizacao = new Date().toISOString()
+      return {
+        success: true,
+        data: {
+          usuario: acesso.usuario,
+          senhaTemporaria,
+          ativo: acesso.ativo,
+          forcaTrocaSenha: acesso.forcaTrocaSenha,
+          criadoEm: acesso.criadoEm,
+        },
+      }
+    }
+  )
+
+  /** Toggle ativo/inativo. */
+  fastify.patch(
+    '/api/clientes/:id/portal-access',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string }
+      const cliente = clientes.get(id)
+      if (!cliente || !cliente.portalAcesso) {
+        reply.status(404)
+        return { success: false, error: 'Acesso portal não configurado' }
+      }
+      const body = request.body as { ativo?: boolean } | undefined
+      if (typeof body?.ativo !== 'boolean') {
+        reply.status(400)
+        return { success: false, error: 'Campo "ativo" (boolean) obrigatório' }
+      }
+      cliente.portalAcesso.ativo = body.ativo
+      cliente.portalAcesso.atualizadoEm = new Date().toISOString()
+      return { success: true, data: { ativo: cliente.portalAcesso.ativo } }
+    }
+  )
+
+  /** Revoga (apaga) credencial. */
+  fastify.delete(
+    '/api/clientes/:id/portal-access',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string }
+      const cliente = clientes.get(id)
+      if (!cliente || !cliente.portalAcesso) {
+        reply.status(404)
+        return { success: false, error: 'Acesso portal não configurado' }
+      }
+      cliente.portalAcesso = undefined
+      cliente.ultimaAtualizacao = new Date().toISOString()
+      return { success: true, data: { revogado: true } }
+    }
+  )
+
+  /** Lista mensagens portal (consultor vê todas). */
+  fastify.get(
+    '/api/clientes/:id/portal-mensagens',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string }
+      const cliente = clientes.get(id)
+      if (!cliente) {
+        reply.status(404)
+        return { success: false, error: 'Cliente não encontrado' }
+      }
+      return { success: true, data: cliente.portalMensagens ?? [] }
+    }
+  )
+
+  /** Consultor responde ao cliente pelo sistema. */
+  fastify.post(
+    '/api/clientes/:id/portal-mensagens',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string }
+      const cliente = clientes.get(id)
+      if (!cliente) {
+        reply.status(404)
+        return { success: false, error: 'Cliente não encontrado' }
+      }
+      const body = request.body as { texto?: string; autorNome?: string } | undefined
+      const texto = body?.texto?.trim()
+      if (!texto) {
+        reply.status(400)
+        return { success: false, error: 'Texto obrigatório' }
+      }
+      const msg: PortalMensagem = {
+        id: `pm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        de: 'consultor',
+        autorNome: body?.autorNome?.trim() || cliente.consultor || 'Consultor ALETIS',
+        texto,
+        criadoEm: new Date().toISOString(),
+      }
+      cliente.portalMensagens = [...(cliente.portalMensagens ?? []), msg]
+      return reply.status(201).send({ success: true, data: msg })
+    }
+  )
+
+  /** Marca mensagens do cliente como lidas (pelo consultor). */
+  fastify.patch(
+    '/api/clientes/:id/portal-mensagens/marcar-lidas',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string }
+      const cliente = clientes.get(id)
+      if (!cliente) {
+        reply.status(404)
+        return { success: false, error: 'Cliente não encontrado' }
+      }
+      const agora = new Date().toISOString()
+      let marcadas = 0
+      for (const m of cliente.portalMensagens ?? []) {
+        if (m.de === 'cliente' && !m.lidaEm) {
+          m.lidaEm = agora
+          marcadas++
+        }
+      }
+      return { success: true, data: { marcadas } }
+    }
+  )
 }
