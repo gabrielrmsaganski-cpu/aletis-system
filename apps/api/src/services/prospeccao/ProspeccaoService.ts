@@ -6,15 +6,19 @@ import { ScoringEngine } from './ScoringEngine'
 import { SICARClient, SICARError, getSICARClient } from './SICARClient'
 import { SICARIndex, SicarIndexStats } from './SICARIndex'
 import { GeoEnrichmentSource, getGeoEnrichmentSource } from './GeoEnrichmentSource'
+import { NasaPowerSource, getNasaPowerSource } from './NasaPowerSource'
+import { IbgeSidraSource, getIbgeSidraSource } from './IbgeSidraSource'
 import { LeadsRepository, BlacklistEntry } from './LeadsRepository'
 import type {
   AreaEstimation,
   CarConsultaResult,
+  ClimaAgro,
   CnpjEnrichment,
   GeoEnrichment,
   LeadFull,
   LeadRaw,
   LeadStatus,
+  ProducaoMunicipal,
   ProspeccaoFilters,
   ProspeccaoStats,
 } from './types'
@@ -32,6 +36,8 @@ export class ProspeccaoService {
   private sicar: SICARClient
   private sicarIndex: SICARIndex
   private geo: GeoEnrichmentSource
+  private nasaPower: NasaPowerSource
+  private ibgeSidra: IbgeSidraSource
   private repo: LeadsRepository
 
   /** Controle de lotes em execução (key = batchId). */
@@ -45,6 +51,8 @@ export class ProspeccaoService {
     this.sicar = getSICARClient()
     this.sicarIndex = new SICARIndex(storageDir)
     this.geo = getGeoEnrichmentSource()
+    this.nasaPower = getNasaPowerSource()
+    this.ibgeSidra = getIbgeSidraSource()
     this.repo = new LeadsRepository(storageDir)
   }
 
@@ -339,7 +347,9 @@ export class ProspeccaoService {
     totalHectares?: number
     cnpj?: CnpjEnrichment
     geo?: GeoEnrichment
-    errors: { car?: string; cnpj?: string; geo?: string }
+    clima?: ClimaAgro
+    producaoMunicipal?: ProducaoMunicipal
+    errors: { car?: string; cnpj?: string; geo?: string; clima?: string; producao?: string }
     enriquecidoEm: string
   }> {
     const cpfCnpjClean = (params.cpfCnpj || '').replace(/\D/g, '')
@@ -386,11 +396,50 @@ export class ProspeccaoService {
       geoError = err?.message || 'falha Geo'
     }
 
+    // ---- Fase 2: enriquecimentos dependentes de coordenadas/IBGE ----
+    // Rodam em paralelo após termos geo. NASA POWER precisa de lat/lng; SIDRA
+    // precisa de código IBGE. Ambos falham silenciosamente se a base não tiver
+    // o ponto/município — não quebram o fluxo.
+    const lat = geo?.coordenadas?.lat
+    const lng = geo?.coordenadas?.lng
+    const codIbge = geo?.codigoIbge || cnpj?.endereco?.codigoMunicipioIbge
+
+    const [climaRes, prodRes] = await Promise.all([
+      lat != null && lng != null
+        ? this.nasaPower.enrich(lat, lng).catch((err) => ({ __err: err?.message || 'falha NASA POWER' } as any))
+        : Promise.resolve(null),
+      codIbge
+        ? this.ibgeSidra.enrich(codIbge).catch((err) => ({ __err: err?.message || 'falha IBGE SIDRA' } as any))
+        : Promise.resolve(null),
+    ])
+
+    let clima: ClimaAgro | undefined
+    let climaError: string | undefined
+    if (climaRes && typeof climaRes === 'object' && '__err' in climaRes) {
+      climaError = (climaRes as any).__err
+    } else if (climaRes) {
+      clima = climaRes as ClimaAgro
+    } else if (lat == null || lng == null) {
+      climaError = 'sem coordenadas para consultar clima'
+    }
+
+    let producaoMunicipal: ProducaoMunicipal | undefined
+    let producaoError: string | undefined
+    if (prodRes && typeof prodRes === 'object' && '__err' in prodRes) {
+      producaoError = (prodRes as any).__err
+    } else if (prodRes) {
+      producaoMunicipal = prodRes as ProducaoMunicipal
+    } else if (!codIbge) {
+      producaoError = 'sem código IBGE para consultar produção'
+    }
+
     const carOk = 'car' in carRes && carRes.car
-    const errors: { car?: string; cnpj?: string; geo?: string } = {}
+    const errors: { car?: string; cnpj?: string; geo?: string; clima?: string; producao?: string } = {}
     if (!carOk && 'error' in carRes && carRes.error) errors.car = carRes.error
     if (cnpjError) errors.cnpj = cnpjError
     if (geoError) errors.geo = geoError
+    if (climaError) errors.clima = climaError
+    if (producaoError) errors.producao = producaoError
 
     return {
       car: carOk ? carRes.car : undefined,
@@ -399,6 +448,8 @@ export class ProspeccaoService {
       totalHectares: carOk ? (carRes as any).totalHectares : undefined,
       cnpj,
       geo,
+      clima,
+      producaoMunicipal,
       errors,
       enriquecidoEm: new Date().toISOString(),
     }

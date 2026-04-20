@@ -113,6 +113,57 @@ export interface GeoEnrichment {
   enriquecidoEm: string
 }
 
+/**
+ * Dados agroclimáticos anuais de um ponto (NASA POWER).
+ * Médias dos últimos 12 meses. Permite dimensionar risco climático
+ * real da propriedade (seca, excesso de chuva, radiação p/ fotossíntese).
+ */
+export interface ClimaAgro {
+  lat: number
+  lng: number
+  periodo: { inicio: string; fim: string }
+  /** Temperatura média anual em °C (pode ser null se NASA POWER faltar). */
+  tempMediaAnualC: number | null
+  /** Precipitação acumulada no período em mm. */
+  chuvaAcumuladaAnualMm: number | null
+  /** Radiação solar média diária em MJ/m². */
+  radiacaoMediaDiariaMjM2: number | null
+  /** Umidade relativa média em %. */
+  umidadeRelativaMediaPct: number | null
+  /** Resumo mensal — útil para gráfico sazonal no CRM. */
+  mensais: Array<{
+    anoMes: string // YYYY-MM
+    tempMediaC: number | null
+    chuvaMmTotal: number | null
+  }>
+  fonte: string
+  enriquecidoEm: string
+}
+
+/**
+ * Produção agrícola + rebanho do município (IBGE SIDRA PAM/PPM).
+ * Serve para comparar o cliente com o perfil produtivo dominante
+ * da região — base de argumentação para reestruturação.
+ */
+export interface ProducaoMunicipal {
+  codigoMunicipioIbge: number
+  anoReferencia: string
+  culturas: Array<{
+    cultura: string
+    tipo: 'temporaria' | 'permanente'
+    valorMilReais: number
+    anoReferencia: string
+  }>
+  rebanho: Array<{
+    especie: string
+    cabecas: number
+    anoReferencia: string
+  }>
+  valorTotalLavouraMilReais: number
+  fonte: string
+  enriquecidoEm: string
+}
+
 /** Estimativa de área rural — dado "hectares" que o PGFN não fornece diretamente. */
 export interface AreaEstimation {
   hectaresEstimados: number

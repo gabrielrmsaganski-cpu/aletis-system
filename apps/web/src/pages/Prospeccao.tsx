@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Target,
   Flame,
@@ -41,6 +42,7 @@ import {
   Archive,
   StopCircle,
   ListChecks,
+  UserPlus,
 } from 'lucide-react'
 
 // ────────────────────────────────────────────────────────────
@@ -258,6 +260,9 @@ export default function Prospeccao() {
   const [sicarStatus, setSicarStatus] = useState<SicarStatus | null>(null)
   const [carLoading, setCarLoading] = useState<string | null>(null)
   const [carError, setCarError] = useState<string | null>(null)
+  const [iniciando, setIniciando] = useState<string | null>(null)
+  const [iniciarMsg, setIniciarMsg] = useState<{ tipo: 'sucesso' | 'erro' | 'info'; texto: string } | null>(null)
+  const navigate = useNavigate()
 
   // Bulk enrich
   const [bulkOpen, setBulkOpen] = useState(false)
@@ -391,6 +396,36 @@ export default function Prospeccao() {
       setDeleting(null)
     }
   }, [search, loadStats])
+
+  /**
+   * Importa o lead PGFN para o funil CRM (estágio "prospecção").
+   * Idempotente — se cpfCnpj já está no CRM, retorna o cliente existente.
+   * Redireciona automaticamente para /clientes/:id ao concluir.
+   */
+  const handleIniciarProspeccao = useCallback(async (cpfCnpj: string) => {
+    setIniciando(cpfCnpj)
+    setIniciarMsg(null)
+    try {
+      const r = await fetch('/api/clientes/iniciar-prospeccao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cpfCnpj }),
+      })
+      const j = await r.json()
+      if (!j.success) throw new Error(j.error || 'Falha ao iniciar prospecção')
+      setIniciarMsg({
+        tipo: j.jaExistia ? 'info' : 'sucesso',
+        texto: j.jaExistia
+          ? 'Cliente já estava no funil — abrindo detalhes…'
+          : 'Lead importado para o CRM — abrindo detalhes…',
+      })
+      setTimeout(() => navigate(`/clientes/${j.data.id}`), 600)
+    } catch (e: any) {
+      setIniciarMsg({ tipo: 'erro', texto: e?.message || 'Falha ao iniciar prospecção' })
+    } finally {
+      setIniciando(null)
+    }
+  }, [navigate])
 
   const handleRestaurar = useCallback(async (cpfCnpj: string) => {
     setDeleting(cpfCnpj)
@@ -629,13 +664,16 @@ export default function Prospeccao() {
           enriching={enriching === selectedLead.cpfCnpjClean}
           carLoading={carLoading === selectedLead.cpfCnpjClean}
           deleting={deleting === selectedLead.cpfCnpjClean}
+          iniciando={iniciando === selectedLead.cpfCnpjClean}
+          iniciarMsg={iniciarMsg}
           carError={carError}
           sicarStatus={sicarStatus}
-          onClose={() => { setSelectedLead(null); setCarError(null) }}
+          onClose={() => { setSelectedLead(null); setCarError(null); setIniciarMsg(null) }}
           onEnrich={() => handleEnrich(selectedLead.cpfCnpjClean)}
           onExcluir={(motivo) => handleExcluir(selectedLead.cpfCnpjClean, motivo)}
           onRestaurar={() => handleRestaurar(selectedLead.cpfCnpjClean)}
           onConsultarCar={(codImovel) => handleConsultarCar(selectedLead.cpfCnpjClean, codImovel)}
+          onIniciarProspeccao={() => handleIniciarProspeccao(selectedLead.cpfCnpjClean)}
         />
       )}
 
@@ -1665,6 +1703,8 @@ function LeadDrawer({
   enriching,
   carLoading,
   deleting,
+  iniciando,
+  iniciarMsg,
   carError,
   sicarStatus,
   onClose,
@@ -1672,11 +1712,14 @@ function LeadDrawer({
   onExcluir,
   onRestaurar,
   onConsultarCar,
+  onIniciarProspeccao,
 }: {
   lead: LeadFull
   enriching: boolean
   carLoading: boolean
   deleting: boolean
+  iniciando: boolean
+  iniciarMsg: { tipo: 'sucesso' | 'erro' | 'info'; texto: string } | null
   carError: string | null
   sicarStatus: SicarStatus | null
   onClose: () => void
@@ -1684,6 +1727,7 @@ function LeadDrawer({
   onExcluir: (motivo: string) => void
   onRestaurar: () => void
   onConsultarCar: (codImovel: string) => void
+  onIniciarProspeccao: () => void
 }) {
   const isExcluido = lead.status === 'excluido'
   const askExclude = () => {
@@ -1760,12 +1804,39 @@ function LeadDrawer({
           </div>
 
           {/* Metrics row */}
-          <div className="grid grid-cols-4 gap-3 mt-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
             <DrawerKpi label="Score" value={`${lead.score.total}`} sub={cls.label} />
             <DrawerKpi label="Dívida total" value={fmtBRLShort(lead.totalDivida)} sub="consolidada" />
             <DrawerKpi label="Área estimada" value={lead.area.hectaresEstimados > 0 ? fmtHa(lead.area.hectaresEstimados) : '—'} sub={`conf. ${lead.area.confidence}`} />
             <DrawerKpi label="Honorários" value={fmtBRLShort(lead.score.honorariosEstimados)} sub="1% modelo ALETIS" />
           </div>
+
+          {/* CTA principal — importar lead para o CRM */}
+          {!isExcluido && (
+            <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2">
+              <button
+                onClick={onIniciarProspeccao}
+                disabled={iniciando}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-aletis-verde-escuro font-semibold text-sm shadow-lg hover:bg-aletis-bege transition disabled:opacity-60"
+              >
+                {iniciando ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
+                {iniciando ? 'Importando…' : 'Iniciar prospecção · levar ao CRM'}
+              </button>
+              {iniciarMsg && (
+                <span
+                  className={`text-xs font-medium px-3 py-1.5 rounded-lg ${
+                    iniciarMsg.tipo === 'sucesso'
+                      ? 'bg-emerald-500/20 text-emerald-100 border border-emerald-300/40'
+                      : iniciarMsg.tipo === 'info'
+                      ? 'bg-white/15 text-white border border-white/20'
+                      : 'bg-red-500/20 text-red-100 border border-red-300/40'
+                  }`}
+                >
+                  {iniciarMsg.texto}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Tabs */}

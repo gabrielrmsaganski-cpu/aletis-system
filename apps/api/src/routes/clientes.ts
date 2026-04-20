@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { getProspeccaoService } from '../services/prospeccao/ProspeccaoService'
-import type { CarConsultaResult, CnpjEnrichment, GeoEnrichment } from '../services/prospeccao/types'
+import type { CarConsultaResult, ClimaAgro, CnpjEnrichment, GeoEnrichment, LeadFull, ProducaoMunicipal } from '../services/prospeccao/types'
 
 /* ========================================================================
  *  Tipos
@@ -102,8 +102,24 @@ interface ContatoDescoberto {
 interface ClienteEnrichStatus {
   cnpj?: 'ok' | 'erro' | 'nao_aplicavel' | 'pendente'
   geo?: 'ok' | 'erro' | 'nao_encontrado' | 'pendente'
+  clima?: 'ok' | 'erro' | 'nao_disponivel' | 'pendente'
+  producao?: 'ok' | 'erro' | 'nao_disponivel' | 'pendente'
   mensagem?: string
   tentadoEm?: string
+}
+
+/**
+ * Origem do cliente quando importado a partir da aba Prospecção.
+ * Preserva o vínculo com o lead PGFN original para auditoria.
+ */
+interface LeadOrigem {
+  cpfCnpjClean: string
+  scoreTotal?: number
+  classificacao?: 'quente' | 'morno' | 'frio' | 'reativo'
+  honorariosEstimados?: number
+  temAjuizada?: boolean
+  totalDividaPgfn?: number
+  importadoEm: string
 }
 
 interface Divida {
@@ -167,6 +183,12 @@ interface Cliente {
   cep?: string
   /** Status dos enriquecimentos secundários (CNPJ, Geo). CAR fica em carStatus. */
   enrichStatus?: ClienteEnrichStatus
+  /** Clima agroclimático anual do ponto (NASA POWER). */
+  clima?: ClimaAgro
+  /** Produção agrícola e pecuária do município (IBGE SIDRA). */
+  producaoMunicipal?: ProducaoMunicipal
+  /** Origem: se foi importado a partir da prospecção PGFN. */
+  leadOrigem?: LeadOrigem
 }
 
 /* ========================================================================
@@ -264,261 +286,6 @@ function seed() {
       dataCadastro: '2025-08-10',
       ultimaAtualizacao: '2026-02-26',
       observacoes: 'Memória de cálculo elaborada. Proposta de 4x R$70.550 alinhadas safra. Pagamentos parciais em andamento.',
-    },
-
-    /* ---- FICTÍCIOS (agronegócio brasileiro realista) ---- */
-    {
-      id: 'cli-003',
-      nome: 'Fazenda Santa Helena Ltda',
-      cpfCnpj: '12.345.678/0001-90',
-      cidade: 'Sorriso',
-      uf: 'MT',
-      telefone: '(66) 99977-3003',
-      email: 'contato@fazsantahelena.com.br',
-      atividade: 'Produção de soja e algodão',
-      areaTotalHa: 2800,
-      culturas: ['soja', 'algodao'],
-      estagio: 'analise',
-      consultor: 'Mariana Costa',
-      credor: 'Banco do Brasil',
-      valorTotalDivida: 4850000.00,
-      valorTotalPago: 0,
-      dividas: [
-        { contrato: 'BB-2024/1892', valorOriginal: 3200000.00, valorAtualizado: 3520000.00, vencimento: '2025-07-15', status: 'ativa', credor: 'Banco do Brasil' },
-        { contrato: 'BB-2024/2103', valorOriginal: 1650000.00, valorAtualizado: 1330000.00, vencimento: '2025-09-30', status: 'ativa', credor: 'Banco do Brasil' },
-      ],
-      pagamentos: [],
-      timeline: [
-        { data: '2025-11-01', tipo: 'contato', descricao: 'Encaminhamento via indicação - dívida custeio BB' },
-        { data: '2025-11-15', tipo: 'analise', descricao: 'Análise patrimonial e de fluxo de caixa em andamento' },
-      ],
-      dataCadastro: '2025-11-01',
-      ultimaAtualizacao: '2025-11-15',
-      observacoes: 'Grande produtor MT. Crise de fluxo de caixa por queda preço soja safra 24/25.',
-    },
-    {
-      id: 'cli-004',
-      nome: 'José Roberto Fernandes',
-      cpfCnpj: '789.XXX.XXX-34',
-      cidade: 'Rio Verde',
-      uf: 'GO',
-      telefone: '(64) 99966-4004',
-      email: 'jroberto.fern@email.com',
-      atividade: 'Pecuária de corte e grãos',
-      areaTotalHa: 1200,
-      culturas: ['soja', 'milho', 'boi_gordo'],
-      estagio: 'acordo',
-      consultor: 'Eduardo Mendes',
-      credor: 'Bradesco',
-      valorTotalDivida: 1890000.00,
-      valorTotalPago: 945000.00,
-      dividas: [
-        { contrato: 'BRA-89234', valorOriginal: 1200000.00, valorAtualizado: 1350000.00, vencimento: '2025-05-20', status: 'em_acordo', credor: 'Bradesco' },
-        { contrato: 'BRA-91002', valorOriginal: 540000.00, valorAtualizado: 540000.00, vencimento: '2025-11-30', status: 'em_acordo', credor: 'Bradesco' },
-      ],
-      pagamentos: [
-        { data: '2025-06-15', valor: 500000.00, descricao: 'Venda lote 350 cab boi gordo', tipo: 'pagamento' },
-        { data: '2025-10-10', valor: 445000.00, descricao: 'Parcela pós-safra milho', tipo: 'pagamento' },
-      ],
-      timeline: [
-        { data: '2025-03-20', tipo: 'contato', descricao: 'Busca acordo Bradesco - custeio + investimento' },
-        { data: '2025-04-05', tipo: 'analise', descricao: 'Análise rebanho + lavoura 1.200 ha' },
-        { data: '2025-05-01', tipo: 'proposta', descricao: 'Proposta de quitação via venda parcial rebanho + parcelas safra' },
-        { data: '2025-06-15', tipo: 'pagamento', descricao: 'Pagamento via venda de gado: R$500.000' },
-        { data: '2025-10-10', tipo: 'pagamento', descricao: 'Parcela pós-safra: R$445.000' },
-      ],
-      dataCadastro: '2025-03-20',
-      ultimaAtualizacao: '2025-10-10',
-      observacoes: 'Acordo em andamento. 50% quitado via gado + safra milho.',
-    },
-    {
-      id: 'cli-005',
-      nome: 'Agroindustrial Campos Verdes S/A',
-      cpfCnpj: '34.567.890/0001-12',
-      cidade: 'Uberlândia',
-      uf: 'MG',
-      telefone: '(34) 3233-5005',
-      email: 'financeiro@camposverdes.agr.br',
-      atividade: 'Agroindústria - processamento de grãos',
-      areaTotalHa: 5000,
-      culturas: ['soja', 'milho', 'cafe'],
-      estagio: 'prospeccao',
-      consultor: 'Mariana Costa',
-      credor: 'Itaú BBA',
-      valorTotalDivida: 12500000.00,
-      valorTotalPago: 0,
-      dividas: [
-        { contrato: 'IBBA-2025/4455', valorOriginal: 8000000.00, valorAtualizado: 8960000.00, vencimento: '2026-01-15', status: 'ativa', credor: 'Itaú BBA' },
-        { contrato: 'IBBA-2025/4456', valorOriginal: 3540000.00, valorAtualizado: 3540000.00, vencimento: '2026-06-30', status: 'ativa', credor: 'Itaú BBA' },
-      ],
-      pagamentos: [],
-      timeline: [
-        { data: '2026-01-05', tipo: 'contato', descricao: 'Contato via site - agroindústria grande porte' },
-      ],
-      dataCadastro: '2026-01-05',
-      ultimaAtualizacao: '2026-01-05',
-      observacoes: 'Prospect de alto valor. Dívida agroindustrial Itaú BBA.',
-    },
-    {
-      id: 'cli-006',
-      nome: 'Maria Aparecida dos Santos',
-      cpfCnpj: '123.XXX.XXX-56',
-      cidade: 'Barreiras',
-      uf: 'BA',
-      telefone: '(77) 99955-6006',
-      email: 'maria.santos@email.com',
-      atividade: 'Produção de algodão e soja',
-      areaTotalHa: 850,
-      culturas: ['algodao', 'soja'],
-      estagio: 'negociacao',
-      consultor: 'Eduardo Mendes',
-      credor: 'Santander',
-      valorTotalDivida: 980000.00,
-      valorTotalPago: 250000.00,
-      dividas: [
-        { contrato: 'SAN-778901', valorOriginal: 650000.00, valorAtualizado: 720000.00, vencimento: '2025-08-30', status: 'em_acordo', credor: 'Santander' },
-        { contrato: 'SAN-778902', valorOriginal: 260000.00, valorAtualizado: 260000.00, vencimento: '2026-02-28', status: 'em_acordo', credor: 'Santander' },
-      ],
-      pagamentos: [
-        { data: '2025-09-15', valor: 150000.00, descricao: 'Primeira parcela acordo', tipo: 'pagamento' },
-        { data: '2026-01-20', valor: 100000.00, descricao: 'Segunda parcela', tipo: 'pagamento' },
-      ],
-      timeline: [
-        { data: '2025-06-10', tipo: 'contato', descricao: 'Indicação - produtora MATOPIBA com dívida Santander' },
-        { data: '2025-07-01', tipo: 'analise', descricao: 'Análise 850 ha algodão/soja Barreiras-BA' },
-        { data: '2025-08-05', tipo: 'proposta', descricao: 'Proposta parcelamento com desconto 15% à vista' },
-        { data: '2025-09-15', tipo: 'pagamento', descricao: 'Primeira parcela: R$150.000' },
-        { data: '2026-01-20', tipo: 'pagamento', descricao: 'Segunda parcela: R$100.000' },
-      ],
-      dataCadastro: '2025-06-10',
-      ultimaAtualizacao: '2026-01-20',
-      observacoes: 'Acordo Santander em andamento. Próxima parcela prevista pós-colheita algodão.',
-    },
-    {
-      id: 'cli-007',
-      nome: 'Cooperativa Agropecuária Rondônia',
-      cpfCnpj: '45.678.901/0001-23',
-      cidade: 'Ji-Paraná',
-      uf: 'RO',
-      telefone: '(69) 3422-7007',
-      email: 'financeiro@cooprn.coop.br',
-      atividade: 'Cooperativa - leite e café',
-      areaTotalHa: 15000,
-      culturas: ['cafe', 'leite', 'cacau'],
-      estagio: 'analise',
-      consultor: 'Mariana Costa',
-      credor: 'BNDES / Banco da Amazônia',
-      valorTotalDivida: 8200000.00,
-      valorTotalPago: 0,
-      dividas: [
-        { contrato: 'BASA-2024/3890', valorOriginal: 5500000.00, valorAtualizado: 6050000.00, vencimento: '2025-12-31', status: 'ativa', credor: 'Banco da Amazônia' },
-        { contrato: 'BNDES-2024/1120', valorOriginal: 2150000.00, valorAtualizado: 2150000.00, vencimento: '2026-06-30', status: 'ativa', credor: 'BNDES' },
-      ],
-      pagamentos: [],
-      timeline: [
-        { data: '2025-10-20', tipo: 'contato', descricao: 'Cooperativa com 120 associados - crise de liquidez' },
-        { data: '2025-11-05', tipo: 'analise', descricao: 'Levantamento patrimonial e análise de cooperados' },
-        { data: '2026-01-15', tipo: 'documento', descricao: 'Documentação patrimonial entregue' },
-      ],
-      dataCadastro: '2025-10-20',
-      ultimaAtualizacao: '2026-01-15',
-      observacoes: 'Caso complexo - cooperativa. Necessita reestruturação completa.',
-    },
-    {
-      id: 'cli-008',
-      nome: 'Rodrigo Antunes Pereira',
-      cpfCnpj: '567.XXX.XXX-12',
-      cidade: 'Lucas do Rio Verde',
-      uf: 'MT',
-      telefone: '(65) 99944-8008',
-      email: 'rodrigo.antunes@email.com',
-      atividade: 'Produtor rural - Soja e milho safrinha',
-      areaTotalHa: 600,
-      culturas: ['soja', 'milho'],
-      estagio: 'encerrado',
-      consultor: 'Eduardo Mendes',
-      credor: 'Cresol',
-      valorTotalDivida: 420000.00,
-      valorTotalPago: 420000.00,
-      dividas: [
-        { contrato: 'CRE-45102', valorOriginal: 420000.00, valorAtualizado: 420000.00, vencimento: '2025-04-30', status: 'paga', credor: 'Cresol' },
-      ],
-      pagamentos: [
-        { data: '2025-05-10', valor: 210000.00, descricao: 'Primeira parcela', tipo: 'pagamento' },
-        { data: '2025-08-15', valor: 210000.00, descricao: 'Quitação final', tipo: 'pagamento' },
-      ],
-      timeline: [
-        { data: '2025-02-01', tipo: 'contato', descricao: 'Busca renegociação Cresol' },
-        { data: '2025-02-15', tipo: 'proposta', descricao: 'Proposta 2x iguais pós-safra' },
-        { data: '2025-03-01', tipo: 'acordo', descricao: 'Acordo firmado com Cresol' },
-        { data: '2025-05-10', tipo: 'pagamento', descricao: 'Parcela 1: R$210.000' },
-        { data: '2025-08-15', tipo: 'pagamento', descricao: 'Quitação final: R$210.000' },
-        { data: '2025-08-20', tipo: 'documento', descricao: 'Termo de quitação emitido' },
-      ],
-      dataCadastro: '2025-02-01',
-      ultimaAtualizacao: '2025-08-20',
-      observacoes: 'Caso encerrado com sucesso. Dívida quitada em 2 parcelas.',
-    },
-    {
-      id: 'cli-009',
-      nome: 'Agropecuária Três Irmãos Ltda',
-      cpfCnpj: '56.789.012/0001-34',
-      cidade: 'Luís Eduardo Magalhães',
-      uf: 'BA',
-      telefone: '(77) 99933-9009',
-      email: 'tres.irmaos@email.com',
-      atividade: 'Grãos e irrigação',
-      areaTotalHa: 3500,
-      culturas: ['soja', 'milho', 'feijao_irrigado'],
-      estagio: 'prospeccao',
-      consultor: 'Mariana Costa',
-      credor: 'Sicredi',
-      valorTotalDivida: 3100000.00,
-      valorTotalPago: 0,
-      dividas: [
-        { contrato: 'SIC-2025/7780', valorOriginal: 2000000.00, valorAtualizado: 2200000.00, vencimento: '2026-03-15', status: 'ativa', credor: 'Sicredi' },
-        { contrato: 'SIC-2025/7781', valorOriginal: 900000.00, valorAtualizado: 900000.00, vencimento: '2026-07-31', status: 'ativa', credor: 'Sicredi' },
-      ],
-      pagamentos: [],
-      timeline: [
-        { data: '2026-02-10', tipo: 'contato', descricao: 'Contato inicial via WhatsApp' },
-      ],
-      dataCadastro: '2026-02-10',
-      ultimaAtualizacao: '2026-02-10',
-      observacoes: 'Prospect MATOPIBA. Análise inicial pendente.',
-    },
-    {
-      id: 'cli-010',
-      nome: 'Carlos Eduardo Nakamura',
-      cpfCnpj: '890.XXX.XXX-67',
-      cidade: 'Maringá',
-      uf: 'PR',
-      telefone: '(44) 99922-1010',
-      email: 'carlos.nakamura@email.com',
-      atividade: 'Cafeicultura e grãos',
-      areaTotalHa: 180,
-      culturas: ['cafe', 'soja'],
-      estagio: 'negociacao',
-      consultor: 'Eduardo Mendes',
-      credor: 'Banco do Brasil',
-      valorTotalDivida: 560000.00,
-      valorTotalPago: 140000.00,
-      dividas: [
-        { contrato: 'BB-2024/8901', valorOriginal: 350000.00, valorAtualizado: 385000.00, vencimento: '2025-09-30', status: 'em_acordo', credor: 'Banco do Brasil' },
-        { contrato: 'BB-2024/8902', valorOriginal: 175000.00, valorAtualizado: 175000.00, vencimento: '2026-03-31', status: 'em_acordo', credor: 'Banco do Brasil' },
-      ],
-      pagamentos: [
-        { data: '2025-10-20', valor: 140000.00, descricao: 'Venda lote café especial', tipo: 'pagamento' },
-      ],
-      timeline: [
-        { data: '2025-07-15', tipo: 'contato', descricao: 'Indicação - cafeicultor com dívida BB' },
-        { data: '2025-08-01', tipo: 'analise', descricao: 'Análise 180 ha café + soja Maringá-PR' },
-        { data: '2025-09-01', tipo: 'proposta', descricao: 'Proposta: venda café especial + parcelas safra soja' },
-        { data: '2025-10-20', tipo: 'pagamento', descricao: 'Venda lote café: R$140.000' },
-      ],
-      dataCadastro: '2025-07-15',
-      ultimaAtualizacao: '2025-10-20',
-      observacoes: 'Cafeicultor com café especial de alto valor. Negociação BB em progresso.',
     },
   ]
 
@@ -802,11 +569,29 @@ async function enrichAndApply(
       }
     }
 
+    // ---- Clima (NASA POWER) ----
+    if (res.clima) {
+      cliente.clima = res.clima
+      resumo.push(
+        `clima ${res.clima.tempMediaAnualC != null ? res.clima.tempMediaAnualC.toFixed(1) + '°C' : ''}` +
+        (res.clima.chuvaAcumuladaAnualMm != null ? ` · ${Math.round(res.clima.chuvaAcumuladaAnualMm)} mm/ano` : ''),
+      )
+    }
+
+    // ---- Produção municipal (IBGE SIDRA) ----
+    if (res.producaoMunicipal) {
+      cliente.producaoMunicipal = res.producaoMunicipal
+      const top = res.producaoMunicipal.culturas.slice(0, 3).map((c) => c.cultura).join(', ')
+      if (top) resumo.push(`top culturas município: ${top}`)
+    }
+
     // ---- Status resumo dos enriquecimentos ----
     cliente.enrichStatus = {
       cnpj: res.cnpj ? 'ok' : res.errors.cnpj ? 'erro' : cliente.cpfCnpj.replace(/\D/g, '').length === 14 ? 'nao_aplicavel' : 'nao_aplicavel',
       geo: res.geo ? 'ok' : res.errors.geo ? 'nao_encontrado' : 'nao_encontrado',
-      mensagem: [res.errors.cnpj, res.errors.geo].filter(Boolean).join(' · ') || undefined,
+      clima: res.clima ? 'ok' : res.errors.clima ? 'erro' : 'nao_disponivel',
+      producao: res.producaoMunicipal ? 'ok' : res.errors.producao ? 'erro' : 'nao_disponivel',
+      mensagem: [res.errors.cnpj, res.errors.geo, res.errors.clima, res.errors.producao].filter(Boolean).join(' · ') || undefined,
       tentadoEm: agora,
     }
 
@@ -1002,7 +787,7 @@ export default async function (fastify: FastifyInstance) {
 
     for (const key of updatable) {
       if (body[key] !== undefined) {
-        ;(cliente as Record<string, unknown>)[key] = body[key]
+        ;(cliente as unknown as Record<string, unknown>)[key] = body[key]
       }
     }
 
@@ -1126,6 +911,128 @@ export default async function (fastify: FastifyInstance) {
       }
     },
   )
+
+  /**
+   * Inicia prospecção — converte um lead PGFN em cliente no funil.
+   *
+   * Body: { cpfCnpj: string, consultor?: string, observacoes?: string }
+   * Usa ProspeccaoService.getLead() para obter o LeadFull e deriva o cliente
+   * preservando dívidas, score e sinais agro. Se o CPF/CNPJ já foi importado
+   * anteriormente, retorna o cliente existente (idempotente).
+   */
+  fastify.post('/api/clientes/iniciar-prospeccao', async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = (request.body as { cpfCnpj?: string; consultor?: string; observacoes?: string }) || {}
+    const cpfCnpjRaw = body.cpfCnpj || ''
+    const clean = cpfCnpjRaw.replace(/\D/g, '')
+    if (!clean || (clean.length !== 11 && clean.length !== 14)) {
+      reply.status(400)
+      return { success: false, error: 'cpfCnpj inválido' }
+    }
+
+    // Idempotência: se já existe cliente com esse CPF/CNPJ, retorna
+    const existente = Array.from(clientes.values()).find(
+      (c) => c.cpfCnpj.replace(/\D/g, '') === clean,
+    )
+    if (existente) {
+      return {
+        success: true,
+        data: existente,
+        jaExistia: true,
+        message: 'Cliente já havia sido importado anteriormente',
+      }
+    }
+
+    const service = getProspeccaoService()
+    const lead: LeadFull | null = service.getLead(cpfCnpjRaw)
+    if (!lead) {
+      reply.status(404)
+      return { success: false, error: 'Lead não encontrado na base PGFN' }
+    }
+
+    const id = `cli-${String(clientes.size + 1).padStart(3, '0')}`
+    const agora = new Date().toISOString().slice(0, 10)
+    const agoraIso = new Date().toISOString()
+
+    // Mapeia dívidas PGFN para o formato interno
+    const dividas: Divida[] = lead.debts.map((d) => ({
+      contrato: d.inscricao,
+      valorOriginal: d.valor,
+      valorAtualizado: d.valor,
+      vencimento: d.dataInscricao || agora,
+      status: d.ajuizado ? 'ativa' : 'ativa',
+      credor: d.fonte === 'PREV' ? 'RFB/Previdência' : d.fonte === 'FGTS' ? 'FGTS' : 'RFB/Dívida Ativa',
+    }))
+
+    const novo: Cliente = {
+      id,
+      nome: lead.cnpj?.razaoSocial || lead.nome,
+      cpfCnpj: lead.cpfCnpj,
+      cidade: lead.cnpj?.endereco?.municipio || '',
+      uf: lead.cnpj?.endereco?.uf || lead.uf || '',
+      telefone: lead.cnpj?.telefone1 || '',
+      email: lead.cnpj?.email || '',
+      atividade: lead.cnpj?.cnaeFiscalDescricao || lead.agroSignals.join(', ') || 'Produtor rural',
+      areaTotalHa: Math.round(lead.area?.hectaresEstimados || 0),
+      culturas: [],
+      estagio: 'prospeccao',
+      consultor: body.consultor || 'Não atribuído',
+      credor: 'PGFN',
+      valorTotalDivida: lead.totalDivida,
+      valorTotalPago: 0,
+      dividas,
+      pagamentos: [],
+      timeline: [
+        {
+          data: agora,
+          tipo: 'contato',
+          descricao: 'Lead importado da base PGFN via Prospecção OODA',
+          detalhes: `Score ${lead.score.total} (${lead.score.classificacao}) · ${lead.qtdInscricoes} inscrições · ${lead.temAjuizada ? 'com ajuizamento' : 'sem ajuizamento'}`,
+        },
+      ],
+      dataCadastro: agora,
+      ultimaAtualizacao: agora,
+      observacoes: body.observacoes || `Honorários estimados: R$ ${lead.score.honorariosEstimados.toLocaleString('pt-BR')}. Sinais agro: ${lead.agroSignals.join(', ') || '—'}.`,
+      carCodigoImovel: lead.car?.codImovel,
+      cep: lead.cnpj?.endereco?.cep?.replace(/\D/g, ''),
+      cnpjInfo: lead.cnpj ? mapCnpjInfo(lead.cnpj) : undefined,
+      carStatus: lead.car ? { status: 'ok', tentadoEm: agoraIso } : { status: 'pendente', tentadoEm: agoraIso },
+      enrichStatus: { cnpj: lead.cnpj ? 'ok' : 'pendente', geo: 'pendente', clima: 'pendente', producao: 'pendente', tentadoEm: agoraIso },
+      leadOrigem: {
+        cpfCnpjClean: lead.cpfCnpjClean,
+        scoreTotal: lead.score.total,
+        classificacao: lead.score.classificacao,
+        honorariosEstimados: lead.score.honorariosEstimados,
+        temAjuizada: lead.temAjuizada,
+        totalDividaPgfn: lead.totalDivida,
+        importadoEm: agoraIso,
+      },
+    }
+
+    // Aplica CAR já vindo do lead (se houver)
+    if (lead.car && lead.carSource) {
+      novo.car = mapCarInfo(lead.car, lead.carSource, lead.carOutrosImoveis?.length, lead.car.areaImovel)
+      if ((!novo.areaTotalHa || novo.areaTotalHa <= 0) && lead.car.areaImovel > 0) {
+        novo.areaTotalHa = Math.round(lead.car.areaImovel)
+      }
+    }
+
+    clientes.set(id, novo)
+
+    // Enriquecimento em background (geo + clima + produção). Fire-and-forget.
+    setImmediate(() => {
+      enrichAndApply(novo, { motivo: 'import prospecção PGFN' }).catch((err) => {
+        request.log.warn({ err, clienteId: id }, 'falha no enriquecimento pós-import prospecção')
+      })
+    })
+
+    reply.status(201)
+    return {
+      success: true,
+      data: novo,
+      jaExistia: false,
+      message: 'Lead importado com sucesso para o funil CRM',
+    }
+  })
 
   /* ---- TIMELINE ---- */
   fastify.get('/api/clientes/:id/timeline', async (request: FastifyRequest, reply: FastifyReply) => {

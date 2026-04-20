@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { apiFetch } from '../hooks/useApi'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
+import { MapThumbnail } from '../components/MapThumbnail'
 import {
   LineChart,
   Line,
@@ -86,6 +87,38 @@ interface TimelineEvent {
   usuario: string
 }
 
+interface EnderecoRico {
+  cep?: string
+  formatado?: string
+  cidade?: string
+  uf?: string
+  logradouro?: string
+  bairro?: string
+  coordenadas?: { lat: number; lng: number; source?: string }
+  fonte?: string
+}
+
+interface ClimaAgro {
+  lat: number
+  lng: number
+  periodo: { inicio: string; fim: string }
+  tempMediaAnualC: number | null
+  chuvaAcumuladaAnualMm: number | null
+  radiacaoMediaDiariaMjM2: number | null
+  umidadeRelativaMediaPct: number | null
+  mensais: Array<{ anoMes: string; tempMediaC: number | null; chuvaMmTotal: number | null }>
+  fonte: string
+}
+
+interface ProducaoMunicipal {
+  codigoMunicipioIbge: number
+  anoReferencia: string
+  culturas: Array<{ cultura: string; tipo: 'temporaria' | 'permanente'; valorMilReais: number; anoReferencia: string }>
+  rebanho: Array<{ especie: string; cabecas: number; anoReferencia: string }>
+  valorTotalLavouraMilReais: number
+  fonte: string
+}
+
 interface ClienteData {
   id: string
   nome: string
@@ -111,6 +144,9 @@ interface ClienteData {
   dividas: Divida[]
   evolucaoDivida: { mes: string; valor: number }[]
   timeline: TimelineEvent[]
+  endereco?: EnderecoRico
+  clima?: ClimaAgro
+  producaoMunicipal?: ProducaoMunicipal
 }
 
 // ────────────────────────────────────────────────────────────
@@ -615,6 +651,9 @@ export default function ClienteDetalhes() {
             dividas: mappedDividas,
             evolucaoDivida: Array.isArray(data.evolucaoDivida) ? data.evolucaoDivida : [],
             timeline: mappedTimeline,
+            endereco: data.endereco,
+            clima: data.clima,
+            producaoMunicipal: data.producaoMunicipal,
           }
           setApiCliente(mapped)
         }
@@ -888,6 +927,138 @@ export default function ClienteDetalhes() {
                 </div>
               </div>
             </div>
+
+            {/* Localização + Satélite */}
+            {cliente.endereco?.coordenadas && (
+              <div className="card-premium p-5">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <div className="w-9 h-9 rounded-lg bg-aletis-verde/10 flex items-center justify-center">
+                    <MapPin className="w-4 h-4 text-aletis-verde" />
+                  </div>
+                  <h3 className="text-base font-display font-semibold text-aletis-grafite-escuro">
+                    Localização & Satélite
+                  </h3>
+                </div>
+                <MapThumbnail
+                  lat={cliente.endereco.coordenadas.lat}
+                  lng={cliente.endereco.coordenadas.lng}
+                  legenda={cliente.endereco.formatado}
+                  height={220}
+                />
+                {cliente.endereco.formatado && (
+                  <p className="mt-3 text-xs font-body text-aletis-grafite-medio leading-relaxed">
+                    {cliente.endereco.formatado}
+                  </p>
+                )}
+                {cliente.endereco.fonte && (
+                  <p className="mt-2 text-[10px] font-body text-aletis-grafite-claro uppercase tracking-wider">
+                    Fonte: {cliente.endereco.fonte}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Clima Agroclimático (NASA POWER) */}
+            {cliente.clima && (
+              <div className="card-premium p-5">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <div className="w-9 h-9 rounded-lg bg-sky-500/10 flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 text-sky-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base font-display font-semibold text-aletis-grafite-escuro">
+                      Clima Agroclimático
+                    </h3>
+                    <p className="text-[11px] font-body text-aletis-grafite-claro truncate">
+                      {cliente.clima.fonte} · {cliente.clima.periodo.inicio} → {cliente.clima.periodo.fim}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <ClimaCell
+                    label="Temp. média"
+                    value={cliente.clima.tempMediaAnualC != null ? `${cliente.clima.tempMediaAnualC.toFixed(1)} °C` : '—'}
+                  />
+                  <ClimaCell
+                    label="Chuva anual"
+                    value={
+                      cliente.clima.chuvaAcumuladaAnualMm != null
+                        ? `${Math.round(cliente.clima.chuvaAcumuladaAnualMm).toLocaleString('pt-BR')} mm`
+                        : '—'
+                    }
+                  />
+                  <ClimaCell
+                    label="Radiação solar"
+                    value={
+                      cliente.clima.radiacaoMediaDiariaMjM2 != null
+                        ? `${cliente.clima.radiacaoMediaDiariaMjM2.toFixed(1)} MJ/m²·dia`
+                        : '—'
+                    }
+                  />
+                  <ClimaCell
+                    label="Umidade rel."
+                    value={
+                      cliente.clima.umidadeRelativaMediaPct != null
+                        ? `${cliente.clima.umidadeRelativaMediaPct.toFixed(0)}%`
+                        : '—'
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Produção Municipal (IBGE SIDRA) */}
+            {cliente.producaoMunicipal && (cliente.producaoMunicipal.culturas.length > 0 || cliente.producaoMunicipal.rebanho.length > 0) && (
+              <div className="card-premium p-5">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <div className="w-9 h-9 rounded-lg bg-aletis-dourado/10 flex items-center justify-center">
+                    <Wheat className="w-4 h-4 text-aletis-dourado" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base font-display font-semibold text-aletis-grafite-escuro">
+                      Produção do Município
+                    </h3>
+                    <p className="text-[11px] font-body text-aletis-grafite-claro truncate">
+                      {cliente.producaoMunicipal.fonte} · ref {cliente.producaoMunicipal.anoReferencia}
+                    </p>
+                  </div>
+                </div>
+                {cliente.producaoMunicipal.culturas.length > 0 && (
+                  <>
+                    <p className="text-[11px] font-body text-aletis-grafite-claro uppercase tracking-wider mb-2">
+                      Top culturas (valor da produção)
+                    </p>
+                    <div className="space-y-1.5 mb-3">
+                      {cliente.producaoMunicipal.culturas.slice(0, 5).map((c) => (
+                        <div key={c.cultura + c.tipo} className="flex items-center justify-between gap-2 text-xs font-body">
+                          <span className="truncate text-aletis-grafite-escuro">{c.cultura}</span>
+                          <span className="font-mono text-aletis-grafite-medio flex-shrink-0">
+                            R$ {c.valorMilReais.toLocaleString('pt-BR')} mil
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {cliente.producaoMunicipal.rebanho.length > 0 && (
+                  <>
+                    <p className="text-[11px] font-body text-aletis-grafite-claro uppercase tracking-wider mb-2 mt-2">
+                      Rebanho (cabeças)
+                    </p>
+                    <div className="space-y-1.5">
+                      {cliente.producaoMunicipal.rebanho.slice(0, 3).map((r) => (
+                        <div key={r.especie} className="flex items-center justify-between gap-2 text-xs font-body">
+                          <span className="truncate text-aletis-grafite-escuro">{r.especie}</span>
+                          <span className="font-mono text-aletis-grafite-medio flex-shrink-0">
+                            {r.cabecas.toLocaleString('pt-BR')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Resumo Financeiro */}
             <div className="card-premium p-5">
@@ -1314,6 +1485,15 @@ export default function ClienteDetalhes() {
       )}
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+    </div>
+  )
+}
+
+function ClimaCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-aletis-bege/50 border border-aletis-borda/60 px-3 py-2">
+      <p className="text-[10px] font-body text-aletis-grafite-claro uppercase tracking-wider">{label}</p>
+      <p className="text-sm font-body font-semibold text-aletis-grafite-escuro mt-0.5 truncate">{value}</p>
     </div>
   )
 }

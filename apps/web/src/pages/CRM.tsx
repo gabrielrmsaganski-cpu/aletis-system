@@ -724,29 +724,30 @@ export default function CRM() {
                     className="border-b border-aletis-borda/50 hover:bg-aletis-bege/30 transition-colors duration-150 group"
                   >
                     {/* Cliente */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
+                    <td className="px-4 py-3 max-w-[260px]">
+                      <div className="flex items-center gap-3 min-w-0">
                         <Avatar nome={c.nome} estagio={c.estagio} />
                         <Link
                           to={`/clientes/${c.id}`}
-                          className="text-sm font-body font-medium text-aletis-grafite-escuro group-hover:text-aletis-verde transition-colors"
+                          className="text-sm font-body font-medium text-aletis-grafite-escuro group-hover:text-aletis-verde transition-colors truncate min-w-0"
+                          title={c.nome}
                         >
                           {c.nome}
                         </Link>
                       </div>
                     </td>
                     {/* Cidade/UF */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5 text-sm font-body text-aletis-grafite-medio">
-                        <MapPin className="w-3.5 h-3.5 text-aletis-grafite-claro" />
-                        {c.cidade}/{c.uf}
+                    <td className="px-4 py-3 max-w-[180px]">
+                      <div className="flex items-center gap-1.5 text-sm font-body text-aletis-grafite-medio min-w-0">
+                        <MapPin className="w-3.5 h-3.5 text-aletis-grafite-claro flex-shrink-0" />
+                        <span className="truncate" title={`${c.cidade}/${c.uf}`}>{c.cidade}/{c.uf}</span>
                       </div>
                     </td>
                     {/* Credor */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5 text-sm font-body text-aletis-grafite-medio">
-                        <Building2 className="w-3.5 h-3.5 text-aletis-grafite-claro" />
-                        {c.credor}
+                    <td className="px-4 py-3 max-w-[200px]">
+                      <div className="flex items-center gap-1.5 text-sm font-body text-aletis-grafite-medio min-w-0">
+                        <Building2 className="w-3.5 h-3.5 text-aletis-grafite-claro flex-shrink-0" />
+                        <span className="truncate" title={c.credor}>{c.credor}</span>
                       </div>
                     </td>
                     {/* Valor Dívida */}
@@ -852,21 +853,26 @@ export default function CRM() {
                       to={`/clientes/${c.id}`}
                       className="block bg-white border border-aletis-borda rounded-xl p-3.5 hover:shadow-lg hover:-translate-y-0.5 hover:border-aletis-verde/30 transition-all duration-200 group/card"
                     >
-                      <div className="flex items-start justify-between mb-2">
-                        <p className="text-sm font-body font-semibold text-aletis-grafite-escuro leading-tight group-hover/card:text-aletis-verde transition-colors">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <p
+                          className="text-sm font-body font-semibold text-aletis-grafite-escuro leading-tight group-hover/card:text-aletis-verde transition-colors min-w-0 line-clamp-2 break-words"
+                          title={c.nome}
+                        >
                           {c.nome}
                         </p>
-                        <HealthDot value={c.saudeFinanceira} />
+                        <div className="flex-shrink-0">
+                          <HealthDot value={c.saudeFinanceira} />
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs font-body text-aletis-grafite-claro mb-1.5">
-                        <MapPin className="w-3 h-3" />
-                        {c.cidade}/{c.uf}
+                      <div className="flex items-center gap-1.5 text-xs font-body text-aletis-grafite-claro mb-1.5 min-w-0">
+                        <MapPin className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate" title={`${c.cidade}/${c.uf}`}>{c.cidade}/{c.uf}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs font-body text-aletis-grafite-claro mb-2">
-                        <Building2 className="w-3 h-3" />
-                        {c.credor}
+                      <div className="flex items-center gap-1.5 text-xs font-body text-aletis-grafite-claro mb-2 min-w-0">
+                        <Building2 className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate" title={c.credor}>{c.credor}</span>
                       </div>
-                      <p className="text-sm font-body font-bold text-aletis-grafite-escuro">
+                      <p className="text-sm font-body font-bold text-aletis-grafite-escuro truncate">
                         {formatBRLCompact(c.valorDivida)}
                       </p>
                     </Link>
