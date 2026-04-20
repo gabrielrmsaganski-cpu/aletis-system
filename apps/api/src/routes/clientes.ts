@@ -189,6 +189,24 @@ interface Cliente {
   producaoMunicipal?: ProducaoMunicipal
   /** Origem: se foi importado a partir da prospecção PGFN. */
   leadOrigem?: LeadOrigem
+  /** Próxima ação agendada (data + descrição curta). Renderizada no kanban e no detalhe. */
+  proximaAcao?: {
+    data: string // YYYY-MM-DD
+    descricao: string
+    criadoEm: string
+    criadoPor?: string
+  }
+  /** Tags livres para segmentar carteira (ex: "alta-prioridade", "aguardando-doc"). */
+  tags?: string[]
+  /** Notas internas (comentários livres) — equipe interna. */
+  notas?: Array<{
+    id: string
+    autor: string
+    criadoEm: string
+    texto: string
+  }>
+  /** Timestamp da última transição de estágio (aging p/ SLA). */
+  estagioDesde?: string
 }
 
 /* ========================================================================
@@ -779,11 +797,13 @@ export default async function (fastify: FastifyInstance) {
       'areaTotalHa', 'culturas', 'estagio', 'consultor', 'credor',
       'valorTotalDivida', 'valorTotalPago', 'dividas', 'pagamentos',
       'observacoes', 'carCodigoImovel', 'cep',
+      'proximaAcao', 'tags',
     ]
 
     const cpfAntes = cliente.cpfCnpj
     const nomeAntes = cliente.nome
     const codCarAntes = cliente.carCodigoImovel
+    const estagioAntes = cliente.estagio
 
     for (const key of updatable) {
       if (body[key] !== undefined) {
@@ -793,13 +813,26 @@ export default async function (fastify: FastifyInstance) {
 
     cliente.ultimaAtualizacao = new Date().toISOString().slice(0, 10)
 
-    // Add timeline event for stage change
-    if (body.estagio) {
+    // Add timeline event for stage change + track aging
+    if (body.estagio && body.estagio !== estagioAntes) {
+      cliente.estagioDesde = new Date().toISOString()
       cliente.timeline.push({
         data: cliente.ultimaAtualizacao,
         tipo: 'analise',
         descricao: `Estágio alterado para: ${body.estagio}`,
       })
+    }
+
+    // Timeline event for nova próxima ação
+    if (body.proximaAcao && typeof body.proximaAcao === 'object') {
+      const pa = body.proximaAcao as { data?: string; descricao?: string }
+      if (pa.data && pa.descricao) {
+        cliente.timeline.push({
+          data: cliente.ultimaAtualizacao,
+          tipo: 'analise',
+          descricao: `Próxima ação (${pa.data}): ${pa.descricao}`,
+        })
+      }
     }
 
     // Re-enriquece CAR se o cpfCnpj, nome, ou código CAR mudaram — ou se
@@ -1032,6 +1065,46 @@ export default async function (fastify: FastifyInstance) {
       jaExistia: false,
       message: 'Lead importado com sucesso para o funil CRM',
     }
+  })
+
+  /* ---- NOTAS (comentários internos) ---- */
+  fastify.post('/api/clientes/:id/notas', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string }
+    const cliente = clientes.get(id)
+    if (!cliente) {
+      reply.status(404)
+      return { success: false, error: 'Cliente não encontrado' }
+    }
+    const body = request.body as { texto?: string; autor?: string }
+    if (!body.texto || body.texto.trim().length === 0) {
+      reply.status(400)
+      return { success: false, error: 'Texto da nota é obrigatório' }
+    }
+    const nota = {
+      id: `nota-${Date.now()}`,
+      autor: body.autor || 'Sistema',
+      criadoEm: new Date().toISOString(),
+      texto: body.texto.trim(),
+    }
+    cliente.notas = [...(cliente.notas || []), nota]
+    cliente.ultimaAtualizacao = new Date().toISOString().slice(0, 10)
+    return { success: true, data: nota, total: cliente.notas.length }
+  })
+
+  fastify.delete('/api/clientes/:id/notas/:notaId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id, notaId } = request.params as { id: string; notaId: string }
+    const cliente = clientes.get(id)
+    if (!cliente) {
+      reply.status(404)
+      return { success: false, error: 'Cliente não encontrado' }
+    }
+    const antes = cliente.notas?.length || 0
+    cliente.notas = (cliente.notas || []).filter((n) => n.id !== notaId)
+    if (cliente.notas.length === antes) {
+      reply.status(404)
+      return { success: false, error: 'Nota não encontrada' }
+    }
+    return { success: true }
   })
 
   /* ---- TIMELINE ---- */

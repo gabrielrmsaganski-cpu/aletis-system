@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
-import { MapPin, ExternalLink, Satellite, Map as MapIcon } from 'lucide-react'
+import { MapPin, ExternalLink, Satellite, Map as MapIcon, Maximize2 } from 'lucide-react'
+import FullScreenMap from './FullScreenMap'
 
 /**
  * Thumbnail de satélite/mapa para um ponto geográfico.
@@ -39,11 +40,16 @@ interface Props {
   height?: number
   /** Rótulo opcional embaixo do thumbnail. */
   legenda?: string
+  /** Título exibido no modal full-screen. */
+  titulo?: string
+  /** Área em hectares — renderizada como círculo no full-screen. */
+  areaHa?: number
 }
 
-export function MapThumbnail({ lat, lng, zoom = 15, height = 200, legenda }: Props) {
+export function MapThumbnail({ lat, lng, zoom = 15, height = 200, legenda, titulo, areaHa }: Props) {
   const [layer, setLayer] = useState<TileLayer>('satellite')
   const [errored, setErrored] = useState(false)
+  const [showFullScreen, setShowFullScreen] = useState(false)
 
   const { tiles, centerPx } = useMemo(() => {
     const z = Math.max(3, Math.min(18, Math.round(zoom)))
@@ -81,8 +87,18 @@ export function MapThumbnail({ lat, lng, zoom = 15, height = 200, legenda }: Pro
   return (
     <div className="rounded-xl overflow-hidden border border-aletis-borda dark:border-white/10 bg-aletis-bege/30 dark:bg-white/5">
       <div
-        className="relative w-full bg-black/70"
+        className="relative w-full bg-black/70 cursor-zoom-in group"
         style={{ height: `${height}px`, overflow: 'hidden' }}
+        onClick={() => setShowFullScreen(true)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setShowFullScreen(true)
+          }
+        }}
+        title="Clique para ampliar"
       >
         {/* Mosaico 3x3 — cada tile 256px, escala proporcional ao container. */}
         <div
@@ -130,10 +146,10 @@ export function MapThumbnail({ lat, lng, zoom = 15, height = 200, legenda }: Pro
           />
         </div>
 
-        {/* Toggle layer */}
+        {/* Toggle layer + ampliar */}
         <div className="absolute top-2 right-2 flex gap-1 bg-black/60 backdrop-blur rounded-lg p-0.5 shadow-lg">
           <button
-            onClick={() => setLayer('satellite')}
+            onClick={(e) => { e.stopPropagation(); setLayer('satellite') }}
             className={`px-2 py-1 rounded text-[10px] font-semibold flex items-center gap-1 transition ${
               layer === 'satellite'
                 ? 'bg-white text-aletis-grafite-escuro'
@@ -145,7 +161,7 @@ export function MapThumbnail({ lat, lng, zoom = 15, height = 200, legenda }: Pro
             Satélite
           </button>
           <button
-            onClick={() => setLayer('osm')}
+            onClick={(e) => { e.stopPropagation(); setLayer('osm') }}
             className={`px-2 py-1 rounded text-[10px] font-semibold flex items-center gap-1 transition ${
               layer === 'osm'
                 ? 'bg-white text-aletis-grafite-escuro'
@@ -155,6 +171,14 @@ export function MapThumbnail({ lat, lng, zoom = 15, height = 200, legenda }: Pro
           >
             <MapIcon size={11} />
             Mapa
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowFullScreen(true) }}
+            className="px-2 py-1 rounded text-[10px] font-semibold flex items-center gap-1 text-white/80 hover:text-white hover:bg-white/10 transition"
+            title="Ampliar (zoom interativo, NDVI, camadas)"
+          >
+            <Maximize2 size={11} />
+            Ampliar
           </button>
         </div>
 
@@ -169,6 +193,7 @@ export function MapThumbnail({ lat, lng, zoom = 15, height = 200, legenda }: Pro
             href={gmapsLink}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
             className="text-[9px] bg-black/60 text-white/90 hover:bg-black/80 px-1.5 py-0.5 rounded flex items-center gap-1"
             title="Abrir no Google Maps"
           >
@@ -178,13 +203,34 @@ export function MapThumbnail({ lat, lng, zoom = 15, height = 200, legenda }: Pro
             href={osmLink}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
             className="text-[9px] bg-black/60 text-white/90 hover:bg-black/80 px-1.5 py-0.5 rounded flex items-center gap-1"
             title="Abrir no OpenStreetMap"
           >
             OSM <ExternalLink size={9} />
           </a>
         </div>
+
+        {/* Hint de clique para ampliar */}
+        <div className="absolute inset-x-0 top-0 h-12 pointer-events-none bg-gradient-to-b from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition" />
+        <div className="absolute left-2 top-2 opacity-0 group-hover:opacity-100 transition pointer-events-none">
+          <div className="bg-white/95 text-aletis-grafite-escuro text-[10px] font-semibold px-2 py-1 rounded-lg shadow flex items-center gap-1">
+            <Maximize2 size={11} /> Clique para ampliar
+          </div>
+        </div>
       </div>
+
+      {showFullScreen && (
+        <FullScreenMap
+          lat={lat}
+          lng={lng}
+          titulo={titulo || legenda}
+          subtitulo={titulo ? legenda : undefined}
+          areaHa={areaHa}
+          zoom={Math.max(zoom, 16)}
+          onClose={() => setShowFullScreen(false)}
+        />
+      )}
 
       {(legenda || errored) && (
         <div className="px-3 py-1.5 text-[11px] font-body text-aletis-grafite-medio dark:text-white/60 flex items-center justify-between gap-2">

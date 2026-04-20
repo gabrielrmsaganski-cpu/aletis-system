@@ -3,7 +3,7 @@ import { useState, useCallback, useRef } from 'react'
 export interface ToastItem {
   id: number
   message: string
-  type: 'info' | 'success' | 'warning'
+  type: 'info' | 'success' | 'warning' | 'error'
 }
 
 let nextId = 1

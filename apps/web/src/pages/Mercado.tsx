@@ -937,6 +937,7 @@ export default function Mercado() {
       </>)}
       {activeTab === 'safra' && (
         <>
+          <SafraCalendarioSection />
           <SafraPorEstadoSection />
           <ExportacaoAgroSection />
         </>
@@ -2016,6 +2017,306 @@ function SicorVolumeSection() {
             </div>
           ))}
         </div>
+      </div>
+    </section>
+  )
+}
+
+// ────────────────────────────────────────────────────────────
+// SAFRA — Calendário Agrícola (plantio × colheita por cultura/região)
+// Fonte: CONAB Calendário de Plantio e Colheita (dados consolidados)
+// ────────────────────────────────────────────────────────────
+interface CalendarioCultura {
+  cultura: string
+  emoji: string
+  cor: string
+  regioes: {
+    uf: string
+    plantio: number[] // meses 1-12
+    colheita: number[] // meses 1-12
+    observacao?: string
+  }[]
+}
+
+const CALENDARIO_SAFRA: CalendarioCultura[] = [
+  {
+    cultura: 'Soja',
+    emoji: '🌱',
+    cor: 'bg-emerald-500',
+    regioes: [
+      { uf: 'MT', plantio: [9, 10, 11, 12], colheita: [1, 2, 3, 4], observacao: 'Semeadura concentrada out-nov; vazio sanitário 15/jun-15/set' },
+      { uf: 'PR', plantio: [9, 10, 11], colheita: [1, 2, 3] },
+      { uf: 'RS', plantio: [10, 11, 12], colheita: [3, 4, 5] },
+      { uf: 'MS', plantio: [9, 10, 11], colheita: [1, 2, 3] },
+      { uf: 'GO', plantio: [10, 11], colheita: [2, 3] },
+      { uf: 'BA', plantio: [10, 11, 12], colheita: [2, 3, 4] },
+    ],
+  },
+  {
+    cultura: 'Milho 1ª safra',
+    emoji: '🌽',
+    cor: 'bg-yellow-500',
+    regioes: [
+      { uf: 'PR', plantio: [9, 10], colheita: [2, 3] },
+      { uf: 'RS', plantio: [8, 9, 10], colheita: [1, 2, 3] },
+      { uf: 'SC', plantio: [9, 10], colheita: [2, 3] },
+      { uf: 'MG', plantio: [10, 11], colheita: [3, 4] },
+    ],
+  },
+  {
+    cultura: 'Milho 2ª safra (safrinha)',
+    emoji: '🌽',
+    cor: 'bg-orange-500',
+    regioes: [
+      { uf: 'MT', plantio: [1, 2, 3], colheita: [6, 7, 8], observacao: 'Janela ideal jan/fev; atraso eleva risco de geada em MS/PR' },
+      { uf: 'PR', plantio: [1, 2], colheita: [6, 7] },
+      { uf: 'MS', plantio: [1, 2], colheita: [6, 7] },
+      { uf: 'GO', plantio: [1, 2, 3], colheita: [6, 7] },
+    ],
+  },
+  {
+    cultura: 'Algodão',
+    emoji: '🌾',
+    cor: 'bg-sky-500',
+    regioes: [
+      { uf: 'MT', plantio: [12, 1, 2], colheita: [6, 7, 8] },
+      { uf: 'BA', plantio: [11, 12, 1], colheita: [5, 6, 7] },
+    ],
+  },
+  {
+    cultura: 'Café',
+    emoji: '☕',
+    cor: 'bg-amber-700',
+    regioes: [
+      { uf: 'MG', plantio: [10, 11, 12], colheita: [5, 6, 7, 8], observacao: 'Bienalidade: safra alta/baixa alterna a cada ano' },
+      { uf: 'ES', plantio: [10, 11], colheita: [5, 6, 7] },
+      { uf: 'SP', plantio: [10, 11], colheita: [5, 6, 7] },
+    ],
+  },
+  {
+    cultura: 'Cana-de-açúcar',
+    emoji: '🎋',
+    cor: 'bg-lime-600',
+    regioes: [
+      { uf: 'SP', plantio: [2, 3, 9, 10], colheita: [4, 5, 6, 7, 8, 9, 10, 11], observacao: 'Centro-Sul: safra abr-nov' },
+      { uf: 'GO', plantio: [2, 3], colheita: [4, 5, 6, 7, 8, 9, 10, 11] },
+    ],
+  },
+  {
+    cultura: 'Arroz',
+    emoji: '🌾',
+    cor: 'bg-stone-500',
+    regioes: [
+      { uf: 'RS', plantio: [9, 10, 11], colheita: [2, 3, 4], observacao: 'RS responde por ~70% da produção nacional' },
+      { uf: 'SC', plantio: [8, 9, 10], colheita: [1, 2, 3] },
+    ],
+  },
+  {
+    cultura: 'Trigo',
+    emoji: '🌾',
+    cor: 'bg-amber-400',
+    regioes: [
+      { uf: 'PR', plantio: [4, 5, 6], colheita: [9, 10, 11] },
+      { uf: 'RS', plantio: [5, 6, 7], colheita: [10, 11, 12] },
+    ],
+  },
+  {
+    cultura: 'Feijão',
+    emoji: '🫘',
+    cor: 'bg-rose-500',
+    regioes: [
+      { uf: 'PR', plantio: [9, 10, 1, 2], colheita: [12, 1, 2, 5, 6], observacao: 'Três safras por ano (águas, seca, inverno irrigado)' },
+      { uf: 'MG', plantio: [10, 11, 1, 2], colheita: [1, 2, 4, 5] },
+    ],
+  },
+  {
+    cultura: 'Boi gordo (abate)',
+    emoji: '🐂',
+    cor: 'bg-red-700',
+    regioes: [
+      { uf: 'MT', plantio: [], colheita: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], observacao: 'Pico de abate abr-jul (fim da estação chuvosa)' },
+      { uf: 'MS', plantio: [], colheita: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+      { uf: 'GO', plantio: [], colheita: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+    ],
+  },
+]
+
+const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
+function SafraCalendarioSection() {
+  const [culturaFiltro, setCulturaFiltro] = useState<string>('todas')
+  const mesAtual = new Date().getMonth() + 1
+
+  const culturasFiltradas = culturaFiltro === 'todas'
+    ? CALENDARIO_SAFRA
+    : CALENDARIO_SAFRA.filter((c) => c.cultura === culturaFiltro)
+
+  const eventosDoMes = useMemo(() => {
+    const eventos: { cultura: string; emoji: string; uf: string; tipo: 'plantio' | 'colheita' }[] = []
+    CALENDARIO_SAFRA.forEach((c) => {
+      c.regioes.forEach((r) => {
+        if (r.plantio.includes(mesAtual)) eventos.push({ cultura: c.cultura, emoji: c.emoji, uf: r.uf, tipo: 'plantio' })
+        if (r.colheita.includes(mesAtual)) eventos.push({ cultura: c.cultura, emoji: c.emoji, uf: r.uf, tipo: 'colheita' })
+      })
+    })
+    return eventos
+  }, [mesAtual])
+
+  return (
+    <section className="mb-8">
+      <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-lg bg-aletis-dourado/15 flex items-center justify-center">
+            <Calendar className="w-4 h-4 text-aletis-dourado" />
+          </div>
+          <div>
+            <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
+              Calendário Agrícola por Cultura e Estado
+            </h2>
+            <p className="text-xs font-body text-aletis-grafite-claro">
+              Janelas de plantio e colheita — base para estrutura de dívida alinhada ao fluxo de caixa da safra
+            </p>
+          </div>
+        </div>
+        <select
+          value={culturaFiltro}
+          onChange={(e) => setCulturaFiltro(e.target.value)}
+          className="px-3 py-2 rounded-lg border border-aletis-borda bg-white text-sm font-body text-aletis-grafite-escuro focus:outline-none focus:ring-2 focus:ring-aletis-verde/30"
+        >
+          <option value="todas">Todas as culturas</option>
+          {CALENDARIO_SAFRA.map((c) => (
+            <option key={c.cultura} value={c.cultura}>{c.emoji} {c.cultura}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Eventos do mês atual */}
+      {eventosDoMes.length > 0 && (
+        <div className="mb-5 card-premium p-4 border-l-4 border-aletis-dourado">
+          <h3 className="text-sm font-display font-semibold text-aletis-grafite-escuro mb-2 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-aletis-dourado" />
+            Ativo agora em {MESES_CURTOS[mesAtual - 1]}
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {eventosDoMes.map((e, i) => (
+              <span
+                key={i}
+                className={`text-xs font-body px-2.5 py-1 rounded-lg border ${
+                  e.tipo === 'plantio'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-amber-50 border-amber-200 text-amber-800'
+                }`}
+              >
+                {e.emoji} {e.cultura} · {e.uf} · {e.tipo}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Grid de calendário por cultura */}
+      <div className="space-y-4">
+        {culturasFiltradas.map((cultura) => (
+          <div key={cultura.cultura} className="card-premium overflow-hidden">
+            <div className="p-4 border-b border-aletis-borda/50 flex items-center gap-3">
+              <span className="text-2xl">{cultura.emoji}</span>
+              <div className="flex-1">
+                <h3 className="text-base font-display font-semibold text-aletis-grafite-escuro">
+                  {cultura.cultura}
+                </h3>
+                <p className="text-[11px] font-body text-aletis-grafite-claro">
+                  {cultura.regioes.length} região{cultura.regioes.length !== 1 ? 'ões' : ''} monitorada{cultura.regioes.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] font-body">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-emerald-500" />
+                  <span className="text-aletis-grafite-medio">Plantio</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-amber-500" />
+                  <span className="text-aletis-grafite-medio">Colheita</span>
+                </div>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px]">
+                <thead>
+                  <tr className="bg-aletis-bege/40 border-b border-aletis-borda/50">
+                    <th className="text-left px-3 py-2 text-[11px] font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider w-16">
+                      UF
+                    </th>
+                    {MESES_CURTOS.map((m, i) => (
+                      <th
+                        key={m}
+                        className={`text-center px-2 py-2 text-[11px] font-body font-semibold uppercase tracking-wider ${
+                          i + 1 === mesAtual
+                            ? 'bg-aletis-dourado/15 text-aletis-dourado'
+                            : 'text-aletis-grafite-medio'
+                        }`}
+                      >
+                        {m}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {cultura.regioes.map((r) => (
+                    <React.Fragment key={r.uf}>
+                      <tr className="border-b border-aletis-borda/30 hover:bg-aletis-bege/20">
+                        <td className="px-3 py-2 text-sm font-display font-bold text-aletis-grafite-escuro">
+                          {r.uf}
+                        </td>
+                        {MESES_CURTOS.map((_, i) => {
+                          const mes = i + 1
+                          const isPlantio = r.plantio.includes(mes)
+                          const isColheita = r.colheita.includes(mes)
+                          const isMesAtual = mes === mesAtual
+                          return (
+                            <td
+                              key={mes}
+                              className={`px-1 py-2 text-center relative ${
+                                isMesAtual ? 'bg-aletis-dourado/5' : ''
+                              }`}
+                            >
+                              {isPlantio && isColheita ? (
+                                <div className="flex gap-0.5 items-center justify-center">
+                                  <span className="w-2 h-5 bg-emerald-500 rounded-sm" title="Plantio" />
+                                  <span className="w-2 h-5 bg-amber-500 rounded-sm" title="Colheita" />
+                                </div>
+                              ) : isPlantio ? (
+                                <div className="w-full h-5 bg-emerald-500 rounded-sm mx-auto" title="Plantio" />
+                              ) : isColheita ? (
+                                <div className="w-full h-5 bg-amber-500 rounded-sm mx-auto" title="Colheita" />
+                              ) : (
+                                <div className="w-full h-5 bg-aletis-bege/40 rounded-sm mx-auto" />
+                              )}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                      {r.observacao && (
+                        <tr>
+                          <td colSpan={13} className="px-3 pb-2 pt-0 text-[11px] font-body italic text-aletis-grafite-claro">
+                            ↳ {r.observacao}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 bg-aletis-bege/80 rounded-xl p-3 flex items-start gap-2">
+        <div className="w-2 h-2 rounded-full bg-aletis-grafite-claro/40 flex-shrink-0 mt-1.5" />
+        <p className="text-[11px] font-body text-aletis-grafite-claro leading-relaxed">
+          <strong>Uso consultivo:</strong> alinhe parcelas e carências ao período de colheita de cada cultura/região do cliente. Operações de custeio devem vencer após a venda da safra. Geadas em safrinha (MS/PR mai-jul) e vazio sanitário da soja (MT 15/jun-15/set) são janelas críticas para renegociação.
+          <br />Fontes: CONAB — Calendário de Plantio e Colheita; MAPA — Portaria de Vazio Sanitário.
+        </p>
       </div>
     </section>
   )

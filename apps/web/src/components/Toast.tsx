@@ -1,11 +1,12 @@
 import React from 'react'
-import { X, Info, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { X, Info, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
 import type { ToastItem } from '../hooks/useToast'
 
 const iconMap = {
   info: Info,
   success: CheckCircle2,
   warning: AlertTriangle,
+  error: XCircle,
 } as const
 
 const colorMap = {
@@ -24,6 +25,12 @@ const colorMap = {
   warning: {
     bg: 'bg-aletis-grafite-escuro',
     icon: 'text-ambar',
+    text: 'text-white',
+    close: 'text-white/60 hover:text-white',
+  },
+  error: {
+    bg: 'bg-red-900',
+    icon: 'text-red-300',
     text: 'text-white',
     close: 'text-white/60 hover:text-white',
   },

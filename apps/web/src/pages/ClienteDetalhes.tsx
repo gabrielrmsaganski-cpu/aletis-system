@@ -40,6 +40,11 @@ import {
   Handshake,
   CreditCard,
   Eye,
+  Filter,
+  StickyNote,
+  Trash2,
+  Tag,
+  Sparkles,
 } from 'lucide-react'
 
 // ────────────────────────────────────────────────────────────
@@ -70,6 +75,7 @@ interface Divida {
   taxa: string
   status: 'em_dia' | 'atrasada' | 'renegociada' | 'quitada'
   historicoPagamentos: HistoricoPagamento[]
+  vencimento?: string
 }
 
 interface HistoricoPagamento {
@@ -147,6 +153,8 @@ interface ClienteData {
   endereco?: EnderecoRico
   clima?: ClimaAgro
   producaoMunicipal?: ProducaoMunicipal
+  areaTotalHa?: number
+  car?: { areaImovel?: number; codImovel?: string; municipio?: string; uf?: string }
 }
 
 // ────────────────────────────────────────────────────────────
@@ -571,6 +579,15 @@ export default function ClienteDetalhes() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [editForm, setEditForm] = useState({ telefone: '', email: '', estagio: '' })
   const [saving, setSaving] = useState(false)
+  const [timelineFilter, setTimelineFilter] = useState<string>('todos')
+  const [notas, setNotas] = useState<Array<{ id: string; autor: string; criadoEm: string; texto: string }>>([])
+  const [novaNota, setNovaNota] = useState('')
+  const [addingNota, setAddingNota] = useState(false)
+  const [tags, setTags] = useState<string[]>([])
+  const [novaTag, setNovaTag] = useState('')
+  const [proximaAcao, setProximaAcao] = useState<{ data: string; descricao: string } | null>(null)
+  const [proximaAcaoForm, setProximaAcaoForm] = useState({ data: '', descricao: '' })
+  const [editingProxAcao, setEditingProxAcao] = useState(false)
   const navigate = useNavigate()
   const { toasts, show: showToast, dismiss: dismissToast } = useToast()
 
@@ -604,6 +621,7 @@ export default function ClienteDetalhes() {
                 taxa: d.taxa || '—',
                 status: debtStatusMap[d.status] || 'em_dia',
                 historicoPagamentos: Array.isArray(d.historicoPagamentos) ? d.historicoPagamentos : [],
+                vencimento: d.vencimento,
               }))
             : []
 
@@ -654,12 +672,103 @@ export default function ClienteDetalhes() {
             endereco: data.endereco,
             clima: data.clima,
             producaoMunicipal: data.producaoMunicipal,
+            areaTotalHa: data.areaTotalHa,
+            car: data.car
+              ? {
+                  areaImovel: data.car.areaImovel,
+                  codImovel: data.car.codImovel,
+                  municipio: data.car.municipio,
+                  uf: data.car.uf,
+                }
+              : undefined,
           }
           setApiCliente(mapped)
+          setNotas(Array.isArray(data.notas) ? data.notas : [])
+          setTags(Array.isArray(data.tags) ? data.tags : [])
+          setProximaAcao(data.proximaAcao || null)
         }
       })
       .catch(() => { /* fallback to inline data */ })
   }, [id])
+
+  const apiIdResolved = useMemo(
+    () => (id === 'ailton-caeiro' ? 'cli-001' : id === 'paulo-luciano' ? 'cli-002' : id),
+    [id],
+  )
+
+  const handleAddNota = useCallback(async () => {
+    if (!novaNota.trim() || !apiIdResolved) return
+    setAddingNota(true)
+    try {
+      const res = await apiFetch<{ success: boolean; data: { id: string; autor: string; criadoEm: string; texto: string } }>(
+        `/clientes/${apiIdResolved}/notas`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ texto: novaNota.trim(), autor: 'Equipe ALETIS' }),
+        },
+      )
+      if (res.success) {
+        setNotas((prev) => [...prev, res.data])
+        setNovaNota('')
+        showToast('Nota adicionada', 'success')
+      }
+    } catch {
+      showToast('Falha ao adicionar nota', 'error')
+    } finally {
+      setAddingNota(false)
+    }
+  }, [novaNota, apiIdResolved, showToast])
+
+  const handleRemoverNota = useCallback(async (notaId: string) => {
+    if (!apiIdResolved) return
+    try {
+      await apiFetch(`/clientes/${apiIdResolved}/notas/${notaId}`, { method: 'DELETE' })
+      setNotas((prev) => prev.filter((n) => n.id !== notaId))
+    } catch {
+      showToast('Falha ao remover nota', 'error')
+    }
+  }, [apiIdResolved, showToast])
+
+  const handleSaveTags = useCallback(async (novas: string[]) => {
+    if (!apiIdResolved) return
+    try {
+      await apiFetch(`/clientes/${apiIdResolved}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: novas }),
+      })
+      setTags(novas)
+    } catch {
+      showToast('Falha ao salvar tags', 'error')
+    }
+  }, [apiIdResolved, showToast])
+
+  const handleSaveProximaAcao = useCallback(async () => {
+    if (!apiIdResolved) return
+    if (!proximaAcaoForm.data || !proximaAcaoForm.descricao.trim()) {
+      showToast('Informe data e descrição', 'error')
+      return
+    }
+    try {
+      await apiFetch(`/clientes/${apiIdResolved}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proximaAcao: {
+            data: proximaAcaoForm.data,
+            descricao: proximaAcaoForm.descricao.trim(),
+            criadoEm: new Date().toISOString(),
+          },
+        }),
+      })
+      setProximaAcao({ data: proximaAcaoForm.data, descricao: proximaAcaoForm.descricao.trim() })
+      setEditingProxAcao(false)
+      showToast('Próxima ação salva', 'success')
+    } catch {
+      showToast('Falha ao salvar ação', 'error')
+    }
+  }, [apiIdResolved, proximaAcaoForm, showToast])
 
   // Resolve client data — prefer API, fallback to inline
   const cliente: ClienteData = useMemo(() => {
@@ -943,7 +1052,9 @@ export default function ClienteDetalhes() {
                   lat={cliente.endereco.coordenadas.lat}
                   lng={cliente.endereco.coordenadas.lng}
                   legenda={cliente.endereco.formatado}
-                  height={220}
+                  titulo={cliente.nome}
+                  areaHa={cliente.areaTotalHa || cliente.car?.areaImovel}
+                  height={240}
                 />
                 {cliente.endereco.formatado && (
                   <p className="mt-3 text-xs font-body text-aletis-grafite-medio leading-relaxed">
@@ -1059,6 +1170,201 @@ export default function ClienteDetalhes() {
                 )}
               </div>
             )}
+
+            {/* Próxima Ação */}
+            <div className="card-premium p-5">
+              <div className="flex items-center justify-between gap-2.5 mb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                    <Clock className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <h3 className="text-base font-display font-semibold text-aletis-grafite-escuro">
+                    Próxima Ação
+                  </h3>
+                </div>
+                {!editingProxAcao && (
+                  <button
+                    onClick={() => {
+                      setProximaAcaoForm({
+                        data: proximaAcao?.data || new Date().toISOString().slice(0, 10),
+                        descricao: proximaAcao?.descricao || '',
+                      })
+                      setEditingProxAcao(true)
+                    }}
+                    className="text-xs font-body font-semibold text-aletis-verde hover:underline"
+                  >
+                    {proximaAcao ? 'Editar' : 'Agendar'}
+                  </button>
+                )}
+              </div>
+
+              {editingProxAcao ? (
+                <div className="space-y-2">
+                  <input
+                    type="date"
+                    value={proximaAcaoForm.data}
+                    onChange={(e) => setProximaAcaoForm((p) => ({ ...p, data: e.target.value }))}
+                    className="w-full text-sm font-body border border-aletis-borda rounded-lg px-3 py-2 focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none"
+                  />
+                  <textarea
+                    value={proximaAcaoForm.descricao}
+                    onChange={(e) => setProximaAcaoForm((p) => ({ ...p, descricao: e.target.value }))}
+                    placeholder="Ex: Ligar para Sicoob, enviar proposta de parcelamento..."
+                    rows={2}
+                    className="w-full text-sm font-body border border-aletis-borda rounded-lg px-3 py-2 focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none resize-none"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveProximaAcao}
+                      className="flex-1 text-xs font-body font-semibold bg-aletis-verde text-white rounded-lg py-2 hover:bg-aletis-verde-escuro transition"
+                    >
+                      Salvar
+                    </button>
+                    <button
+                      onClick={() => setEditingProxAcao(false)}
+                      className="px-4 text-xs font-body text-aletis-grafite-medio hover:text-aletis-grafite-escuro"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : proximaAcao ? (
+                (() => {
+                  const dias = Math.floor((new Date(proximaAcao.data).getTime() - Date.now()) / 86_400_000)
+                  const color = dias < 0 ? 'text-red-600' : dias <= 3 ? 'text-amber-600' : 'text-aletis-verde'
+                  return (
+                    <div>
+                      <p className="text-sm font-body text-aletis-grafite-escuro mb-1">{proximaAcao.descricao}</p>
+                      <p className={`text-xs font-body font-semibold ${color}`}>
+                        {new Date(proximaAcao.data).toLocaleDateString('pt-BR')} ·{' '}
+                        {dias < 0 ? `atrasado ${Math.abs(dias)} dia(s)` : dias === 0 ? 'hoje' : `em ${dias} dia(s)`}
+                      </p>
+                    </div>
+                  )
+                })()
+              ) : (
+                <p className="text-xs font-body text-aletis-grafite-claro">
+                  Nenhuma ação agendada. Clique em <strong>Agendar</strong> para criar uma.
+                </p>
+              )}
+            </div>
+
+            {/* Tags */}
+            <div className="card-premium p-5">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="w-9 h-9 rounded-lg bg-aletis-verde/10 flex items-center justify-center">
+                  <Tag className="w-4 h-4 text-aletis-verde" />
+                </div>
+                <h3 className="text-base font-display font-semibold text-aletis-grafite-escuro">
+                  Tags / Rótulos
+                </h3>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {tags.length === 0 && (
+                  <span className="text-xs font-body text-aletis-grafite-claro">
+                    Nenhuma tag. Use tags como "alta-prioridade", "aguardando-doc", etc.
+                  </span>
+                )}
+                {tags.map((t) => (
+                  <span
+                    key={t}
+                    className="inline-flex items-center gap-1 text-xs font-body font-semibold px-2 py-1 rounded-lg bg-aletis-verde/10 text-aletis-verde border border-aletis-verde/20"
+                  >
+                    {t}
+                    <button
+                      onClick={() => handleSaveTags(tags.filter((x) => x !== t))}
+                      className="hover:text-red-600"
+                      aria-label={`Remover tag ${t}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  const t = novaTag.trim().toLowerCase().replace(/\s+/g, '-')
+                  if (t && !tags.includes(t)) {
+                    handleSaveTags([...tags, t])
+                    setNovaTag('')
+                  }
+                }}
+                className="flex gap-2"
+              >
+                <input
+                  type="text"
+                  value={novaTag}
+                  onChange={(e) => setNovaTag(e.target.value)}
+                  placeholder="nova-tag"
+                  className="flex-1 text-xs font-body border border-aletis-borda rounded-lg px-2.5 py-1.5 focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none"
+                />
+                <button
+                  type="submit"
+                  className="text-xs font-body font-semibold bg-aletis-verde text-white rounded-lg px-3 py-1.5 hover:bg-aletis-verde-escuro transition disabled:opacity-50"
+                  disabled={!novaTag.trim()}
+                >
+                  + Adicionar
+                </button>
+              </form>
+            </div>
+
+            {/* Notas internas */}
+            <div className="card-premium p-5">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="w-9 h-9 rounded-lg bg-aletis-verde/10 flex items-center justify-center">
+                  <StickyNote className="w-4 h-4 text-aletis-verde" />
+                </div>
+                <h3 className="text-base font-display font-semibold text-aletis-grafite-escuro">
+                  Notas Internas ({notas.length})
+                </h3>
+              </div>
+
+              <div className="space-y-2 mb-3 max-h-[320px] overflow-y-auto pr-1">
+                {notas.length === 0 && (
+                  <p className="text-xs font-body text-aletis-grafite-claro italic">
+                    Sem notas ainda. Registre observações estratégicas, deliberações internas ou contexto não-estruturado.
+                  </p>
+                )}
+                {notas.slice().reverse().map((n) => (
+                  <div
+                    key={n.id}
+                    className="group relative rounded-lg border border-aletis-borda bg-aletis-bege/30 p-3"
+                  >
+                    <p className="text-xs font-body text-aletis-grafite-escuro whitespace-pre-wrap leading-relaxed">
+                      {n.texto}
+                    </p>
+                    <div className="flex items-center justify-between mt-2 text-[10px] font-body text-aletis-grafite-claro">
+                      <span>{n.autor} · {new Date(n.criadoEm).toLocaleString('pt-BR')}</span>
+                      <button
+                        onClick={() => handleRemoverNota(n.id)}
+                        className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 transition"
+                        aria-label="Remover nota"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <textarea
+                  value={novaNota}
+                  onChange={(e) => setNovaNota(e.target.value)}
+                  placeholder="Adicionar nota interna (visível só pela equipe)..."
+                  rows={2}
+                  className="w-full text-xs font-body border border-aletis-borda rounded-lg px-3 py-2 focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none resize-none"
+                />
+                <button
+                  onClick={handleAddNota}
+                  disabled={!novaNota.trim() || addingNota}
+                  className="w-full text-xs font-body font-semibold bg-aletis-verde text-white rounded-lg py-2 hover:bg-aletis-verde-escuro transition disabled:opacity-50"
+                >
+                  {addingNota ? 'Adicionando...' : '+ Adicionar Nota'}
+                </button>
+              </div>
+            </div>
 
             {/* Resumo Financeiro */}
             <div className="card-premium p-5">
@@ -1187,6 +1493,9 @@ export default function ClienteDetalhes() {
                       Taxa
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider">
+                      Vencimento / Aging
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider">
                       Status
                     </th>
                   </tr>
@@ -1243,13 +1552,50 @@ export default function ClienteDetalhes() {
                             </span>
                           </td>
                           <td className="px-4 py-3">
+                            {(() => {
+                              if (!d.vencimento)
+                                return (
+                                  <span className="text-xs text-aletis-grafite-claro">—</span>
+                                )
+                              const dias = Math.floor(
+                                (new Date(d.vencimento).getTime() - Date.now()) / 86_400_000,
+                              )
+                              const quitada = d.status === 'quitada'
+                              const color = quitada
+                                ? 'text-positivo'
+                                : dias < -60
+                                ? 'text-red-700 font-bold'
+                                : dias < -30
+                                ? 'text-red-600 font-semibold'
+                                : dias < 0
+                                ? 'text-red-500 font-semibold'
+                                : dias < 30
+                                ? 'text-amber-600 font-semibold'
+                                : 'text-aletis-grafite-medio'
+                              return (
+                                <div className="text-xs font-body">
+                                  <div className={color}>
+                                    {new Date(d.vencimento).toLocaleDateString('pt-BR')}
+                                  </div>
+                                  <div className={`text-[10px] ${color}`}>
+                                    {quitada
+                                      ? 'Quitada'
+                                      : dias < 0
+                                      ? `Atrasada ${Math.abs(dias)}d`
+                                      : `Vence em ${dias}d`}
+                                  </div>
+                                </div>
+                              )
+                            })()}
+                          </td>
+                          <td className="px-4 py-3">
                             <StatusBadge status={d.status} />
                           </td>
                         </tr>
                         {/* Expanded: Payment History */}
                         {isExpanded && (
                           <tr className="bg-aletis-bege/40">
-                            <td colSpan={8} className="px-8 py-4">
+                            <td colSpan={9} className="px-8 py-4">
                               <div className="mb-2">
                                 <h4 className="text-sm font-body font-semibold text-aletis-grafite-escuro flex items-center gap-2">
                                   <CreditCard className="w-4 h-4 text-aletis-verde" />
@@ -1328,6 +1674,77 @@ export default function ClienteDetalhes() {
               {cliente.dividas.length !== 1 ? 's' : ''}
             </div>
           </div>
+
+          {/* Aging Buckets */}
+          {cliente.dividas.some((d) => d.vencimento) && (
+            <div className="card-premium p-4">
+              <h4 className="text-sm font-display font-semibold text-aletis-grafite-escuro mb-3 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-aletis-dourado" />
+                Distribuição por Vencimento (Aging)
+              </h4>
+              {(() => {
+                const now = Date.now()
+                const buckets = {
+                  quitada: { valor: 0, count: 0 },
+                  aVencer: { valor: 0, count: 0 },
+                  atraso30: { valor: 0, count: 0 },
+                  atraso60: { valor: 0, count: 0 },
+                  atrasoPlus: { valor: 0, count: 0 },
+                }
+                cliente.dividas.forEach((d) => {
+                  if (d.status === 'quitada') {
+                    buckets.quitada.valor += d.valorAtual
+                    buckets.quitada.count++
+                    return
+                  }
+                  if (!d.vencimento) return
+                  const dias = Math.floor(
+                    (new Date(d.vencimento).getTime() - now) / 86_400_000,
+                  )
+                  if (dias >= 0) {
+                    buckets.aVencer.valor += d.valorAtual
+                    buckets.aVencer.count++
+                  } else if (dias >= -30) {
+                    buckets.atraso30.valor += d.valorAtual
+                    buckets.atraso30.count++
+                  } else if (dias >= -60) {
+                    buckets.atraso60.valor += d.valorAtual
+                    buckets.atraso60.count++
+                  } else {
+                    buckets.atrasoPlus.valor += d.valorAtual
+                    buckets.atrasoPlus.count++
+                  }
+                })
+                const items = [
+                  { key: 'aVencer', label: 'A vencer', color: 'bg-emerald-50 border-emerald-200 text-emerald-800', data: buckets.aVencer },
+                  { key: 'atraso30', label: '1-30d atraso', color: 'bg-amber-50 border-amber-200 text-amber-800', data: buckets.atraso30 },
+                  { key: 'atraso60', label: '31-60d atraso', color: 'bg-orange-50 border-orange-200 text-orange-800', data: buckets.atraso60 },
+                  { key: 'atrasoPlus', label: '60d+ atraso', color: 'bg-red-50 border-red-200 text-red-800', data: buckets.atrasoPlus },
+                  { key: 'quitada', label: 'Quitadas', color: 'bg-positivo/10 border-positivo/30 text-positivo', data: buckets.quitada },
+                ]
+                return (
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    {items.map((it) => (
+                      <div
+                        key={it.key}
+                        className={`border rounded-xl p-3 ${it.color}`}
+                      >
+                        <p className="text-[10px] font-body font-semibold uppercase tracking-wider opacity-80">
+                          {it.label}
+                        </p>
+                        <p className="text-base font-display font-bold mt-1">
+                          {formatBRL(it.data.valor)}
+                        </p>
+                        <p className="text-[11px] font-body mt-0.5 opacity-70">
+                          {it.data.count} contrato{it.data.count !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+            </div>
+          )}
         </div>
       )}
 
@@ -1392,48 +1809,94 @@ export default function ClienteDetalhes() {
            TAB: TIMELINE
            ════════════════════════════════════════════════════════ */}
       {activeTab === 'timeline' && (
-        <div className="space-y-0 animate-fade-in">
-          {cliente.timeline.map((event, i) => (
-            <div key={event.id} className="flex gap-4 group">
-              {/* Timeline Line + Icon */}
-              <div className="flex flex-col items-center">
-                <TimelineIcon tipo={event.tipo} />
-                {i < cliente.timeline.length - 1 && (
-                  <div className="w-px flex-1 bg-aletis-borda min-h-[24px]" />
-                )}
+        <div className="space-y-4 animate-fade-in">
+          {/* Filter chips */}
+          {(() => {
+            const tipos = Array.from(new Set(cliente.timeline.map((e) => e.tipo)))
+            return (
+              <div className="flex items-center gap-2 flex-wrap">
+                <Filter className="w-4 h-4 text-aletis-grafite-claro" />
+                <button
+                  onClick={() => setTimelineFilter('todos')}
+                  className={`text-xs font-body font-semibold px-2.5 py-1 rounded-full border transition ${
+                    timelineFilter === 'todos'
+                      ? 'bg-aletis-verde text-white border-aletis-verde'
+                      : 'bg-white text-aletis-grafite-medio border-aletis-borda hover:border-aletis-verde/40'
+                  }`}
+                >
+                  Todos ({cliente.timeline.length})
+                </button>
+                {tipos.map((t) => {
+                  const count = cliente.timeline.filter((e) => e.tipo === t).length
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => setTimelineFilter(t)}
+                      className={`text-xs font-body font-semibold px-2.5 py-1 rounded-full border transition capitalize ${
+                        timelineFilter === t
+                          ? 'bg-aletis-verde text-white border-aletis-verde'
+                          : 'bg-white text-aletis-grafite-medio border-aletis-borda hover:border-aletis-verde/40'
+                      }`}
+                    >
+                      {t.replace(/_/g, ' ')} ({count})
+                    </button>
+                  )
+                })}
               </div>
+            )
+          })()}
 
-              {/* Content Card */}
-              <div className="flex-1 pb-6">
-                <div className="card-premium p-4 hover:shadow-xl transition-shadow duration-200">
-                  <div className="flex items-start justify-between mb-1.5">
-                    <h4 className="text-sm font-body font-semibold text-aletis-grafite-escuro">
-                      {event.titulo}
-                    </h4>
-                    <span className="text-[11px] font-body text-aletis-grafite-claro whitespace-nowrap ml-3 flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {event.data}
-                    </span>
-                  </div>
-                  <p className="text-sm font-body text-aletis-grafite-medio leading-relaxed mb-2">
-                    {event.descricao}
+          {(() => {
+            const filtered = timelineFilter === 'todos'
+              ? cliente.timeline
+              : cliente.timeline.filter((e) => e.tipo === timelineFilter)
+            if (filtered.length === 0) {
+              return (
+                <div className="card-premium p-12 text-center">
+                  <p className="text-sm font-body text-aletis-grafite-claro">
+                    Nenhum evento {timelineFilter !== 'todos' ? `do tipo "${timelineFilter}"` : 'registrado'}.
                   </p>
-                  <div className="flex items-center gap-1.5 text-xs font-body text-aletis-grafite-claro">
-                    <User className="w-3 h-3" />
-                    {event.usuario}
-                  </div>
                 </div>
-              </div>
-            </div>
-          ))}
+              )
+            }
+            return (
+              <div className="space-y-0">
+                {filtered.map((event, i) => (
+                  <div key={event.id} className="flex gap-4 group">
+                    {/* Timeline Line + Icon */}
+                    <div className="flex flex-col items-center">
+                      <TimelineIcon tipo={event.tipo} />
+                      {i < filtered.length - 1 && (
+                        <div className="w-px flex-1 bg-aletis-borda min-h-[24px]" />
+                      )}
+                    </div>
 
-          {cliente.timeline.length === 0 && (
-            <div className="card-premium p-12 text-center">
-              <p className="text-sm font-body text-aletis-grafite-claro">
-                Nenhum evento registrado na timeline.
-              </p>
-            </div>
-          )}
+                    {/* Content Card */}
+                    <div className="flex-1 pb-6">
+                      <div className="card-premium p-4 hover:shadow-xl transition-shadow duration-200">
+                        <div className="flex items-start justify-between mb-1.5">
+                          <h4 className="text-sm font-body font-semibold text-aletis-grafite-escuro">
+                            {event.titulo}
+                          </h4>
+                          <span className="text-[11px] font-body text-aletis-grafite-claro whitespace-nowrap ml-3 flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {event.data}
+                          </span>
+                        </div>
+                        <p className="text-sm font-body text-aletis-grafite-medio leading-relaxed mb-2">
+                          {event.descricao}
+                        </p>
+                        <div className="flex items-center gap-1.5 text-xs font-body text-aletis-grafite-claro">
+                          <User className="w-3 h-3" />
+                          {event.usuario}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
         </div>
       )}
 

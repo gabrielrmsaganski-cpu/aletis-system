@@ -43,6 +43,12 @@ type Estagio =
   | 'acompanhamento'
   | 'concluido'
 
+interface ProximaAcao {
+  data: string
+  descricao: string
+  criadoEm: string
+}
+
 interface Cliente {
   id: string
   nome: string
@@ -53,6 +59,10 @@ interface Cliente {
   estagio: Estagio
   saudeFinanceira: number
   consultor: string
+  tags?: string[]
+  proximaAcao?: ProximaAcao
+  estagioDesde?: string
+  ultimaAtualizacao?: string
 }
 
 // ────────────────────────────────────────────────────────────
@@ -113,6 +123,9 @@ interface ClienteApi {
   areaTotalHa?: number
   ultimaAtualizacao?: string
   saudeFinanceira?: number
+  tags?: string[]
+  proximaAcao?: ProximaAcao
+  estagioDesde?: string
 }
 
 function mapApiCliente(c: ClienteApi): Cliente {
@@ -126,124 +139,33 @@ function mapApiCliente(c: ClienteApi): Cliente {
     estagio: (c.estagio as Estagio) || 'lead',
     saudeFinanceira: c.saudeFinanceira ?? 50,
     consultor: c.consultor,
+    tags: c.tags,
+    proximaAcao: c.proximaAcao,
+    estagioDesde: c.estagioDesde,
+    ultimaAtualizacao: c.ultimaAtualizacao,
   }
 }
 
+/** Dias desde YYYY-MM-DD ou ISO. null se inválido. */
+function diasDesde(iso?: string): number | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return null
+  return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86_400_000))
+}
+
+/** Dias até próxima ação (negativo = atrasado). null se inválido. */
+function diasAte(iso?: string): number | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return null
+  return Math.floor((d.getTime() - Date.now()) / 86_400_000)
+}
+
 // ────────────────────────────────────────────────────────────
-// Fallback Data
+// Fallback Data — vazio por padrão; API é a fonte de verdade.
 // ────────────────────────────────────────────────────────────
-const FALLBACK_CLIENTES: Cliente[] = [
-  {
-    id: 'ailton-caeiro',
-    nome: 'Ailton Caeiro',
-    cidade: 'Toledo',
-    uf: 'PR',
-    credor: 'Sicoob',
-    valorDivida: 2_100_000,
-    estagio: 'proposta',
-    saudeFinanceira: 42,
-    consultor: 'Christian Kohler',
-  },
-  {
-    id: 'paulo-luciano',
-    nome: 'Paulo Luciano',
-    cidade: 'Dourados',
-    uf: 'MS',
-    credor: 'Fertiflora',
-    valorDivida: 277_000,
-    estagio: 'negociacao',
-    saudeFinanceira: 58,
-    consultor: 'Christian Kohler',
-  },
-  {
-    id: 'maria-santos',
-    nome: 'Maria Santos',
-    cidade: 'Rondonópolis',
-    uf: 'MT',
-    credor: 'Banco do Brasil',
-    valorDivida: 890_000,
-    estagio: 'acordo',
-    saudeFinanceira: 71,
-    consultor: 'Ana Beatriz Lima',
-  },
-  {
-    id: 'roberto-almeida',
-    nome: 'Roberto Almeida',
-    cidade: 'Rio Verde',
-    uf: 'GO',
-    credor: 'Sicredi',
-    valorDivida: 1_020_000,
-    estagio: 'acompanhamento',
-    saudeFinanceira: 83,
-    consultor: 'Ana Beatriz Lima',
-  },
-  {
-    id: 'jose-moreira',
-    nome: 'José Moreira',
-    cidade: 'Uberaba',
-    uf: 'MG',
-    credor: 'Cresol',
-    valorDivida: 510_000,
-    estagio: 'concluido',
-    saudeFinanceira: 92,
-    consultor: 'Christian Kohler',
-  },
-  {
-    id: 'carlos-mendes',
-    nome: 'Carlos Mendes',
-    cidade: 'Maringá',
-    uf: 'PR',
-    credor: 'Bradesco',
-    valorDivida: 780_000,
-    estagio: 'analise',
-    saudeFinanceira: 35,
-    consultor: 'Rafael Teixeira',
-  },
-  {
-    id: 'fernanda-oliveira',
-    nome: 'Fernanda Oliveira',
-    cidade: 'Sorriso',
-    uf: 'MT',
-    credor: 'Bayer Crop Science',
-    valorDivida: 430_000,
-    estagio: 'qualificacao',
-    saudeFinanceira: 50,
-    consultor: 'Rafael Teixeira',
-  },
-  {
-    id: 'pedro-henrique',
-    nome: 'Pedro Henrique Costa',
-    cidade: 'Ribeirão Preto',
-    uf: 'SP',
-    credor: 'Banco do Brasil',
-    valorDivida: 320_000,
-    estagio: 'lead',
-    saudeFinanceira: 28,
-    consultor: 'Ana Beatriz Lima',
-  },
-  {
-    id: 'luciana-ferraz',
-    nome: 'Luciana Ferraz',
-    cidade: 'Cascavel',
-    uf: 'PR',
-    credor: 'Syngenta',
-    valorDivida: 645_000,
-    estagio: 'negociacao',
-    saudeFinanceira: 62,
-    consultor: 'Christian Kohler',
-  },
-  {
-    id: 'antonio-barbosa',
-    nome: 'Antônio Barbosa',
-    cidade: 'Jataí',
-    uf: 'GO',
-    credor: 'Sicoob',
-    valorDivida: 1_560_000,
-    estagio: 'lead',
-    saudeFinanceira: 19,
-    consultor: 'Rafael Teixeira',
-  },
-]
+const FALLBACK_CLIENTES: Cliente[] = []
 
 // ────────────────────────────────────────────────────────────
 // Helper: initials from name
@@ -713,6 +635,9 @@ export default function CRM() {
                     </th>
                   ))}
                   <th className="text-left px-4 py-3 text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider">
+                    Aging / Próx. Ação
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider">
                     Ações
                   </th>
                 </tr>
@@ -770,6 +695,65 @@ export default function CRM() {
                         {c.consultor}
                       </span>
                     </td>
+                    {/* Aging / Próxima Ação */}
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const dias = diasDesde(c.estagioDesde || c.ultimaAtualizacao)
+                        const prox = diasAte(c.proximaAcao?.data)
+                        return (
+                          <div className="flex flex-col gap-1 text-xs font-body">
+                            {dias !== null && (
+                              <span
+                                className={`inline-flex items-center ${
+                                  dias < 7
+                                    ? 'text-aletis-grafite-claro'
+                                    : dias < 30
+                                    ? 'text-amber-600'
+                                    : 'text-red-600 font-semibold'
+                                }`}
+                                title={`Último movimento há ${dias} dia(s)`}
+                              >
+                                {dias < 7 ? '🟢' : dias < 30 ? '🟡' : '🔴'} {dias}d parado
+                              </span>
+                            )}
+                            {prox !== null && c.proximaAcao && (
+                              <span
+                                className={`inline-flex items-center gap-1 truncate max-w-[180px] ${
+                                  prox < 0
+                                    ? 'text-red-600 font-semibold'
+                                    : prox <= 3
+                                    ? 'text-amber-600'
+                                    : 'text-aletis-verde'
+                                }`}
+                                title={c.proximaAcao.descricao}
+                              >
+                                {prox < 0 ? `⏰ Atr. ${Math.abs(prox)}d` : prox === 0 ? '⏰ Hoje' : `⏰ ${prox}d`}
+                                <span className="truncate text-aletis-grafite-medio">— {c.proximaAcao.descricao}</span>
+                              </span>
+                            )}
+                            {c.tags && c.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 max-w-[180px]">
+                                {c.tags.slice(0, 2).map((t) => (
+                                  <span
+                                    key={t}
+                                    className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-aletis-verde/10 text-aletis-verde truncate max-w-[80px]"
+                                    title={t}
+                                  >
+                                    {t}
+                                  </span>
+                                ))}
+                                {c.tags.length > 2 && (
+                                  <span className="text-[9px] text-aletis-grafite-claro">+{c.tags.length - 2}</span>
+                                )}
+                              </div>
+                            )}
+                            {dias === null && prox === null && (!c.tags || c.tags.length === 0) && (
+                              <span className="text-aletis-grafite-claro">—</span>
+                            )}
+                          </div>
+                        )
+                      })()}
+                    </td>
                     {/* Ações */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
@@ -794,7 +778,7 @@ export default function CRM() {
                 {filteredClientes.length === 0 && (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="px-4 py-12 text-center text-sm font-body text-aletis-grafite-claro"
                     >
                       Nenhum cliente encontrado com os filtros aplicados.
@@ -875,6 +859,63 @@ export default function CRM() {
                       <p className="text-sm font-body font-bold text-aletis-grafite-escuro truncate">
                         {formatBRLCompact(c.valorDivida)}
                       </p>
+
+                      {/* Tags */}
+                      {c.tags && c.tags.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {c.tags.slice(0, 3).map((t) => (
+                            <span
+                              key={t}
+                              className="text-[9px] font-body font-semibold px-1.5 py-0.5 rounded bg-aletis-verde/10 text-aletis-verde border border-aletis-verde/20 truncate max-w-[90px]"
+                              title={t}
+                            >
+                              {t}
+                            </span>
+                          ))}
+                          {c.tags.length > 3 && (
+                            <span className="text-[9px] text-aletis-grafite-claro font-body">+{c.tags.length - 3}</span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Aging + próxima ação */}
+                      {(() => {
+                        const dias = diasDesde(c.estagioDesde || c.ultimaAtualizacao)
+                        const prox = diasAte(c.proximaAcao?.data)
+                        if (dias === null && prox === null) return null
+                        return (
+                          <div className="mt-2 pt-2 border-t border-aletis-borda/50 flex items-center justify-between gap-2 text-[10px] font-body">
+                            {dias !== null ? (
+                              <span
+                                className={`truncate ${
+                                  dias < 7
+                                    ? 'text-aletis-grafite-claro'
+                                    : dias < 30
+                                    ? 'text-amber-600'
+                                    : 'text-red-600 font-semibold'
+                                }`}
+                                title="Dias sem atualização do estágio"
+                              >
+                                {dias}d no estágio
+                              </span>
+                            ) : <span />}
+                            {prox !== null && (
+                              <span
+                                className={`truncate font-semibold ${
+                                  prox < 0
+                                    ? 'text-red-600'
+                                    : prox <= 3
+                                    ? 'text-amber-600'
+                                    : 'text-aletis-verde'
+                                }`}
+                                title={c.proximaAcao?.descricao}
+                              >
+                                {prox < 0 ? `Atrasado ${Math.abs(prox)}d` : prox === 0 ? 'Hoje' : `Em ${prox}d`}
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </Link>
                   ))}
                   {clients.length === 0 && (
