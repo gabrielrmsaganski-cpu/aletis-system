@@ -11,10 +11,30 @@ import { DataSourceManager, type DataSourceCategory } from '../services/DataSour
 export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
   const manager = DataSourceManager.getInstance();
 
+  // Dispara uma sondagem leve na primeira consulta de status quando
+  // nenhuma fonte foi ainda verificada. Isso elimina o estado "desconhecido"
+  // inicial sem bloquear a resposta do endpoint.
+  let sondagemInicialDisparada = false;
+  const dispararSondagemSeNecessario = () => {
+    if (sondagemInicialDisparada) return;
+    const fontes = manager.getSourceStatus();
+    const algumaVerificada = fontes.some((f) => f.ultimaAtualizacao !== null);
+    if (algumaVerificada) {
+      sondagemInicialDisparada = true;
+      return;
+    }
+    sondagemInicialDisparada = true;
+    manager.probeAllSources().catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Fontes] Falha na sondagem inicial: ${msg}`);
+    });
+  };
+
   // ── GET /api/fontes/status ─────────────────────────────
   // Returns health and status of all registered data sources
   fastify.get('/api/fontes/status', async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
+      dispararSondagemSeNecessario();
       const dashboardStatus = manager.getDashboardStatus();
 
       return reply.status(200).send({
@@ -27,6 +47,38 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
       return reply.status(500).send({
         sucesso: false,
         erro: 'Erro ao obter status das fontes de dados',
+        detalhes: msg,
+      });
+    }
+  });
+
+  // ── POST /api/fontes/probe ─────────────────────────────
+  // Executa uma sondagem completa em todas as fontes registradas.
+  fastify.post('/api/fontes/probe', async (
+    request: FastifyRequest<{ Querystring: { timeoutMs?: string; concurrency?: string } }>,
+    reply: FastifyReply
+  ) => {
+    try {
+      const timeoutMs = request.query.timeoutMs ? parseInt(request.query.timeoutMs, 10) : undefined;
+      const concurrency = request.query.concurrency ? parseInt(request.query.concurrency, 10) : undefined;
+
+      console.log('[Fontes] Sondagem manual disparada');
+      const resumo = await manager.probeAllSources({
+        timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : undefined,
+        concurrency: Number.isFinite(concurrency) ? concurrency : undefined,
+      });
+
+      return reply.status(200).send({
+        sucesso: true,
+        resumo,
+        dashboard: manager.getDashboardStatus(),
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Erro desconhecido';
+      console.error(`[Fontes] Erro na sondagem: ${msg}`);
+      return reply.status(500).send({
+        sucesso: false,
+        erro: 'Erro ao executar sondagem nas fontes',
         detalhes: msg,
       });
     }

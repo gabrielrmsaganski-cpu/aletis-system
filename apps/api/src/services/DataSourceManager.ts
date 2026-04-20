@@ -510,6 +510,86 @@ export class DataSourceManager {
     return counts;
   }
 
+  /**
+   * Probes all registered sources with a lightweight HEAD/GET request and
+   * updates their status accordingly. Intended to populate the dashboard
+   * status even when individual sources haven't been consumed yet.
+   *
+   * Semantics: any HTTP response (2xx, 3xx, 4xx) counts as "online" —
+   * it means the endpoint is reachable. Only network errors, DNS failures,
+   * or timeouts flip the status to "offline". HTTP 5xx → "degraded".
+   */
+  async probeAllSources(options?: {
+    concurrency?: number;
+    timeoutMs?: number;
+  }): Promise<{
+    probed: number;
+    online: number;
+    degraded: number;
+    offline: number;
+    durationMs: number;
+  }> {
+    const concurrency = options?.concurrency ?? 6;
+    const timeoutMs = options?.timeoutMs ?? 4000;
+    const entries = Array.from(this.registry.values());
+    const started = Date.now();
+    const summary = { probed: 0, online: 0, degraded: 0, offline: 0 };
+
+    const axiosProbe = (await import('axios')).default;
+
+    const probeOne = async (entry: DataSourceEntry) => {
+      const start = Date.now();
+      try {
+        const resp = await axiosProbe.request({
+          method: 'GET',
+          url: entry.url,
+          timeout: timeoutMs,
+          maxContentLength: 2048,
+          maxBodyLength: 2048,
+          validateStatus: () => true,
+          responseType: 'text',
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (compatible; ALETIS-HealthCheck/1.0; +https://aletis.com.br)',
+            Accept: '*/*',
+          },
+        });
+        const latencia = Date.now() - start;
+        if (resp.status >= 500) {
+          this.updateSourceStatus(entry.nome, 'degraded', latencia, `HTTP ${resp.status}`);
+          summary.degraded++;
+        } else {
+          // 2xx, 3xx, 4xx — endpoint responde. 4xx geralmente é falta de parâmetro.
+          this.updateSourceStatus(entry.nome, 'online', latencia);
+          summary.online++;
+        }
+      } catch (error) {
+        const latencia = Date.now() - start;
+        const msg = error instanceof Error ? error.message : 'probe failed';
+        this.updateSourceStatus(entry.nome, 'offline', latencia, msg);
+        summary.offline++;
+      }
+      summary.probed++;
+    };
+
+    // Paralelismo limitado
+    const queue = [...entries];
+    const workers: Promise<void>[] = [];
+    const runner = async () => {
+      while (queue.length > 0) {
+        const next = queue.shift();
+        if (!next) break;
+        await probeOne(next);
+      }
+    };
+    for (let i = 0; i < Math.min(concurrency, entries.length); i++) {
+      workers.push(runner());
+    }
+    await Promise.all(workers);
+
+    return { ...summary, durationMs: Date.now() - started };
+  }
+
   // ── Summary for Dashboard ────────────────────────────────
 
   /**

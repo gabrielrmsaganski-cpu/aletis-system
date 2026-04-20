@@ -118,6 +118,31 @@ async function start(): Promise<void> {
     app.log.info('Routes registered:')
     const routes = app.printRoutes()
     console.log(routes)
+
+    // Sondagem periódica das fontes de dados — primeira após 15s,
+    // repetição a cada 10 minutos. Isso mantém o dashboard "Fontes"
+    // com status atualizados em vez de "Desconhecido".
+    try {
+      const { DataSourceManager } = await import('./services/DataSourceManager.js')
+      const manager = DataSourceManager.getInstance()
+
+      const runProbe = async () => {
+        try {
+          const resumo = await manager.probeAllSources()
+          app.log.info(
+            { resumo },
+            `[Fontes] Sondagem concluída: ${resumo.online} online, ${resumo.degraded} degradadas, ${resumo.offline} offline`
+          )
+        } catch (err) {
+          app.log.warn({ err }, '[Fontes] Falha na sondagem periódica')
+        }
+      }
+
+      setTimeout(() => void runProbe(), 15_000)
+      setInterval(() => void runProbe(), 10 * 60_000)
+    } catch (err) {
+      app.log.warn({ err }, '[Fontes] Não foi possível agendar sondagens periódicas')
+    }
   } catch (err) {
     app.log.fatal(err)
     process.exit(1)
