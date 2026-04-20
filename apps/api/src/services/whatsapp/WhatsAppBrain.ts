@@ -396,7 +396,7 @@ export class WhatsAppBrain {
       reply,
       sendAsAudio: cameFromAudio,
       session,
-      escalated,
+      escalated: escalated ?? false,
       intent: intent.tipo,
     }
   }

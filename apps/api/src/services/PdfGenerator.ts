@@ -3,7 +3,7 @@
 // Renders professional PDF proposals using Puppeteer
 // ============================================================
 
-import puppeteer from 'puppeteer';
+import puppeteer, { type Browser } from 'puppeteer';
 
 interface PropostaData {
   id: string;
@@ -254,9 +254,9 @@ function buildHtml(p: PropostaData): string {
 </html>`;
 }
 
-let browserInstance: puppeteer.Browser | null = null;
+let browserInstance: Browser | null = null;
 
-async function getBrowser(): Promise<puppeteer.Browser> {
+async function getBrowser(): Promise<Browser> {
   if (browserInstance && browserInstance.connected) return browserInstance;
   browserInstance = await puppeteer.launch({
     headless: true,

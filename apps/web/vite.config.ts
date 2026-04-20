@@ -20,4 +20,16 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-core': ['react', 'react-dom', 'react-router-dom'],
+          'leaflet-vendor': ['leaflet', 'react-leaflet'],
+          'icons-vendor': ['lucide-react'],
+        },
+      },
+    },
+  },
 })

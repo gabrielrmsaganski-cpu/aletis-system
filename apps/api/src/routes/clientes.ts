@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { getProspeccaoService } from '../services/prospeccao/ProspeccaoService'
 import type { CarConsultaResult, ClimaAgro, CnpjEnrichment, GeoEnrichment, LeadFull, ProducaoMunicipal } from '../services/prospeccao/types'
+import { calcularSRAI, type SraiInput } from '../services/ScoreSRAI.js'
+import { verificarABS, type AbsInput } from '../services/VerificadorABS.js'
 
 /* ========================================================================
  *  Tipos
@@ -122,6 +124,65 @@ interface LeadOrigem {
   importadoEm: string
 }
 
+/**
+ * Exposição de commodity por cliente — quanto do faturamento depende de cada
+ * cultura/proteína. Usado pelo simulador multi-cenário e pelo score SRAI para
+ * avaliar sensibilidade a variação de preço/produtividade.
+ */
+interface ExposicaoCommodity {
+  /** soja, milho, algodao, cafe, cana, arroz, trigo, feijao, boi, leite, etc. */
+  commodity: string
+  /** Área dedicada (ha) — zero para pecuária/leite se indicado por cabeças. */
+  areaHa: number
+  /** Produtividade esperada em sc/ha, @/ha, kg/ha, L/dia — depende da commodity. */
+  produtividade: number
+  /** Unidade de produtividade (sc/ha, @/ha, kg/ha, L/dia). */
+  unidadeProdutividade: string
+  /** Preço de referência no momento do cadastro — R$ por unidade. */
+  precoReferencia: number
+  /** Unidade de preço (R$/sc, R$/@, R$/kg, R$/L). */
+  unidadePreco: string
+  /** % do faturamento total estimado (informativo — soma pode não ser 100%). */
+  pctReceita?: number
+  /** Data da última atualização (ISO date). */
+  atualizadoEm: string
+  /** Observações livres (fornecedor de sementes, contrato futuro, etc.). */
+  observacoes?: string
+}
+
+/**
+ * Checklist de visita técnica executada por consultor em campo.
+ * Padroniza observações e gera evidências para pareceres de crédito.
+ */
+interface VisitaTecnica {
+  id: string
+  data: string // ISO date
+  consultor: string
+  duracaoMinutos?: number
+  coordenadas?: { lat: number; lng: number }
+  checklist: {
+    /** Conferência de limites, cercas, acessos. */
+    infraestruturaOk?: boolean
+    /** Máquinas e implementos presentes/operacionais. */
+    maquinarioOk?: boolean
+    /** Lavoura/pastagem em estado compatível com projeção. */
+    lavouraOk?: boolean
+    /** Armazéns/silos com capacidade adequada. */
+    armazenagemOk?: boolean
+    /** Regularidade ambiental aparente (APP, reserva legal). */
+    ambientalOk?: boolean
+    /** Livros contábeis/notas disponíveis. */
+    documentacaoOk?: boolean
+    /** Produtor presente e cooperativo. */
+    receptividadeOk?: boolean
+  }
+  observacoesGerais?: string
+  riscos?: string[]
+  oportunidades?: string[]
+  fotos?: Array<{ url: string; legenda?: string }>
+  criadoEm: string
+}
+
 interface Divida {
   contrato: string
   valorOriginal: number
@@ -207,6 +268,10 @@ interface Cliente {
   }>
   /** Timestamp da última transição de estágio (aging p/ SLA). */
   estagioDesde?: string
+  /** Exposição por commodity — base para simulador e score SRAI. */
+  exposicaoCommodity?: ExposicaoCommodity[]
+  /** Checklists de visitas técnicas realizadas. */
+  visitasTecnicas?: VisitaTecnica[]
 }
 
 /* ========================================================================
@@ -1065,6 +1130,207 @@ export default async function (fastify: FastifyInstance) {
       jaExistia: false,
       message: 'Lead importado com sucesso para o funil CRM',
     }
+  })
+
+  /* ---- SCORE SRAI (Risco Agrícola Integrado) ---- */
+  fastify.get('/api/clientes/:id/srai', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string }
+    const cliente = clientes.get(id)
+    if (!cliente) {
+      reply.status(404)
+      return { success: false, error: 'Cliente não encontrado' }
+    }
+    const hoje = new Date()
+    const diasAtrasoMaximo = cliente.dividas.reduce((max, d) => {
+      if (d.status === 'paga') return max
+      const venc = new Date(d.vencimento)
+      const dias = Math.floor((hoje.getTime() - venc.getTime()) / 86400000)
+      return dias > max ? dias : max
+    }, 0)
+    const ultimoContato = cliente.timeline
+      .filter((t) => t.tipo === 'contato' || t.tipo === 'reuniao')
+      .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())[0]
+    const diasUltimoContato = ultimoContato
+      ? Math.floor((hoje.getTime() - new Date(ultimoContato.data).getTime()) / 86400000)
+      : 365
+    const anomaliaChuvaPct =
+      cliente.clima?.chuvaAcumuladaAnualMm && cliente.clima.chuvaAcumuladaAnualMm > 0
+        ? ((cliente.clima.chuvaAcumuladaAnualMm - 1500) / 1500) * 100
+        : undefined
+
+    const input: SraiInput = {
+      valorTotalDivida: cliente.valorTotalDivida,
+      valorTotalPago: cliente.valorTotalPago,
+      numeroContratosAtivos: cliente.dividas.filter((d) => d.status !== 'paga').length,
+      temAjuizamento: cliente.leadOrigem?.temAjuizada ?? false,
+      diasAtrasoMaximo: Math.max(0, diasAtrasoMaximo),
+      areaTotalHa: cliente.areaTotalHa,
+      culturas: cliente.culturas,
+      temCar: !!cliente.car,
+      carCondicao: cliente.car?.condicaoCadastro,
+      anomaliaChuvaPct,
+      tempMediaAnualC: cliente.clima?.tempMediaAnualC ?? undefined,
+      exposicaoDiversificada: (cliente.exposicaoCommodity?.length ?? 0) >= 2,
+      diasUltimoContato,
+      temProximaAcao: !!cliente.proximaAcao,
+    }
+    const score = calcularSRAI(input)
+    return { success: true, data: { ...score, input } }
+  })
+
+  /* ---- VERIFICADOR AB+S (Agro Brasil Sustentável) ---- */
+  fastify.get('/api/clientes/:id/abs', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string }
+    const cliente = clientes.get(id)
+    if (!cliente) {
+      reply.status(404)
+      return { success: false, error: 'Cliente não encontrado' }
+    }
+    const body = (request.query as { plantioDireto?: string; ilpf?: string; prada?: string }) || {}
+    const anomaliaChuvaPct =
+      cliente.clima?.chuvaAcumuladaAnualMm && cliente.clima.chuvaAcumuladaAnualMm > 0
+        ? ((cliente.clima.chuvaAcumuladaAnualMm - 1500) / 1500) * 100
+        : undefined
+    const input: AbsInput = {
+      temCar: !!cliente.car,
+      carCondicao: cliente.car?.condicaoCadastro,
+      carStatus: cliente.carStatus?.status,
+      areaImovel: cliente.car?.areaImovel,
+      areaReservaLegal: cliente.car?.areaReservaLegal,
+      areaVegetacaoNativa: cliente.car?.areaVegetacaoNativa,
+      modulosFiscais: cliente.car?.modulosFiscais,
+      temAjuizamento: cliente.leadOrigem?.temAjuizada ?? false,
+      situacaoCadastralCnpj: cliente.cnpjInfo?.situacaoCadastral,
+      optantePeloSimples: cliente.cnpjInfo?.optantePeloSimples,
+      culturas: cliente.culturas,
+      atividade: cliente.atividade,
+      temPlantioDireto: body.plantioDireto === 'true',
+      temIntegracaoLPF: body.ilpf === 'true',
+      temPlanoRecuperacao: body.prada === 'true',
+      anomaliaChuvaPct,
+    }
+    const resultado = verificarABS(input)
+    return { success: true, data: { ...resultado, input } }
+  })
+
+  /* ---- EXPOSIÇÃO POR COMMODITY ---- */
+  fastify.put('/api/clientes/:id/exposicao', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string }
+    const cliente = clientes.get(id)
+    if (!cliente) {
+      reply.status(404)
+      return { success: false, error: 'Cliente não encontrado' }
+    }
+    const body = request.body as { exposicao?: Array<Partial<ExposicaoCommodity>> }
+    if (!Array.isArray(body.exposicao)) {
+      reply.status(400)
+      return { success: false, error: 'exposicao deve ser um array' }
+    }
+    const agoraIso = new Date().toISOString()
+    const normalizadas: ExposicaoCommodity[] = []
+    const errs: string[] = []
+    body.exposicao.forEach((e, idx) => {
+      if (!e.commodity || typeof e.commodity !== 'string') {
+        errs.push(`[${idx}] commodity obrigatória`)
+        return
+      }
+      if (typeof e.areaHa !== 'number' || e.areaHa < 0) {
+        errs.push(`[${idx}] areaHa inválida`)
+        return
+      }
+      if (typeof e.produtividade !== 'number' || e.produtividade < 0) {
+        errs.push(`[${idx}] produtividade inválida`)
+        return
+      }
+      if (typeof e.precoReferencia !== 'number' || e.precoReferencia < 0) {
+        errs.push(`[${idx}] precoReferencia inválido`)
+        return
+      }
+      normalizadas.push({
+        commodity: e.commodity.toLowerCase().trim(),
+        areaHa: e.areaHa,
+        produtividade: e.produtividade,
+        unidadeProdutividade: e.unidadeProdutividade || 'sc/ha',
+        precoReferencia: e.precoReferencia,
+        unidadePreco: e.unidadePreco || 'R$/sc',
+        pctReceita: typeof e.pctReceita === 'number' ? e.pctReceita : undefined,
+        atualizadoEm: agoraIso,
+        observacoes: e.observacoes?.trim() || undefined,
+      })
+    })
+    if (errs.length > 0) {
+      reply.status(400)
+      return { success: false, error: 'Erro de validação', detalhes: errs }
+    }
+    cliente.exposicaoCommodity = normalizadas
+    cliente.ultimaAtualizacao = new Date().toISOString().slice(0, 10)
+    cliente.timeline.push({
+      data: cliente.ultimaAtualizacao,
+      tipo: 'analise',
+      descricao: 'Exposição por commodity atualizada',
+      detalhes: normalizadas
+        .map((e) => `${e.commodity}: ${e.areaHa} ha × ${e.produtividade} ${e.unidadeProdutividade}`)
+        .join(' · '),
+    })
+    return { success: true, data: cliente.exposicaoCommodity }
+  })
+
+  /* ---- VISITA TÉCNICA ---- */
+  fastify.post('/api/clientes/:id/visitas', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string }
+    const cliente = clientes.get(id)
+    if (!cliente) {
+      reply.status(404)
+      return { success: false, error: 'Cliente não encontrado' }
+    }
+    const body = request.body as Partial<VisitaTecnica>
+    if (!body.consultor || !body.data) {
+      reply.status(400)
+      return { success: false, error: 'consultor e data são obrigatórios' }
+    }
+    const visita: VisitaTecnica = {
+      id: `visita-${Date.now()}`,
+      data: body.data,
+      consultor: body.consultor,
+      duracaoMinutos: body.duracaoMinutos,
+      coordenadas: body.coordenadas,
+      checklist: body.checklist || {},
+      observacoesGerais: body.observacoesGerais?.trim() || undefined,
+      riscos: body.riscos?.filter((r) => r && r.trim().length > 0),
+      oportunidades: body.oportunidades?.filter((o) => o && o.trim().length > 0),
+      fotos: body.fotos,
+      criadoEm: new Date().toISOString(),
+    }
+    cliente.visitasTecnicas = [...(cliente.visitasTecnicas || []), visita]
+    cliente.ultimaAtualizacao = new Date().toISOString().slice(0, 10)
+
+    const itensOk = Object.values(visita.checklist).filter(Boolean).length
+    const totalChecklist = Object.keys(visita.checklist).length
+    cliente.timeline.push({
+      data: visita.data,
+      tipo: 'reuniao',
+      descricao: `Visita técnica realizada por ${visita.consultor}`,
+      detalhes: `Checklist: ${itensOk}/${totalChecklist} itens OK${visita.observacoesGerais ? ' · ' + visita.observacoesGerais.slice(0, 100) : ''}`,
+    })
+
+    reply.status(201)
+    return { success: true, data: visita, total: cliente.visitasTecnicas.length }
+  })
+
+  fastify.delete('/api/clientes/:id/visitas/:visitaId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id, visitaId } = request.params as { id: string; visitaId: string }
+    const cliente = clientes.get(id)
+    if (!cliente) {
+      reply.status(404)
+      return { success: false, error: 'Cliente não encontrado' }
+    }
+    const antes = cliente.visitasTecnicas?.length || 0
+    cliente.visitasTecnicas = (cliente.visitasTecnicas || []).filter((v) => v.id !== visitaId)
+    if (cliente.visitasTecnicas.length === antes) {
+      reply.status(404)
+      return { success: false, error: 'Visita não encontrada' }
+    }
+    return { success: true }
   })
 
   /* ---- NOTAS (comentários internos) ---- */

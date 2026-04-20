@@ -470,7 +470,128 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
-  // 15. Lista de calculadoras disponíveis (manifest)
+  // 15. Simulador Multi-Cenário (combinação de shocks preço/produtividade/Selic)
+  fastify.post('/api/credito/simulador-multi-cenario', async (request, reply) => {
+    try {
+      const body = request.body as {
+        saldoDevedor: number
+        taxaAnualBase: number
+        prazoMeses: number
+        exposicaoCommodity?: Array<{
+          commodity: string
+          areaHa: number
+          produtividade: number
+          precoReferencia: number
+        }>
+        cenarios?: Array<{
+          nome: string
+          shockPrecoPct?: number
+          shockProdutividadePct?: number
+          shockTaxaPp?: number
+        }>
+      }
+
+      if (!body.saldoDevedor || body.saldoDevedor <= 0) {
+        reply.status(400)
+        return { success: false, error: 'saldoDevedor obrigatório e > 0' }
+      }
+      if (!body.taxaAnualBase || body.taxaAnualBase <= 0) {
+        reply.status(400)
+        return { success: false, error: 'taxaAnualBase obrigatório e > 0' }
+      }
+      if (!body.prazoMeses || body.prazoMeses <= 0) {
+        reply.status(400)
+        return { success: false, error: 'prazoMeses obrigatório e > 0' }
+      }
+
+      const cenarios = body.cenarios?.length
+        ? body.cenarios
+        : [
+            { nome: 'otimista', shockPrecoPct: 10, shockProdutividadePct: 8, shockTaxaPp: -1 },
+            { nome: 'realista', shockPrecoPct: 0, shockProdutividadePct: 0, shockTaxaPp: 0 },
+            { nome: 'pessimista', shockPrecoPct: -20, shockProdutividadePct: -15, shockTaxaPp: 2 },
+            { nome: 'estresse', shockPrecoPct: -35, shockProdutividadePct: -25, shockTaxaPp: 4 },
+          ]
+
+      const exposicao = body.exposicaoCommodity || []
+      const receitaBaseAnual = exposicao.reduce(
+        (acc, e) => acc + e.areaHa * e.produtividade * e.precoReferencia,
+        0,
+      )
+
+      const resultados = cenarios.map((c) => {
+        const taxaCenario = body.taxaAnualBase + (c.shockTaxaPp ?? 0) / 100
+        const taxaMensal = Math.pow(1 + taxaCenario, 1 / 12) - 1
+        // Amortização PRICE (parcela fixa)
+        const parcela =
+          (body.saldoDevedor * taxaMensal) /
+          (1 - Math.pow(1 + taxaMensal, -body.prazoMeses))
+        const totalPago = parcela * body.prazoMeses
+        const juros = totalPago - body.saldoDevedor
+
+        // Receita ajustada pelos shocks
+        const fatorPreco = 1 + (c.shockPrecoPct ?? 0) / 100
+        const fatorProd = 1 + (c.shockProdutividadePct ?? 0) / 100
+        const receitaCenario = receitaBaseAnual * fatorPreco * fatorProd
+        const servicoAnualDivida = parcela * 12
+        const coberturaDSCR = receitaCenario > 0 ? receitaCenario / servicoAnualDivida : 0
+
+        // Classificação de risco
+        let classificacao: 'saudavel' | 'atencao' | 'critico' | 'insolvente'
+        if (coberturaDSCR >= 1.5) classificacao = 'saudavel'
+        else if (coberturaDSCR >= 1.2) classificacao = 'atencao'
+        else if (coberturaDSCR >= 1.0) classificacao = 'critico'
+        else classificacao = 'insolvente'
+
+        return {
+          nome: c.nome,
+          shocks: {
+            precoPct: c.shockPrecoPct ?? 0,
+            produtividadePct: c.shockProdutividadePct ?? 0,
+            taxaPp: c.shockTaxaPp ?? 0,
+          },
+          taxaAnualCenario: Number((taxaCenario * 100).toFixed(3)),
+          parcelaMensal: Number(parcela.toFixed(2)),
+          totalPago: Number(totalPago.toFixed(2)),
+          jurosTotais: Number(juros.toFixed(2)),
+          receitaAnualCenario: Number(receitaCenario.toFixed(2)),
+          servicoAnualDivida: Number(servicoAnualDivida.toFixed(2)),
+          dscr: Number(coberturaDSCR.toFixed(3)),
+          classificacao,
+        }
+      })
+
+      const realista = resultados.find((r) => r.nome === 'realista') || resultados[0]
+      const pessimista =
+        resultados.find((r) => r.nome === 'pessimista') || resultados[resultados.length - 1]
+
+      return {
+        success: true,
+        data: {
+          parametros: {
+            saldoDevedor: body.saldoDevedor,
+            taxaAnualBase: body.taxaAnualBase,
+            prazoMeses: body.prazoMeses,
+            receitaBaseAnual: Number(receitaBaseAnual.toFixed(2)),
+          },
+          cenarios: resultados,
+          resumo: {
+            dscrRealista: realista.dscr,
+            dscrPessimista: pessimista.dscr,
+            alertaInsolvencia: resultados.some((r) => r.classificacao === 'insolvente'),
+            alertaCritico: resultados.some((r) => r.classificacao === 'critico'),
+          },
+          fundamentacao:
+            'DSCR ≥ 1.5 indica saúde financeira. Entre 1.2-1.5 requer atenção. Abaixo de 1.0 indica insolvência no cenário. Base teórica: MCR 2-6-4 BCB, CMN 5.152/2024.',
+        },
+      }
+    } catch (err) {
+      reply.status(422)
+      return { success: false, error: (err as Error).message }
+    }
+  })
+
+  // 16. Lista de calculadoras disponíveis (manifest)
   fastify.get('/api/credito/calculadoras', async () => {
     return {
       success: true,

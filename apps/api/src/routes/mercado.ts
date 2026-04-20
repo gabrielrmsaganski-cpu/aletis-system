@@ -1038,4 +1038,103 @@ export default async function (fastify: FastifyInstance) {
       return { success: false, error: `Falha ao buscar safra para UF ${request.params.uf}` }
     }
   })
+
+  /* ------------------------------------------------------------------
+   *  BASIS REGIONAL + FRETE ESTIMADO
+   * ------------------------------------------------------------------
+   *  Calcula diferencial de preço (basis) entre praça de referência
+   *  (porto/CEPEA) e preço no interior, descontando custo de frete
+   *  estimado via tabela simplificada por UF de origem.
+   *
+   *  Uso típico: cliente em Sinop/MT querendo estimar preço líquido da
+   *  saca de soja no campo após frete até Paranaguá.
+   *
+   *  Fonte basis: CEPEA (quando disponível) ou FALLBACK.
+   *  Fonte frete: tabela estimativa ALETIS (R$/t por UF origem → destino),
+   *  baseada em médias setoriais 2024-2026 (ANTT/IMEA/ABIOVE).
+   * ------------------------------------------------------------------ */
+  fastify.get(
+    '/api/mercado/basis',
+    async (request: FastifyRequest<{ Querystring: { commodity?: string; ufOrigem?: string; destino?: string } }>) => {
+      const commodity = (request.query.commodity || 'soja').toLowerCase()
+      const ufOrigem = (request.query.ufOrigem || 'MT').toUpperCase()
+      const destino = (request.query.destino || 'paranagua').toLowerCase()
+
+      // Preço de referência (porto/praça principal) — fallback estático
+      const fallback = FALLBACK_CULTURAS[commodity]
+      if (!fallback) {
+        return { success: false, error: `Commodity "${commodity}" não suportada` }
+      }
+
+      // Tabela de frete R$/tonelada (estimativa baseada em médias 2024-2026)
+      // Pontos destino: paranagua, santos, itaqui
+      const TABELA_FRETE: Record<string, Record<string, number>> = {
+        paranagua: { MT: 380, MS: 220, GO: 310, MG: 280, SP: 150, PR: 80, RS: 280, BA: 520, MA: 680, TO: 490, RO: 720, PI: 620 },
+        santos:    { MT: 410, MS: 260, GO: 280, MG: 190, SP: 90,  PR: 200, RS: 340, BA: 450, MA: 640, TO: 470, RO: 740, PI: 560 },
+        itaqui:    { MT: 420, MS: 540, GO: 390, MG: 520, SP: 700, PR: 820, RS: 980, BA: 380, MA: 140, TO: 220, RO: 560, PI: 320 },
+      }
+
+      const freteRSporTon = TABELA_FRETE[destino]?.[ufOrigem]
+      if (freteRSporTon == null) {
+        return {
+          success: false,
+          error: `Rota ${ufOrigem}→${destino} não coberta pela tabela`,
+          suportado: { destinos: Object.keys(TABELA_FRETE), ufsOrigem: Object.keys(TABELA_FRETE.paranagua) },
+        }
+      }
+
+      // Conversão para saca 60kg (commodities grãos) ou arroba 15kg (boi/algodão)
+      const unidade = fallback.unidade.toLowerCase()
+      let freteUnidade = 0
+      let unidadeLabel = ''
+      if (unidade.includes('saca') || unidade.includes('60')) {
+        freteUnidade = freteRSporTon * 0.06 // 60 kg = 0.06 ton
+        unidadeLabel = 'R$/saca 60kg'
+      } else if (unidade.includes('arroba') || unidade.includes('@')) {
+        freteUnidade = freteRSporTon * 0.015
+        unidadeLabel = 'R$/arroba 15kg'
+      } else {
+        freteUnidade = freteRSporTon
+        unidadeLabel = 'R$/tonelada'
+      }
+
+      // Basis estimado = spread típico interior vs porto (negativo: interior < porto)
+      // Heurística setorial: soja/milho no cerrado ~ -8% a -15% do preço CBOT/porto.
+      const BASIS_TIPICO_PCT: Record<string, number> = {
+        soja: -0.10, milho: -0.12, algodao: -0.05, cafe: -0.03, boi: -0.04, arroz: -0.08, trigo: -0.06,
+      }
+      const basisPct = BASIS_TIPICO_PCT[commodity] ?? -0.10
+      const precoPorto = fallback.precoAtual
+      const basisAbsoluto = precoPorto * basisPct
+      const precoInteriorEstimado = precoPorto + basisAbsoluto
+      const precoLiquidoProdutor = precoInteriorEstimado - freteUnidade
+
+      return {
+        success: true,
+        data: {
+          commodity,
+          ufOrigem,
+          destino,
+          praçaReferencia: fallback.praca,
+          precoPorto,
+          basisPct: Number((basisPct * 100).toFixed(2)),
+          basisAbsoluto: Number(basisAbsoluto.toFixed(2)),
+          precoInteriorEstimado: Number(precoInteriorEstimado.toFixed(2)),
+          freteRSporTon,
+          freteUnidade: Number(freteUnidade.toFixed(2)),
+          unidade: unidadeLabel,
+          precoLiquidoProdutor: Number(precoLiquidoProdutor.toFixed(2)),
+          atualizacao: fallback.atualizacao,
+        },
+        meta: {
+          fontes: {
+            preco: fallback.fonte,
+            basis: 'Estimativa ALETIS (spread setorial 2024-2026)',
+            frete: 'Tabela estimativa ALETIS (ANTT/IMEA/ABIOVE 2024-2026)',
+          },
+          aviso: 'Valores estimados. Para fretes reais consulte transportadora. Basis varia por prêmio/deságio do contrato.',
+        },
+      }
+    },
+  )
 }

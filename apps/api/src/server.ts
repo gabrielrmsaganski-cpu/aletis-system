@@ -1,10 +1,9 @@
-import Fastify from 'fastify'
+import Fastify, { FastifyServerOptions } from 'fastify'
 import cors from '@fastify/cors'
 import { join, dirname } from 'path'
 import { readdirSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { createRequire } from 'module'
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -14,34 +13,33 @@ const PORT = Number(process.env.PORT) || 3001
 const HOST = process.env.HOST || '0.0.0.0'
 
 /** Probe for pino-pretty — optional dev dependency */
-function getLoggerTransport(): object | undefined {
-  if (process.env.NODE_ENV === 'production') return undefined
+function buildLoggerOptions(): FastifyServerOptions['logger'] {
+  const level = process.env.LOG_LEVEL || 'info'
+  if (process.env.NODE_ENV === 'production') return { level }
   try {
     require.resolve('pino-pretty')
-    return { target: 'pino-pretty', options: { colorize: true, translateTime: 'HH:MM:ss' } }
+    return {
+      level,
+      transport: { target: 'pino-pretty', options: { colorize: true, translateTime: 'HH:MM:ss' } },
+    }
   } catch {
-    return undefined
+    return { level }
   }
 }
 
-async function buildApp(): Promise<FastifyInstance> {
-  const fastify = Fastify({
-    logger: {
-      level: process.env.LOG_LEVEL || 'info',
-      transport: getLoggerTransport(),
-    },
-  })
+async function buildApp() {
+  const fastify = Fastify({ logger: buildLoggerOptions() })
 
   // --- CORS ---
   await fastify.register(cors, { origin: true, credentials: true })
 
   // --- Request logging hook ---
-  fastify.addHook('onRequest', async (request: FastifyRequest) => {
+  fastify.addHook('onRequest', async (request) => {
     request.log.info({ method: request.method, url: request.url }, 'incoming request')
   })
 
   // --- Global error handler ---
-  fastify.setErrorHandler((error, request: FastifyRequest, reply: FastifyReply) => {
+  fastify.setErrorHandler((error: Error & { statusCode?: number; code?: string }, request, reply) => {
     const statusCode = error.statusCode ?? 500
     request.log.error({ err: error, method: request.method, url: request.url }, 'request error')
 
@@ -55,7 +53,7 @@ async function buildApp(): Promise<FastifyInstance> {
   })
 
   // --- Not found handler ---
-  fastify.setNotFoundHandler((_request: FastifyRequest, reply: FastifyReply) => {
+  fastify.setNotFoundHandler((_request, reply) => {
     reply.status(404).send({
       success: false,
       error: 'Rota não encontrada',

@@ -220,7 +220,7 @@ export class WhatsAppService {
     const fd = new FormData()
     fd.append('messaging_product', 'whatsapp')
     fd.append('type', mimeType)
-    const blob = new Blob([audioBuffer], { type: mimeType })
+    const blob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType })
     fd.append('file', blob, 'voice.ogg')
 
     const res = await fetch(url, {

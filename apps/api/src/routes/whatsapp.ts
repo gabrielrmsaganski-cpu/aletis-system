@@ -83,7 +83,7 @@ export default async function whatsappRoutes(fastify: FastifyInstance): Promise<
     reply.status(200).send({ success: true })
 
     try {
-      const payload = request.body
+      const payload = request.body as Parameters<NonNullable<typeof wa>['parseInbound']>[0]
       const messages = wa!.parseInbound(payload)
       if (messages.length === 0) return
 
