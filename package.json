@@ -14,6 +14,6 @@
     "test": "turbo run test",
     "dev:web": "pnpm --filter @aletis/web dev",
     "dev:api": "pnpm --filter @aletis/api dev",
-    "dev:portal": "pnpm --filter @aletis/portal-client dev"
+    "typecheck": "turbo run typecheck"
   }
 }
