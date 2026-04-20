@@ -1048,24 +1048,55 @@ function CardEnquadramento() {
 // 8. Dacao em Pagamento
 // ════════════════════════════════════════════════════════════
 type DacaoResult = {
-  valorAvaliacaoBem: number
-  desagioAplicado: number
-  valorAceito: number
-  custosTransferencia: number
-  economiaFinanceira: number
-  prazoEstimadoConclusao: string
-  viabilidadeJuridica: 'alta' | 'media' | 'baixa'
-  requisitos: string[]
+  saldoDevedor: number
+  valorTotalBens: number
+  valorAposDesagio: number
+  custosTransacao: number
+  valorLiquidoCredor: number
+  suficiente: boolean
+  saldoRemanescente: number
+  propostaLiquidacaoParcial: string
   fundamentacao: string
+  detalhamento: Array<{ bem: string; valorAvaliacao: number; participacao: number }>
+}
+
+type TipoBem = 'imovel_rural' | 'imovel_urbano' | 'maquinario' | 'semovente' | 'cota_cooperativa'
+
+// Deságio típico de mercado em acordos extrajudiciais por liquidez do bem
+const DESAGIO_POR_LIQUIDEZ: Record<'alta' | 'media' | 'baixa', number> = {
+  alta: 8,
+  media: 18,
+  baixa: 30,
+}
+
+// ITBI (2%) + cartório/matrícula (~2%) para imóveis; móveis usam custo menor
+const CUSTOS_TRANSACAO_PCT: Record<TipoBem, number> = {
+  imovel_rural: 4,
+  imovel_urbano: 4,
+  maquinario: 1.5,
+  semovente: 1,
+  cota_cooperativa: 0.5,
 }
 
 function CardDacao() {
   const [divida, setDivida] = useState('521285')
   const [valorBem, setValorBem] = useState('521285')
-  const [tipo, setTipo] = useState<'imovel_rural' | 'imovel_urbano' | 'maquinario' | 'semovente' | 'cota_cooperativa'>('imovel_rural')
+  const [descricaoBem, setDescricaoBem] = useState('')
+  const [tipo, setTipo] = useState<TipoBem>('imovel_rural')
   const [liquidez, setLiquidez] = useState<'alta' | 'media' | 'baixa'>('alta')
   const [aceitaDacao, setAceitaDacao] = useState(true)
   const [result, setResult] = useState<DacaoResult | null>(null)
+
+  const defaultDescricao = () => {
+    const labels: Record<TipoBem, string> = {
+      imovel_rural: 'Imóvel rural ofertado em dação',
+      imovel_urbano: 'Imóvel urbano ofertado em dação',
+      maquinario: 'Maquinário ofertado em dação',
+      semovente: 'Semoventes ofertados em dação',
+      cota_cooperativa: 'Cota de cooperativa ofertada em dação',
+    }
+    return labels[tipo]
+  }
 
   return (
     <PremiumCalculatorCard
@@ -1079,14 +1110,21 @@ function CardDacao() {
           <form
             onSubmit={async e => {
               e.preventDefault()
+              const saldoDevedor = Number(divida)
+              const valorAvaliacao = Number(valorBem)
+              if (!Number.isFinite(saldoDevedor) || saldoDevedor <= 0) return
+              if (!Number.isFinite(valorAvaliacao) || valorAvaliacao <= 0) return
               const r = await execute<DacaoResult>('/credito/dacao-pagamento', {
-                dividaAtual: Number(divida),
-                bem: {
-                  tipo,
-                  valorAvaliacao: Number(valorBem),
-                  liquidezDeMercado: liquidez,
-                },
-                credorAceitaDacao: aceitaDacao,
+                saldoDevedor,
+                bensOferecidos: [
+                  {
+                    descricao: descricaoBem.trim() || defaultDescricao(),
+                    tipo,
+                    valorAvaliacao,
+                  },
+                ],
+                desagioCredorPct: DESAGIO_POR_LIQUIDEZ[liquidez],
+                custosTransacaoPct: CUSTOS_TRANSACAO_PCT[tipo],
               })
               if (r) setResult(r)
             }}
@@ -1094,10 +1132,11 @@ function CardDacao() {
           >
             <Input label="Dívida atual" value={divida} onChange={setDivida} suffix="R$" />
             <Input label="Valor avaliação bem" value={valorBem} onChange={setValorBem} suffix="R$" />
+            <Input label="Descrição do bem" value={descricaoBem} onChange={setDescricaoBem} />
             <Select
               label="Tipo do bem"
               value={tipo}
-              onChange={v => setTipo(v as typeof tipo)}
+              onChange={v => setTipo(v as TipoBem)}
               options={[
                 { value: 'imovel_rural', label: 'Imóvel rural' },
                 { value: 'imovel_urbano', label: 'Imóvel urbano' },
@@ -1111,9 +1150,9 @@ function CardDacao() {
               value={liquidez}
               onChange={v => setLiquidez(v as typeof liquidez)}
               options={[
-                { value: 'alta', label: 'Alta' },
-                { value: 'media', label: 'Média' },
-                { value: 'baixa', label: 'Baixa' },
+                { value: 'alta', label: `Alta (deságio ${DESAGIO_POR_LIQUIDEZ.alta}%)` },
+                { value: 'media', label: `Média (deságio ${DESAGIO_POR_LIQUIDEZ.media}%)` },
+                { value: 'baixa', label: `Baixa (deságio ${DESAGIO_POR_LIQUIDEZ.baixa}%)` },
               ]}
             />
             <label className="flex items-center gap-2 text-xs font-body text-aletis-grafite-medio col-span-2 lg:col-span-1">
@@ -1128,28 +1167,94 @@ function CardDacao() {
           {result && (
             <div className="mt-5 space-y-3">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <Metric label="Valor aceito" value={fmtBRL(result.valorAceito)} variant="gold" />
-                <Metric label="Deságio aplicado" value={fmtPct(result.desagioAplicado)} variant="alert" />
-                <Metric label="Custos transferência" value={fmtBRL(result.custosTransferencia)} />
-                <Metric label="Economia financeira" value={fmtBRL(result.economiaFinanceira)} variant="positive" />
-                <Metric label="Prazo conclusão" value={result.prazoEstimadoConclusao} />
+                <Metric label="Saldo devedor" value={fmtBRL(result.saldoDevedor)} />
+                <Metric label="Valor avaliação" value={fmtBRL(result.valorTotalBens)} variant="gold" />
                 <Metric
-                  label="Viabilidade jurídica"
-                  value={result.viabilidadeJuridica.toUpperCase()}
-                  variant={result.viabilidadeJuridica === 'alta' ? 'positive' : result.viabilidadeJuridica === 'media' ? 'gold' : 'alert'}
+                  label="Deságio aplicado"
+                  value={fmtPct(DESAGIO_POR_LIQUIDEZ[liquidez])}
+                  variant="alert"
+                />
+                <Metric label="Valor pós-deságio" value={fmtBRL(result.valorAposDesagio)} />
+                <Metric label="Custos transação" value={fmtBRL(result.custosTransacao)} />
+                <Metric
+                  label="Valor líquido ao credor"
+                  value={fmtBRL(result.valorLiquidoCredor)}
+                  variant={result.suficiente ? 'positive' : 'alert'}
+                />
+                <Metric
+                  label={result.suficiente ? 'Sobra devedor' : 'Saldo remanescente'}
+                  value={fmtBRL(
+                    result.suficiente
+                      ? result.valorLiquidoCredor - result.saldoDevedor
+                      : result.saldoRemanescente,
+                  )}
+                  variant={result.suficiente ? 'positive' : 'alert'}
+                />
+                <Metric
+                  label="Viabilidade"
+                  value={
+                    result.suficiente && aceitaDacao
+                      ? 'ALTA'
+                      : result.suficiente
+                      ? 'MÉDIA'
+                      : aceitaDacao
+                      ? 'MÉDIA'
+                      : 'BAIXA'
+                  }
+                  variant={
+                    result.suficiente && aceitaDacao
+                      ? 'positive'
+                      : !result.suficiente && !aceitaDacao
+                      ? 'alert'
+                      : 'gold'
+                  }
                 />
               </div>
-              {result.requisitos.length > 0 && (
+
+              <div
+                className={`rounded-lg p-3 border ${
+                  result.suficiente
+                    ? 'bg-aletis-verde/5 border-aletis-verde/20'
+                    : 'bg-amber-50 border-amber-200'
+                }`}
+              >
+                <p
+                  className={`text-[10px] uppercase tracking-wide mb-1 ${
+                    result.suficiente ? 'text-aletis-verde' : 'text-amber-700'
+                  }`}
+                >
+                  Proposta de liquidação
+                </p>
+                <p className="text-xs font-body text-aletis-grafite-escuro">
+                  {result.propostaLiquidacaoParcial}
+                </p>
+              </div>
+
+              {result.detalhamento.length > 1 && (
                 <div className="rounded-lg bg-aletis-bege p-3 border border-aletis-grafite-claro/10">
-                  <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-claro mb-1">Requisitos</p>
-                  <ul className="text-xs font-body text-aletis-grafite-escuro list-disc list-inside space-y-0.5">
-                    {result.requisitos.map((r, i) => <li key={i}>{r}</li>)}
+                  <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-claro mb-1">
+                    Detalhamento dos bens
+                  </p>
+                  <ul className="text-xs font-body text-aletis-grafite-escuro space-y-0.5">
+                    {result.detalhamento.map((d, i) => (
+                      <li key={i} className="flex justify-between gap-2">
+                        <span className="truncate">{d.bem}</span>
+                        <span className="font-mono tabular-nums whitespace-nowrap">
+                          {fmtBRL(d.valorAvaliacao)} · {d.participacao}%
+                        </span>
+                      </li>
+                    ))}
                   </ul>
                 </div>
               )}
-              <div className="rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
-                <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Fundamentação</p>
-                <p className="text-xs font-body text-aletis-grafite-escuro">{result.fundamentacao}</p>
+
+              <div className="rounded-lg bg-aletis-grafite-escuro/5 border border-aletis-grafite-escuro/10 p-3">
+                <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-medio mb-1">
+                  Fundamentação
+                </p>
+                <pre className="text-[11px] font-body text-aletis-grafite-escuro whitespace-pre-wrap leading-relaxed">
+                  {result.fundamentacao}
+                </pre>
               </div>
             </div>
           )}
