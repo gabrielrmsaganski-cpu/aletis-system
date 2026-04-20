@@ -21,20 +21,38 @@ aletis-system/
     └── knowledge-base/   Súmulas STJ, MCR, Plano Safra 2025/26, Proagro, precedentes
 ```
 
-## Data Sources (LIVE)
+## Data Sources (LIVE — 32 fontes registradas)
 
 Arquitetura: **TRY REAL API → CACHE (node-cache) → FALLBACK** — nunca quebra.
+Cada resposta inclui `fonteOrigem` (`api | cache | fallback`); o badge `DataSourceBadge` no frontend exibe origem + timestamp + qualidade.
 
-- **BCB SGS** — Selic (432), IPCA (433), IGP-M (189), CDI (12), Crédito Rural (25469)
-- **BCB OLINDA** — Dólar PTAX
-- **CEPEA/ESALQ** — cotações de commodities (soja, milho, boi, café, algodão)
-- **INMET / OpenMeteo / NASA POWER** — clima e dados agrometeorológicos
-- **CONAB** — safra e preços
-- **IBGE SIDRA / LSPA** — produção agrícola
-- **SICOR** — crédito rural operacional
-- **NASA FIRMS** — focos de calor
+**Macroeconomia (BCB)** — 11 fontes, todas públicas sem chave:
+`bcb_selic` · `bcb_ipca` · `bcb_igpm` · `bcb_dolar_ptax` · `bcb_cdi` · `bcb_credito_rural` · `bcb_expectativas` (Focus) · `bcb_icbr_agro` · `bcb_icbr_energia` · `bcb_icbr_metal` · `bcb_embi` · `bcb_sicor`
 
-`DataSourceManager` é o orquestrador singleton. Todas as respostas incluem `fonteOrigem` (`api | cache | fallback`) e o badge `DataSourceBadge` exibe origem + timestamp + qualidade no frontend.
+**Commodities (CEPEA/ESALQ via NoticiasAgricolas + fallback AgroLink + CEPEA direto via Cloudflare bypass)** — 5 fontes:
+`cepea_soja` · `cepea_milho` · `cepea_boi` · `cepea_cafe` · `cepea_algodao`
+
+**Clima e agrometeorologia** — 4 fontes:
+`inmet_estacao` · `cptec_previsao` · `nasa_power` · `openmeteo_forecast`
+
+**IBGE (demografia, produção, fundiária)** — 4 fontes:
+`ibge_municipios` · `ibge_producao_agricola` (SIDRA) · `ibge_estrutura_fundiaria` · `ibge_lspa`
+
+**Combustíveis (ANP)** — 2 fontes: `anp_diesel` · `anp_etanol`
+
+**Safra & produção (CONAB)** — 2 fontes: `conab_safra` · `conab_precos`
+
+**Outras** — 4 fontes:
+`awesome_cambio` (Awesome API — câmbio turbinado) · `nasa_firms` (focos de calor) · `comexstat_exportacao` (MDIC) · `sicar` (CAR via shapefile local)
+
+### Fontes que exigem bypass
+- **CEPEA direto** — site protegido por Cloudflare Managed Challenge. Solução implementada: `apps/api/src/services/captcha/CloudflareBypass.ts` (Puppeteer + stealth) + fallback para **NoticiasAgricolas** (republicador CEPEA sem proteção) como fonte primária. Resultado: 5/5 cotações online em <600ms.
+- **SICAR / Receita Federal** — Turnstile/hCaptcha resolvíveis via **2captcha** (`TWOCAPTCHA_API_KEY` em `.env`; custo ~$1.50-$2 por 1000 captchas).
+
+### Observabilidade das fontes
+- `POST /api/fontes/probe` — dispara sondagem real de todas as fontes (timeout 4s, concorrência 6)
+- `GET /api/fontes/status` — retorna estado (`online | degraded | offline`) + latência + último erro
+- Scheduler automático: sonda 15s após boot e a cada 10 minutos. Dashboard `/fontes` consome isso em tempo real.
 
 ## Calculadoras de Crédito (20 totais)
 
