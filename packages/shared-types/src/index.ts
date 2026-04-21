@@ -3,10 +3,10 @@
 // ============================================================
 
 // ── Dossiê Agro (padrão Daycoval 2025) ────────────────────
-export * from './dossie-agro';
+export * from './dossie-agro.js';
 
 // ── Plano Simples de Custeio Agrícola 2026 ────────────────
-export * from './custeio';
+export * from './custeio.js';
 
 // ── Auth & Users ──────────────────────────────────────────
 export type UserRole = 'admin' | 'consultor_senior' | 'consultor_junior' | 'cliente';

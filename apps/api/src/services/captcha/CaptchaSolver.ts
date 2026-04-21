@@ -122,17 +122,24 @@ export class CaptchaSolver {
   private readonly baseUrl: string
 
   constructor(config: CaptchaSolverConfig) {
-    if (!config.apiKey) {
-      throw new CaptchaSolverError('NO_KEY', 'TWOCAPTCHA_API_KEY não configurada')
-    }
-    this.apiKey = config.apiKey
+    // Não lançamos erro se a key estiver ausente — assim o módulo carrega
+    // normalmente em dev sem 2captcha configurado. Cada método de solve
+    // verifica a key em runtime via `ensureKey()`.
+    this.apiKey = config.apiKey ?? ''
     this.timeoutMs = config.timeoutMs ?? 120_000
     this.pollIntervalMs = config.pollIntervalMs ?? 5_000
     this.baseUrl = config.baseUrl ?? 'https://2captcha.com'
   }
 
+  private ensureKey(): void {
+    if (!this.apiKey) {
+      throw new CaptchaSolverError('NO_KEY', 'TWOCAPTCHA_API_KEY não configurada')
+    }
+  }
+
   /** Consulta o saldo (USD) restante da conta. */
   async getBalance(): Promise<number> {
+    this.ensureKey()
     const { data } = await axios.get(`${this.baseUrl}/res.php`, {
       params: { key: this.apiKey, action: 'getbalance', json: 1 },
       timeout: 15_000,
@@ -250,6 +257,7 @@ export class CaptchaSolver {
   // ─── Internal ───────────────────────────────────────────
 
   private async submitAndPoll(params: Record<string, any>, kind: string): Promise<CaptchaSolution> {
+    this.ensureKey()
     const t0 = Date.now()
 
     // 1. Submit

@@ -97,22 +97,27 @@ async function buildApp() {
   })
 
   // --- Auto-register route modules ---
+  // Per-file try/catch: one bad module should not skip the rest.
   const routesDir = join(__dirname, 'routes')
+  let files: string[] = []
   try {
-    const files = readdirSync(routesDir)
-    for (const file of files) {
-      if (file.endsWith('.ts') || file.endsWith('.js')) {
-        const modulePath = join(routesDir, file)
-        const routeModule = await import(modulePath)
-        const handler = routeModule.default || routeModule
-        if (typeof handler === 'function') {
-          await fastify.register(handler)
-          fastify.log.info(`Route module registered: ${file}`)
-        }
-      }
-    }
+    files = readdirSync(routesDir)
   } catch (err) {
-    fastify.log.warn({ err }, 'Could not auto-load routes directory')
+    fastify.log.error({ err }, 'Could not read routes directory')
+  }
+  for (const file of files) {
+    if (!file.endsWith('.ts') && !file.endsWith('.js')) continue
+    const modulePath = join(routesDir, file)
+    try {
+      const routeModule = await import(modulePath)
+      const handler = routeModule.default || routeModule
+      if (typeof handler === 'function') {
+        await fastify.register(handler)
+        fastify.log.info(`Route module registered: ${file}`)
+      }
+    } catch (err) {
+      fastify.log.error({ err, file }, `Failed to load route module: ${file}`)
+    }
   }
 
   return fastify
