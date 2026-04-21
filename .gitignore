@@ -74,3 +74,6 @@ apps/api/storage/prospeccao/leads-agro-summary.json
 apps/api/storage/prospeccao/sicar-imoveis.json
 apps/api/storage/prospeccao/enriched/
 apps/api/storage/prospeccao/blacklist.json
+
+# Financeiro runtime data (db.json + anexos + fechamentos gerados)
+apps/api/storage/financeiro/

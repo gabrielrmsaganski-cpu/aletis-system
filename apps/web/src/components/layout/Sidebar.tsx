@@ -25,6 +25,7 @@ import {
   ChevronRight,
   LogOut,
   Target,
+  DollarSign,
 } from 'lucide-react'
 
 interface NavItem {
@@ -67,6 +68,7 @@ const navSections: NavSection[] = [
   {
     header: 'GESTÃO',
     items: [
+      { label: 'Financeiro', path: '/financeiro', icon: DollarSign },
       { label: 'Relatórios', path: '/relatorios', icon: BarChart3 },
       { label: 'Configurações', path: '/configuracoes', icon: Settings },
     ],

@@ -26,6 +26,7 @@ const Relatorios = lazy(() => import('./pages/Relatorios'))
 const Configuracoes = lazy(() => import('./pages/Configuracoes'))
 const ALIX = lazy(() => import('./pages/ALIX'))
 const Prospeccao = lazy(() => import('./pages/Prospeccao'))
+const Financeiro = lazy(() => import('./pages/Financeiro'))
 
 function RouteFallback() {
   return (
@@ -65,6 +66,7 @@ export default function App() {
                 <Route path="/whatsapp" element={<WhatsApp />} />
                 <Route path="/ia" element={<ALIX />} />
                 <Route path="/prospeccao" element={<Prospeccao />} />
+                <Route path="/financeiro" element={<Financeiro />} />
                 <Route path="/relatorios" element={<Relatorios />} />
                 <Route path="/clima" element={<Clima />} />
                 <Route path="/configuracoes" element={<Configuracoes />} />

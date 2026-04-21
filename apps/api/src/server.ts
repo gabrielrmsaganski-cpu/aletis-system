@@ -1,6 +1,7 @@
 import Fastify, { FastifyServerOptions } from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
+import multipart from '@fastify/multipart'
 import { join, dirname } from 'path'
 import { readdirSync } from 'fs'
 import { fileURLToPath } from 'url'
@@ -38,6 +39,14 @@ async function buildApp() {
   await fastify.register(jwt, {
     secret: process.env.JWT_SECRET || 'aletis-portal-dev-secret-change-me-in-prod',
     sign: { expiresIn: '12h' },
+  })
+
+  // --- Multipart (uploads de NF, comprovantes, OFX, etc) ---
+  await fastify.register(multipart, {
+    limits: {
+      fileSize: 25 * 1024 * 1024, // 25 MB por arquivo
+      files: 10,
+    },
   })
 
   // --- Request logging hook ---

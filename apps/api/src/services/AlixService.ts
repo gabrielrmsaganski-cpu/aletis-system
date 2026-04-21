@@ -122,6 +122,13 @@ type Intent =
   | { tipo: 'sazonalidade'; commodity: string }
   | { tipo: 'contratos_tipos' }
   | { tipo: 'contrato_orientacao'; tipoContrato: string }
+  // Financeiro interno
+  | { tipo: 'fin_dashboard' }
+  | { tipo: 'fin_faturamento_mes'; competencia?: string }
+  | { tipo: 'fin_despesas_mes'; competencia?: string }
+  | { tipo: 'fin_das_previsto'; competencia?: string }
+  | { tipo: 'fin_inadimplencia' }
+  | { tipo: 'fin_fechamento_contador'; competencia?: string }
   | { tipo: 'generico' };
 
 // ── Intent classifier ────────────────────────────────────────
@@ -142,6 +149,31 @@ function classify(input: string): Intent {
   // Brief / panorama do mercado
   if (/(panorama|brief|resumo).*(mercado|hoje|dia|dia de hoje)|^(?:como (?:esta|está)|como anda).*mercado|mercado.*hoje|resumo do dia/.test(q)) {
     return { tipo: 'market_brief' };
+  }
+
+  // Financeiro interno do negócio — antes de intents mais genéricas
+  // para evitar que "das" e "fechamento" sejam absorvidos por sumula/plano.
+  const competenciaMatch = q.match(/(\d{4})-(\d{2})|(\d{2})\/(\d{4})/);
+  const compDetectada = competenciaMatch
+    ? (competenciaMatch[1] ? `${competenciaMatch[1]}-${competenciaMatch[2]}` : `${competenciaMatch[4]}-${competenciaMatch[3]}`)
+    : undefined;
+  if (/(fechamento.*(contador|mes|mensal)|pacote.*contador|enviar.*contador|zip.*contador|fechar.*(mes|mensal))/.test(q)) {
+    return { tipo: 'fin_fechamento_contador', competencia: compDetectada };
+  }
+  if (/(faturamento.*(mes|mensal|atual)|receita.*(mes|do mes|desse mes|este mes)|quanto.*fatu(?:rei|rou)|receita bruta.*mes)/.test(q)) {
+    return { tipo: 'fin_faturamento_mes', competencia: compDetectada };
+  }
+  if (/(despesas?.*(mes|mensal|atual|do mes|desse mes)|quanto.*gastei.*mes|gastos.*mes|custos.*mes)/.test(q)) {
+    return { tipo: 'fin_despesas_mes', competencia: compDetectada };
+  }
+  if (/(\bdas\b.*(previsto|do mes|proximo|calcul)|quanto.*das|simples nacional.*(mes|proximo)|imposto.*simples)/.test(q)) {
+    return { tipo: 'fin_das_previsto', competencia: compDetectada };
+  }
+  if (/(inadimpl|contas.*(atrasad|vencid)|receb.*atrasad|honorarios?.*atrasad|quem.*nao pagou)/.test(q)) {
+    return { tipo: 'fin_inadimplencia' };
+  }
+  if (/(dashboard.*financ|kpi.*financ|resumo.*financ|painel.*financ|situacao.*financ|saude.*financ)/.test(q)) {
+    return { tipo: 'fin_dashboard' };
   }
 
   // Sazonalidade (quando vender / quando segurar)
@@ -504,6 +536,13 @@ export class AlixService {
       case 'sazonalidade': return this.sazonalidade(intent.commodity);
       case 'contratos_tipos': return this.contratosTipos();
       case 'contrato_orientacao': return this.contratoOrientacao(intent.tipoContrato);
+
+      case 'fin_dashboard': return this.finDashboard();
+      case 'fin_faturamento_mes': return this.finFaturamentoMes(intent.competencia);
+      case 'fin_despesas_mes': return this.finDespesasMes(intent.competencia);
+      case 'fin_das_previsto': return this.finDasPrevisto(intent.competencia);
+      case 'fin_inadimplencia': return this.finInadimplencia();
+      case 'fin_fechamento_contador': return this.finFechamentoContador(intent.competencia);
 
       case 'generico':
       default:
@@ -1160,6 +1199,156 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
       sources: ['ContratoGenerator'],
       toolsUsed: ['ContratoGenerator.listarTipos'],
     };
+  }
+
+  // ── Financeiro interno ─────────────────────────────────
+
+  private async finDashboard(): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    try {
+      const { getFinanceiroService } = await import('./financeiro/FinanceiroService.js');
+      const d = getFinanceiroService().calcularDashboard();
+      const topCats = d.topCategoriasDespesa.slice(0, 3).map((c) => `• ${c.nome}: ${fmtBRL(c.valor)} (${fmtNum(c.pct, 1)}%)`).join('\n');
+      const content = `**Painel financeiro — ${d.mesAtual}**\n\n` +
+        `• Receita do mês: ${fmtBRL(d.dreAtual.receitaBruta)} (${d.dreAtual.contagens.receitas} receitas)\n` +
+        `• Despesas + impostos: ${fmtBRL(d.dreAtual.totalDespesas + d.dreAtual.impostosApurados)}\n` +
+        `• Resultado líquido: **${fmtBRL(d.dreAtual.resultadoLiquido)}** (margem ${fmtNum(d.dreAtual.margemLiquida, 1)}%)\n` +
+        `• RBT12: ${fmtBRL(d.rbt12)} (${fmtNum((d.rbt12 / 4_800_000) * 100, 1)}% do limite Simples)\n` +
+        `• A receber: ${fmtBRL(d.contasReceber.total)} (atrasadas: ${fmtBRL(d.contasReceber.atrasadas)})\n` +
+        `• A pagar: ${fmtBRL(d.contasPagar.total)} (atrasadas: ${fmtBRL(d.contasPagar.atrasadas)})\n` +
+        (d.dasProximo ? `• DAS previsto: ${fmtBRL(d.dasProximo.valorDAS)} — vence ${d.dasProximo.vencimento}\n` : '') +
+        (topCats ? `\n**Top categorias de despesa (3 meses):**\n${topCats}` : '') +
+        (d.alertas.length ? `\n\n**Alertas ativos:** ${d.alertas.length}\n${d.alertas.slice(0, 3).map((a) => `• ${a.titulo}`).join('\n')}` : '');
+      return { content, sources: ['financeiro:db'], toolsUsed: ['FinanceiroService.calcularDashboard'] };
+    } catch (err: any) {
+      return { content: `Erro ao ler financeiro: ${err.message}`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private async finFaturamentoMes(comp?: string): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    try {
+      const { getFinanceiroService } = await import('./financeiro/FinanceiroService.js');
+      const svc = getFinanceiroService();
+      const competencia = comp ?? new Date().toISOString().slice(0, 7);
+      const dre = svc.calcularDREMensal(competencia);
+      const receitas = svc.listarReceitas({ competencia });
+      const recebido = receitas.filter((r) => r.status === 'recebida').reduce((s, r) => s + r.valorLiquido, 0);
+      const aReceber = receitas.filter((r) => r.status !== 'recebida' && r.status !== 'cancelada').reduce((s, r) => s + r.valorLiquido, 0);
+      const content = `**Faturamento — ${competencia}**\n\n` +
+        `• Receita bruta: **${fmtBRL(dre.receitaBruta)}** (${dre.contagens.receitas} NF/receita)\n` +
+        `• Retenções: ${fmtBRL(dre.retencoes)}\n` +
+        `• Receita líquida: ${fmtBRL(dre.receitaLiquida)}\n` +
+        `• Já recebido: ${fmtBRL(recebido)}\n` +
+        `• Ainda a receber: ${fmtBRL(aReceber)}\n\n` +
+        (receitas.length > 0 ? `**Maiores receitas:**\n${receitas.slice(0, 5).map((r) => `• ${r.cliente?.nome ?? r.descricao} — ${fmtBRL(r.valorBruto)} [${r.status}]`).join('\n')}` : '_Nenhuma receita no período._');
+      return { content, sources: ['financeiro:db'], toolsUsed: ['FinanceiroService.calcularDREMensal'] };
+    } catch (err: any) {
+      return { content: `Erro: ${err.message}`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private async finDespesasMes(comp?: string): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    try {
+      const { getFinanceiroService } = await import('./financeiro/FinanceiroService.js');
+      const svc = getFinanceiroService();
+      const competencia = comp ?? new Date().toISOString().slice(0, 7);
+      const dre = svc.calcularDREMensal(competencia);
+      const categorias = Object.entries(dre.despesasPorCategoria)
+        .filter(([, v]) => v > 0)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8);
+      const content = `**Despesas — ${competencia}**\n\n` +
+        `• Total: **${fmtBRL(dre.totalDespesas)}** (${dre.contagens.despesas} lançamentos)\n` +
+        `• Dedutíveis: ${fmtBRL(dre.despesasDedutiveis)}\n` +
+        `• Não-dedutíveis: ${fmtBRL(dre.despesasNaoDedutiveis)}\n` +
+        `• Impostos apurados: ${fmtBRL(dre.impostosApurados)}\n\n` +
+        (categorias.length > 0 ? `**Por categoria:**\n${categorias.map(([cat, v]) => `• ${cat.replace(/_/g, ' ')}: ${fmtBRL(v as number)}`).join('\n')}` : '_Nenhuma despesa no período._');
+      return { content, sources: ['financeiro:db'], toolsUsed: ['FinanceiroService.calcularDREMensal'] };
+    } catch (err: any) {
+      return { content: `Erro: ${err.message}`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private async finDasPrevisto(comp?: string): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    try {
+      const { getFinanceiroService } = await import('./financeiro/FinanceiroService.js');
+      const { calcularDAS, alertaLimiteSimples } = await import('./financeiro/simples-nacional.js');
+      const svc = getFinanceiroService();
+      const competencia = comp ?? new Date().toISOString().slice(0, 7);
+      const config = svc.getConfig();
+      const receita = svc.receitaBrutaMes(competencia);
+      const rbt12 = svc.calcularRBT12(competencia);
+      if (receita <= 0) {
+        return {
+          content: `Sem receita bruta em ${competencia} — DAS dispensado. RBT12 acumulado: ${fmtBRL(rbt12)}.`,
+          sources: ['financeiro:db'],
+          toolsUsed: ['FinanceiroService.receitaBrutaMes'],
+        };
+      }
+      const calc = calcularDAS(receita, rbt12, config.anexoSimples, competencia);
+      const alerta = alertaLimiteSimples(rbt12);
+      const content = `**DAS previsto — ${competencia} (Anexo ${config.anexoSimples})**\n\n` +
+        `• Receita do mês: ${fmtBRL(calc.receitaBrutaMes)}\n` +
+        `• RBT12: ${fmtBRL(calc.rbt12)} (${fmtNum((rbt12 / 4_800_000) * 100, 1)}% do limite)\n` +
+        `• Faixa: ${calc.faixa} — alíquota nominal ${fmtNum(calc.aliquotaNominal, 2)}%, PD ${fmtBRL(calc.valorDeduzir)}\n` +
+        `• **Alíquota efetiva: ${fmtNum(calc.aliquotaEfetiva, 4)}%**\n` +
+        `• **Valor DAS: ${fmtBRL(calc.valorDAS)}**\n` +
+        `• Vencimento: ${calc.vencimento}\n\n` +
+        `**Partilha:** IRPJ ${fmtBRL(calc.detalhamentoPartilha.irpj)} · CSLL ${fmtBRL(calc.detalhamentoPartilha.csll)} · COFINS ${fmtBRL(calc.detalhamentoPartilha.cofins)} · PIS ${fmtBRL(calc.detalhamentoPartilha.pis)} · CPP ${fmtBRL(calc.detalhamentoPartilha.cpp)} · ISS ${fmtBRL(calc.detalhamentoPartilha.iss)}` +
+        (alerta.nivel !== 'ok' ? `\n\n⚠️ ${alerta.mensagem}` : '');
+      return { content, sources: ['financeiro:db', 'LC 123/2006'], toolsUsed: ['calcularDAS'] };
+    } catch (err: any) {
+      return { content: `Erro: ${err.message}`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private async finInadimplencia(): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    try {
+      const { getFinanceiroService } = await import('./financeiro/FinanceiroService.js');
+      const svc = getFinanceiroService();
+      const atrasadas = svc.listarReceitas({ status: 'atrasada' });
+      if (atrasadas.length === 0) {
+        return { content: 'Sem receitas atrasadas. ✅', sources: ['financeiro:db'], toolsUsed: ['FinanceiroService.listarReceitas'] };
+      }
+      const total = atrasadas.reduce((s, r) => s + r.valorLiquido, 0);
+      const hoje = new Date().toISOString().slice(0, 10);
+      const lista = atrasadas
+        .sort((a, b) => (a.dataPrevisaoRecebimento ?? '').localeCompare(b.dataPrevisaoRecebimento ?? ''))
+        .slice(0, 10)
+        .map((r) => {
+          const dias = r.dataPrevisaoRecebimento
+            ? Math.round((new Date(hoje).getTime() - new Date(r.dataPrevisaoRecebimento).getTime()) / 86400000)
+            : 0;
+          return `• ${r.cliente?.nome ?? r.descricao}: ${fmtBRL(r.valorLiquido)} (${dias}d atrasado — vencia ${r.dataPrevisaoRecebimento ?? '-'})`;
+        })
+        .join('\n');
+      return {
+        content: `**${atrasadas.length} receita(s) atrasadas** — total ${fmtBRL(total)}:\n\n${lista}\n\nConsidere cobrança ou renegociação para desbloquear caixa.`,
+        sources: ['financeiro:db'],
+        toolsUsed: ['FinanceiroService.listarReceitas'],
+      };
+    } catch (err: any) {
+      return { content: `Erro: ${err.message}`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private async finFechamentoContador(comp?: string): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    try {
+      const { getFinanceiroService } = await import('./financeiro/FinanceiroService.js');
+      const svc = getFinanceiroService();
+      const competencia = comp ?? new Date().toISOString().slice(0, 7);
+      const checklist = svc.gerarChecklistFechamento(competencia);
+      const pendencias = checklist.itens.filter((i) => !i.ok);
+      const content = `**Fechamento para o contador — ${competencia}**\n\n` +
+        `Status: ${checklist.pronto ? '✅ **PRONTO PARA ENVIO**' : `⚠️ ${pendencias.length} pendência(s)`}\n\n` +
+        checklist.itens.map((i) => `${i.ok ? '✅' : '○'} **${i.titulo}** — ${i.detalhe}`).join('\n') +
+        `\n\n**Como gerar o pacote:**\n` +
+        `• Acesse a aba "Fechamento" em /financeiro e clique em "Baixar ZIP completo"\n` +
+        `• Via API: \`POST /api/financeiro/fechamento/${competencia}/gerar\`\n` +
+        `• O pacote inclui: manifesto, DRE/CSVs, memória de cálculo do DAS, todos os anexos e o PDF formal`;
+      return { content, sources: ['financeiro:db'], toolsUsed: ['FinanceiroService.gerarChecklistFechamento'] };
+    } catch (err: any) {
+      return { content: `Erro: ${err.message}`, sources: [], toolsUsed: [] };
+    }
   }
 
   // ── Generic fallback ───────────────────────────────────
