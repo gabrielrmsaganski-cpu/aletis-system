@@ -20,10 +20,11 @@ const contratos: Map<string, ContratoGerado> = new Map()
 export default async function (fastify: FastifyInstance) {
   /* ---- LIST TIPOS DISPONÍVEIS ---- */
   fastify.get('/api/contratos/tipos', async () => {
+    const data = contratoGenerator.listarTipos()
     return {
       success: true,
-      data: contratoGenerator.listarTipos(),
-      total: 6,
+      data,
+      total: data.length,
     }
   })
 
@@ -82,9 +83,27 @@ export default async function (fastify: FastifyInstance) {
       'termo_renegociacao',
       'acordo_extrajudicial',
       'transacao_excepcional',
+      'prestacao_servicos_aletis',
     ]
     if (body.tipo && !tiposValidos.includes(body.tipo)) {
       errors.push(`tipo inválido. Aceitos: ${tiposValidos.join(', ')}`)
+    }
+
+    // Validação extra para contrato de prestação de serviços ALETIS
+    if (body.tipo === 'prestacao_servicos_aletis') {
+      if (!body.servicos) {
+        errors.push('servicos é obrigatório para tipo prestacao_servicos_aletis')
+      } else {
+        if (!body.servicos.modeloHonorarios) {
+          errors.push('servicos.modeloHonorarios é obrigatório')
+        }
+        if (!body.servicos.prazoVigenciaMeses || body.servicos.prazoVigenciaMeses < 1) {
+          errors.push('servicos.prazoVigenciaMeses deve ser >= 1')
+        }
+        if (!body.servicos.escopo) {
+          errors.push('servicos.escopo é obrigatório')
+        }
+      }
     }
 
     if (errors.length > 0) {

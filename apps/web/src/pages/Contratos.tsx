@@ -29,6 +29,7 @@ import {
   Building2,
   User,
   FileSignature,
+  Briefcase,
 } from 'lucide-react'
 
 const fmtBRL = (v: number): string =>
@@ -47,6 +48,7 @@ type TipoContrato =
   | 'termo_renegociacao'
   | 'acordo_extrajudicial'
   | 'transacao_excepcional'
+  | 'prestacao_servicos_aletis'
 
 interface TipoInfo {
   tipo: TipoContrato
@@ -81,6 +83,7 @@ const TIPO_ICON: Record<TipoContrato, React.ElementType> = {
   termo_renegociacao: RefreshCw,
   acordo_extrajudicial: Handshake,
   transacao_excepcional: Scale,
+  prestacao_servicos_aletis: Briefcase,
 }
 
 const TIPO_COR: Record<TipoContrato, string> = {
@@ -90,6 +93,7 @@ const TIPO_COR: Record<TipoContrato, string> = {
   termo_renegociacao: 'bg-blue-50 text-blue-700 border-blue-200',
   acordo_extrajudicial: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   transacao_excepcional: 'bg-rose-50 text-rose-700 border-rose-200',
+  prestacao_servicos_aletis: 'bg-aletis-dourado/15 text-aletis-grafite-escuro border-aletis-dourado/40',
 }
 
 export default function Contratos() {
@@ -359,12 +363,14 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
     devedorEndereco: '',
     devedorCidade: '',
     devedorUf: '',
+    devedorEmail: '',
     // Credor
     credorNome: '',
     credorCpf: '',
     credorEndereco: '',
     credorCidade: '',
     credorUf: '',
+    credorEmail: '',
     // Comum
     local: '',
     uf: '',
@@ -388,6 +394,52 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
     numeroParcelas: '12',
     valorParcela: '',
     primeiraParcela: '',
+    // Prestação de Serviços ALETIS
+    servicosModelo: 'hibrido_fixo_exito' as
+      | 'fixo'
+      | 'mensal'
+      | 'exito'
+      | 'hibrido_fixo_exito'
+      | 'hibrido_mensal_exito',
+    servicosHonorarioFixo: '',
+    servicosMensalidade: '',
+    servicosMesesRetainer: '6',
+    servicosPercentualExito: '20',
+    servicosBaseCalculoExito: 'economia_total' as
+      | 'economia_total'
+      | 'reducao_saldo'
+      | 'valor_renegociado',
+    servicosPisoExito: '',
+    servicosTetoExito: '',
+    servicosPrazoVigencia: '12',
+    servicosCondicaoExito: 'a_vista_liquidacao' as
+      | 'a_vista_liquidacao'
+      | 'pro_rata_parcelas_credor'
+      | 'parcelado_ate_180d',
+    servicosSaldoDevedor: '',
+    servicosNumeroCredores: '',
+    servicosCredoresListados: '',
+    servicosDescricaoCaso: '',
+    servicosAplicaCdc: false,
+    servicosAplicaSuper: false,
+    servicosConsultorNome: 'Christian Kohler',
+    servicosConsultorEmail: 'contato@aletis.com.br',
+    servicosConsultorFone: '',
+    servicosPlataformaAssinatura: 'Clicksign',
+    servicosArbitragem: false,
+    servicosCamaraArbitral: 'CAM-CCBC',
+    // Escopo (checkbox)
+    escDiagnostico: true,
+    escMemoria: true,
+    escAbusividade: true,
+    escDescaracterizacao: true,
+    escFluxo: true,
+    escProposta: true,
+    escNegociacao: true,
+    escGarantias: true,
+    escMinutas: true,
+    escSuportePericial: false,
+    escAcompanhamento: true,
   })
 
   const tipoInfo = tipos.find((t) => t.tipo === tipo)
@@ -421,6 +473,7 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
         enderecoCompleto: form.devedorEndereco,
         cidade: form.devedorCidade,
         uf: form.devedorUf,
+        email: form.devedorEmail || undefined,
       },
       credor: {
         nomeCompleto: form.credorNome,
@@ -428,6 +481,7 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
         enderecoCompleto: form.credorEndereco,
         cidade: form.credorCidade,
         uf: form.credorUf,
+        email: form.credorEmail || undefined,
       },
       local: form.local,
       uf: form.uf,
@@ -458,12 +512,66 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
       if (parcelas.length > 0) dados.parcelas = parcelas
     }
 
+    if (tipo === 'prestacao_servicos_aletis') {
+      dados.servicos = {
+        escopo: {
+          diagnosticoFinanceiro: form.escDiagnostico,
+          memoriaCalculoAuditavel: form.escMemoria,
+          deteccaoAbusividadeEAnatocismo: form.escAbusividade,
+          deteccaoDescaracterizacaoCreditoRural: form.escDescaracterizacao,
+          projecaoFluxoCaixaEStressTest: form.escFluxo,
+          propostaEstruturadaReestruturacao: form.escProposta,
+          negociacaoCredoresMulti: form.escNegociacao,
+          estruturacaoGarantiasDacao: form.escGarantias,
+          minutasContratuais: form.escMinutas,
+          suportePericialRevisional: form.escSuportePericial,
+          acompanhamentoExecucao: form.escAcompanhamento,
+        },
+        modeloHonorarios: form.servicosModelo,
+        honorarioFixo: form.servicosHonorarioFixo ? parseFloat(form.servicosHonorarioFixo) : undefined,
+        mensalidade: form.servicosMensalidade ? parseFloat(form.servicosMensalidade) : undefined,
+        mesesRetainer: form.servicosMesesRetainer ? parseInt(form.servicosMesesRetainer) : undefined,
+        percentualExito: form.servicosPercentualExito ? parseFloat(form.servicosPercentualExito) : undefined,
+        baseCalculoExito: form.servicosBaseCalculoExito,
+        pisoExito: form.servicosPisoExito ? parseFloat(form.servicosPisoExito) : undefined,
+        tetoExito: form.servicosTetoExito ? parseFloat(form.servicosTetoExito) : undefined,
+        prazoVigenciaMeses: parseInt(form.servicosPrazoVigencia) || 12,
+        condicaoPagamentoExito: form.servicosCondicaoExito,
+        operacao: {
+          saldoDevedorAtualizado: form.servicosSaldoDevedor ? parseFloat(form.servicosSaldoDevedor) : 0,
+          numeroCredores: form.servicosNumeroCredores ? parseInt(form.servicosNumeroCredores) : undefined,
+          credoresListados: form.servicosCredoresListados
+            ? form.servicosCredoresListados.split(',').map((s) => s.trim()).filter(Boolean)
+            : undefined,
+          descricaoSituacao: form.servicosDescricaoCaso || undefined,
+        },
+        aplicaCdc: form.servicosAplicaCdc,
+        aplicaSuperendividamento: form.servicosAplicaSuper,
+        contatoAletis: {
+          consultorResponsavel: form.servicosConsultorNome,
+          email: form.servicosConsultorEmail,
+          telefone: form.servicosConsultorFone || undefined,
+        },
+        plataformaAssinaturaEletronica: form.servicosPlataformaAssinatura || undefined,
+        arbitragem: form.servicosArbitragem
+          ? {
+              adotar: true,
+              camara: form.servicosCamaraArbitral,
+              tipo: 'institucional' as const,
+              idioma: 'português',
+              sede: `${form.local}-${form.uf}`,
+            }
+          : undefined,
+      }
+    }
+
     await onSubmit(dados)
     setLoading(false)
   }
 
   const isCPR = tipo === 'cpr_financeira' || tipo === 'cpr_fisica'
-  const isDivida = !isCPR
+  const isServicos = tipo === 'prestacao_servicos_aletis'
+  const isDivida = !isCPR && !isServicos
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -506,10 +614,10 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
             )}
           </div>
 
-          {/* Devedor */}
+          {/* Devedor / Contratante */}
           <fieldset className="rounded-lg border border-aletis-borda/60 p-4">
             <legend className="px-2 font-display text-xs font-semibold uppercase tracking-wider text-aletis-verde">
-              Devedor
+              {isServicos ? 'Contratante (Cliente)' : 'Devedor'}
             </legend>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <FormInput name="devedorNome" label="Nome completo" value={form.devedorNome} onChange={handleChange} required />
@@ -517,20 +625,26 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
               <FormInput name="devedorEndereco" label="Endereço" value={form.devedorEndereco} onChange={handleChange} className="md:col-span-2" />
               <FormInput name="devedorCidade" label="Cidade" value={form.devedorCidade} onChange={handleChange} />
               <FormInput name="devedorUf" label="UF" value={form.devedorUf} onChange={handleChange} maxLength={2} />
+              {isServicos && (
+                <FormInput name="devedorEmail" label="E-mail" type="email" value={form.devedorEmail} onChange={handleChange} className="md:col-span-2" />
+              )}
             </div>
           </fieldset>
 
-          {/* Credor */}
+          {/* Credor / Contratada */}
           <fieldset className="rounded-lg border border-aletis-borda/60 p-4">
             <legend className="px-2 font-display text-xs font-semibold uppercase tracking-wider text-aletis-verde">
-              Credor
+              {isServicos ? 'Contratada (ALETIS)' : 'Credor'}
             </legend>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <FormInput name="credorNome" label="Nome completo" value={form.credorNome} onChange={handleChange} required />
+              <FormInput name="credorNome" label="Nome completo / Razão Social" value={form.credorNome} onChange={handleChange} required />
               <FormInput name="credorCpf" label="CPF/CNPJ" value={form.credorCpf} onChange={handleChange} required />
               <FormInput name="credorEndereco" label="Endereço" value={form.credorEndereco} onChange={handleChange} className="md:col-span-2" />
               <FormInput name="credorCidade" label="Cidade" value={form.credorCidade} onChange={handleChange} />
               <FormInput name="credorUf" label="UF" value={form.credorUf} onChange={handleChange} maxLength={2} />
+              {isServicos && (
+                <FormInput name="credorEmail" label="E-mail" type="email" value={form.credorEmail} onChange={handleChange} className="md:col-span-2" />
+              )}
             </div>
           </fieldset>
 
@@ -568,6 +682,218 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
                 <FormInput name="primeiraParcela" label="Vencimento 1ª parcela" type="date" value={form.primeiraParcela} onChange={handleChange} className="md:col-span-2" />
               </div>
             </fieldset>
+          )}
+
+          {/* Prestação de Serviços ALETIS */}
+          {isServicos && (
+            <>
+              {/* Operação base */}
+              <fieldset className="rounded-lg border border-aletis-borda/60 p-4">
+                <legend className="px-2 font-display text-xs font-semibold uppercase tracking-wider text-aletis-dourado">
+                  Operação objeto dos serviços
+                </legend>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <FormInput name="servicosSaldoDevedor" label="Saldo devedor atualizado (R$)" type="number" step="0.01" value={form.servicosSaldoDevedor} onChange={handleChange} required />
+                  <FormInput name="servicosNumeroCredores" label="Nº de credores" type="number" value={form.servicosNumeroCredores} onChange={handleChange} />
+                  <FormInput name="servicosCredoresListados" label="Credores (separar por vírgula)" value={form.servicosCredoresListados} onChange={handleChange} className="md:col-span-2" placeholder="Banco do Brasil, Sicredi, Fertiflora" />
+                </div>
+                <div className="mt-3">
+                  <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-aletis-grafite-medio">
+                    Descrição da situação do Contratante
+                  </label>
+                  <textarea
+                    name="servicosDescricaoCaso"
+                    value={form.servicosDescricaoCaso}
+                    onChange={handleChange}
+                    rows={3}
+                    placeholder="Breve contexto do caso (inadimplência, contratos de crédito rural em execução, penhoras, etc.)"
+                    className="w-full rounded-lg border border-aletis-borda bg-white px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
+                  />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-4">
+                  <label className="inline-flex items-center gap-2 text-xs font-body text-aletis-grafite-medio">
+                    <input
+                      type="checkbox"
+                      checked={form.servicosAplicaCdc}
+                      onChange={(e) => setForm({ ...form, servicosAplicaCdc: e.target.checked })}
+                      className="h-4 w-4 rounded border-aletis-borda text-aletis-verde focus:ring-aletis-verde"
+                    />
+                    Contratante é consumidor — aplica CDC (Lei 8.078/90)
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-xs font-body text-aletis-grafite-medio">
+                    <input
+                      type="checkbox"
+                      checked={form.servicosAplicaSuper}
+                      onChange={(e) => setForm({ ...form, servicosAplicaSuper: e.target.checked })}
+                      className="h-4 w-4 rounded border-aletis-borda text-aletis-verde focus:ring-aletis-verde"
+                    />
+                    Situação de superendividamento (Lei 14.181/21)
+                  </label>
+                </div>
+              </fieldset>
+
+              {/* Escopo modular */}
+              <fieldset className="rounded-lg border border-aletis-borda/60 p-4">
+                <legend className="px-2 font-display text-xs font-semibold uppercase tracking-wider text-aletis-dourado">
+                  Escopo — Módulos de Serviço
+                </legend>
+                <p className="mb-3 text-[11px] text-aletis-grafite-claro">
+                  Selecione os módulos que compõem o escopo deste contrato. O texto da cláusula III será gerado listando apenas os módulos ativos.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {([
+                    ['escDiagnostico', 'Diagnóstico financeiro integral'],
+                    ['escMemoria', 'Memória de cálculo auditável'],
+                    ['escAbusividade', 'Detecção de abusividade / anatocismo'],
+                    ['escDescaracterizacao', 'Descaracterização de crédito rural (Res. BCB 4.966/21)'],
+                    ['escFluxo', 'Projeção de fluxo de caixa + stress test'],
+                    ['escProposta', 'Proposta estruturada de reestruturação'],
+                    ['escNegociacao', 'Negociação multi-credor'],
+                    ['escGarantias', 'Estruturação de garantias / dação em pagamento'],
+                    ['escMinutas', 'Minutas contratuais (CPR, Confissão, Renegociação)'],
+                    ['escSuportePericial', 'Suporte pericial / revisional judicial'],
+                    ['escAcompanhamento', 'Acompanhamento de execução pós-acordo'],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="inline-flex items-center gap-2 text-xs font-body text-aletis-grafite-medio">
+                      <input
+                        type="checkbox"
+                        checked={form[key]}
+                        onChange={(e) => setForm({ ...form, [key]: e.target.checked })}
+                        className="h-4 w-4 rounded border-aletis-borda text-aletis-verde focus:ring-aletis-verde"
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              {/* Honorários */}
+              <fieldset className="rounded-lg border border-aletis-borda/60 p-4">
+                <legend className="px-2 font-display text-xs font-semibold uppercase tracking-wider text-aletis-dourado">
+                  Honorários
+                </legend>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-aletis-grafite-medio">
+                      Modelo de honorários
+                    </label>
+                    <select
+                      name="servicosModelo"
+                      value={form.servicosModelo}
+                      onChange={handleChange}
+                      className="w-full rounded-lg border border-aletis-borda bg-white px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
+                    >
+                      <option value="fixo">Fixo</option>
+                      <option value="mensal">Mensal (retainer)</option>
+                      <option value="exito">Somente êxito</option>
+                      <option value="hibrido_fixo_exito">Híbrido — Fixo + Êxito</option>
+                      <option value="hibrido_mensal_exito">Híbrido — Mensal + Êxito</option>
+                    </select>
+                  </div>
+                  <FormInput name="servicosPrazoVigencia" label="Prazo de vigência (meses)" type="number" min={1} value={form.servicosPrazoVigencia} onChange={handleChange} />
+
+                  {(form.servicosModelo === 'fixo' || form.servicosModelo === 'hibrido_fixo_exito') && (
+                    <FormInput name="servicosHonorarioFixo" label="Honorário fixo (R$)" type="number" step="0.01" value={form.servicosHonorarioFixo} onChange={handleChange} />
+                  )}
+
+                  {(form.servicosModelo === 'mensal' || form.servicosModelo === 'hibrido_mensal_exito') && (
+                    <>
+                      <FormInput name="servicosMensalidade" label="Mensalidade (R$)" type="number" step="0.01" value={form.servicosMensalidade} onChange={handleChange} />
+                      <FormInput name="servicosMesesRetainer" label="Nº de mensalidades" type="number" min={1} value={form.servicosMesesRetainer} onChange={handleChange} />
+                    </>
+                  )}
+
+                  {(form.servicosModelo === 'exito' ||
+                    form.servicosModelo === 'hibrido_fixo_exito' ||
+                    form.servicosModelo === 'hibrido_mensal_exito') && (
+                    <>
+                      <FormInput name="servicosPercentualExito" label="Percentual de êxito (%)" type="number" step="0.1" value={form.servicosPercentualExito} onChange={handleChange} />
+                      <div>
+                        <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-aletis-grafite-medio">
+                          Base de cálculo do êxito
+                        </label>
+                        <select
+                          name="servicosBaseCalculoExito"
+                          value={form.servicosBaseCalculoExito}
+                          onChange={handleChange}
+                          className="w-full rounded-lg border border-aletis-borda bg-white px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
+                        >
+                          <option value="economia_total">Economia total (saldo − valor renegociado)</option>
+                          <option value="reducao_saldo">Redução de saldo (deságio)</option>
+                          <option value="valor_renegociado">Valor renegociado</option>
+                        </select>
+                      </div>
+                      <FormInput name="servicosPisoExito" label="Piso do êxito (R$) — opcional" type="number" step="0.01" value={form.servicosPisoExito} onChange={handleChange} />
+                      <FormInput name="servicosTetoExito" label="Teto do êxito (R$) — opcional" type="number" step="0.01" value={form.servicosTetoExito} onChange={handleChange} />
+                      <div className="md:col-span-2">
+                        <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-aletis-grafite-medio">
+                          Condição de pagamento do êxito
+                        </label>
+                        <select
+                          name="servicosCondicaoExito"
+                          value={form.servicosCondicaoExito}
+                          onChange={handleChange}
+                          className="w-full rounded-lg border border-aletis-borda bg-white px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
+                        >
+                          <option value="a_vista_liquidacao">À vista, na liquidação/formalização do acordo</option>
+                          <option value="pro_rata_parcelas_credor">Pro rata das parcelas pagas ao credor</option>
+                          <option value="parcelado_ate_180d">Parcelado em até 180 dias</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </fieldset>
+
+              {/* Contato ALETIS + formalização */}
+              <fieldset className="rounded-lg border border-aletis-borda/60 p-4">
+                <legend className="px-2 font-display text-xs font-semibold uppercase tracking-wider text-aletis-dourado">
+                  Contato ALETIS & Formalização
+                </legend>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <FormInput name="servicosConsultorNome" label="Consultor responsável" value={form.servicosConsultorNome} onChange={handleChange} />
+                  <FormInput name="servicosConsultorEmail" label="E-mail" type="email" value={form.servicosConsultorEmail} onChange={handleChange} />
+                  <FormInput name="servicosConsultorFone" label="Telefone" value={form.servicosConsultorFone} onChange={handleChange} />
+                  <div>
+                    <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-aletis-grafite-medio">
+                      Plataforma de assinatura eletrônica
+                    </label>
+                    <select
+                      name="servicosPlataformaAssinatura"
+                      value={form.servicosPlataformaAssinatura}
+                      onChange={handleChange}
+                      className="w-full rounded-lg border border-aletis-borda bg-white px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
+                    >
+                      <option value="Clicksign">Clicksign</option>
+                      <option value="DocuSign">DocuSign</option>
+                      <option value="D4Sign">D4Sign</option>
+                      <option value="Gov.br">Gov.br</option>
+                      <option value="ICP-Brasil">ICP-Brasil (certificado A1/A3)</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center gap-3">
+                  <label className="inline-flex items-center gap-2 text-xs font-body text-aletis-grafite-medio">
+                    <input
+                      type="checkbox"
+                      checked={form.servicosArbitragem}
+                      onChange={(e) => setForm({ ...form, servicosArbitragem: e.target.checked })}
+                      className="h-4 w-4 rounded border-aletis-borda text-aletis-verde focus:ring-aletis-verde"
+                    />
+                    Incluir cláusula arbitral (Lei 9.307/96)
+                  </label>
+                  {form.servicosArbitragem && (
+                    <input
+                      name="servicosCamaraArbitral"
+                      value={form.servicosCamaraArbitral}
+                      onChange={handleChange}
+                      placeholder="Câmara (ex: CAM-CCBC)"
+                      className="flex-1 rounded-lg border border-aletis-borda bg-white px-3 py-1.5 text-xs focus:border-aletis-verde focus:outline-none"
+                    />
+                  )}
+                </div>
+              </fieldset>
+            </>
           )}
 
           {/* Metadata */}
