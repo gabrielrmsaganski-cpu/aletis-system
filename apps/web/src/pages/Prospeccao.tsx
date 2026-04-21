@@ -481,8 +481,9 @@ export default function Prospeccao() {
 
   const handleEnrich = useCallback(async (cpfCnpj: string) => {
     setEnriching(cpfCnpj)
+    const clean = cpfCnpj.replace(/\D/g, '')
     try {
-      const r = await fetch(`/api/prospeccao/enriquecer/${cpfCnpj}`, {
+      const r = await fetch(`/api/prospeccao/enriquecer/${encodeURIComponent(clean)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -503,8 +504,9 @@ export default function Prospeccao() {
   const handleConsultarCar = useCallback(async (cpfCnpj: string, codImovel: string) => {
     setCarLoading(cpfCnpj)
     setCarError(null)
+    const clean = cpfCnpj.replace(/\D/g, '')
     try {
-      const r = await fetch(`/api/prospeccao/enriquecer/${cpfCnpj}`, {
+      const r = await fetch(`/api/prospeccao/enriquecer/${encodeURIComponent(clean)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ codImovel }),
@@ -525,8 +527,9 @@ export default function Prospeccao() {
 
   const handleExcluir = useCallback(async (cpfCnpj: string, motivo: string) => {
     setDeleting(cpfCnpj)
+    const clean = cpfCnpj.replace(/\D/g, '')
     try {
-      const r = await fetch(`/api/prospeccao/lead/${cpfCnpj}`, {
+      const r = await fetch(`/api/prospeccao/lead/${encodeURIComponent(clean)}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ motivo }),
@@ -573,10 +576,14 @@ export default function Prospeccao() {
     }
   }, [navigate])
 
-  /** Abre o drawer buscando detalhes completos do lead (usado pelo HotLeadsPanel). */
+  /**
+   * Abre o drawer buscando detalhes completos do lead (usado pelo HotLeadsPanel).
+   * Usa só-dígitos para não quebrar em CNPJs com "/" (ex: 11.111.111/0001-11).
+   */
   const openLeadByCpf = useCallback(async (cpfCnpj: string) => {
+    const clean = cpfCnpj.replace(/\D/g, '')
     try {
-      const r = await fetch(`/api/prospeccao/lead/${cpfCnpj}`)
+      const r = await fetch(`/api/prospeccao/lead/${encodeURIComponent(clean)}`)
       const j = await r.json()
       if (j.success) setSelectedLead(j.data)
     } catch (e) {
@@ -594,8 +601,9 @@ export default function Prospeccao() {
       payload: { tipo: ContactOutcomeTipo; canal?: ContactCanal; notas?: string; registradoPor?: string },
     ) => {
       setRegistrandoContato(true)
+      const clean = cpfCnpj.replace(/\D/g, '')
       try {
-        const r = await fetch(`/api/prospeccao/lead/${cpfCnpj}/contato`, {
+        const r = await fetch(`/api/prospeccao/lead/${encodeURIComponent(clean)}/contato`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -620,8 +628,9 @@ export default function Prospeccao() {
 
   const handleRestaurar = useCallback(async (cpfCnpj: string) => {
     setDeleting(cpfCnpj)
+    const clean = cpfCnpj.replace(/\D/g, '')
     try {
-      const r = await fetch(`/api/prospeccao/lead/${cpfCnpj}/restaurar`, { method: 'POST' })
+      const r = await fetch(`/api/prospeccao/lead/${encodeURIComponent(clean)}/restaurar`, { method: 'POST' })
       const j = await r.json()
       if (!j.success) throw new Error(j.error || 'Falha ao restaurar')
       await Promise.all([search(), loadStats()])

@@ -2,11 +2,22 @@ import { useState, useEffect, useCallback } from 'react'
 
 const API_BASE = '/api'
 
+/**
+ * Fastify rejeita POST/PUT com `Content-Type: application/json` e body vazio
+ * ("Body cannot be empty..."). Só mandamos o header quando há body de fato.
+ */
+function buildInit(options?: RequestInit): RequestInit {
+  const hasBody = options?.body !== undefined && options?.body !== null
+  const headers: Record<string, string> = hasBody ? { 'Content-Type': 'application/json' } : {}
+  if (options?.headers) {
+    const incoming = options.headers as Record<string, string>
+    for (const [k, v] of Object.entries(incoming)) headers[k] = v
+  }
+  return { ...options, headers }
+}
+
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    ...options,
-  })
+  const res = await fetch(`${API_BASE}${path}`, buildInit(options))
   const json = await res.json()
   if (!res.ok || json.success === false) {
     throw new Error(json.error || `API error ${res.status}`)
@@ -15,10 +26,7 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
 }
 
 export async function apiFetchFull<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    ...options,
-  })
+  const res = await fetch(`${API_BASE}${path}`, buildInit(options))
   const json = await res.json()
   if (!res.ok || json.success === false) {
     throw new Error(json.error || `API error ${res.status}`)
