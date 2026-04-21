@@ -26,6 +26,7 @@ import {
   LogOut,
   Target,
   DollarSign,
+  Wheat,
 } from 'lucide-react'
 
 interface NavItem {
@@ -48,6 +49,7 @@ const navSections: NavSection[] = [
       { label: 'CRM', path: '/crm', icon: Users },
       { label: 'Propostas', path: '/propostas', icon: FileText },
       { label: 'Contratos', path: '/contratos', icon: FileCheck },
+      { label: 'Custeio Agrícola', path: '/custeio', icon: Wheat },
     ],
   },
   {
