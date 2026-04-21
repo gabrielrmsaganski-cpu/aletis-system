@@ -5,6 +5,7 @@ import { recalcularDivida, projetarFluxoCaixa, type ResultadoRecalculo } from '.
 import { projetarFluxoPlurianual } from '../../lib/calculadoras-premium.js'
 import { getFinanceiroService } from '../financeiro/FinanceiroService.js'
 import { getAnalisesRepository } from './AnalisesRepository.js'
+import { getSmartAdvisor } from './advisor/SmartAdvisor.js'
 import { ANALISE_VERSAO, type AnaliseCliente } from './types.js'
 
 /* ========================================================================
@@ -496,7 +497,7 @@ export class AutoCalcOrchestrator {
       safe('margemCliente', erros, () => buscarMargemCliente(cliente)),
     ])
 
-    const analise: AnaliseCliente = {
+    const analiseBase: AnaliseCliente = {
       inputHash,
       geradoEm: new Date().toISOString(),
       versao: ANALISE_VERSAO,
@@ -508,7 +509,19 @@ export class AutoCalcOrchestrator {
       fluxoCaixaSafra: fluxo ?? null,
       margemCliente: margem ?? null,
       alertasTop: consolidarAlertas(sraiRes ?? null, absRes ?? null, saldo ?? null, fluxo ?? null),
+      recomendacoes: [],
       erros,
+    }
+
+    // SmartAdvisor — roda por último, já com todos os campos do snapshot
+    // preenchidos. Isolado em try/catch: falha aqui não aborta a materialização.
+    const recomendacoes = await safe('smartAdvisor', erros, () =>
+      getSmartAdvisor().evaluate({ cliente, analise: analiseBase }),
+    )
+
+    const analise: AnaliseCliente = {
+      ...analiseBase,
+      recomendacoes: recomendacoes ?? [],
     }
     repo.save(cliente.id, analise)
     return analise

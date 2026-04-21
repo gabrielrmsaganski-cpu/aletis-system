@@ -249,6 +249,15 @@ interface AnaliseCliente {
     origem: 'srai' | 'abs' | 'caixa' | 'dividas' | 'relacionamento'
     mensagem: string
   }>
+  recomendacoes: Array<{
+    id: string
+    titulo: string
+    categoria: 'recuperacao' | 'oportunidade' | 'relacionamento' | 'compliance' | 'estrategia'
+    prioridade: 'p1' | 'p2' | 'p3'
+    acao: string
+    justificativa: string
+    impactoEstimado?: string
+  }>
   erros: Record<string, string>
 }
 
@@ -2918,7 +2927,7 @@ function PainelInteligente({ analises, loading, recalculando, onRecalcular }: Pa
     )
   }
 
-  const { srai, abs, saldoRecalculado, projecao5Safras, fluxoCaixaSafra, margemCliente, alertasTop } = analises
+  const { srai, abs, saldoRecalculado, projecao5Safras, fluxoCaixaSafra, margemCliente, alertasTop, recomendacoes } = analises
 
   return (
     <div className="rounded-2xl border border-aletis-borda bg-gradient-to-br from-white to-aletis-bege/30 p-5">
@@ -2944,6 +2953,55 @@ function PainelInteligente({ analises, loading, recalculando, onRecalcular }: Pa
           {recalculando ? 'Recalculando...' : 'Recalcular'}
         </button>
       </div>
+
+      {/* Recomendações do SmartAdvisor — o "que fazer agora" */}
+      {recomendacoes && recomendacoes.length > 0 && (
+        <div className="mb-4 rounded-xl border border-aletis-verde/30 bg-gradient-to-br from-aletis-verde/5 to-aletis-dourado/5 p-3">
+          <p className="text-[11px] font-body font-semibold uppercase tracking-wider text-aletis-verde-escuro mb-2 flex items-center gap-1">
+            <Sparkles className="w-3 h-3" /> Recomendações ({recomendacoes.length})
+          </p>
+          <ul className="space-y-2">
+            {recomendacoes.slice(0, 5).map((r) => (
+              <li
+                key={r.id}
+                className="rounded-lg border border-aletis-borda bg-white px-3 py-2 flex items-start gap-3"
+              >
+                <span
+                  className={
+                    'inline-flex items-center justify-center text-[10px] font-bold font-mono w-6 h-6 rounded-md flex-shrink-0 mt-0.5 ' +
+                    (r.prioridade === 'p1'
+                      ? 'bg-red-100 text-red-700'
+                      : r.prioridade === 'p2'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-sky-100 text-sky-700')
+                  }
+                >
+                  {r.prioridade.toUpperCase()}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-display font-semibold text-aletis-grafite-escuro leading-tight">
+                      {r.titulo}
+                    </span>
+                    <span className="text-[9px] uppercase tracking-wider font-body font-semibold text-aletis-grafite-claro bg-aletis-bege/60 px-1.5 py-0.5 rounded">
+                      {r.categoria}
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-body text-aletis-grafite-medio mt-1 leading-snug">{r.acao}</p>
+                  <p className="text-[10px] font-body text-aletis-grafite-claro mt-1 italic leading-snug">
+                    {r.justificativa}
+                  </p>
+                  {r.impactoEstimado && (
+                    <p className="text-[10px] font-body text-aletis-verde font-semibold mt-1">
+                      Impacto: {r.impactoEstimado}
+                    </p>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Radar de alertas */}
       {alertasTop.length > 0 && (

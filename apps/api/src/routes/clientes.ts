@@ -17,6 +17,7 @@ import {
 } from '../services/cliente/AutoCalcOrchestrator.js'
 import type { AnaliseCliente } from '../services/cliente/types.js'
 import { getAnalisesBus } from '../services/cliente/AnalisesBus.js'
+import { getSmartAdvisor } from '../services/cliente/advisor/SmartAdvisor.js'
 
 /* ========================================================================
  *  Portal do Cliente — tipos anexados
@@ -1418,6 +1419,11 @@ export default async function (fastify: FastifyInstance) {
     const analise = await orch.orchestrate(cliente as unknown as ClienteParaAnalise, { force: true })
     cliente.analises = analise
     return { success: true, data: analise }
+  })
+
+  /* ---- CATÁLOGO DE REGRAS DO SMARTADVISOR (debug/admin) ---- */
+  fastify.get('/api/advisor/regras', async () => {
+    return { success: true, data: getSmartAdvisor().listarRegras() }
   })
 
   /* ---- EXPOSIÇÃO POR COMMODITY ---- */

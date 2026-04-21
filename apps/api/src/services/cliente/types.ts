@@ -3,6 +3,7 @@ import type { AbsOutput, AbsInput } from '../VerificadorABS.js'
 import type { ResultadoRecalculo, ProjecaoFluxoCaixa } from '../../lib/financeiro.js'
 import type { FluxoPlurianualResultado } from '../../lib/calculadoras-premium.js'
 import type { MargemCliente } from '../financeiro/types.js'
+import type { Recommendation } from './advisor/types.js'
 
 /**
  * Snapshot por-cliente produzido pelo `AutoCalcOrchestrator`. Materializa no
@@ -63,8 +64,15 @@ export interface AnaliseCliente {
     mensagem: string
   }>
 
+  /**
+   * Recomendações acionáveis produzidas pelo `SmartAdvisor` a partir das
+   * calculadoras acima — o "o que fazer agora" para o consultor. Ordenadas
+   * por prioridade (p1 → p3).
+   */
+  recomendacoes: Recommendation[]
+
   /** Erros por calculadora (não bloqueia — apenas reporta). */
   erros: Record<string, string>
 }
 
-export const ANALISE_VERSAO = 'analise-v1.0'
+export const ANALISE_VERSAO = 'analise-v1.1'
