@@ -527,6 +527,50 @@ export class FinanceiroService {
     const receitasAbertas = Array.from(this.receitas.values()).filter(
       (r) => r.status !== 'recebida' && r.status !== 'cancelada'
     )
+    // Bucket aging — só considera receitas em aberto com previsão de recebimento
+    const aging = {
+      emDia: { count: 0, total: 0 },
+      atraso_1_30: { count: 0, total: 0 },
+      atraso_31_60: { count: 0, total: 0 },
+      atraso_61_90: { count: 0, total: 0 },
+      atraso_90plus: { count: 0, total: 0 },
+      indiceSaude: 0,
+      dso: 0,
+    }
+    let dsoSoma = 0 // soma(valor * dias) para DSO ponderado
+    let dsoValor = 0 // soma(valor)
+    // Peso do bucket no índice de saúde (quanto mais atraso, mais "mata" o score)
+    const pesoSaude = { emDia: 1.0, atraso_1_30: 0.8, atraso_31_60: 0.5, atraso_61_90: 0.2, atraso_90plus: 0.0 }
+    let saudeNumerador = 0
+    let saudeDenominador = 0
+    for (const r of receitasAbertas) {
+      const valor = r.valorLiquido
+      const diasAtraso = r.dataPrevisaoRecebimento ? this.diasAteHoje(r.dataPrevisaoRecebimento) : 0
+      let bucket: keyof typeof pesoSaude
+      if (diasAtraso <= 0) bucket = 'emDia'
+      else if (diasAtraso <= 30) bucket = 'atraso_1_30'
+      else if (diasAtraso <= 60) bucket = 'atraso_31_60'
+      else if (diasAtraso <= 90) bucket = 'atraso_61_90'
+      else bucket = 'atraso_90plus'
+      aging[bucket].count += 1
+      aging[bucket].total += valor
+      saudeNumerador += valor * pesoSaude[bucket]
+      saudeDenominador += valor
+      if (r.dataPrevisaoRecebimento) {
+        // DSO: idade do recebível em dias contados da emissão
+        const idade = this.diasEntre(r.dataEmissao, new Date().toISOString().slice(0, 10))
+        dsoSoma += valor * Math.max(idade, 0)
+        dsoValor += valor
+      }
+    }
+    aging.emDia.total = Number(aging.emDia.total.toFixed(2))
+    aging.atraso_1_30.total = Number(aging.atraso_1_30.total.toFixed(2))
+    aging.atraso_31_60.total = Number(aging.atraso_31_60.total.toFixed(2))
+    aging.atraso_61_90.total = Number(aging.atraso_61_90.total.toFixed(2))
+    aging.atraso_90plus.total = Number(aging.atraso_90plus.total.toFixed(2))
+    aging.indiceSaude = saudeDenominador > 0 ? Number(((saudeNumerador / saudeDenominador) * 100).toFixed(1)) : 100
+    aging.dso = dsoValor > 0 ? Number((dsoSoma / dsoValor).toFixed(1)) : 0
+
     const contasReceber = {
       total: Number(receitasAbertas.reduce((s, r) => s + r.valorLiquido, 0).toFixed(2)),
       atrasadas: Number(
@@ -546,6 +590,7 @@ export class FinanceiroService {
           vencimento: r.dataPrevisaoRecebimento ?? '',
           diasAtraso: this.diasAteHoje(r.dataPrevisaoRecebimento ?? ''),
         })),
+      aging,
     }
 
     // Contas a pagar
@@ -660,6 +705,16 @@ export class FinanceiroService {
         severidade: contasReceber.atrasadas > 20000 ? 'critico' : 'atencao',
         titulo: `${this.formatBRL(contasReceber.atrasadas)} em honorários atrasados`,
         detalhe: `${receitasAbertas.filter((r) => r.status === 'atrasada').length} recebimentos aguardando. Considere cobrança ou renegociação.`,
+      })
+    }
+    // Alerta de concentração em buckets ruins (60+): sinal de deterioração da carteira
+    const receberRuim = aging.atraso_61_90.total + aging.atraso_90plus.total
+    if (contasReceber.total > 0 && receberRuim / contasReceber.total > 0.3) {
+      alertas.push({
+        tipo: 'inadimplencia',
+        severidade: aging.atraso_90plus.total > 0 ? 'critico' : 'atencao',
+        titulo: `${((receberRuim / contasReceber.total) * 100).toFixed(0)}% dos recebíveis com >60 dias de atraso`,
+        detalhe: `${this.formatBRL(receberRuim)} em risco. Índice de saúde da carteira: ${aging.indiceSaude}/100. DSO: ${aging.dso.toFixed(0)} dias.`,
       })
     }
     if (contasPagar.atrasadas > 0) {
@@ -786,6 +841,13 @@ export class FinanceiroService {
     const d1 = new Date(hoje + 'T00:00:00Z').getTime()
     const d2 = new Date(data + 'T00:00:00Z').getTime()
     return Math.round((d1 - d2) / 86400000)
+  }
+
+  private diasEntre(dataInicio: string, dataFim: string): number {
+    if (!dataInicio || !dataFim) return 0
+    const d1 = new Date(dataInicio + 'T00:00:00Z').getTime()
+    const d2 = new Date(dataFim + 'T00:00:00Z').getTime()
+    return Math.round((d2 - d1) / 86400000)
   }
 
   private mesesDesdeHoje(comp: string): number {

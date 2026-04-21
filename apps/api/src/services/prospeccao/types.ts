@@ -202,11 +202,18 @@ export interface CarConsultaResult {
 export interface LeadScore {
   total: number
   breakdown: {
-    divida: number // 0-40 — tamanho da dívida
-    ajuizamento: number // 0-20 — urgência
-    recencia: number // 0-15 — há quanto tempo inscrito
-    agroMatch: number // 0-15 — qualidade do sinal agro
+    divida: number // 0-30 — tamanho da dívida
+    ajuizamento: number // 0-15 — urgência
+    recencia: number // 0-10 — há quanto tempo inscrito
+    agroMatch: number // 0-10 — qualidade do sinal agro
     hectares: number // 0-10 — área estimada
+    velocity: number // 0-10 — aceleração do passivo (janela curta + muitas inscrições)
+    fitRegional: number // 0-15 — proximidade operacional da mesa ALETIS (UFs core)
+  }
+  /** Contexto textual derivado do scoring — para UI e handoff ao consultor. */
+  motivos?: {
+    velocity?: string // ex: "5 inscrições em 8 meses — passivo acelerando"
+    fitRegional?: string // ex: "PR — região sede, mesa local"
   }
   classificacao: 'quente' | 'morno' | 'frio' | 'reativo'
   honorariosEstimados: number // R$ — 1% da dívida, modelo ALETIS

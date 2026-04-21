@@ -173,6 +173,15 @@ interface DashboardData {
   contasReceber: {
     total: number; atrasadas: number
     proximosVencimentos: Array<{ id: string; cliente: string; valor: number; vencimento: string; diasAtraso: number }>
+    aging: {
+      emDia: { count: number; total: number }
+      atraso_1_30: { count: number; total: number }
+      atraso_31_60: { count: number; total: number }
+      atraso_61_90: { count: number; total: number }
+      atraso_90plus: { count: number; total: number }
+      indiceSaude: number
+      dso: number
+    }
   }
   contasPagar: {
     total: number; atrasadas: number
@@ -445,6 +454,9 @@ function DashboardSection({ showToast }: { showToast: (t: 'sucesso' | 'erro', m:
         </div>
       </div>
 
+      {/* Aging de recebíveis */}
+      <AgingRecebiveis aging={contasReceber.aging} total={contasReceber.total} />
+
       {/* Fluxo de caixa 12m */}
       <div className="rounded-xl border border-aletis-borda/60 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between mb-3">
@@ -522,6 +534,133 @@ function DashboardSection({ showToast }: { showToast: (t: 'sucesso' | 'erro', m:
             <p className="text-xs text-aletis-grafite-claro italic">Sem receitas registradas este ano.</p>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+/* ================= Aging de Recebíveis ================= */
+
+type AgingData = DashboardData['contasReceber']['aging']
+type AgingBucketKey = 'emDia' | 'atraso_1_30' | 'atraso_31_60' | 'atraso_61_90' | 'atraso_90plus'
+
+function AgingRecebiveis({
+  aging,
+  total,
+}: {
+  aging: AgingData
+  total: number
+}) {
+  const buckets: Array<{
+    id: AgingBucketKey
+    label: string
+    color: string
+    barColor: string
+  }> = [
+    { id: 'emDia', label: 'Em dia', color: 'text-emerald-700', barColor: 'bg-emerald-500' },
+    { id: 'atraso_1_30', label: '1–30 d', color: 'text-amber-700', barColor: 'bg-amber-400' },
+    { id: 'atraso_31_60', label: '31–60 d', color: 'text-orange-700', barColor: 'bg-orange-500' },
+    { id: 'atraso_61_90', label: '61–90 d', color: 'text-rose-700', barColor: 'bg-rose-500' },
+    { id: 'atraso_90plus', label: '90+ d', color: 'text-red-800', barColor: 'bg-red-700' },
+  ]
+
+  const saudeCor =
+    aging.indiceSaude >= 85 ? 'text-emerald-700' :
+    aging.indiceSaude >= 65 ? 'text-amber-700' :
+    aging.indiceSaude >= 45 ? 'text-orange-700' : 'text-rose-700'
+
+  const saudeBgCor =
+    aging.indiceSaude >= 85 ? 'bg-emerald-500' :
+    aging.indiceSaude >= 65 ? 'bg-amber-400' :
+    aging.indiceSaude >= 45 ? 'bg-orange-500' : 'bg-rose-500'
+
+  if (total === 0) {
+    return (
+      <div className="rounded-xl border border-aletis-borda/60 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-2 mb-2">
+          <ArrowDownRight className="h-4 w-4 text-emerald-600" />
+          <h3 className="font-display text-sm font-semibold text-aletis-grafite-escuro">Aging de recebíveis</h3>
+        </div>
+        <p className="text-xs text-aletis-grafite-claro italic">Nenhum recebível em aberto no momento.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border border-aletis-borda/60 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <ArrowDownRight className="h-4 w-4 text-emerald-600" />
+          <h3 className="font-display text-sm font-semibold text-aletis-grafite-escuro">
+            Aging de recebíveis
+          </h3>
+          <span className="text-[10px] uppercase tracking-wider text-aletis-grafite-claro">
+            carteira em aberto
+          </span>
+        </div>
+        <div className="flex items-center gap-4 text-xs">
+          <div>
+            <span className="text-aletis-grafite-claro">DSO</span>{' '}
+            <strong className="text-aletis-grafite-escuro">
+              {aging.dso.toFixed(0)}{' '}
+              <span className="text-aletis-grafite-claro font-normal">dias</span>
+            </strong>
+          </div>
+          <div>
+            <span className="text-aletis-grafite-claro">Saúde</span>{' '}
+            <strong className={saudeCor}>{aging.indiceSaude.toFixed(0)}/100</strong>
+            <span className="inline-block align-middle ml-1.5 w-16 h-1.5 rounded-full bg-aletis-borda/40 overflow-hidden">
+              <span
+                className={`block h-full ${saudeBgCor} transition-all`}
+                style={{ width: `${Math.max(0, Math.min(100, aging.indiceSaude))}%` }}
+              />
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Barra de distribuição (stacked) */}
+      <div className="flex h-3 rounded-full overflow-hidden border border-aletis-borda/40 mb-3">
+        {buckets.map((b) => {
+          const bucket = aging[b.id]
+          const pct = total > 0 ? (bucket.total / total) * 100 : 0
+          if (pct === 0) return null
+          return (
+            <div
+              key={b.id}
+              className={b.barColor}
+              style={{ width: `${pct}%` }}
+              title={`${b.label}: ${bucket.count} recebíveis, ${fmtBRL(bucket.total)} (${pct.toFixed(1)}%)`}
+            />
+          )
+        })}
+      </div>
+
+      {/* Grid dos buckets */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        {buckets.map((b) => {
+          const bucket = aging[b.id]
+          const pct = total > 0 ? (bucket.total / total) * 100 : 0
+          return (
+            <div
+              key={b.id}
+              className="rounded-lg border border-aletis-borda/50 bg-aletis-bege/40 p-2.5"
+            >
+              <div className="flex items-center justify-between">
+                <span className={`text-[10px] font-display font-semibold uppercase tracking-wider ${b.color}`}>
+                  {b.label}
+                </span>
+                <span className="text-[10px] text-aletis-grafite-claro">{pct.toFixed(0)}%</span>
+              </div>
+              <div className={`mt-1 font-display text-sm font-bold ${b.color}`}>
+                {fmtBRL(bucket.total)}
+              </div>
+              <div className="text-[11px] text-aletis-grafite-medio">
+                {bucket.count} {bucket.count === 1 ? 'recebível' : 'recebíveis'}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

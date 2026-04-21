@@ -297,6 +297,18 @@ export interface DashboardFinanceiro {
     total: number
     atrasadas: number
     proximosVencimentos: Array<{ id: string; cliente: string; valor: number; vencimento: string; diasAtraso: number }>
+    /** Distribuição de recebíveis em aberto por faixa de atraso (bucket analysis). */
+    aging: {
+      emDia: { count: number; total: number }         // ainda não venceu (ou sem data de previsão)
+      atraso_1_30: { count: number; total: number }   // 1-30 dias de atraso
+      atraso_31_60: { count: number; total: number }  // 31-60 dias
+      atraso_61_90: { count: number; total: number }  // 61-90 dias
+      atraso_90plus: { count: number; total: number } // 90+ dias — risco crítico
+      /** Índice saúde (0-100): 100 = tudo em dia; cai proporcional ao atraso ponderado. */
+      indiceSaude: number
+      /** DSO aproximado (Days Sales Outstanding): prazo médio de recebimento ponderado por valor. */
+      dso: number
+    }
   }
   contasPagar: {
     total: number

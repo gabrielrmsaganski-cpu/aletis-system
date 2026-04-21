@@ -99,6 +99,12 @@ interface LeadScore {
     recencia: number
     agroMatch: number
     hectares: number
+    velocity: number
+    fitRegional: number
+  }
+  motivos?: {
+    velocity?: string
+    fitRegional?: string
   }
   classificacao: 'quente' | 'morno' | 'frio' | 'reativo'
   honorariosEstimados: number
@@ -2278,12 +2284,15 @@ function TabSocios({ lead }: { lead: LeadFull }) {
 
 function TabScore({ lead }: { lead: LeadFull }) {
   const b = lead.score.breakdown
-  const items = [
-    { label: 'Tamanho da dívida', value: b.divida, max: 40, icon: DollarSign },
-    { label: 'Ajuizamento (urgência)', value: b.ajuizamento, max: 20, icon: Gavel },
-    { label: 'Recência da inscrição', value: b.recencia, max: 15, icon: Calendar },
-    { label: 'Qualidade do sinal agro', value: b.agroMatch, max: 15, icon: Wheat },
+  const m = lead.score.motivos
+  const items: Array<{ label: string; value: number; max: number; icon: any; hint?: string }> = [
+    { label: 'Tamanho da dívida', value: b.divida, max: 30, icon: DollarSign },
+    { label: 'Ajuizamento (urgência)', value: b.ajuizamento, max: 15, icon: Gavel },
+    { label: 'Recência da inscrição', value: b.recencia, max: 10, icon: Calendar },
+    { label: 'Qualidade do sinal agro', value: b.agroMatch, max: 10, icon: Wheat },
     { label: 'Área estimada', value: b.hectares, max: 10, icon: Tractor },
+    { label: 'Velocity do passivo', value: b.velocity ?? 0, max: 10, icon: Zap, hint: m?.velocity },
+    { label: 'Fit regional ALETIS', value: b.fitRegional ?? 0, max: 15, icon: MapPin, hint: m?.fitRegional },
   ]
   return (
     <>
@@ -2306,7 +2315,7 @@ function TabScore({ lead }: { lead: LeadFull }) {
       <div className="space-y-2">
         {items.map((it) => {
           const Icon = it.icon
-          const pct = (it.value / it.max) * 100
+          const pct = it.max > 0 ? (it.value / it.max) * 100 : 0
           return (
             <div key={it.label}>
               <div className="flex items-center justify-between mb-1 text-xs">
@@ -2323,6 +2332,11 @@ function TabScore({ lead }: { lead: LeadFull }) {
                   style={{ width: `${pct}%` }}
                 />
               </div>
+              {it.hint && (
+                <p className="mt-0.5 text-[10px] italic text-aletis-grafite-medio dark:text-white/40">
+                  {it.hint}
+                </p>
+              )}
             </div>
           )
         })}
