@@ -23,6 +23,15 @@ import {
   buscarLinhasPorPublico,
 } from '@aletis/knowledge-base';
 import {
+  simular as simularAmortizacaoCalc,
+  networkDays,
+  FERIADOS_NACIONAIS,
+  taxaNominalParaEfetiva,
+  type ParametrosOperacao,
+  type SistemaAmortizacao,
+  type Periodicidade,
+} from '@aletis/financial-calc';
+import {
   runClaude,
   isLLMEnabled,
   CLAUDE_MODEL_SONNET,
@@ -30,6 +39,8 @@ import {
   type ClaudeToolRegistry,
   type ClaudeMessage,
 } from './llm/ClaudeFoundryClient.js';
+import { getDossieRepository } from './cliente/DossieRepository.js';
+import { dossieAgroResumo, type DossieAgro } from '@aletis/shared-types';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -911,6 +922,153 @@ Posso responder tudo em segundos. Manda.`;
     };
   }
 
+  // ── Dossiê Agro (Daycoval 2025) ────────────────────────
+  //
+  // Três tools expostas ao Claude: visão geral, produção e dívidas.
+  // Todas resolvem "clienteId ou nome" → id → dossiê. Retornam markdown
+  // pronto para resposta do chat, seguindo o padrão dos outros handlers.
+
+  /** Resolve uma string (id, CPF/CNPJ, nome) em um cliente do CRM. */
+  private resolverClienteParaDossie(termo: string): { id: string; nome: string; cpfCnpj?: string } | null {
+    if (!termo) return null;
+    const list = getClientesStore();
+    if (list.length === 0) return null;
+
+    // 1) match direto por id
+    const byId = list.find((c) => c?.id === termo);
+    if (byId) return { id: byId.id, nome: byId.nome, cpfCnpj: byId.cpfCnpj ?? byId.cpf };
+
+    // 2) match por CPF/CNPJ (só dígitos)
+    const digits = termo.replace(/\D/g, '');
+    if (digits.length >= 11) {
+      const byDoc = list.find((c) => (c?.cpfCnpj || c?.cpf || '').replace(/\D/g, '') === digits);
+      if (byDoc) return { id: byDoc.id, nome: byDoc.nome, cpfCnpj: byDoc.cpfCnpj ?? byDoc.cpf };
+    }
+
+    // 3) match por nome (case-insensitive, inclui substring)
+    const t = termo.toLowerCase().trim();
+    const byNome = list.find((c) => typeof c?.nome === 'string' && c.nome.toLowerCase().includes(t));
+    if (byNome) return { id: byNome.id, nome: byNome.nome, cpfCnpj: byNome.cpfCnpj ?? byNome.cpf };
+
+    return null;
+  }
+
+  private dossieParaTermo(termo: string): { cliente: { id: string; nome: string }; dossie: DossieAgro | null; erro?: string } {
+    const cliente = this.resolverClienteParaDossie(termo);
+    if (!cliente) {
+      return { cliente: { id: '', nome: '' }, dossie: null, erro: `Cliente "${termo}" não encontrado no CRM.` };
+    }
+    const dossie = getDossieRepository().get(cliente.id);
+    if (!dossie) {
+      return { cliente: { id: cliente.id, nome: cliente.nome }, dossie: null, erro: `Cliente ${cliente.nome} ainda não tem dossiê agro cadastrado.` };
+    }
+    return { cliente: { id: cliente.id, nome: cliente.nome }, dossie };
+  }
+
+  private async dossieBuscar(termo: string): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    const { cliente, dossie, erro } = this.dossieParaTermo(termo);
+    if (!dossie) return { content: erro || 'Dossiê indisponível.', sources: ['/api/clientes/:id/dossie'], toolsUsed: [] };
+
+    const resumo = dossieAgroResumo(dossie);
+    const linhas: string[] = [
+      `**Dossiê Agro — ${cliente.nome}** (v${resumo.versao}, data-base ${dossie.dataBase})`,
+      '',
+      `• **Grupo econômico:** ${resumo.totais.pessoasFisicas} PF + ${resumo.totais.pessoasJuridicas} PJ`,
+      `• **Imóveis:** ${resumo.totais.imoveis} propriedade(s) — ${resumo.totais.areaTotalHa.toLocaleString('pt-BR')} ha — ${fmtBRL(resumo.totais.valorImoveisTotal)}`,
+      `• **Produção:** ${resumo.totais.culturas} cultura(s) cadastrada(s) em ${new Set(dossie.producao.agricultura.map((a) => a.uf)).size} UF(s)`,
+      `• **Dívidas bancárias:** ${resumo.totais.dividasBancarias} contrato(s) — saldo ${fmtBRL(resumo.totais.saldoDividasBancarias)}`,
+    ];
+    if (dossie.operacional.historia) {
+      const hist = dossie.operacional.historia.slice(0, 220);
+      linhas.push('', `**Contexto:** ${hist}${dossie.operacional.historia.length > 220 ? '…' : ''}`);
+    }
+    if (dossie.grupoEconomico.demandaTotal) {
+      linhas.push(`• **Demanda declarada:** ${fmtBRL(dossie.grupoEconomico.demandaTotal)}`);
+    }
+    return {
+      content: linhas.join('\n'),
+      sources: [`/api/clientes/${cliente.id}/dossie`],
+      toolsUsed: ['dossie.buscar'],
+    };
+  }
+
+  private async dossieProducao(termo: string): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    const { cliente, dossie, erro } = this.dossieParaTermo(termo);
+    if (!dossie) return { content: erro || 'Dossiê indisponível.', sources: [], toolsUsed: [] };
+
+    const agri = dossie.producao.agricultura;
+    const pec = dossie.producao.pecuaria;
+    if (agri.length === 0 && pec.length === 0) {
+      return { content: `Dossiê de **${cliente.nome}** não tem quadros de produção preenchidos.`, sources: [`/api/clientes/${cliente.id}/dossie`], toolsUsed: ['dossie.producao'] };
+    }
+
+    const linhas: string[] = [`**Produção — ${cliente.nome}** (data-base ${dossie.producao.dataBase || dossie.dataBase})`, ''];
+
+    if (agri.length > 0) {
+      linhas.push('**Agricultura:**');
+      for (const a of agri.slice(0, 12)) {
+        const atual = a.safras.find((s) => s.tipo === 'atual');
+        const prevista = a.safras.find((s) => s.tipo === 'prevista');
+        const nome = a.outroDescricao || a.cultura.replace(/_/g, ' ');
+        const pieces: string[] = [`• ${nome} (${a.uf})`];
+        if (atual) {
+          pieces.push(`atual ${atual.safra}: ${atual.areaPlantadaHa ?? '?'} ha, ${atual.rendimentoScHa ?? '?'} sc/ha`);
+        }
+        if (prevista) {
+          pieces.push(`prevista ${prevista.safra}: ${prevista.areaPlantadaHa ?? '?'} ha`);
+        }
+        linhas.push(pieces.join(' — '));
+      }
+      if (agri.length > 12) linhas.push(`_…e mais ${agri.length - 12} quadro(s)_`);
+    }
+
+    if (pec.length > 0) {
+      linhas.push('', '**Pecuária:**');
+      for (const p of pec.slice(0, 8)) {
+        const nome = p.outroDescricao || p.atividade.replace(/_/g, ' ');
+        linhas.push(`• ${nome} (${p.uf}): ${p.cabecas ?? '?'} cab — ${p.areaPastagemHa ?? '?'} ha de pasto`);
+      }
+      if (pec.length > 8) linhas.push(`_…e mais ${pec.length - 8} quadro(s)_`);
+    }
+
+    return { content: linhas.join('\n'), sources: [`/api/clientes/${cliente.id}/dossie`], toolsUsed: ['dossie.producao'] };
+  }
+
+  private async dossieDividas(termo: string): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    const { cliente, dossie, erro } = this.dossieParaTermo(termo);
+    if (!dossie) return { content: erro || 'Dossiê indisponível.', sources: [], toolsUsed: [] };
+
+    const b = dossie.dividas.bancarias;
+    const f = dossie.dividas.fornecedores;
+    const t = dossie.dividas.terras;
+    if (b.length === 0 && f.length === 0 && t.length === 0) {
+      return { content: `Dossiê de **${cliente.nome}** não tem estrutura de dívidas preenchida.`, sources: [`/api/clientes/${cliente.id}/dossie`], toolsUsed: ['dossie.dividas'] };
+    }
+
+    const totalBancaria = b.reduce((s, x) => s + (x.saldoTotal || 0), 0);
+    const totalFornecedor = f.reduce((s, x) => s + (x.valorBRL || 0), 0);
+    const totalTerras = t.reduce((s, x) => s + (x.totalVencer || 0), 0);
+
+    const linhas: string[] = [
+      `**Estrutura de Dívidas — ${cliente.nome}** (data-base ${dossie.dividas.dataBase || dossie.dataBase})`,
+      '',
+      `• **Bancárias:** ${b.length} contrato(s) — ${fmtBRL(totalBancaria)}`,
+      `• **Fornecedores/Barter:** ${f.length} — ${fmtBRL(totalFornecedor)}`,
+      `• **Terras:** ${t.length} — ${fmtBRL(totalTerras)} a vencer`,
+    ];
+
+    if (b.length > 0) {
+      linhas.push('', '**Top bancárias (por saldo):**');
+      const top = [...b].sort((x, y) => (y.saldoTotal || 0) - (x.saldoTotal || 0)).slice(0, 6);
+      for (const d of top) {
+        const taxa = d.taxaJuros ? `${(d.taxaJuros * 100).toFixed(2)}%` : 's/ taxa';
+        linhas.push(`• ${d.instituicao} (${d.modalidade}) — ${fmtBRL(d.saldoTotal)} — ${taxa} — venc. ${d.dataVencimento ?? 's/ data'}`);
+      }
+    }
+
+    return { content: linhas.join('\n'), sources: [`/api/clientes/${cliente.id}/dossie`], toolsUsed: ['dossie.dividas'] };
+  }
+
   // ── Climate ─────────────────────────────────────────────
 
   private async resolveMunicipio(cidade: string): Promise<{ codigoIbge: string; nome: string; uf: string; lat: number; lon: number } | null> {
@@ -1691,6 +1849,56 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
         handler: () => this.propostasInteligentesListar(),
       },
 
+      // ── Dossiê Agro (padrão Daycoval 2025) ───────────
+      {
+        spec: {
+          name: 'buscar_dossie',
+          description:
+            'Retorna sumário estruturado do Dossiê Agro Canônico do cliente (grupo econômico, imóveis, produção, dívidas — visão geral). Aceita id do cliente, CPF/CNPJ ou nome.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteIdOuNome: {
+                type: 'string',
+                description: 'Id do cliente (ex: cli-001), CPF/CNPJ ou nome (parcial).',
+              },
+            },
+            required: ['clienteIdOuNome'],
+          },
+        },
+        handler: (i) => this.dossieBuscar(String(i.clienteIdOuNome)),
+      },
+      {
+        spec: {
+          name: 'dossie_producao',
+          description:
+            'Detalha as culturas agrícolas e pecuária do dossiê agro: UF, área plantada, rendimento, safras atual e prevista. Aceita id, CPF/CNPJ ou nome.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteIdOuNome: { type: 'string' },
+            },
+            required: ['clienteIdOuNome'],
+          },
+        },
+        handler: (i) => this.dossieProducao(String(i.clienteIdOuNome)),
+      },
+      {
+        spec: {
+          name: 'dossie_dividas',
+          description:
+            'Foca na estrutura de dívidas do dossiê agro: bancárias (com instituição, taxa, vencimento), fornecedores/barter e terras. Aceita id, CPF/CNPJ ou nome.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteIdOuNome: { type: 'string' },
+            },
+            required: ['clienteIdOuNome'],
+          },
+        },
+        handler: (i) => this.dossieDividas(String(i.clienteIdOuNome)),
+      },
+
       // ── Base de conhecimento ──────────────────────────
       {
         spec: {
@@ -1864,6 +2072,86 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
         },
         handler: () => this.reportFontes(),
       },
+
+      // ── Cálculo financeiro (biblioteca de métodos Sisbr 2.0) ──
+      {
+        spec: {
+          name: 'simular_amortizacao',
+          description:
+            'Simula uma operação de crédito com os métodos Sisbr 2.0/Sicredi. Suporta SAC (pré/pós), Price (pré/pós), SAC Especial, Americano, Alemão e Misto. Retorna totais, taxa efetiva implícita e as 3 primeiras + 3 últimas parcelas.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              valor: { type: 'number', description: 'Valor principal em BRL (ex: 100000)' },
+              prazoMeses: { type: 'number', description: 'Número de parcelas (1..360). Para periodicidade anual, use o número de anos.' },
+              taxaMensal: { type: 'number', description: 'Taxa pré-fixada ao mês em % (ex: 0.35 = 0,35% a.m.)' },
+              taxaPosAnual: { type: 'number', description: 'Taxa pós-fixada ao ano em % (opcional, ex: 14.15)' },
+              sistema: {
+                type: 'string',
+                enum: ['SAC_PRE', 'SAC_POS', 'PRICE_PRE', 'PRICE_POS', 'SAC_ESPECIAL', 'AMERICANO', 'ALEMAO', 'MISTO'],
+                description: 'Sistema de amortização',
+              },
+              periodicidade: {
+                type: 'string',
+                enum: ['MENSAL', 'BIMESTRAL', 'TRIMESTRAL', 'SEMESTRAL', 'ANUAL'],
+                description: 'Intervalo entre parcelas (default MENSAL)',
+              },
+              dataInicio: { type: 'string', description: 'Data da operação (YYYY-MM-DD). Default = hoje.' },
+              primeiroVencimento: { type: 'string', description: 'Primeiro vencimento (YYYY-MM-DD). Se omitido, calculado a partir da data da operação + 1 período.' },
+              diaVencimento: { type: 'number', description: 'Dia do mês de vencimento (1..31). Default = dia da dataInicio.' },
+              carenciaMeses: { type: 'number', description: 'Meses de carência (reservado para uso futuro).' },
+            },
+            required: ['valor', 'prazoMeses', 'taxaMensal', 'sistema'],
+          },
+        },
+        handler: (i) =>
+          this.calcSimularAmortizacao(
+            Number(i.valor),
+            Number(i.prazoMeses),
+            Number(i.taxaMensal),
+            String(i.sistema) as SistemaAmortizacao,
+            {
+              taxaPosAnual: i.taxaPosAnual !== undefined ? Number(i.taxaPosAnual) : undefined,
+              periodicidade: i.periodicidade ? (String(i.periodicidade) as Periodicidade) : undefined,
+              dataInicio: i.dataInicio ? String(i.dataInicio) : undefined,
+              primeiroVencimento: i.primeiroVencimento ? String(i.primeiroVencimento) : undefined,
+              diaVencimento: i.diaVencimento !== undefined ? Number(i.diaVencimento) : undefined,
+              carenciaMeses: i.carenciaMeses !== undefined ? Number(i.carenciaMeses) : undefined,
+            },
+          ),
+      },
+      {
+        spec: {
+          name: 'dias_uteis_entre',
+          description:
+            'Quantidade de dias úteis entre duas datas (ISO YYYY-MM-DD), usando a tabela de feriados nacionais do Sisbr 2.0 (597 datas). Equivalente ao NETWORKDAYS do Excel.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              dataInicio: { type: 'string', description: 'Data inicial (YYYY-MM-DD)' },
+              dataFim: { type: 'string', description: 'Data final (YYYY-MM-DD)' },
+            },
+            required: ['dataInicio', 'dataFim'],
+          },
+        },
+        handler: (i) => this.calcDiasUteis(String(i.dataInicio), String(i.dataFim)),
+      },
+      {
+        spec: {
+          name: 'taxa_efetiva',
+          description:
+            'Converte uma taxa nominal em taxa efetiva, dado o número de períodos por ano (ex: 12 = mensal). Retorna a taxa efetiva anual.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              taxaNominal: { type: 'number', description: 'Taxa nominal em % (ex: 12 = 12% a.a.)' },
+              periodosAno: { type: 'number', description: 'Capitalizações por ano (ex: 12, 252, 365)' },
+            },
+            required: ['taxaNominal', 'periodosAno'],
+          },
+        },
+        handler: (i) => this.calcTaxaEfetiva(Number(i.taxaNominal), Number(i.periodosAno)),
+      },
     ];
 
     const tools: ClaudeTool[] = specs.map((s) => s.spec);
@@ -1878,6 +2166,134 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
       };
     }
     return { tools, registry };
+  }
+
+  // ── Cálculo financeiro (financial-calc) ───────────────
+
+  private calcSimularAmortizacao(
+    valor: number,
+    prazoMeses: number,
+    taxaMensalPct: number,
+    sistema: SistemaAmortizacao,
+    opts: {
+      taxaPosAnual?: number;
+      periodicidade?: Periodicidade;
+      dataInicio?: string;
+      primeiroVencimento?: string;
+      diaVencimento?: number;
+      carenciaMeses?: number;
+    } = {},
+  ): { content: string; sources: string[]; toolsUsed: string[] } {
+    try {
+      if (!Number.isFinite(valor) || valor <= 0) throw new Error('valor inválido');
+      if (!Number.isFinite(prazoMeses) || prazoMeses <= 0) throw new Error('prazoMeses inválido');
+      if (!Number.isFinite(taxaMensalPct)) throw new Error('taxaMensal inválida');
+
+      const hoje = new Date().toISOString().slice(0, 10);
+      const dataInicio = opts.dataInicio || hoje;
+      const diaVenc = opts.diaVencimento ?? (Number(dataInicio.slice(8, 10)) || 15);
+      const periodicidade = opts.periodicidade || 'MENSAL';
+
+      const params: ParametrosOperacao = {
+        valor,
+        dataOperacao: dataInicio,
+        numeroParcelas: prazoMeses,
+        periodicidade,
+        taxaMensal: taxaMensalPct / 100,
+        taxaPosAnual:
+          opts.taxaPosAnual !== undefined && Number.isFinite(opts.taxaPosAnual)
+            ? opts.taxaPosAnual / 100
+            : undefined,
+        diaVencimento: diaVenc,
+        primeiroVencimento: opts.primeiroVencimento,
+        sistema,
+        carenciaMeses: opts.carenciaMeses,
+      };
+
+      const r = simularAmortizacaoCalc(params);
+      const ind = r.indicadores;
+      const primeiras = r.tabela.slice(0, 3);
+      const ultimas = r.tabela.slice(-3);
+
+      const fmtLinha = (l: typeof r.tabela[number]) =>
+        `  ${String(l.parcela).padStart(3)} | ${l.data} | ${fmtBRL(l.pagamento)} | amort ${fmtBRL(
+          l.amortizacao,
+        )} | juros ${fmtBRL(l.jurosPre + l.jurosPos)} | saldo ${fmtBRL(l.saldoFinal)}`;
+
+      let content = `**Simulação ${sistema}** — ${fmtBRL(valor)} em ${prazoMeses} parcela(s) ${periodicidade.toLowerCase()}\n\n`;
+      content += `• Taxa pré: ${fmtNum(taxaMensalPct, 4)}% a.m.\n`;
+      if (params.taxaPosAnual) content += `• Taxa pós: ${fmtNum(params.taxaPosAnual * 100, 2)}% a.a.\n`;
+      content += `• Total pago: **${fmtBRL(ind.totalPago)}**\n`;
+      content += `• Total juros: ${fmtBRL(ind.totalJuros)} (pré ${fmtBRL(ind.totalJurosPre)} + pós ${fmtBRL(ind.totalJurosPos)})\n`;
+      content += `• Taxa efetiva implícita: ${fmtNum(ind.taxaEfetivaMensal * 100, 4)}% a.m. (${fmtNum(
+        ind.taxaEfetivaAnual * 100,
+        2,
+      )}% a.a.)\n`;
+      content += `• Duração: ${fmtNum(ind.duracao, 2)} meses | Prazo médio: ${fmtNum(ind.prazoMedio, 2)} meses\n\n`;
+      content += `**Primeiras parcelas:**\n\`\`\`\n`;
+      content += primeiras.map(fmtLinha).join('\n') + '\n';
+      content += `\`\`\`\n`;
+      if (r.tabela.length > 6) {
+        content += `**Últimas parcelas:**\n\`\`\`\n`;
+        content += ultimas.map(fmtLinha).join('\n') + '\n';
+        content += `\`\`\`\n`;
+      }
+      return {
+        content,
+        sources: ['@aletis/financial-calc', 'Planilha MÉTODOS DE CÁLCULO.xlsm (Sisbr 2.0)'],
+        toolsUsed: ['financial-calc.simular'],
+      };
+    } catch (err) {
+      return {
+        content: `Não consegui simular (${(err as Error).message}). Confira os parâmetros.`,
+        sources: [],
+        toolsUsed: [],
+      };
+    }
+  }
+
+  private calcDiasUteis(
+    dataInicio: string,
+    dataFim: string,
+  ): { content: string; sources: string[]; toolsUsed: string[] } {
+    try {
+      const n = networkDays(dataInicio, dataFim, FERIADOS_NACIONAIS);
+      const absN = Math.abs(n);
+      return {
+        content: `Entre **${dataInicio}** e **${dataFim}** há **${absN} dia(s) útil(eis)** ${n < 0 ? '(intervalo invertido)' : ''}.\n\n_Calculado sobre tabela de 597 feriados nacionais Sisbr 2.0 (NETWORKDAYS)._`,
+        sources: ['@aletis/financial-calc', 'FERIADOS_NACIONAIS (Sisbr 2.0)'],
+        toolsUsed: ['financial-calc.networkDays'],
+      };
+    } catch (err) {
+      return {
+        content: `Não foi possível calcular dias úteis (${(err as Error).message}).`,
+        sources: [],
+        toolsUsed: [],
+      };
+    }
+  }
+
+  private calcTaxaEfetiva(
+    taxaNominalPct: number,
+    periodosAno: number,
+  ): { content: string; sources: string[]; toolsUsed: string[] } {
+    try {
+      const efetiva = taxaNominalParaEfetiva(taxaNominalPct, periodosAno);
+      return {
+        content:
+          `**Taxa nominal** ${fmtNum(taxaNominalPct, 4)}% capitalizada ${periodosAno}x/ano` +
+          `\n→ **Taxa efetiva anual**: ${fmtNum(efetiva, 4)}%\n\n` +
+          `_Spread efetivo-nominal: ${fmtNum(efetiva - taxaNominalPct, 4)} p.p._`,
+        sources: ['@aletis/financial-calc'],
+        toolsUsed: ['financial-calc.taxaNominalParaEfetiva'],
+      };
+    } catch (err) {
+      return {
+        content: `Não foi possível converter a taxa (${(err as Error).message}).`,
+        sources: [],
+        toolsUsed: [],
+      };
+    }
   }
 
   // ── Generic fallback ───────────────────────────────────
