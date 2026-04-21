@@ -8,6 +8,15 @@ export * from './dossie-agro.js';
 // ── Plano Simples de Custeio Agrícola 2026 ────────────────
 export * from './custeio.js';
 
+// ── Contabilidade (Lambda-backed: Balancete, DRE, EBITDA…) ─
+export * from './contabil.js';
+
+// ── Situação Fiscal / CND Checklist ───────────────────────
+export * from './fiscal.js';
+
+// ── Planner Financeiro Anual (orçado vs realizado) ────────
+export * from './planner.js';
+
 // ── Auth & Users ──────────────────────────────────────────
 export type UserRole = 'admin' | 'consultor_senior' | 'consultor_junior' | 'cliente';
 
