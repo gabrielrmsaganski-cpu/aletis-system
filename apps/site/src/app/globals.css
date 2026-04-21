@@ -1,0 +1,190 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════════
+   ALETIS — Site Institucional · Design System
+   Verde profundo · Dourado sofisticado · Marfim elegante
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  --aletis-verde: #0F4C35;
+  --aletis-verde-escuro: #0A3526;
+  --aletis-verde-profundo: #062019;
+  --aletis-dourado: #C9A84C;
+  --aletis-dourado-suave: #E8C97A;
+  --aletis-marfim: #FDFBF6;
+  --aletis-bege: #F8F5EF;
+  --aletis-borda: #E2DDD5;
+  --aletis-grafite: #1C1C1E;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-aletis-marfim text-aletis-grafite-escuro font-body antialiased;
+    font-feature-settings: 'ss01', 'cv01', 'cv11';
+  }
+
+  /* Seleção premium */
+  ::selection {
+    background: rgba(201, 168, 76, 0.35);
+    color: #062019;
+  }
+
+  /* Headings display */
+  h1, h2, h3 {
+    @apply font-display tracking-tight;
+  }
+
+  /* Scrollbar refinado */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(15, 76, 53, 0.25);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(15, 76, 53, 0.5);
+  }
+
+  /* Foco premium global */
+  *:focus-visible {
+    outline: 2px solid rgba(201, 168, 76, 0.7);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  /* ─── Linha dourada hair-line ─── */
+  .gold-hairline {
+    @apply inline-block h-px w-10 bg-aletis-dourado;
+  }
+
+  /* ─── Eyebrow (pequeno label acima de títulos) ─── */
+  .eyebrow {
+    @apply inline-flex items-center gap-2 text-[11px] font-display font-semibold uppercase tracking-widest2 text-aletis-dourado-escuro;
+  }
+
+  .eyebrow--light {
+    @apply text-aletis-dourado;
+  }
+
+  /* ─── Botões premium ─── */
+  .btn-primary {
+    @apply relative inline-flex items-center justify-center gap-2 rounded-full bg-aletis-dourado px-6 py-3 font-display text-sm font-semibold uppercase tracking-wider2 text-aletis-verde-escuro shadow-gold transition-all duration-300 hover:bg-aletis-dourado-suave hover:-translate-y-0.5 hover:shadow-[0_14px_45px_-18px_rgba(201,168,76,0.75)] active:translate-y-0;
+  }
+
+  .btn-ghost {
+    @apply relative inline-flex items-center justify-center gap-2 rounded-full border border-aletis-dourado/40 bg-transparent px-6 py-3 font-display text-sm font-semibold uppercase tracking-wider2 text-aletis-dourado transition-all duration-300 hover:border-aletis-dourado hover:bg-aletis-dourado/10;
+  }
+
+  .btn-secondary {
+    @apply relative inline-flex items-center justify-center gap-2 rounded-full border border-aletis-verde/30 bg-white px-6 py-3 font-display text-sm font-semibold uppercase tracking-wider2 text-aletis-verde-escuro transition-all duration-300 hover:border-aletis-verde hover:bg-aletis-verde hover:text-white;
+  }
+
+  /* ─── Card premium ─── */
+  .card-premium {
+    @apply relative overflow-hidden rounded-2xl border border-aletis-borda/70 bg-white p-6 shadow-premium-sm transition-all duration-500 hover:-translate-y-1 hover:border-aletis-dourado/40 hover:shadow-premium;
+  }
+
+  .card-dark {
+    @apply relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-aletis-verde-escuro to-aletis-verde-profundo p-6 text-white shadow-premium;
+  }
+
+  /* ─── Container refinado ─── */
+  .container-refined {
+    @apply mx-auto w-full max-w-[1240px] px-5 sm:px-8 lg:px-10;
+  }
+
+  /* ─── Link de navegação ─── */
+  .nav-link {
+    @apply relative font-body text-sm font-medium text-white/75 transition-colors duration-200 hover:text-white;
+  }
+
+  .nav-link::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -6px;
+    width: 0;
+    height: 1px;
+    background: var(--aletis-dourado);
+    transition: width 0.3s ease;
+  }
+
+  .nav-link:hover::after {
+    width: 100%;
+  }
+
+  /* ─── Ornamento de moldura dourada ─── */
+  .gold-frame {
+    position: relative;
+  }
+  .gold-frame::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 1px solid rgba(201, 168, 76, 0.25);
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  /* ─── Gradiente texto dourado ─── */
+  .text-gold-gradient {
+    background: linear-gradient(135deg, #F5E6B8 0%, #C9A84C 50%, #A68A3A 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* ─── Serif display com tracking fino ─── */
+  .display-xl {
+    @apply font-display text-4xl leading-[1.05] tracking-tight md:text-[56px] lg:text-[68px];
+  }
+  .display-lg {
+    @apply font-display text-3xl leading-[1.1] tracking-tight md:text-5xl;
+  }
+  .display-md {
+    @apply font-display text-2xl leading-[1.15] tracking-tight md:text-[34px];
+  }
+}
+
+/* ─── Reveal (fade-up ao entrar no viewport) ─── */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Respeita usuários que preferem menos movimento */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
