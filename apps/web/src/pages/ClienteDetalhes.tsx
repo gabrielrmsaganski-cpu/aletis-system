@@ -184,6 +184,74 @@ interface AbsResult {
   versao: string
 }
 
+// Snapshot do AutoCalcOrchestrator (Cliente Inteligente — Fase 1).
+// Shape em espelho de `apps/api/src/services/cliente/types.ts`.
+interface AnaliseCliente {
+  inputHash: string
+  geradoEm: string
+  versao: string
+  duracaoMs: number
+  srai: (SraiResult & { input: unknown }) | null
+  abs: (AbsResult & { input: unknown }) | null
+  saldoRecalculado: {
+    taxaMensalPadrao: number
+    dataCorte: string
+    totalValorOriginal: number
+    totalValorAtualizado: number
+    totalSaldoRecalculado: number
+    totalJurosAcumulados: number
+    porDivida: Array<{
+      contrato: string
+      credor: string
+      valorOriginal: number
+      valorAtualizado: number
+      saldoRecalculado: number
+      jurosAcumulados: number
+      diasDesdeVencimento: number
+    }>
+  } | null
+  projecao5Safras: {
+    anos: Array<{
+      ano: number
+      safra: string
+      receitaBruta: number
+      custoTotal: number
+      margemBruta: number
+      dividas: number
+      saldoLiquido: number
+      saldoAcumulado: number
+    }>
+    valorPresenteLiquido: number
+    viabilidade: 'VIAVEL' | 'APERTADO' | 'INVIAVEL'
+    anosCriticos: string[]
+    recomendacoes: string[]
+  } | null
+  fluxoCaixaSafra: {
+    receitaBruta: number
+    custoTotal: number
+    margemBruta: number
+    totalDividas: number
+    saldoLivre: number
+    capacidadePagamento: number
+    fluxoMensal: Array<{ mes: string; receita: number; despesa: number; saldo: number; saldoAcumulado: number }>
+  } | null
+  margemCliente: {
+    nome: string
+    receitaBruta: number
+    receitaLiquida: number
+    despesasAtribuidas: number
+    margem: number
+    margemPct: number
+    classificacao: 'ouro' | 'prata' | 'bronze' | 'prejuizo'
+  } | null
+  alertasTop: Array<{
+    nivel: 'critico' | 'alto' | 'moderado' | 'info'
+    origem: 'srai' | 'abs' | 'caixa' | 'dividas' | 'relacionamento'
+    mensagem: string
+  }>
+  erros: Record<string, string>
+}
+
 interface ExposicaoItem {
   commodity: string
   areaHa: number
@@ -688,6 +756,10 @@ export default function ClienteDetalhes() {
   const [abs, setAbs] = useState<AbsResult | null>(null)
   const [loadingRisco, setLoadingRisco] = useState(false)
   const [absQuery, setAbsQuery] = useState({ plantioDireto: false, ilpf: false, prada: false })
+  // Snapshot de análises automáticas (AutoCalcOrchestrator)
+  const [analises, setAnalises] = useState<AnaliseCliente | null>(null)
+  const [loadingAnalises, setLoadingAnalises] = useState(false)
+  const [recalculando, setRecalculando] = useState(false)
   // Exposição por commodity
   const [exposicao, setExposicao] = useState<ExposicaoItem[]>([])
   const [savingExposicao, setSavingExposicao] = useState(false)
@@ -838,6 +910,39 @@ export default function ClienteDetalhes() {
       })
       .finally(() => setLoadingRisco(false))
   }, [id, absQuery])
+
+  // Snapshot consolidado do AutoCalcOrchestrator — materializado no backend e
+  // servido em uma única chamada. Idempotente: a 2ª leitura devolve o mesmo
+  // objeto enquanto nada no cliente muda.
+  useEffect(() => {
+    if (!id) return
+    const apiId = id === 'ailton-caeiro' ? 'cli-001' : id === 'paulo-luciano' ? 'cli-002' : id
+    setLoadingAnalises(true)
+    // apiFetch auto-desembrulha { success, data } → devolve só `data`
+    apiFetch<AnaliseCliente>(`/clientes/${apiId}/analises`)
+      .then((data) => {
+        if (data) setAnalises(data)
+      })
+      .catch(() => { /* ignore — UI já mostra empty state */ })
+      .finally(() => setLoadingAnalises(false))
+  }, [id])
+
+  const recalcularAnalises = useCallback(async () => {
+    if (!id) return
+    const apiId = id === 'ailton-caeiro' ? 'cli-001' : id === 'paulo-luciano' ? 'cli-002' : id
+    setRecalculando(true)
+    try {
+      const data = await apiFetch<AnaliseCliente>(`/clientes/${apiId}/recalcular`, { method: 'POST' })
+      if (data) {
+        setAnalises(data)
+        showToast(`Análises recalculadas (${data.duracaoMs}ms)`, 'success')
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Falha ao recalcular', 'error')
+    } finally {
+      setRecalculando(false)
+    }
+  }, [id, showToast])
 
   const apiIdResolved = useMemo(
     () => (id === 'ailton-caeiro' ? 'cli-001' : id === 'paulo-luciano' ? 'cli-002' : id),
@@ -1188,6 +1293,14 @@ export default function ClienteDetalhes() {
            ════════════════════════════════════════════════════════ */}
       {activeTab === 'visao-geral' && (
         <div className="space-y-6 animate-fade-in">
+          {/* ══════════════ PAINEL INTELIGENTE (AutoCalcOrchestrator) ══════════════ */}
+          <PainelInteligente
+            analises={analises}
+            loading={loadingAnalises}
+            recalculando={recalculando}
+            onRecalcular={recalcularAnalises}
+          />
+
           {/* Info Cards Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* Dados Pessoais */}
@@ -2739,3 +2852,451 @@ function ClimaCell({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PainelInteligente — 6 cards de análises automáticas (Cliente Inteligente)
+   Consome o snapshot produzido pelo AutoCalcOrchestrator no backend.
+═══════════════════════════════════════════════════════════════════════ */
+
+interface PainelInteligenteProps {
+  analises: AnaliseCliente | null
+  loading: boolean
+  recalculando: boolean
+  onRecalcular: () => void
+}
+
+function PainelInteligente({ analises, loading, recalculando, onRecalcular }: PainelInteligenteProps) {
+  if (loading && !analises) {
+    return (
+      <div className="rounded-2xl border border-aletis-borda bg-white p-5">
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="w-9 h-9 rounded-lg bg-aletis-verde/10 flex items-center justify-center animate-pulse">
+            <Sparkles className="w-4 h-4 text-aletis-verde" />
+          </div>
+          <div>
+            <h3 className="text-base font-display font-semibold text-aletis-grafite-escuro">
+              Painel Inteligente
+            </h3>
+            <p className="text-xs font-body text-aletis-grafite-claro">Calculando análises automáticas...</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-32 rounded-xl bg-aletis-bege/40 animate-pulse" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (!analises) {
+    return (
+      <div className="rounded-2xl border border-aletis-borda bg-white p-5">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-aletis-verde/10 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-aletis-verde" />
+            </div>
+            <div>
+              <h3 className="text-base font-display font-semibold text-aletis-grafite-escuro">
+                Painel Inteligente
+              </h3>
+              <p className="text-xs font-body text-aletis-grafite-claro">
+                Análises ainda não foram geradas.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onRecalcular}
+            disabled={recalculando}
+            className="text-xs font-body font-semibold text-aletis-verde px-3 py-1.5 rounded-lg border border-aletis-verde hover:bg-aletis-verde hover:text-white transition-colors disabled:opacity-60"
+          >
+            {recalculando ? 'Calculando...' : 'Calcular agora'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const { srai, abs, saldoRecalculado, projecao5Safras, fluxoCaixaSafra, margemCliente, alertasTop } = analises
+
+  return (
+    <div className="rounded-2xl border border-aletis-borda bg-gradient-to-br from-white to-aletis-bege/30 p-5">
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-aletis-verde to-aletis-dourado flex items-center justify-center">
+            <Sparkles className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <h3 className="text-base font-display font-semibold text-aletis-grafite-escuro">
+              Painel Inteligente
+            </h3>
+            <p className="text-[11px] font-body text-aletis-grafite-claro">
+              {analises.versao} · gerado em {new Date(analises.geradoEm).toLocaleString('pt-BR')} · {analises.duracaoMs}ms
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={onRecalcular}
+          disabled={recalculando}
+          className="text-xs font-body font-semibold text-aletis-verde px-3 py-1.5 rounded-lg border border-aletis-verde hover:bg-aletis-verde hover:text-white transition-colors disabled:opacity-60"
+        >
+          {recalculando ? 'Recalculando...' : 'Recalcular'}
+        </button>
+      </div>
+
+      {/* Radar de alertas */}
+      {alertasTop.length > 0 && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+          <p className="text-[11px] font-body font-semibold uppercase tracking-wider text-amber-800 mb-2 flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3" /> Radar ({alertasTop.length})
+          </p>
+          <ul className="space-y-1">
+            {alertasTop.map((a, i) => (
+              <li key={i} className="text-xs font-body text-aletis-grafite-escuro flex items-start gap-2">
+                <span
+                  className={
+                    'inline-block w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ' +
+                    (a.nivel === 'critico'
+                      ? 'bg-red-500'
+                      : a.nivel === 'alto'
+                        ? 'bg-orange-500'
+                        : a.nivel === 'moderado'
+                          ? 'bg-amber-500'
+                          : 'bg-sky-500')
+                  }
+                />
+                <span className="flex-1 leading-snug">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-aletis-grafite-claro mr-1.5">
+                    {a.origem}
+                  </span>
+                  {a.mensagem}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 6 cards automáticos */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {/* Card 1 — SRAI */}
+        <CardAnalise
+          icon={<TrendingDown className="w-4 h-4" />}
+          titulo="Score SRAI"
+          legenda={srai?.versao ?? '—'}
+          vazio={!srai}
+        >
+          {srai && (
+            <>
+              <div className="flex items-baseline gap-2">
+                <span
+                  className={
+                    'text-3xl font-display font-bold ' +
+                    (srai.classificacao === 'baixo'
+                      ? 'text-positivo'
+                      : srai.classificacao === 'moderado'
+                        ? 'text-amber-600'
+                        : srai.classificacao === 'alto'
+                          ? 'text-orange-600'
+                          : 'text-red-600')
+                  }
+                >
+                  {srai.scoreTotal}
+                </span>
+                <span className="text-xs font-body uppercase tracking-wider text-aletis-grafite-medio">
+                  risco {srai.classificacao}
+                </span>
+              </div>
+              <div className="mt-2 grid grid-cols-4 gap-1">
+                {Object.entries(srai.componentes).map(([k, v]) => (
+                  <div key={k} className="rounded bg-aletis-bege/60 px-1.5 py-1">
+                    <p className="text-[9px] font-body text-aletis-grafite-claro uppercase truncate">{k.slice(0, 4)}</p>
+                    <p className="text-xs font-body font-semibold text-aletis-grafite-escuro">{v}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </CardAnalise>
+
+        {/* Card 2 — ABS */}
+        <CardAnalise
+          icon={<FileCheck className="w-4 h-4" />}
+          titulo="Elegibilidade AB+S"
+          legenda={abs?.versao ?? '—'}
+          vazio={!abs}
+        >
+          {abs && (
+            <>
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span
+                  className={
+                    'text-lg font-display font-bold capitalize ' +
+                    (abs.nivelElegibilidade === 'integral'
+                      ? 'text-positivo'
+                      : abs.nivelElegibilidade === 'parcial'
+                        ? 'text-amber-600'
+                        : abs.nivelElegibilidade === 'condicional'
+                          ? 'text-orange-600'
+                          : 'text-red-600')
+                  }
+                >
+                  {abs.nivelElegibilidade}
+                </span>
+                <span className="text-2xl font-display font-bold text-aletis-grafite-escuro">
+                  {abs.scorePercentual}%
+                </span>
+              </div>
+              {abs.taxasEstimadasPct.max > 0 && (
+                <p className="text-xs font-body text-aletis-grafite-medio mt-1">
+                  Taxa estimada: {abs.taxasEstimadasPct.min}%–{abs.taxasEstimadasPct.max}% a.a.
+                </p>
+              )}
+              <div className="mt-2 flex flex-wrap gap-1">
+                {abs.checkpoints.slice(0, 4).map((c) => (
+                  <span
+                    key={c.item}
+                    className={
+                      'text-[10px] font-body px-1.5 py-0.5 rounded ' +
+                      (c.status === 'ok'
+                        ? 'bg-positivo/15 text-positivo'
+                        : c.status === 'pendente'
+                          ? 'bg-amber-100 text-amber-700'
+                          : c.status === 'falha'
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-aletis-bege/60 text-aletis-grafite-medio')
+                    }
+                  >
+                    {c.item}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+        </CardAnalise>
+
+        {/* Card 3 — Saldo recalculado */}
+        <CardAnalise
+          icon={<CreditCard className="w-4 h-4" />}
+          titulo="Saldo Recalculado"
+          legenda={saldoRecalculado ? `Juros ${saldoRecalculado.taxaMensalPadrao}% a.m.` : '—'}
+          vazio={!saldoRecalculado}
+        >
+          {saldoRecalculado && (
+            <>
+              <p className="text-2xl font-display font-bold text-aletis-grafite-escuro font-mono">
+                {formatBRLCompact(saldoRecalculado.totalSaldoRecalculado)}
+              </p>
+              <div className="mt-1 flex flex-col gap-0.5">
+                <p className="text-[11px] font-body text-aletis-grafite-medio">
+                  Principal{' '}
+                  <span className="font-mono text-aletis-grafite-escuro">
+                    {formatBRLCompact(saldoRecalculado.totalValorOriginal)}
+                  </span>
+                </p>
+                <p className="text-[11px] font-body text-aletis-grafite-medio">
+                  Juros acumulados{' '}
+                  <span className="font-mono text-red-700 font-semibold">
+                    +{formatBRLCompact(saldoRecalculado.totalJurosAcumulados)}
+                  </span>
+                </p>
+                <p className="text-[10px] font-body text-aletis-grafite-claro">
+                  {saldoRecalculado.porDivida.length} dívida(s) · corte {saldoRecalculado.dataCorte}
+                </p>
+              </div>
+            </>
+          )}
+        </CardAnalise>
+
+        {/* Card 4 — Projeção 5 safras */}
+        <CardAnalise
+          icon={<TrendingUp className="w-4 h-4" />}
+          titulo="Projeção 5 safras"
+          legenda={projecao5Safras ? `VPL a 12% aa` : 'Cultura não informada'}
+          vazio={!projecao5Safras}
+        >
+          {projecao5Safras && (
+            <>
+              <div className="flex items-baseline gap-2">
+                <span
+                  className={
+                    'text-lg font-display font-bold ' +
+                    (projecao5Safras.viabilidade === 'VIAVEL'
+                      ? 'text-positivo'
+                      : projecao5Safras.viabilidade === 'APERTADO'
+                        ? 'text-amber-600'
+                        : 'text-red-600')
+                  }
+                >
+                  {projecao5Safras.viabilidade}
+                </span>
+                <span className="text-sm font-mono font-semibold text-aletis-grafite-escuro">
+                  VPL {formatBRLCompact(projecao5Safras.valorPresenteLiquido)}
+                </span>
+              </div>
+              <div className="mt-2 flex gap-0.5 items-end h-10">
+                {projecao5Safras.anos.map((a) => {
+                  const maxAbs = Math.max(
+                    ...projecao5Safras.anos.map((x) => Math.abs(x.saldoLiquido) || 1),
+                  )
+                  const h = Math.max(3, Math.round((Math.abs(a.saldoLiquido) / maxAbs) * 36))
+                  return (
+                    <div
+                      key={a.ano}
+                      className="flex-1 flex flex-col items-center gap-0.5"
+                      title={`${a.safra}: ${formatBRLCompact(a.saldoLiquido)}`}
+                    >
+                      <div
+                        style={{ height: `${h}px` }}
+                        className={
+                          'w-full rounded-sm ' +
+                          (a.saldoLiquido >= 0 ? 'bg-positivo/70' : 'bg-red-500/70')
+                        }
+                      />
+                      <span className="text-[9px] font-mono text-aletis-grafite-claro">{a.ano}</span>
+                    </div>
+                  )
+                })}
+              </div>
+              {projecao5Safras.anosCriticos.length > 0 && (
+                <p className="text-[10px] font-body text-red-700 mt-1">
+                  Críticos: {projecao5Safras.anosCriticos.join(', ')}
+                </p>
+              )}
+            </>
+          )}
+        </CardAnalise>
+
+        {/* Card 5 — Fluxo caixa safra */}
+        <CardAnalise
+          icon={<DollarSign className="w-4 h-4" />}
+          titulo="Fluxo Safra"
+          legenda={fluxoCaixaSafra ? `+6m pós-colheita` : 'Cultura não informada'}
+          vazio={!fluxoCaixaSafra}
+        >
+          {fluxoCaixaSafra && (
+            <>
+              <p
+                className={
+                  'text-2xl font-display font-bold font-mono ' +
+                  (fluxoCaixaSafra.saldoLivre >= 0 ? 'text-positivo' : 'text-red-600')
+                }
+              >
+                {formatBRLCompact(fluxoCaixaSafra.saldoLivre)}
+              </p>
+              <p className="text-[11px] font-body text-aletis-grafite-medio mt-0.5">saldo livre da safra</p>
+              <div className="mt-2 space-y-0.5">
+                <LinhaKV k="Receita" v={formatBRLCompact(fluxoCaixaSafra.receitaBruta)} />
+                <LinhaKV k="Custo" v={formatBRLCompact(fluxoCaixaSafra.custoTotal)} />
+                <LinhaKV k="Dívidas" v={formatBRLCompact(fluxoCaixaSafra.totalDividas)} />
+                <LinhaKV
+                  k="Comprometimento"
+                  v={`${fluxoCaixaSafra.capacidadePagamento.toFixed(0)}% da margem`}
+                  destaque={
+                    fluxoCaixaSafra.capacidadePagamento > 100
+                      ? 'red'
+                      : fluxoCaixaSafra.capacidadePagamento > 70
+                        ? 'amber'
+                        : 'green'
+                  }
+                />
+              </div>
+            </>
+          )}
+        </CardAnalise>
+
+        {/* Card 6 — Margem cliente (Financeiro) */}
+        <CardAnalise
+          icon={<Handshake className="w-4 h-4" />}
+          titulo="Margem Cliente"
+          legenda={margemCliente ? margemCliente.classificacao.toUpperCase() : 'Sem lançamentos'}
+          vazio={!margemCliente}
+        >
+          {margemCliente && (
+            <>
+              <div className="flex items-baseline gap-2">
+                <span
+                  className={
+                    'text-2xl font-display font-bold font-mono ' +
+                    (margemCliente.margem >= 0 ? 'text-positivo' : 'text-red-600')
+                  }
+                >
+                  {formatBRLCompact(margemCliente.margem)}
+                </span>
+                <span className="text-sm font-body font-semibold text-aletis-grafite-medio">
+                  {margemCliente.margemPct.toFixed(1)}%
+                </span>
+              </div>
+              <div className="mt-2 space-y-0.5">
+                <LinhaKV k="Receita líquida" v={formatBRLCompact(margemCliente.receitaLiquida)} />
+                <LinhaKV k="Despesas" v={formatBRLCompact(margemCliente.despesasAtribuidas)} />
+              </div>
+              <span
+                className={
+                  'inline-block mt-2 text-[10px] font-body font-semibold uppercase tracking-wider px-2 py-0.5 rounded ' +
+                  (margemCliente.classificacao === 'ouro'
+                    ? 'bg-aletis-dourado/20 text-aletis-dourado'
+                    : margemCliente.classificacao === 'prata'
+                      ? 'bg-sky-100 text-sky-700'
+                      : margemCliente.classificacao === 'bronze'
+                        ? 'bg-orange-100 text-orange-700'
+                        : 'bg-red-100 text-red-700')
+                }
+              >
+                {margemCliente.classificacao}
+              </span>
+            </>
+          )}
+        </CardAnalise>
+      </div>
+    </div>
+  )
+}
+
+function CardAnalise({
+  icon,
+  titulo,
+  legenda,
+  vazio,
+  children,
+}: {
+  icon: React.ReactNode
+  titulo: string
+  legenda: string
+  vazio: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div className="rounded-xl bg-white border border-aletis-borda/60 p-3.5 hover:border-aletis-verde/40 transition-colors">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-7 h-7 rounded-md bg-aletis-verde/10 flex items-center justify-center text-aletis-verde">
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <p className="text-[12px] font-display font-semibold text-aletis-grafite-escuro truncate">
+            {titulo}
+          </p>
+          <p className="text-[10px] font-body text-aletis-grafite-claro truncate">{legenda}</p>
+        </div>
+      </div>
+      {vazio ? (
+        <p className="text-xs font-body italic text-aletis-grafite-claro py-2">Dados insuficientes</p>
+      ) : (
+        <div>{children}</div>
+      )}
+    </div>
+  )
+}
+
+function LinhaKV({ k, v, destaque }: { k: string; v: string; destaque?: 'red' | 'amber' | 'green' }) {
+  const cor =
+    destaque === 'red' ? 'text-red-600' : destaque === 'amber' ? 'text-amber-700' : destaque === 'green' ? 'text-positivo' : 'text-aletis-grafite-escuro'
+  return (
+    <div className="flex items-center justify-between gap-2 text-[11px] font-body">
+      <span className="text-aletis-grafite-medio truncate">{k}</span>
+      <span className={`font-mono font-semibold ${cor}`}>{v}</span>
+    </div>
+  )
+}
+

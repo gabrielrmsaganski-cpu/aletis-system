@@ -1,14 +1,21 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { getProspeccaoService } from '../services/prospeccao/ProspeccaoService'
 import type { CarConsultaResult, ClimaAgro, CnpjEnrichment, GeoEnrichment, LeadFull, ProducaoMunicipal } from '../services/prospeccao/types'
-import { calcularSRAI, type SraiInput } from '../services/ScoreSRAI.js'
-import { verificarABS, type AbsInput } from '../services/VerificadorABS.js'
+import { calcularSRAI } from '../services/ScoreSRAI.js'
+import { verificarABS } from '../services/VerificadorABS.js'
 import {
   criarAcessoPortal,
   hashSenha,
   normalizarUsuario,
   type PortalAcesso,
 } from '../services/PortalAuthService.js'
+import {
+  getAutoCalcOrchestrator,
+  buildSraiInput,
+  buildAbsInput,
+  type ClienteParaAnalise,
+} from '../services/cliente/AutoCalcOrchestrator.js'
+import type { AnaliseCliente } from '../services/cliente/types.js'
 
 /* ========================================================================
  *  Portal do Cliente — tipos anexados
@@ -299,6 +306,13 @@ interface Cliente {
   portalAcesso?: PortalAcesso
   /** Histórico de mensagens do Portal do Cliente (cliente ↔ consultor). */
   portalMensagens?: PortalMensagem[]
+  /**
+   * Snapshot das análises automáticas (SRAI + ABS + dívidas + projeções +
+   * margem). Materializado pelo `AutoCalcOrchestrator` após enriquecimento e
+   * persistido em disco via `AnalisesRepository`. Fica hidratado em memória
+   * para o cliente não precisar disparar GET /srai + /abs + /... no mount.
+   */
+  analises?: AnaliseCliente
 }
 
 /* ========================================================================
@@ -730,12 +744,70 @@ async function enrichAndApply(
 }
 
 /* ========================================================================
+ *  AutoCalc — orquestrador de análises automáticas
+ * ======================================================================== */
+
+/**
+ * Dispara o orquestrador em background e, ao terminar, anexa o snapshot ao
+ * cliente em memória. Sem await — o consumidor vê o snapshot atualizado na
+ * próxima leitura (GET /clientes/:id). Idempotente via `inputHash`.
+ */
+function scheduleAnalises(cliente: Cliente, motivo: string): void {
+  const orch = getAutoCalcOrchestrator()
+  orch.schedule(cliente as unknown as ClienteParaAnalise)
+  // Quando concluir, hidrata `cliente.analises` e (se algo mudou) registra evento.
+  setImmediate(async () => {
+    try {
+      const analise = await orch.orchestrate(cliente as unknown as ClienteParaAnalise)
+      const antes = cliente.analises
+      cliente.analises = analise
+      const mudouSrai =
+        antes?.srai?.scoreTotal !== analise.srai?.scoreTotal ||
+        antes?.srai?.classificacao !== analise.srai?.classificacao
+      if (mudouSrai && analise.srai) {
+        cliente.timeline.push({
+          data: new Date().toISOString().slice(0, 10),
+          tipo: 'analise',
+          descricao: antes?.srai
+            ? `Score SRAI atualizado: ${antes.srai.scoreTotal} → ${analise.srai.scoreTotal} (${analise.srai.classificacao})`
+            : `Análise automática concluída: SRAI ${analise.srai.scoreTotal} (${analise.srai.classificacao})`,
+          detalhes: motivo,
+        })
+      }
+    } catch {
+      // erros já são logados pelo orquestrador
+    }
+  })
+}
+
+/** Backfill de análises ao boot — garante que seeds tenham snapshot inicial. */
+function backfillSeedAnalises(): void {
+  const alvos = Array.from(clientes.values())
+  if (alvos.length === 0) return
+  setImmediate(async () => {
+    // Aguarda o enriquecimento CAR/geo terminar (500ms × N + margem)
+    await new Promise((r) => setTimeout(r, 1500))
+    for (const c of alvos) {
+      try {
+        const analise = await getAutoCalcOrchestrator().orchestrate(c as unknown as ClienteParaAnalise)
+        c.analises = analise
+      } catch {
+        // best-effort
+      }
+      await new Promise((r) => setTimeout(r, 50))
+    }
+  })
+}
+
+/* ========================================================================
  *  Roteador
  * ======================================================================== */
 
 export default async function (fastify: FastifyInstance) {
   // Backfill seed clients with CAR data when the module registers.
   backfillSeedEnrichment()
+  // Hidrata seeds com o snapshot de análises (após enriquecimento).
+  backfillSeedAnalises()
 
   /* ---- LIST ---- */
   fastify.get('/api/clientes', async (request: FastifyRequest, _reply: FastifyReply) => {
@@ -865,6 +937,12 @@ export default async function (fastify: FastifyInstance) {
       new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 3000)),
     ])
 
+    // Dispara análises automáticas (SRAI, ABS, saldos, projeções, margem) —
+    // fire-and-forget. Se o enriquecimento ainda estiver em voo, agenda outra
+    // passada quando ele terminar para re-hidratar com CAR/clima/CNPJ.
+    scheduleAnalises(novo, 'cadastro inicial')
+    enrichPromise.then(() => scheduleAnalises(novo, 'pós-enriquecimento'))
+
     reply.status(201)
     return {
       success: true,
@@ -952,6 +1030,9 @@ export default async function (fastify: FastifyInstance) {
     }
 
     clientes.set(id, cliente)
+    // Qualquer PATCH pode mudar dívidas/área/cultura/estágio/exposição — o
+    // orquestrador usa hash(input) então, se nada afetar análises, é no-op.
+    scheduleAnalises(cliente, 'patch cliente')
     return { success: true, data: cliente, carEnrichment: carEnrichmentStatus }
   })
 
@@ -976,6 +1057,8 @@ export default async function (fastify: FastifyInstance) {
       motivo: codImovel ? `live via código ${codImovel}` : 'reconsulta manual',
     })
     clientes.set(id, cliente)
+    // Área e CAR acabaram de mudar — ABS/SRAI dependem disso.
+    scheduleAnalises(cliente, 'reenriquecimento CAR manual')
 
     return {
       success: true,
@@ -1144,11 +1227,16 @@ export default async function (fastify: FastifyInstance) {
     clientes.set(id, novo)
 
     // Enriquecimento em background (geo + clima + produção). Fire-and-forget.
+    // Após o enrichment concluir, roda o orquestrador com o estado já completo.
     setImmediate(() => {
-      enrichAndApply(novo, { motivo: 'import prospecção PGFN' }).catch((err) => {
-        request.log.warn({ err, clienteId: id }, 'falha no enriquecimento pós-import prospecção')
-      })
+      enrichAndApply(novo, { motivo: 'import prospecção PGFN' })
+        .then(() => scheduleAnalises(novo, 'pós-import prospecção'))
+        .catch((err) => {
+          request.log.warn({ err, clienteId: id }, 'falha no enriquecimento pós-import prospecção')
+        })
     })
+    // Já dispara uma primeira passada com o que temos (dívidas PGFN + CAR se veio).
+    scheduleAnalises(novo, 'import prospecção PGFN')
 
     reply.status(201)
     return {
@@ -1167,40 +1255,7 @@ export default async function (fastify: FastifyInstance) {
       reply.status(404)
       return { success: false, error: 'Cliente não encontrado' }
     }
-    const hoje = new Date()
-    const diasAtrasoMaximo = cliente.dividas.reduce((max, d) => {
-      if (d.status === 'paga') return max
-      const venc = new Date(d.vencimento)
-      const dias = Math.floor((hoje.getTime() - venc.getTime()) / 86400000)
-      return dias > max ? dias : max
-    }, 0)
-    const ultimoContato = cliente.timeline
-      .filter((t) => t.tipo === 'contato' || t.tipo === 'reuniao')
-      .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())[0]
-    const diasUltimoContato = ultimoContato
-      ? Math.floor((hoje.getTime() - new Date(ultimoContato.data).getTime()) / 86400000)
-      : 365
-    const anomaliaChuvaPct =
-      cliente.clima?.chuvaAcumuladaAnualMm && cliente.clima.chuvaAcumuladaAnualMm > 0
-        ? ((cliente.clima.chuvaAcumuladaAnualMm - 1500) / 1500) * 100
-        : undefined
-
-    const input: SraiInput = {
-      valorTotalDivida: cliente.valorTotalDivida,
-      valorTotalPago: cliente.valorTotalPago,
-      numeroContratosAtivos: cliente.dividas.filter((d) => d.status !== 'paga').length,
-      temAjuizamento: cliente.leadOrigem?.temAjuizada ?? false,
-      diasAtrasoMaximo: Math.max(0, diasAtrasoMaximo),
-      areaTotalHa: cliente.areaTotalHa,
-      culturas: cliente.culturas,
-      temCar: !!cliente.car,
-      carCondicao: cliente.car?.condicaoCadastro,
-      anomaliaChuvaPct,
-      tempMediaAnualC: cliente.clima?.tempMediaAnualC ?? undefined,
-      exposicaoDiversificada: (cliente.exposicaoCommodity?.length ?? 0) >= 2,
-      diasUltimoContato,
-      temProximaAcao: !!cliente.proximaAcao,
-    }
+    const input = buildSraiInput(cliente as unknown as ClienteParaAnalise)
     const score = calcularSRAI(input)
     return { success: true, data: { ...score, input } }
   })
@@ -1213,31 +1268,46 @@ export default async function (fastify: FastifyInstance) {
       reply.status(404)
       return { success: false, error: 'Cliente não encontrado' }
     }
-    const body = (request.query as { plantioDireto?: string; ilpf?: string; prada?: string }) || {}
-    const anomaliaChuvaPct =
-      cliente.clima?.chuvaAcumuladaAnualMm && cliente.clima.chuvaAcumuladaAnualMm > 0
-        ? ((cliente.clima.chuvaAcumuladaAnualMm - 1500) / 1500) * 100
-        : undefined
-    const input: AbsInput = {
-      temCar: !!cliente.car,
-      carCondicao: cliente.car?.condicaoCadastro,
-      carStatus: cliente.carStatus?.status,
-      areaImovel: cliente.car?.areaImovel,
-      areaReservaLegal: cliente.car?.areaReservaLegal,
-      areaVegetacaoNativa: cliente.car?.areaVegetacaoNativa,
-      modulosFiscais: cliente.car?.modulosFiscais,
-      temAjuizamento: cliente.leadOrigem?.temAjuizada ?? false,
-      situacaoCadastralCnpj: cliente.cnpjInfo?.situacaoCadastral,
-      optantePeloSimples: cliente.cnpjInfo?.optantePeloSimples,
-      culturas: cliente.culturas,
-      atividade: cliente.atividade,
-      temPlantioDireto: body.plantioDireto === 'true',
-      temIntegracaoLPF: body.ilpf === 'true',
-      temPlanoRecuperacao: body.prada === 'true',
-      anomaliaChuvaPct,
-    }
+    const q = (request.query as { plantioDireto?: string; ilpf?: string; prada?: string }) || {}
+    const input = buildAbsInput(cliente as unknown as ClienteParaAnalise, {
+      plantioDireto: q.plantioDireto === 'true',
+      ilpf: q.ilpf === 'true',
+      prada: q.prada === 'true',
+    })
     const resultado = verificarABS(input)
     return { success: true, data: { ...resultado, input } }
+  })
+
+  /* ---- SNAPSHOT DE ANÁLISES AUTOMÁTICAS (Cliente Inteligente) ---- */
+  fastify.get('/api/clientes/:id/analises', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string }
+    const cliente = clientes.get(id)
+    if (!cliente) {
+      reply.status(404)
+      return { success: false, error: 'Cliente não encontrado' }
+    }
+    const orch = getAutoCalcOrchestrator()
+    let analise = cliente.analises ?? orch.get(id)
+    if (!analise) {
+      // Primeira leitura — força a execução síncrona (≈50-200ms)
+      analise = await orch.orchestrate(cliente as unknown as ClienteParaAnalise)
+      cliente.analises = analise
+    }
+    return { success: true, data: analise }
+  })
+
+  /* ---- RECALCULAR ANÁLISES (força nova execução) ---- */
+  fastify.post('/api/clientes/:id/recalcular', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string }
+    const cliente = clientes.get(id)
+    if (!cliente) {
+      reply.status(404)
+      return { success: false, error: 'Cliente não encontrado' }
+    }
+    const orch = getAutoCalcOrchestrator()
+    const analise = await orch.orchestrate(cliente as unknown as ClienteParaAnalise, { force: true })
+    cliente.analises = analise
+    return { success: true, data: analise }
   })
 
   /* ---- EXPOSIÇÃO POR COMMODITY ---- */
