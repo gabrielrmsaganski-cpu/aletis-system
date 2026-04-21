@@ -217,6 +217,30 @@ interface SicarStatus {
   captcha: { enabled: boolean; balanceUsd: number | null; error: string | null }
   index: SicarIndexStats
 }
+interface FilaJob {
+  id: string
+  cpfCnpj: string
+  prioridade: 'alta' | 'normal' | 'baixa'
+  motivo: string
+  status: 'pending' | 'running' | 'done' | 'failed' | 'cancelled'
+  attempts: number
+  nextAttemptAt: number
+  lastError?: string
+  batchId?: string
+  createdAt: string
+  startedAt?: string
+  completedAt?: string
+}
+interface FilaStats {
+  pending: number
+  running: number
+  done: number
+  failed: number
+  cancelled: number
+  ultimasFalhas: FilaJob[]
+  emVoo: FilaJob[]
+  proximos: FilaJob[]
+}
 interface Stats {
   totalLeads: number
   totalDivida: number
@@ -353,6 +377,9 @@ export default function Prospeccao() {
   const [registrandoContato, setRegistrandoContato] = useState(false)
   const [contatoModalOpen, setContatoModalOpen] = useState(false)
 
+  // Fila persistente de enriquecimento (Onda 3)
+  const [filaStats, setFilaStats] = useState<FilaStats | null>(null)
+
   const loadStats = useCallback(async () => {
     setLoadingStats(true)
     try {
@@ -423,10 +450,26 @@ export default function Prospeccao() {
     }
   }, [])
 
+  const loadFilaStats = useCallback(async () => {
+    try {
+      const r = await fetch('/api/prospeccao/fila')
+      const j = await r.json()
+      if (j.success) setFilaStats(j.data)
+    } catch (e) {
+      console.warn('[fila] erro', e)
+    }
+  }, [])
+
   useEffect(() => { loadStats() }, [loadStats])
   useEffect(() => { loadSicarStatus() }, [loadSicarStatus])
   useEffect(() => { loadHotLeads() }, [loadHotLeads])
   useEffect(() => { search() }, [search])
+  // Polling da fila — só ativa enquanto houver jobs em voo ou pendentes.
+  useEffect(() => {
+    loadFilaStats()
+    const id = setInterval(loadFilaStats, 3000)
+    return () => clearInterval(id)
+  }, [loadFilaStats])
   // reset para página 1 quando a aba de status muda
   useEffect(() => { setPage(1) }, [statusTab])
 
@@ -702,6 +745,14 @@ export default function Prospeccao() {
         onOpen={openLeadByCpf}
         onRefresh={loadHotLeads}
       />
+
+      {/* Fila persistente de enriquecimento — visível só se tem trabalho ativo */}
+      {filaStats && (filaStats.pending + filaStats.running + filaStats.failed > 0) && (
+        <FilaEnriquecimentoPanel stats={filaStats} onRetry={async (id) => {
+          await fetch(`/api/prospeccao/fila/${id}/retry`, { method: 'POST' })
+          loadFilaStats()
+        }} />
+      )}
 
       {/* Toolbar de filtros */}
       <FilterPanel
@@ -2978,5 +3029,102 @@ function RegistrarContatoModal({
         </div>
       </div>
     </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   FilaEnriquecimentoPanel — status da fila persistente (Onda 3)
+   Mostra contadores, jobs em voo e últimas falhas com retry manual.
+═══════════════════════════════════════════════════════════════════════ */
+
+function FilaEnriquecimentoPanel({
+  stats,
+  onRetry,
+}: {
+  stats: FilaStats
+  onRetry: (id: string) => void | Promise<void>
+}) {
+  const totalAtivo = stats.pending + stats.running
+  return (
+    <div className="bg-white dark:bg-aletis-grafite-escuro rounded-2xl border border-aletis-borda dark:border-white/5 p-5">
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-lg bg-aletis-dourado/10 flex items-center justify-center">
+            <RefreshCw className={'w-4 h-4 text-aletis-dourado' + (stats.running > 0 ? ' animate-spin' : '')} />
+          </div>
+          <div>
+            <h3 className="text-base font-display font-semibold text-aletis-grafite-escuro dark:text-white">
+              Fila de enriquecimento
+            </h3>
+            <p className="text-[11px] font-body text-aletis-grafite-claro dark:text-white/50">
+              {totalAtivo > 0
+                ? `${totalAtivo} em processamento · ${stats.failed} falhas`
+                : `${stats.failed} falhas pendentes — clique retry para reprocessar`}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs font-body">
+          <BadgeFila label="Pendentes" valor={stats.pending} tone="amber" />
+          <BadgeFila label="Em voo" valor={stats.running} tone="sky" />
+          <BadgeFila label="Falhas" valor={stats.failed} tone="red" />
+          <BadgeFila label="Concluídos" valor={stats.done} tone="green" />
+        </div>
+      </div>
+
+      {stats.emVoo.length > 0 && (
+        <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50/60 dark:bg-sky-500/5 p-2.5">
+          <p className="text-[10px] font-body font-semibold uppercase tracking-wider text-sky-800 dark:text-sky-300 mb-1.5">
+            Processando agora ({stats.emVoo.length})
+          </p>
+          <ul className="space-y-1">
+            {stats.emVoo.slice(0, 3).map((j) => (
+              <li key={j.id} className="text-[11px] font-mono text-aletis-grafite-escuro dark:text-white/80">
+                {j.cpfCnpj} · tentativa {j.attempts}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {stats.ultimasFalhas.length > 0 && (
+        <div className="rounded-lg border border-red-200 bg-red-50/60 dark:bg-red-500/5 p-2.5">
+          <p className="text-[10px] font-body font-semibold uppercase tracking-wider text-red-800 dark:text-red-300 mb-1.5">
+            Últimas falhas ({stats.ultimasFalhas.length})
+          </p>
+          <ul className="space-y-1.5">
+            {stats.ultimasFalhas.slice(0, 5).map((j) => (
+              <li key={j.id} className="flex items-start gap-2 text-[11px]">
+                <span className="font-mono text-aletis-grafite-escuro dark:text-white/80 flex-shrink-0">
+                  {j.cpfCnpj}
+                </span>
+                <span className="flex-1 text-aletis-grafite-medio dark:text-white/60 truncate italic">
+                  {j.lastError || 'erro desconhecido'}
+                </span>
+                <button
+                  onClick={() => onRetry(j.id)}
+                  className="text-[10px] font-body font-semibold text-aletis-verde hover:underline flex-shrink-0"
+                >
+                  Retry
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BadgeFila({ label, valor, tone }: { label: string; valor: number; tone: 'amber' | 'sky' | 'red' | 'green' }) {
+  const classes =
+    tone === 'amber' ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300'
+    : tone === 'sky' ? 'bg-sky-100 text-sky-800 dark:bg-sky-500/10 dark:text-sky-300'
+    : tone === 'red' ? 'bg-red-100 text-red-800 dark:bg-red-500/10 dark:text-red-300'
+    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300'
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-mono font-semibold text-[11px] ${classes}`}>
+      {valor}
+      <span className="text-[9px] font-body uppercase tracking-wider opacity-80">{label}</span>
+    </span>
   )
 }

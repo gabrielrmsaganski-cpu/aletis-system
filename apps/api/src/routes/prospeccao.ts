@@ -338,6 +338,67 @@ export default async function prospeccaoRoutes(app: FastifyInstance) {
     }
   )
 
+  /* ═══════════════════ Fila persistente de enriquecimento ═══════════════════
+   * Substitui o fluxo in-memory do `enriquecer-lote` por jobs persistidos
+   * com backoff em disco. O cliente dispara e some — o drainer processa em
+   * background e sobrevive a reinícios da API.
+   */
+
+  app.post(
+    '/api/prospeccao/fila/agendar',
+    async (req: FastifyRequest<{
+      Body: ProspeccaoFilters & { prioridade?: 'alta' | 'normal' | 'baixa'; motivo?: string }
+    }>) => {
+      const body = (req.body || {}) as ProspeccaoFilters & { prioridade?: 'alta' | 'normal' | 'baixa'; motivo?: string }
+      const { prioridade, motivo, ...filters } = body
+      const res = service.enfileirarLote(filters, { prioridade, motivo })
+      return { success: true, data: res }
+    }
+  )
+
+  app.get('/api/prospeccao/fila', async () => {
+    return { success: true, data: service.getQueue().stats() }
+  })
+
+  app.get(
+    '/api/prospeccao/fila/jobs',
+    async (req: FastifyRequest<{
+      Querystring: { status?: 'pending' | 'running' | 'done' | 'failed' | 'cancelled'; batchId?: string; limite?: string }
+    }>) => {
+      const { status, batchId, limite } = req.query || {}
+      const jobs = service.getQueue().listarJobs({
+        status,
+        batchId,
+        limite: limite ? Number(limite) : undefined,
+      })
+      return { success: true, data: jobs }
+    }
+  )
+
+  app.post(
+    '/api/prospeccao/fila/:id/retry',
+    async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const job = service.getQueue().retry(req.params.id)
+      if (!job) {
+        reply.status(404)
+        return { success: false, error: 'Job não encontrado' }
+      }
+      return { success: true, data: job }
+    }
+  )
+
+  app.delete(
+    '/api/prospeccao/fila/:id',
+    async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const ok = service.getQueue().cancel(req.params.id)
+      if (!ok) {
+        reply.status(409)
+        return { success: false, error: 'Job em execução ou já finalizado' }
+      }
+      return { success: true }
+    }
+  )
+
   app.post(
     '/api/prospeccao/export.csv',
     async (req: FastifyRequest, reply: FastifyReply) => {

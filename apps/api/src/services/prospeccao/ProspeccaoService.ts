@@ -9,6 +9,7 @@ import { GeoEnrichmentSource, getGeoEnrichmentSource } from './GeoEnrichmentSour
 import { NasaPowerSource, getNasaPowerSource } from './NasaPowerSource'
 import { IbgeSidraSource, getIbgeSidraSource } from './IbgeSidraSource'
 import { LeadsRepository, BlacklistEntry } from './LeadsRepository'
+import { EnrichmentQueue, type EnrichmentJob, type JobPrioridade } from './EnrichmentQueue'
 import type {
   AreaEstimation,
   CarConsultaResult,
@@ -56,6 +57,7 @@ export class ProspeccaoService {
   private nasaPower: NasaPowerSource
   private ibgeSidra: IbgeSidraSource
   private repo: LeadsRepository
+  private queue: EnrichmentQueue
 
   /** Controle de lotes em execução (key = batchId). */
   private activeBatches = new Map<string, { cancelled: boolean }>()
@@ -71,6 +73,54 @@ export class ProspeccaoService {
     this.nasaPower = getNasaPowerSource()
     this.ibgeSidra = getIbgeSidraSource()
     this.repo = new LeadsRepository(storageDir)
+    this.queue = new EnrichmentQueue(storageDir)
+    this.queue.setRunner(async (cpfCnpj) => {
+      const enriched = await this.enrichLead(cpfCnpj)
+      if (!enriched) throw new Error('enrichLead devolveu null')
+    })
+    this.queue.start()
+  }
+
+  /** Acesso à fila persistente — usado pelas rotas REST. */
+  getQueue(): EnrichmentQueue {
+    return this.queue
+  }
+
+  /**
+   * Enfileira CPF/CNPJs que batem os filtros — mesmo predicado usado no
+   * `enriquecerLote` antigo, mas agora persiste os jobs e retorna imediato.
+   * O drainer da fila executa em background com backoff por falha.
+   */
+  enfileirarLote(
+    filters: ProspeccaoFilters,
+    opts: { prioridade?: JobPrioridade; motivo?: string } = {},
+  ): { batchId: string; enfileirados: number; jaNaFila: number; total: number } {
+    const targets = this.pgfn.all().filter((raw) => {
+      const decorated = this.buildBasic(raw)
+      if (decorated.status === 'excluido') return false
+      if (decorated.status === 'completa') return false
+      if (filters.uf) {
+        const ufs = Array.isArray(filters.uf) ? filters.uf : [filters.uf]
+        if (!ufs.map((u) => u.toUpperCase()).includes(decorated.uf)) return false
+      }
+      if (filters.minDivida != null && decorated.totalDivida < filters.minDivida) return false
+      if (filters.maxDivida != null && decorated.totalDivida > filters.maxDivida) return false
+      if (filters.minHectares != null && decorated.area.hectaresEstimados < filters.minHectares) return false
+      if (filters.tipoPessoa && decorated.tipoPessoa !== filters.tipoPessoa) return false
+      if (filters.apenasAjuizadas && !decorated.temAjuizada) return false
+      if (filters.termo) {
+        const hay = (decorated.nome + ' ' + decorated.cpfCnpj).toUpperCase()
+        if (!hay.includes(filters.termo.toUpperCase())) return false
+      }
+      return true
+    })
+
+    const res = this.queue.enqueueBatch({
+      cpfCnpjs: targets.map((t) => t.cpfCnpj),
+      prioridade: opts.prioridade ?? 'normal',
+      motivo: opts.motivo ?? `lote filtros=${JSON.stringify(filters)}`,
+    })
+    return { ...res, total: targets.length }
   }
 
   /**
