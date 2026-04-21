@@ -15,6 +15,7 @@ import CRM from './pages/CRM'
 // Heavy pages — lazy-loaded. Bundles pesados (Leaflet, Chart.js, markdown, etc)
 // só chegam ao cliente quando a rota correspondente é visitada.
 const ClienteDetalhes = lazy(() => import('./pages/ClienteDetalhes'))
+const ClienteDossie = lazy(() => import('./pages/ClienteDossie'))
 const Propostas = lazy(() => import('./pages/Propostas'))
 const Contratos = lazy(() => import('./pages/Contratos'))
 const Mercado = lazy(() => import('./pages/Mercado'))
@@ -27,6 +28,7 @@ const Configuracoes = lazy(() => import('./pages/Configuracoes'))
 const ALIX = lazy(() => import('./pages/ALIX'))
 const Prospeccao = lazy(() => import('./pages/Prospeccao'))
 const Financeiro = lazy(() => import('./pages/Financeiro'))
+const CusteioAgricola = lazy(() => import('./pages/CusteioAgricola'))
 
 function RouteFallback() {
   return (
@@ -59,6 +61,7 @@ export default function App() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/crm" element={<CRM />} />
                 <Route path="/clientes/:id" element={<ClienteDetalhes />} />
+                <Route path="/clientes/:id/dossie" element={<ClienteDossie />} />
                 <Route path="/propostas" element={<Propostas />} />
                 <Route path="/contratos" element={<Contratos />} />
                 <Route path="/mercado" element={<Mercado />} />
@@ -67,6 +70,8 @@ export default function App() {
                 <Route path="/ia" element={<ALIX />} />
                 <Route path="/prospeccao" element={<Prospeccao />} />
                 <Route path="/financeiro" element={<Financeiro />} />
+                <Route path="/custeio" element={<CusteioAgricola />} />
+                <Route path="/custeio/:id" element={<CusteioAgricola />} />
                 <Route path="/relatorios" element={<Relatorios />} />
                 <Route path="/clima" element={<Clima />} />
                 <Route path="/configuracoes" element={<Configuracoes />} />

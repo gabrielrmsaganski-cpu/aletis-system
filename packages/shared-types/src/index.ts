@@ -2,6 +2,9 @@
 // ALETIS SHARED TYPES — Domain Models
 // ============================================================
 
+// ── Dossiê Agro (padrão Daycoval 2025) ────────────────────
+export * from './dossie-agro';
+
 // ── Auth & Users ──────────────────────────────────────────
 export type UserRole = 'admin' | 'consultor_senior' | 'consultor_junior' | 'cliente';
 

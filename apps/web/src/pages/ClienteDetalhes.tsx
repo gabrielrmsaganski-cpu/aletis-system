@@ -1261,6 +1261,14 @@ export default function ClienteDetalhes() {
                 <FileText className="w-4 h-4" />
                 Gerar Proposta
               </button>
+              <Link
+                to={`/clientes/${cliente.id}/dossie`}
+                className="btn-outline inline-flex items-center gap-2 text-sm px-4 py-2.5"
+                title="Dossiê Agro Canônico (padrão Daycoval 2025)"
+              >
+                <FileCheck className="w-4 h-4" />
+                Dossiê Agro
+              </Link>
               <button onClick={handleEnviarWhatsApp} className="btn-outline inline-flex items-center gap-2 text-sm px-4 py-2.5">
                 <MessageCircle className="w-4 h-4" />
                 Enviar WhatsApp
