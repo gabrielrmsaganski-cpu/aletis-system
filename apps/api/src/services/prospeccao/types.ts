@@ -222,6 +222,60 @@ export interface LeadScore {
 /** Status do lead no pipeline de prospecção. */
 export type LeadStatus = 'pendente' | 'completa' | 'excluido'
 
+/**
+ * Resultado de um contato realizado com o lead. Alimenta o feedback loop do
+ * scoring — leads respondidos positivamente são priorizados; os que fecham
+ * porta entram na blacklist automaticamente.
+ */
+export type ContactOutcomeTipo =
+  | 'sucesso' // agendou reunião / avançou na conversa
+  | 'interessado' // pediu mais tempo / mandou info pra avaliar
+  | 'retornar' // não atendeu / deixar para reagendar
+  | 'recusou' // disse não explicitamente
+  | 'ja_regularizou' // já quitou/renegociou com outra mesa
+  | 'nao_agro' // perfil não é agro — falso positivo
+  | 'fora_target' // agro, mas fora do perfil ALETIS
+
+export interface ContactOutcome {
+  cpfCnpj: string
+  cpfCnpjClean: string
+  tipo: ContactOutcomeTipo
+  canal?: 'whatsapp' | 'telefone' | 'email' | 'presencial' | 'outro'
+  notas?: string
+  registradoPor?: string
+  registradoEm: string
+}
+
+/**
+ * Métrica resumida do feedback loop para um lead — derivada dos outcomes
+ * registrados. Alimenta o componente HotLead e prioriza a agenda.
+ */
+export interface LeadFeedback {
+  totalContatos: number
+  ultimoOutcome?: ContactOutcomeTipo
+  ultimoContatoEm?: string
+  /** Ajuste ao score base derivado do histórico de contatos (-30 a +20). */
+  ajusteScore: number
+  /** Sinalizador UI — true se o lead merece retomar contato. */
+  reengajar: boolean
+}
+
+/** Rota de hot-lead — lead quente sem contato recente. */
+export interface HotLeadAlert {
+  cpfCnpj: string
+  cpfCnpjClean: string
+  nome: string
+  uf: string
+  scoreTotal: number
+  classificacao: LeadScore['classificacao']
+  honorariosEstimados: number
+  totalDivida: number
+  ultimoContatoEm?: string
+  diasSemContato: number
+  urgencia: 'imediata' | 'alta' | 'media'
+  motivo: string
+}
+
 /** Lead enriquecido — o objeto que a UI consome. */
 export interface LeadFull {
   cpfCnpj: string
@@ -255,6 +309,10 @@ export interface LeadFull {
     pontosChave: string[]
     geradoEm: string
   }
+  /** Histórico consolidado de contatos (feedback loop). */
+  feedback?: LeadFeedback
+  /** Lista completa de outcomes — útil para auditoria e UI de histórico. */
+  contatos?: ContactOutcome[]
 }
 
 export interface ProspeccaoFilters {
@@ -280,6 +338,10 @@ export interface ProspeccaoStats {
   leadsComAjuizamento: number
   leadsCompletos: number
   leadsExcluidos: number
+  /** Hot-leads pendentes de ação — quente + sem contato nos últimos 14d. */
+  hotLeadsPendentes: number
+  /** Leads com outcome "retornar" prontos para re-engajamento (cooldown passou). */
+  leadsParaReengajar: number
   porUf: Array<{ uf: string; count: number; divida: number }>
   porFaixaDivida: Array<{ faixa: string; count: number }>
   topSignals: Array<{ signal: string; count: number }>

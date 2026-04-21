@@ -14,7 +14,10 @@ import type {
   CarConsultaResult,
   ClimaAgro,
   CnpjEnrichment,
+  ContactOutcome,
+  ContactOutcomeTipo,
   GeoEnrichment,
+  HotLeadAlert,
   LeadFull,
   LeadRaw,
   LeadStatus,
@@ -22,6 +25,20 @@ import type {
   ProspeccaoFilters,
   ProspeccaoStats,
 } from './types'
+
+/**
+ * Outcome → decisão automática: quais tipos disparam blacklist imediata. Vem
+ * da lógica "se a porta fechou, não me faz perder tempo com o lead de novo".
+ */
+const OUTCOMES_QUE_EXCLUEM: Record<ContactOutcomeTipo, string | null> = {
+  sucesso: null,
+  interessado: null,
+  retornar: null,
+  recusou: 'Recusou durante contato',
+  ja_regularizou: 'Já regularizou com outra mesa',
+  nao_agro: 'Perfil não é agro (falso positivo)',
+  fora_target: 'Agro mas fora do perfil ALETIS',
+}
 
 /**
  * Orquestra a prospecção agro — combina PGFN + BrasilAPI + estimativa de área
@@ -95,7 +112,134 @@ export class ProspeccaoService {
       out.excluidoMotivo = black.motivo
       out.excluidoEm = black.excluidoEm
     }
+    // Aplica feedback loop ao score — ajuste vem do histórico de contatos,
+    // acumulado com decaimento temporal. Reflete também na classificação.
+    const feedback = this.repo.getFeedback(lead.cpfCnpjClean)
+    if (feedback) {
+      out.feedback = feedback
+      out.contatos = this.repo.getContatos(lead.cpfCnpjClean)
+      const total = Math.max(0, Math.min(100, lead.score.total + feedback.ajusteScore))
+      let classificacao: typeof lead.score.classificacao
+      if (total >= 75) classificacao = 'quente'
+      else if (total >= 55) classificacao = 'morno'
+      else if (total >= 35) classificacao = 'frio'
+      else classificacao = 'reativo'
+      out.score = { ...lead.score, total, classificacao }
+    }
     return out
+  }
+
+  /**
+   * Registra outcome de contato. Se o tipo for "de porta fechada" (recusou,
+   * ja_regularizou, nao_agro, fora_target), move o lead para blacklist.
+   */
+  registrarContato(
+    cpfCnpj: string,
+    params: {
+      tipo: ContactOutcomeTipo
+      canal?: ContactOutcome['canal']
+      notas?: string
+      registradoPor?: string
+    }
+  ): { outcome: ContactOutcome; lead?: LeadFull; excluido?: BlacklistEntry } | null {
+    const raw = this.pgfn.find(cpfCnpj)
+    if (!raw) return null
+    const outcome = this.repo.addContato({
+      cpfCnpj: raw.cpfCnpj,
+      cpfCnpjClean: raw.cpfCnpjClean,
+      tipo: params.tipo,
+      canal: params.canal,
+      notas: params.notas,
+      registradoPor: params.registradoPor,
+    })
+    const motivoExclusao = OUTCOMES_QUE_EXCLUEM[params.tipo]
+    let excluido: BlacklistEntry | undefined
+    if (motivoExclusao) {
+      const motivoCompleto = params.notas ? `${motivoExclusao}: ${params.notas}` : motivoExclusao
+      excluido = this.repo.addToBlacklist(
+        { cpfCnpj: raw.cpfCnpj, cpfCnpjClean: raw.cpfCnpjClean },
+        motivoCompleto,
+      )
+    }
+    const lead = this.buildBasic(raw)
+    return { outcome, lead, excluido }
+  }
+
+  /** Lista de hot-leads pendentes — quente sem contato recente. */
+  hotLeads(opts?: { limite?: number; diasSemContato?: number }): HotLeadAlert[] {
+    const limite = opts?.limite ?? 20
+    const diasMin = opts?.diasSemContato ?? 14
+    const alerts: HotLeadAlert[] = []
+    const hoje = Date.now()
+
+    for (const raw of this.pgfn.all()) {
+      const lead = this.buildBasic(raw)
+      if (lead.status === 'excluido') continue
+      if (lead.score.classificacao !== 'quente') continue
+
+      const ultimoContatoEm = lead.feedback?.ultimoContatoEm
+      const diasSemContato = ultimoContatoEm
+        ? Math.floor((hoje - new Date(ultimoContatoEm).getTime()) / 86_400_000)
+        : Number.POSITIVE_INFINITY
+
+      if (diasSemContato < diasMin) continue
+
+      // Motivo textual + urgência
+      const sinais: string[] = []
+      if (lead.temAjuizada) sinais.push('ajuizado')
+      if (lead.score.breakdown.velocity >= 8) sinais.push('passivo acelerando')
+      if (lead.score.breakdown.fitRegional >= 12) sinais.push('UF core')
+      if (lead.area.hectaresEstimados >= 1000) sinais.push(`${Math.round(lead.area.hectaresEstimados)}ha`)
+
+      let urgencia: HotLeadAlert['urgencia']
+      if (lead.score.total >= 85 && diasSemContato >= 30) urgencia = 'imediata'
+      else if (lead.score.total >= 80 || diasSemContato >= 30) urgencia = 'alta'
+      else urgencia = 'media'
+
+      const motivo = sinais.length
+        ? `Quente (${lead.score.total}) · ${sinais.join(' · ')}`
+        : `Quente (${lead.score.total}) · aguardando primeiro contato`
+
+      alerts.push({
+        cpfCnpj: lead.cpfCnpj,
+        cpfCnpjClean: lead.cpfCnpjClean,
+        nome: lead.nome,
+        uf: lead.uf,
+        scoreTotal: lead.score.total,
+        classificacao: lead.score.classificacao,
+        honorariosEstimados: lead.score.honorariosEstimados,
+        totalDivida: lead.totalDivida,
+        ultimoContatoEm,
+        diasSemContato: Number.isFinite(diasSemContato) ? diasSemContato : 9999,
+        urgencia,
+        motivo,
+      })
+    }
+
+    alerts.sort((a, b) => {
+      const u = (x: HotLeadAlert) => (x.urgencia === 'imediata' ? 3 : x.urgencia === 'alta' ? 2 : 1)
+      const du = u(b) - u(a)
+      if (du !== 0) return du
+      return b.scoreTotal - a.scoreTotal
+    })
+    return alerts.slice(0, limite)
+  }
+
+  /** Leads com outcome "retornar" ou "interessado" prontos para reengajamento. */
+  leadsParaReengajar(limite = 20): LeadFull[] {
+    const out: LeadFull[] = []
+    for (const raw of this.pgfn.all()) {
+      const lead = this.buildBasic(raw)
+      if (lead.status === 'excluido') continue
+      if (lead.feedback?.reengajar) out.push(lead)
+    }
+    out.sort((a, b) => b.score.total - a.score.total)
+    return out.slice(0, limite)
+  }
+
+  listarContatos(cpfCnpj: string): ContactOutcome[] {
+    const clean = cpfCnpj.replace(/\D/g, '')
+    return this.repo.getContatos(clean)
   }
 
   buscar(filters: ProspeccaoFilters): {
@@ -747,6 +891,22 @@ export class ProspeccaoService {
       .sort((a, b) => b.count - a.count)
       .slice(0, 15)
 
+    // Feedback loop: contagens derivadas dos contatos registrados. Usamos o
+    // universo `ativos` (já excluída blacklist) para manter consistência com
+    // os demais KPIs da tela.
+    const hoje = Date.now()
+    let hotLeadsPendentes = 0
+    let leadsParaReengajar = 0
+    for (const l of ativos) {
+      if (l.score.classificacao === 'quente') {
+        const diasSemContato = l.feedback?.ultimoContatoEm
+          ? Math.floor((hoje - new Date(l.feedback.ultimoContatoEm).getTime()) / 86_400_000)
+          : Number.POSITIVE_INFINITY
+        if (diasSemContato >= 14) hotLeadsPendentes++
+      }
+      if (l.feedback?.reengajar) leadsParaReengajar++
+    }
+
     const m = this.pgfn.getManifest()
     return {
       totalLeads,
@@ -756,6 +916,8 @@ export class ProspeccaoService {
       leadsComAjuizamento,
       leadsCompletos,
       leadsExcluidos,
+      hotLeadsPendentes,
+      leadsParaReengajar,
       porUf,
       porFaixaDivida,
       topSignals,

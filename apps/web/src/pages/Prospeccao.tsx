@@ -43,6 +43,11 @@ import {
   StopCircle,
   ListChecks,
   UserPlus,
+  PhoneCall,
+  MessageSquare,
+  History,
+  Siren,
+  RotateCw,
 } from 'lucide-react'
 
 // ────────────────────────────────────────────────────────────
@@ -126,6 +131,45 @@ interface CarConsultaResult {
   consultadoEm: string
 }
 type LeadStatus = 'pendente' | 'completa' | 'excluido'
+type ContactOutcomeTipo =
+  | 'sucesso'
+  | 'interessado'
+  | 'retornar'
+  | 'recusou'
+  | 'ja_regularizou'
+  | 'nao_agro'
+  | 'fora_target'
+type ContactCanal = 'whatsapp' | 'telefone' | 'email' | 'presencial' | 'outro'
+interface ContactOutcome {
+  cpfCnpj: string
+  cpfCnpjClean: string
+  tipo: ContactOutcomeTipo
+  canal?: ContactCanal
+  notas?: string
+  registradoPor?: string
+  registradoEm: string
+}
+interface LeadFeedback {
+  totalContatos: number
+  ultimoOutcome?: ContactOutcomeTipo
+  ultimoContatoEm?: string
+  ajusteScore: number
+  reengajar: boolean
+}
+interface HotLeadAlert {
+  cpfCnpj: string
+  cpfCnpjClean: string
+  nome: string
+  uf: string
+  scoreTotal: number
+  classificacao: 'quente' | 'morno' | 'frio' | 'reativo'
+  honorariosEstimados: number
+  totalDivida: number
+  ultimoContatoEm?: string
+  diasSemContato: number
+  urgencia: 'imediata' | 'alta' | 'media'
+  motivo: string
+}
 interface LeadFull {
   cpfCnpj: string
   cpfCnpjClean: string
@@ -150,6 +194,8 @@ interface LeadFull {
   enriquecidoEm?: string
   excluidoMotivo?: string
   excluidoEm?: string
+  feedback?: LeadFeedback
+  contatos?: ContactOutcome[]
 }
 interface BuscaCounts {
   pendentes: number
@@ -179,10 +225,35 @@ interface Stats {
   leadsComAjuizamento: number
   leadsCompletos: number
   leadsExcluidos: number
+  hotLeadsPendentes: number
+  leadsParaReengajar: number
   porUf: Array<{ uf: string; count: number; divida: number }>
   porFaixaDivida: Array<{ faixa: string; count: number }>
   topSignals: Array<{ signal: string; count: number }>
   manifest: { fonte: string; atualizadoEm: string }
+}
+
+const OUTCOME_LABEL: Record<ContactOutcomeTipo, { label: string; tone: 'green' | 'amber' | 'sky' | 'red' | 'slate' }> = {
+  sucesso: { label: 'Avançou (sucesso)', tone: 'green' },
+  interessado: { label: 'Interessado — aguardando', tone: 'green' },
+  retornar: { label: 'Reagendar — retornar', tone: 'amber' },
+  recusou: { label: 'Recusou', tone: 'red' },
+  ja_regularizou: { label: 'Já regularizou', tone: 'slate' },
+  nao_agro: { label: 'Não é agro', tone: 'slate' },
+  fora_target: { label: 'Fora de target', tone: 'slate' },
+}
+
+const URGENCIA_STYLE: Record<HotLeadAlert['urgencia'], { bg: string; text: string; border: string; label: string }> = {
+  imediata: { bg: 'bg-red-50 dark:bg-red-950/30', text: 'text-red-700 dark:text-red-300', border: 'border-red-300 dark:border-red-800', label: 'Imediata' },
+  alta: { bg: 'bg-amber-50 dark:bg-amber-950/30', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-300 dark:border-amber-800', label: 'Alta' },
+  media: { bg: 'bg-sky-50 dark:bg-sky-950/30', text: 'text-sky-700 dark:text-sky-300', border: 'border-sky-300 dark:border-sky-800', label: 'Média' },
+}
+
+const fmtDate = (iso?: string): string => {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 type BatchPhase = 'idle' | 'starting' | 'running' | 'done' | 'cancelled' | 'error'
@@ -276,6 +347,12 @@ export default function Prospeccao() {
     phase: 'idle', batchId: null, total: 0, processed: 0, ok: 0, fail: 0, errors: [],
   })
 
+  // Feedback loop (hot-leads + reengajamento)
+  const [hotLeads, setHotLeads] = useState<HotLeadAlert[]>([])
+  const [loadingHot, setLoadingHot] = useState(false)
+  const [registrandoContato, setRegistrandoContato] = useState(false)
+  const [contatoModalOpen, setContatoModalOpen] = useState(false)
+
   const loadStats = useCallback(async () => {
     setLoadingStats(true)
     try {
@@ -333,8 +410,22 @@ export default function Prospeccao() {
     }
   }, [])
 
+  const loadHotLeads = useCallback(async () => {
+    setLoadingHot(true)
+    try {
+      const r = await fetch('/api/prospeccao/hot-leads?limite=20')
+      const j = await r.json()
+      if (j.success) setHotLeads(j.data)
+    } catch (e) {
+      console.warn('[hot-leads] erro', e)
+    } finally {
+      setLoadingHot(false)
+    }
+  }, [])
+
   useEffect(() => { loadStats() }, [loadStats])
   useEffect(() => { loadSicarStatus() }, [loadSicarStatus])
+  useEffect(() => { loadHotLeads() }, [loadHotLeads])
   useEffect(() => { search() }, [search])
   // reset para página 1 quando a aba de status muda
   useEffect(() => { setPage(1) }, [statusTab])
@@ -432,6 +523,51 @@ export default function Prospeccao() {
       setIniciando(null)
     }
   }, [navigate])
+
+  /** Abre o drawer buscando detalhes completos do lead (usado pelo HotLeadsPanel). */
+  const openLeadByCpf = useCallback(async (cpfCnpj: string) => {
+    try {
+      const r = await fetch(`/api/prospeccao/lead/${cpfCnpj}`)
+      const j = await r.json()
+      if (j.success) setSelectedLead(j.data)
+    } catch (e) {
+      console.warn('[open-lead] erro', e)
+    }
+  }, [])
+
+  /**
+   * Registra outcome de contato. Se o tipo for "porta fechada", o backend move
+   * automaticamente o lead para a blacklist — refletimos fechando o drawer.
+   */
+  const handleRegistrarContato = useCallback(
+    async (
+      cpfCnpj: string,
+      payload: { tipo: ContactOutcomeTipo; canal?: ContactCanal; notas?: string; registradoPor?: string },
+    ) => {
+      setRegistrandoContato(true)
+      try {
+        const r = await fetch(`/api/prospeccao/lead/${cpfCnpj}/contato`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const j = await r.json()
+        if (!j.success) throw new Error(j.error || 'Falha ao registrar contato')
+        if (j.data.lead) {
+          setSelectedLead(j.data.lead)
+          setLeads((prev) => prev.map((l) => (l.cpfCnpjClean === j.data.lead.cpfCnpjClean ? j.data.lead : l)))
+        }
+        setContatoModalOpen(false)
+        await Promise.all([loadHotLeads(), loadStats()])
+      } catch (e: any) {
+        console.warn('[contato] erro', e)
+        alert(e?.message || 'Falha ao registrar contato')
+      } finally {
+        setRegistrandoContato(false)
+      }
+    },
+    [loadHotLeads, loadStats],
+  )
 
   const handleRestaurar = useCallback(async (cpfCnpj: string) => {
     setDeleting(cpfCnpj)
@@ -559,6 +695,14 @@ export default function Prospeccao() {
       {/* Hero OODA */}
       <HeroOODA stats={stats} loading={loadingStats} sicarStatus={sicarStatus} />
 
+      {/* Roteamento de hot-leads + reengajamento (feedback loop) */}
+      <HotLeadsPanel
+        alerts={hotLeads}
+        loading={loadingHot}
+        onOpen={openLeadByCpf}
+        onRefresh={loadHotLeads}
+      />
+
       {/* Toolbar de filtros */}
       <FilterPanel
         uf={uf} setUf={setUf}
@@ -674,12 +818,23 @@ export default function Prospeccao() {
           iniciarMsg={iniciarMsg}
           carError={carError}
           sicarStatus={sicarStatus}
-          onClose={() => { setSelectedLead(null); setCarError(null); setIniciarMsg(null) }}
+          onClose={() => { setSelectedLead(null); setCarError(null); setIniciarMsg(null); setContatoModalOpen(false) }}
           onEnrich={() => handleEnrich(selectedLead.cpfCnpjClean)}
           onExcluir={(motivo) => handleExcluir(selectedLead.cpfCnpjClean, motivo)}
           onRestaurar={() => handleRestaurar(selectedLead.cpfCnpjClean)}
           onConsultarCar={(codImovel) => handleConsultarCar(selectedLead.cpfCnpjClean, codImovel)}
           onIniciarProspeccao={() => handleIniciarProspeccao(selectedLead.cpfCnpjClean)}
+          onAbrirContato={() => setContatoModalOpen(true)}
+        />
+      )}
+
+      {/* Modal de registrar contato (feedback loop) */}
+      {contatoModalOpen && selectedLead && (
+        <RegistrarContatoModal
+          lead={selectedLead}
+          saving={registrandoContato}
+          onCancel={() => setContatoModalOpen(false)}
+          onSubmit={(payload) => handleRegistrarContato(selectedLead.cpfCnpjClean, payload)}
         />
       )}
 
@@ -790,6 +945,24 @@ function HeroOODA({
             accent="dourado"
           />
         </div>
+
+        {/* Feedback loop — hot-leads + reengajamento */}
+        {stats && (stats.hotLeadsPendentes > 0 || stats.leadsParaReengajar > 0) && (
+          <div className="mt-5 flex flex-wrap gap-3">
+            {stats.hotLeadsPendentes > 0 && (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/15 border border-red-400/30 text-red-200 text-xs">
+                <Siren size={13} />
+                <b>{fmtNum(stats.hotLeadsPendentes)}</b> hot-lead{stats.hotLeadsPendentes === 1 ? '' : 's'} aguardando contato
+              </div>
+            )}
+            {stats.leadsParaReengajar > 0 && (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-aletis-dourado/15 border border-aletis-dourado/40 text-aletis-dourado text-xs">
+                <RotateCw size={13} />
+                <b>{fmtNum(stats.leadsParaReengajar)}</b> lead{stats.leadsParaReengajar === 1 ? '' : 's'} para reengajar
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Strip de topSignals */}
         {stats && stats.topSignals.length > 0 && (
@@ -1719,6 +1892,7 @@ function LeadDrawer({
   onRestaurar,
   onConsultarCar,
   onIniciarProspeccao,
+  onAbrirContato,
 }: {
   lead: LeadFull
   enriching: boolean
@@ -1734,6 +1908,7 @@ function LeadDrawer({
   onRestaurar: () => void
   onConsultarCar: (codImovel: string) => void
   onIniciarProspeccao: () => void
+  onAbrirContato: () => void
 }) {
   const isExcluido = lead.status === 'excluido'
   const askExclude = () => {
@@ -1744,7 +1919,7 @@ function LeadDrawer({
     if (motivo && motivo.trim()) onExcluir(motivo.trim())
   }
   const cls = CLASSIF_STYLE[lead.score.classificacao]
-  const [tab, setTab] = useState<'identidade' | 'divida' | 'agro' | 'car' | 'socios' | 'score'>('identidade')
+  const [tab, setTab] = useState<'identidade' | 'divida' | 'agro' | 'car' | 'socios' | 'score' | 'contatos'>('identidade')
 
   return (
     <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true">
@@ -1817,6 +1992,36 @@ function LeadDrawer({
             <DrawerKpi label="Honorários" value={fmtBRLShort(lead.score.honorariosEstimados)} sub="1% modelo ALETIS" />
           </div>
 
+          {/* Badges de feedback loop — aparecem se o lead tem contatos registrados */}
+          {lead.feedback && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/10 border border-white/15 text-white/80">
+                <History size={11} /> {lead.feedback.totalContatos} contato{lead.feedback.totalContatos === 1 ? '' : 's'}
+              </span>
+              {lead.feedback.ultimoOutcome && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/10 border border-white/15 text-white/80">
+                  último: <b>{OUTCOME_LABEL[lead.feedback.ultimoOutcome].label}</b> · {fmtDate(lead.feedback.ultimoContatoEm)}
+                </span>
+              )}
+              {lead.feedback.ajusteScore !== 0 && (
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${
+                    lead.feedback.ajusteScore > 0
+                      ? 'bg-emerald-500/20 border-emerald-300/40 text-emerald-100'
+                      : 'bg-red-500/20 border-red-300/40 text-red-100'
+                  }`}
+                >
+                  ajuste score {lead.feedback.ajusteScore > 0 ? `+${lead.feedback.ajusteScore}` : lead.feedback.ajusteScore}
+                </span>
+              )}
+              {lead.feedback.reengajar && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-aletis-dourado/25 border border-aletis-dourado/50 text-aletis-dourado font-semibold">
+                  <Siren size={11} /> cooldown vencido · reengajar
+                </span>
+              )}
+            </div>
+          )}
+
           {/* CTA principal — importar lead para o CRM */}
           {!isExcluido && (
             <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2">
@@ -1827,6 +2032,12 @@ function LeadDrawer({
               >
                 {iniciando ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
                 {iniciando ? 'Importando…' : 'Iniciar prospecção · levar ao CRM'}
+              </button>
+              <button
+                onClick={onAbrirContato}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/15 text-white border border-white/30 font-semibold text-sm hover:bg-white/25 transition"
+              >
+                <PhoneCall size={16} /> Registrar contato
               </button>
               {iniciarMsg && (
                 <span
@@ -1854,6 +2065,7 @@ function LeadDrawer({
             { id: 'car', label: 'CAR real', icon: Trees },
             { id: 'socios', label: 'Sócios/QSA', icon: Users },
             { id: 'score', label: 'Score', icon: Gauge },
+            { id: 'contatos', label: 'Contatos', icon: PhoneCall },
           ] as const).map((t) => {
             const Icon = t.icon
             const active = tab === t.id
@@ -1889,8 +2101,113 @@ function LeadDrawer({
           )}
           {tab === 'socios' && <TabSocios lead={lead} />}
           {tab === 'score' && <TabScore lead={lead} />}
+          {tab === 'contatos' && <TabContatos lead={lead} onAbrirContato={onAbrirContato} />}
         </div>
       </aside>
+    </div>
+  )
+}
+
+function TabContatos({ lead, onAbrirContato }: { lead: LeadFull; onAbrirContato: () => void }) {
+  const contatos = lead.contatos || []
+  const feedback = lead.feedback
+  // Ordena do mais recente para o mais antigo — UX de histórico
+  const ordenados = [...contatos].sort((a, b) => b.registradoEm.localeCompare(a.registradoEm))
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h3 className="font-display text-base font-bold text-aletis-grafite-escuro dark:text-white flex items-center gap-2">
+            <History size={16} className="text-aletis-verde" /> Histórico de contatos
+          </h3>
+          <p className="text-xs text-aletis-grafite-medio dark:text-white/50">
+            Outcomes alimentam o feedback loop — scoring é recalculado automaticamente.
+          </p>
+        </div>
+        <button
+          onClick={onAbrirContato}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-aletis-verde text-white hover:brightness-110 transition"
+        >
+          <PhoneCall size={13} /> Novo contato
+        </button>
+      </div>
+
+      {feedback && (
+        <div className="rounded-xl border border-aletis-borda dark:border-white/10 bg-aletis-bege/40 dark:bg-white/5 p-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          <KpiLine label="Total" value={`${feedback.totalContatos}`} />
+          <KpiLine label="Último outcome" value={feedback.ultimoOutcome ? OUTCOME_LABEL[feedback.ultimoOutcome].label : '—'} />
+          <KpiLine label="Último contato" value={fmtDate(feedback.ultimoContatoEm)} />
+          <KpiLine
+            label="Ajuste no score"
+            value={feedback.ajusteScore > 0 ? `+${feedback.ajusteScore}` : `${feedback.ajusteScore}`}
+            accent={feedback.ajusteScore > 0 ? 'green' : feedback.ajusteScore < 0 ? 'red' : undefined}
+          />
+        </div>
+      )}
+
+      {ordenados.length === 0 ? (
+        <div className="p-8 text-center text-aletis-grafite-medio dark:text-white/50 text-sm">
+          <PhoneCall size={28} className="mx-auto mb-2 opacity-40" />
+          Nenhum contato registrado ainda. Use "Novo contato" para iniciar o histórico.
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {ordenados.map((c, i) => {
+            const cfg = OUTCOME_LABEL[c.tipo]
+            const toneCls =
+              cfg.tone === 'green'
+                ? 'border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20'
+                : cfg.tone === 'amber'
+                ? 'border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20'
+                : cfg.tone === 'red'
+                ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/20'
+                : 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30'
+            return (
+              <li key={`${c.registradoEm}-${i}`} className={`rounded-lg border px-3 py-2 ${toneCls}`}>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-xs font-semibold text-aletis-grafite-escuro dark:text-white">
+                    {cfg.label}
+                    {c.canal && <span className="ml-2 text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50">· {c.canal}</span>}
+                  </span>
+                  <span className="text-[11px] text-aletis-grafite-medio dark:text-white/50">
+                    {fmtDate(c.registradoEm)}
+                    {c.registradoPor ? ` · ${c.registradoPor}` : ''}
+                  </span>
+                </div>
+                {c.notas && (
+                  <p className="mt-1 text-xs text-aletis-grafite-medio dark:text-white/70 whitespace-pre-wrap">
+                    {c.notas}
+                  </p>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function KpiLine({
+  label,
+  value,
+  accent,
+}: {
+  label: string
+  value: string
+  accent?: 'green' | 'red'
+}) {
+  const tone =
+    accent === 'green'
+      ? 'text-emerald-700 dark:text-emerald-300'
+      : accent === 'red'
+      ? 'text-red-700 dark:text-red-300'
+      : 'text-aletis-grafite-escuro dark:text-white'
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50">{label}</p>
+      <p className={`font-display text-sm font-bold ${tone}`}>{value}</p>
     </div>
   )
 }
@@ -2363,6 +2680,303 @@ function InfoRow({
       <span className={`text-aletis-grafite-escuro dark:text-white flex-1 ${mono ? 'font-mono text-xs' : ''}`}>
         {value}
       </span>
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────
+// HotLeadsPanel — roteamento de leads quentes sem contato recente
+// ────────────────────────────────────────────────────────────
+function HotLeadsPanel({
+  alerts,
+  loading,
+  onOpen,
+  onRefresh,
+}: {
+  alerts: HotLeadAlert[]
+  loading: boolean
+  onOpen: (cpfCnpj: string) => void
+  onRefresh: () => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const visible = expanded ? alerts : alerts.slice(0, 5)
+
+  if (!loading && alerts.length === 0) {
+    return (
+      <div className="rounded-2xl border border-aletis-borda dark:border-white/5 bg-white dark:bg-aletis-grafite-escuro px-6 py-4 shadow-sm flex items-center gap-3 text-sm text-aletis-grafite-medio dark:text-white/60">
+        <Siren size={18} className="text-aletis-verde flex-shrink-0" />
+        <span>Nenhum hot-lead aguardando contato — todos os leads quentes foram trabalhados recentemente.</span>
+        <button
+          onClick={onRefresh}
+          className="ml-auto inline-flex items-center gap-1 text-xs text-aletis-verde hover:underline"
+        >
+          <RotateCw size={12} /> atualizar
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-2xl border border-red-200 dark:border-red-900/60 bg-gradient-to-br from-red-50/80 to-amber-50/40 dark:from-red-950/20 dark:to-amber-950/10 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-red-100 dark:border-red-900/40 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-red-500/15 flex items-center justify-center">
+            <Siren size={18} className="text-red-600 dark:text-red-400" />
+          </div>
+          <div>
+            <h2 className="font-display text-base font-bold text-aletis-grafite-escuro dark:text-white">
+              Hot-leads pendentes de ação
+            </h2>
+            <p className="text-xs text-aletis-grafite-medio dark:text-white/60">
+              Leads quentes sem contato nos últimos 14 dias — ordenados por urgência
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs text-aletis-grafite-medio dark:text-white/60 hover:bg-white/50 dark:hover:bg-white/5 transition disabled:opacity-50"
+        >
+          {loading ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
+          atualizar
+        </button>
+      </div>
+
+      {loading && alerts.length === 0 ? (
+        <div className="p-8 flex items-center justify-center">
+          <Loader2 size={22} className="animate-spin text-aletis-verde" />
+        </div>
+      ) : (
+        <ul className="divide-y divide-red-100/60 dark:divide-red-900/30">
+          {visible.map((a) => {
+            const u = URGENCIA_STYLE[a.urgencia]
+            return (
+              <li
+                key={a.cpfCnpjClean}
+                className="px-6 py-3 flex items-center gap-3 hover:bg-white/50 dark:hover:bg-white/5 transition cursor-pointer"
+                onClick={() => onOpen(a.cpfCnpj)}
+              >
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${u.bg} ${u.text} ${u.border} flex-shrink-0`}>
+                  {u.label}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-aletis-grafite-escuro dark:text-white truncate">
+                    {a.nome}
+                    <span className="ml-2 text-[10px] font-normal text-aletis-grafite-medio dark:text-white/50 font-mono">
+                      {a.cpfCnpj}
+                    </span>
+                  </p>
+                  <p className="text-[11px] text-aletis-grafite-medio dark:text-white/60 truncate">
+                    {a.motivo} · {a.uf} · dívida {fmtBRLShort(a.totalDivida)}
+                  </p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-sm font-bold text-aletis-grafite-escuro dark:text-white">
+                    {a.scoreTotal}
+                  </p>
+                  <p className="text-[10px] text-aletis-grafite-medio dark:text-white/50">
+                    {Number.isFinite(a.diasSemContato) && a.diasSemContato < 9999
+                      ? `${a.diasSemContato}d sem contato`
+                      : 'nunca contatado'}
+                  </p>
+                </div>
+                <ChevronRight size={16} className="text-aletis-grafite-medio dark:text-white/40 flex-shrink-0" />
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      {alerts.length > 5 && (
+        <div className="px-6 py-2 border-t border-red-100 dark:border-red-900/40 text-center">
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="text-xs text-aletis-verde hover:underline font-semibold"
+          >
+            {expanded ? 'ver menos' : `ver todos (${alerts.length})`}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────
+// RegistrarContatoModal — registra outcome e alimenta o feedback loop
+// ────────────────────────────────────────────────────────────
+function RegistrarContatoModal({
+  lead,
+  saving,
+  onCancel,
+  onSubmit,
+}: {
+  lead: LeadFull
+  saving: boolean
+  onCancel: () => void
+  onSubmit: (p: { tipo: ContactOutcomeTipo; canal?: ContactCanal; notas?: string; registradoPor?: string }) => void
+}) {
+  const [tipo, setTipo] = useState<ContactOutcomeTipo>('retornar')
+  const [canal, setCanal] = useState<ContactCanal>('whatsapp')
+  const [notas, setNotas] = useState('')
+  const [registradoPor, setRegistradoPor] = useState('')
+
+  // Avisa que esses tipos disparam exclusão automática — o backend já faz,
+  // mas UI tem que ser honesta sobre a consequência.
+  const excluiLead: Record<ContactOutcomeTipo, boolean> = {
+    sucesso: false,
+    interessado: false,
+    retornar: false,
+    recusou: true,
+    ja_regularizou: true,
+    nao_agro: true,
+    fora_target: true,
+  }
+
+  const submit = () => {
+    onSubmit({
+      tipo,
+      canal,
+      notas: notas.trim() || undefined,
+      registradoPor: registradoPor.trim() || undefined,
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !saving && onCancel()} />
+      <div className="relative w-full max-w-lg bg-white dark:bg-aletis-grafite-escuro rounded-2xl shadow-2xl">
+        <div className="px-6 py-4 border-b border-aletis-borda dark:border-white/10 flex items-center justify-between">
+          <div>
+            <h3 className="font-display text-base font-bold text-aletis-grafite-escuro dark:text-white flex items-center gap-2">
+              <MessageSquare size={16} className="text-aletis-verde" /> Registrar contato
+            </h3>
+            <p className="text-xs text-aletis-grafite-medio dark:text-white/50 truncate max-w-[28rem]">
+              {lead.nome} · {lead.cpfCnpj}
+            </p>
+          </div>
+          <button
+            onClick={onCancel}
+            disabled={saving}
+            className="p-2 rounded-lg hover:bg-aletis-bege dark:hover:bg-white/5 text-aletis-grafite-medio dark:text-white/60 transition disabled:opacity-40"
+            aria-label="Cancelar"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-aletis-grafite-escuro dark:text-white/80 mb-2">
+              Resultado do contato
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {(Object.keys(OUTCOME_LABEL) as ContactOutcomeTipo[]).map((t) => {
+                const cfg = OUTCOME_LABEL[t]
+                const selected = tipo === t
+                const toneCls =
+                  cfg.tone === 'green'
+                    ? selected
+                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 ring-2 ring-emerald-200 dark:ring-emerald-900'
+                      : 'border-aletis-borda dark:border-white/10 hover:border-emerald-400'
+                    : cfg.tone === 'amber'
+                    ? selected
+                      ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40 ring-2 ring-amber-200 dark:ring-amber-900'
+                      : 'border-aletis-borda dark:border-white/10 hover:border-amber-400'
+                    : cfg.tone === 'red'
+                    ? selected
+                      ? 'border-red-500 bg-red-50 dark:bg-red-950/40 ring-2 ring-red-200 dark:ring-red-900'
+                      : 'border-aletis-borda dark:border-white/10 hover:border-red-400'
+                    : selected
+                    ? 'border-slate-500 bg-slate-100 dark:bg-slate-800 ring-2 ring-slate-200 dark:ring-slate-700'
+                    : 'border-aletis-borda dark:border-white/10 hover:border-slate-400'
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTipo(t)}
+                    disabled={saving}
+                    className={`text-left rounded-lg border px-3 py-2 text-xs transition ${toneCls}`}
+                  >
+                    <span className="block font-semibold text-aletis-grafite-escuro dark:text-white">
+                      {cfg.label}
+                    </span>
+                    {excluiLead[t] && (
+                      <span className="block mt-0.5 text-[10px] text-red-600 dark:text-red-400">
+                        move lead para blacklist
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-aletis-grafite-escuro dark:text-white/80 mb-1">
+                Canal
+              </label>
+              <select
+                value={canal}
+                onChange={(e) => setCanal(e.target.value as ContactCanal)}
+                disabled={saving}
+                className="w-full px-3 py-2 rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-aletis-grafite-escuro text-sm text-aletis-grafite-escuro dark:text-white"
+              >
+                <option value="whatsapp">WhatsApp</option>
+                <option value="telefone">Telefone</option>
+                <option value="email">Email</option>
+                <option value="presencial">Presencial</option>
+                <option value="outro">Outro</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-aletis-grafite-escuro dark:text-white/80 mb-1">
+                Registrado por
+              </label>
+              <input
+                type="text"
+                value={registradoPor}
+                onChange={(e) => setRegistradoPor(e.target.value)}
+                disabled={saving}
+                placeholder="seu nome"
+                className="w-full px-3 py-2 rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-aletis-grafite-escuro text-sm text-aletis-grafite-escuro dark:text-white"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-aletis-grafite-escuro dark:text-white/80 mb-1">
+              Notas
+            </label>
+            <textarea
+              value={notas}
+              onChange={(e) => setNotas(e.target.value)}
+              disabled={saving}
+              rows={3}
+              placeholder="Detalhes úteis para o próximo contato…"
+              className="w-full px-3 py-2 rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-aletis-grafite-escuro text-sm text-aletis-grafite-escuro dark:text-white"
+            />
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-aletis-borda dark:border-white/10 flex items-center justify-end gap-2">
+          <button
+            onClick={onCancel}
+            disabled={saving}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-aletis-grafite-medio dark:text-white/60 hover:bg-aletis-bege dark:hover:bg-white/5 transition"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={submit}
+            disabled={saving}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-aletis-verde text-white hover:brightness-110 transition disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+            Registrar
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

@@ -3,7 +3,24 @@ import { randomUUID } from 'crypto'
 import { getProspeccaoService, BatchEvent } from '../services/prospeccao/ProspeccaoService.js'
 import { SICARError } from '../services/prospeccao/SICARClient.js'
 import { getCaptchaSolver, hasCaptchaKey } from '../services/captcha/CaptchaSolver.js'
-import type { ProspeccaoFilters } from '../services/prospeccao/types.js'
+import type { ContactOutcome, ContactOutcomeTipo, ProspeccaoFilters } from '../services/prospeccao/types.js'
+
+const OUTCOME_TIPOS: readonly ContactOutcomeTipo[] = [
+  'sucesso',
+  'interessado',
+  'retornar',
+  'recusou',
+  'ja_regularizou',
+  'nao_agro',
+  'fora_target',
+]
+const CANAIS: readonly NonNullable<ContactOutcome['canal']>[] = [
+  'whatsapp',
+  'telefone',
+  'email',
+  'presencial',
+  'outro',
+]
 
 /**
  * Rotas de Prospecção — busca de leads agro com dívida ativa PGFN.
@@ -163,6 +180,87 @@ export default async function prospeccaoRoutes(app: FastifyInstance) {
         return { success: false, error: 'Lead não estava excluído', code: 'NOT_BLACKLISTED' }
       }
       return { success: true }
+    }
+  )
+
+  // ─── Feedback loop (contatos, hot-leads, reengajamento) ─────
+
+  app.post(
+    '/api/prospeccao/lead/:cpfCnpj/contato',
+    async (
+      req: FastifyRequest<{
+        Params: { cpfCnpj: string }
+        Body: {
+          tipo?: ContactOutcomeTipo
+          canal?: ContactOutcome['canal']
+          notas?: string
+          registradoPor?: string
+        } | null
+      }>,
+      reply: FastifyReply
+    ) => {
+      const body = req.body || {}
+      if (!body.tipo || !OUTCOME_TIPOS.includes(body.tipo)) {
+        reply.status(400)
+        return {
+          success: false,
+          error: `tipo inválido; use um de: ${OUTCOME_TIPOS.join(', ')}`,
+          code: 'INVALID_TIPO',
+        }
+      }
+      if (body.canal && !CANAIS.includes(body.canal)) {
+        reply.status(400)
+        return {
+          success: false,
+          error: `canal inválido; use um de: ${CANAIS.join(', ')}`,
+          code: 'INVALID_CANAL',
+        }
+      }
+      const result = service.registrarContato(req.params.cpfCnpj, {
+        tipo: body.tipo,
+        canal: body.canal,
+        notas: body.notas,
+        registradoPor: body.registradoPor,
+      })
+      if (!result) {
+        reply.status(404)
+        return { success: false, error: 'Lead não encontrado', code: 'LEAD_NOT_FOUND' }
+      }
+      return { success: true, data: result }
+    }
+  )
+
+  app.get(
+    '/api/prospeccao/lead/:cpfCnpj/contatos',
+    async (
+      req: FastifyRequest<{ Params: { cpfCnpj: string } }>,
+    ) => {
+      const contatos = service.listarContatos(req.params.cpfCnpj)
+      return { success: true, data: contatos }
+    }
+  )
+
+  app.get(
+    '/api/prospeccao/hot-leads',
+    async (
+      req: FastifyRequest<{
+        Querystring: { limite?: string; diasSemContato?: string }
+      }>,
+    ) => {
+      const limite = req.query.limite ? Math.max(1, Math.min(500, Number(req.query.limite))) : undefined
+      const diasSemContato = req.query.diasSemContato
+        ? Math.max(0, Number(req.query.diasSemContato))
+        : undefined
+      const data = service.hotLeads({ limite, diasSemContato })
+      return { success: true, data }
+    }
+  )
+
+  app.get(
+    '/api/prospeccao/leads-reengajar',
+    async (req: FastifyRequest<{ Querystring: { limite?: string } }>) => {
+      const limite = req.query.limite ? Math.max(1, Math.min(500, Number(req.query.limite))) : 20
+      return { success: true, data: service.leadsParaReengajar(limite) }
     }
   )
 
