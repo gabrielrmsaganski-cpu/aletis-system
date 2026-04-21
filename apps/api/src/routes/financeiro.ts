@@ -58,6 +58,41 @@ export default async function (fastify: FastifyInstance) {
 
   fastify.get('/api/financeiro/categorias', async () => ok(CATEGORIAS_DESPESA))
 
+  /* ════════════════ MARGEM POR CLIENTE ════════════════ */
+
+  fastify.get('/api/financeiro/margem-cliente', async (req: FastifyRequest) => {
+    const { ano, limite } = req.query as { ano?: string; limite?: string }
+    return ok(svc.calcularMargensPorCliente({
+      ano: ano ? Number(ano) : undefined,
+      limite: limite ? Number(limite) : undefined,
+    }))
+  })
+
+  /* ════════════════ PROJEÇÃO DE CAIXA ════════════════ */
+
+  fastify.get('/api/financeiro/projecao-caixa', async (req: FastifyRequest) => {
+    const { dias } = req.query as { dias?: string }
+    const diasHorizonte = dias ? Math.min(180, Math.max(14, Number(dias))) : 90
+    return ok(svc.calcularProjecaoCaixa(diasHorizonte))
+  })
+
+  /* ════════════════ RECORRÊNCIAS ════════════════ */
+
+  fastify.post('/api/financeiro/recorrencias/materializar', async (req: FastifyRequest) => {
+    const { competencia } = (req.body ?? {}) as { competencia?: string }
+    return ok(svc.materializarRecorrencias(competencia))
+  })
+
+  /* ════════════════ RECONCILIAÇÃO OFX ════════════════ */
+
+  fastify.get('/api/financeiro/reconciliacao/sugestoes', async (req: FastifyRequest) => {
+    const { contaId, limite } = req.query as { contaId?: string; limite?: string }
+    return ok(svc.sugerirReconciliacoes({
+      contaId,
+      limitePorLancamento: limite ? Number(limite) : undefined,
+    }))
+  })
+
   /* ════════════════ RECEITAS ════════════════ */
 
   fastify.get('/api/financeiro/receitas', async (req: FastifyRequest) => {

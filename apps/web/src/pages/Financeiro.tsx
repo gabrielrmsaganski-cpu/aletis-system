@@ -190,6 +190,36 @@ interface DashboardData {
   fluxoCaixa12m: Array<{ mes: string; receita: number; despesa: number; resultado: number; acumulado: number }>
   topCategoriasDespesa: Array<{ categoria: string; nome: string; valor: number; pct: number }>
   topClientes: Array<{ cliente: string; valor: number; pct: number }>
+  margensPorCliente: Array<{
+    clienteKey: string
+    nome: string
+    cpfCnpj?: string
+    receitaBruta: number
+    receitaLiquida: number
+    despesasAtribuidas: number
+    margem: number
+    margemPct: number
+    numReceitas: number
+    numDespesas: number
+    ultimaAtividade?: string
+    classificacao: 'ouro' | 'prata' | 'bronze' | 'prejuizo'
+  }>
+  projecaoCaixa90d: {
+    diasHorizonte: number
+    saldoInicial: number
+    semanas: Array<{
+      inicio: string
+      fim: string
+      entradas: number
+      saidas: number
+      resultado: number
+      saldoFinal: number
+      alertaNegativo: boolean
+    }>
+    totais: { entradas: number; saidas: number; resultado: number; saldoFinalProjetado: number }
+    primeiroGap?: { semanaInicio: string; deficit: number }
+    geradoEm: string
+  }
   alertas: Array<{ tipo: string; severidade: 'info' | 'atencao' | 'critico'; titulo: string; detalhe: string }>
 }
 
@@ -316,7 +346,10 @@ function DashboardSection({ showToast }: { showToast: (t: 'sucesso' | 'erro', m:
   if (loading) return <LoadingCard />
   if (!data) return <EmptyCard icon={BarChart3} titulo="Sem dados no dashboard" detalhe="Cadastre receitas e despesas para ver os KPIs." />
 
-  const { dreAtual, fluxoCaixa12m, topCategoriasDespesa, topClientes, contasReceber, contasPagar, dasProximo, rbt12, alertas } = data
+  const {
+    dreAtual, fluxoCaixa12m, topCategoriasDespesa, topClientes, contasReceber, contasPagar,
+    dasProximo, rbt12, alertas, margensPorCliente, projecaoCaixa90d,
+  } = data
 
   const maxFluxo = Math.max(...fluxoCaixa12m.map((f) => Math.max(f.receita, f.despesa)), 1)
 
@@ -456,6 +489,12 @@ function DashboardSection({ showToast }: { showToast: (t: 'sucesso' | 'erro', m:
 
       {/* Aging de recebíveis */}
       <AgingRecebiveis aging={contasReceber.aging} total={contasReceber.total} />
+
+      {/* Projeção de caixa 90d */}
+      <ProjecaoCaixa projecao={projecaoCaixa90d} />
+
+      {/* Margem por cliente */}
+      <MargensPorCliente margens={margensPorCliente} />
 
       {/* Fluxo de caixa 12m */}
       <div className="rounded-xl border border-aletis-borda/60 bg-white p-4 shadow-sm">
@@ -661,6 +700,164 @@ function AgingRecebiveis({
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+/* ================= Projeção de Caixa 90d ================= */
+
+type ProjecaoCaixaData = DashboardData['projecaoCaixa90d']
+
+function ProjecaoCaixa({ projecao }: { projecao: ProjecaoCaixaData }) {
+  if (!projecao || !projecao.semanas?.length) return null
+  const { saldoInicial, semanas, totais, primeiroGap, diasHorizonte } = projecao
+  const maxMag = Math.max(
+    ...semanas.map((s) => Math.max(Math.abs(s.entradas), Math.abs(s.saidas), Math.abs(s.saldoFinal))),
+    1,
+  )
+  const saldoFinalCor = totais.saldoFinalProjetado >= 0 ? 'text-emerald-600' : 'text-rose-600'
+
+  return (
+    <div className="rounded-xl border border-aletis-borda/60 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h3 className="font-display text-sm font-semibold text-aletis-grafite-escuro flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-aletis-verde" />
+          Projeção de caixa — próximos {diasHorizonte} dias
+        </h3>
+        <div className="flex items-center gap-4 text-[11px] text-aletis-grafite-medio">
+          <span>Saldo inicial: <strong className="text-aletis-grafite-escuro">{fmtBRL(saldoInicial)}</strong></span>
+          <span>Saldo projetado: <strong className={saldoFinalCor}>{fmtBRL(totais.saldoFinalProjetado)}</strong></span>
+        </div>
+      </div>
+
+      {primeiroGap && (
+        <div className="mb-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <div>
+            <div className="font-semibold">Gap de caixa detectado em {fmtDate(primeiroGap.semanaInicio)}</div>
+            <div>Déficit projetado: {fmtBRL(Math.abs(primeiroGap.deficit))}. Antecipe recebíveis ou negocie prazo.</div>
+          </div>
+        </div>
+      )}
+
+      <div className="overflow-x-auto pb-1">
+        <div className="flex items-end gap-1 h-40 min-w-max">
+          {semanas.map((s) => {
+            const entradaH = (s.entradas / maxMag) * 100
+            const saidaH = (s.saidas / maxMag) * 100
+            const saldoH = (Math.abs(s.saldoFinal) / maxMag) * 100
+            const saldoPositivo = s.saldoFinal >= 0
+            return (
+              <div
+                key={s.inicio}
+                className="flex flex-col items-center gap-1 min-w-[52px]"
+                title={`${fmtDate(s.inicio)} - ${fmtDate(s.fim)}\nEntradas: ${fmtBRL(s.entradas)}\nSaídas: ${fmtBRL(s.saidas)}\nSaldo: ${fmtBRL(s.saldoFinal)}`}
+              >
+                <div className="flex items-end gap-0.5 h-32">
+                  <div className="w-3 bg-emerald-400 rounded-t" style={{ height: `${entradaH}%` }} />
+                  <div className="w-3 bg-rose-400 rounded-t" style={{ height: `${saidaH}%` }} />
+                  <div
+                    className={`w-3 rounded-t ${saldoPositivo ? 'bg-aletis-verde' : 'bg-red-600'}`}
+                    style={{ height: `${saldoH}%` }}
+                  />
+                </div>
+                <div className={`text-[10px] ${s.alertaNegativo ? 'text-rose-600 font-semibold' : 'text-aletis-grafite-claro'}`}>
+                  {fmtDate(s.inicio).slice(0, 5)}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="flex gap-4 mt-3 text-[11px] text-aletis-grafite-medio">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-400" />Entradas ({fmtBRL(totais.entradas)})</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-rose-400" />Saídas ({fmtBRL(totais.saidas)})</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-aletis-verde" />Saldo</span>
+      </div>
+    </div>
+  )
+}
+
+/* ================= Margens por Cliente ================= */
+
+type MargemCliente = DashboardData['margensPorCliente'][number]
+
+const CLASSIFICACAO_STYLE: Record<MargemCliente['classificacao'], { bg: string; text: string; label: string }> = {
+  ouro: { bg: 'bg-amber-100 border-amber-200', text: 'text-amber-700', label: 'Ouro' },
+  prata: { bg: 'bg-slate-100 border-slate-200', text: 'text-slate-600', label: 'Prata' },
+  bronze: { bg: 'bg-orange-100 border-orange-200', text: 'text-orange-700', label: 'Bronze' },
+  prejuizo: { bg: 'bg-rose-100 border-rose-200', text: 'text-rose-700', label: 'Prejuízo' },
+}
+
+function MargensPorCliente({ margens }: { margens: MargemCliente[] }) {
+  if (!margens || margens.length === 0) {
+    return (
+      <div className="rounded-xl border border-aletis-borda/60 bg-white p-4 shadow-sm">
+        <h3 className="font-display text-sm font-semibold text-aletis-grafite-escuro flex items-center gap-2 mb-3">
+          <Target className="h-4 w-4 text-aletis-verde" />
+          Margem por cliente
+        </h3>
+        <p className="text-xs text-aletis-grafite-claro italic">
+          Sem dados — vincule clientes em receitas e marque despesas com cliente em "Vínculo de cliente" para calcular margem.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border border-aletis-borda/60 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h3 className="font-display text-sm font-semibold text-aletis-grafite-escuro flex items-center gap-2">
+          <Target className="h-4 w-4 text-aletis-verde" />
+          Margem por cliente (ano corrente · top {margens.length})
+        </h3>
+        <span className="text-[11px] text-aletis-grafite-medio">
+          Inclui despesas com vínculo explícito · não rateia estrutura
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-aletis-grafite-claro border-b border-aletis-borda/40">
+              <th className="py-2 pr-3">Cliente</th>
+              <th className="py-2 pr-3 text-right">Receita bruta</th>
+              <th className="py-2 pr-3 text-right">Despesas vinc.</th>
+              <th className="py-2 pr-3 text-right">Margem</th>
+              <th className="py-2 pr-3 text-right">Margem %</th>
+              <th className="py-2 pr-3 text-center">Classificação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {margens.map((m) => {
+              const style = CLASSIFICACAO_STYLE[m.classificacao]
+              return (
+                <tr key={m.clienteKey} className="border-b border-aletis-borda/30 last:border-0">
+                  <td className="py-2 pr-3">
+                    <div className="font-medium text-aletis-grafite-escuro truncate max-w-[220px]" title={m.nome}>{m.nome}</div>
+                    <div className="text-[10px] text-aletis-grafite-claro">
+                      {m.numReceitas} receita(s) · {m.numDespesas} despesa(s)
+                    </div>
+                  </td>
+                  <td className="py-2 pr-3 text-right text-aletis-grafite-escuro">{fmtBRL(m.receitaBruta)}</td>
+                  <td className="py-2 pr-3 text-right text-aletis-grafite-medio">{fmtBRL(m.despesasAtribuidas)}</td>
+                  <td className={`py-2 pr-3 text-right font-semibold ${m.margem >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    {fmtBRL(m.margem)}
+                  </td>
+                  <td className={`py-2 pr-3 text-right font-semibold ${m.margemPct >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    {fmtPct(m.margemPct)}
+                  </td>
+                  <td className="py-2 pr-3 text-center">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${style.bg} ${style.text}`}>
+                      {style.label}
+                    </span>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   )
@@ -1020,6 +1217,145 @@ function ImpostosSection({ competencia, showToast }: { competencia: string; show
 
 /* ================= Extratos ================= */
 
+/* ================= Reconciliação OFX assistida ================= */
+
+interface SugestaoReconciliacao {
+  lancamentoId: string
+  lancamento: { id: string; data: string; descricao: string; valor: number; tipo: 'credito' | 'debito' }
+  candidatos: Array<{
+    entidadeTipo: 'receita' | 'despesa' | 'imposto'
+    entidadeId: string
+    entidadeDescricao: string
+    entidadeValor: number
+    entidadeData: string
+    score: number
+    criterios: { valorExato: boolean; diffDias: number; keywordMatch: boolean; mesmaCompetencia: boolean }
+    motivo: string
+  }>
+}
+
+function ReconciliacaoSugestoes({
+  showToast,
+  onReconciliado,
+}: {
+  showToast: (t: 'sucesso' | 'erro', m: string) => void
+  onReconciliado: () => void
+}) {
+  const { data: sugestoes, loading, refetch } = useApi<SugestaoReconciliacao[]>('/financeiro/reconciliacao/sugestoes', [])
+  const [expandido, setExpandido] = useState(false)
+  const [aplicando, setAplicando] = useState<string | null>(null)
+
+  const aplicar = async (lancamentoId: string, cand: SugestaoReconciliacao['candidatos'][number]) => {
+    setAplicando(`${lancamentoId}:${cand.entidadeId}`)
+    try {
+      await apiFetch(`/financeiro/lancamentos/${lancamentoId}/vincular`, {
+        method: 'POST',
+        body: JSON.stringify({ tipo: cand.entidadeTipo, entidadeId: cand.entidadeId }),
+      })
+      showToast('sucesso', `Reconciliado com ${cand.entidadeTipo} · score ${cand.score}`)
+      refetch()
+      onReconciliado()
+    } catch (err: any) {
+      showToast('erro', err.message ?? 'Falha ao reconciliar')
+    } finally {
+      setAplicando(null)
+    }
+  }
+
+  if (loading) return null
+  if (!sugestoes || sugestoes.length === 0) {
+    return (
+      <div className="rounded-xl border border-aletis-borda/60 bg-white p-3 text-xs text-aletis-grafite-claro flex items-center gap-2">
+        <Link2 className="h-4 w-4 text-aletis-verde" />
+        Nenhuma reconciliação pendente — todos os lançamentos OFX estão vinculados ou sem match.
+      </div>
+    )
+  }
+
+  const totalSugestoes = sugestoes.reduce((s, x) => s + x.candidatos.length, 0)
+
+  return (
+    <div className="rounded-xl border border-amber-300/60 bg-amber-50/40 shadow-sm overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpandido((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-amber-50/80"
+      >
+        <div className="flex items-center gap-2">
+          <Link2 className="h-4 w-4 text-amber-700" />
+          <span className="font-display text-sm font-semibold text-aletis-grafite-escuro">
+            Reconciliação OFX — {sugestoes.length} lançamento(s) com {totalSugestoes} sugestão(ões)
+          </span>
+        </div>
+        <span className="text-xs text-amber-700">
+          {expandido ? 'Recolher' : 'Expandir'}
+        </span>
+      </button>
+      {expandido && (
+        <div className="divide-y divide-amber-200/60 border-t border-amber-200/60">
+          {sugestoes.slice(0, 20).map((s) => (
+            <div key={s.lancamentoId} className="p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2 text-xs flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-semibold ${s.lancamento.tipo === 'credito' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                    {s.lancamento.tipo === 'credito' ? 'Crédito' : 'Débito'}
+                  </span>
+                  <span className="text-aletis-grafite-medio">{fmtDate(s.lancamento.data)}</span>
+                  <span className="font-medium text-aletis-grafite-escuro truncate max-w-[420px]">{s.lancamento.descricao}</span>
+                </div>
+                <span className="font-semibold text-aletis-grafite-escuro">{fmtBRL(Math.abs(s.lancamento.valor))}</span>
+              </div>
+              <div className="space-y-1 pl-4 border-l-2 border-amber-300/60">
+                {s.candidatos.map((c) => {
+                  const key = `${s.lancamentoId}:${c.entidadeId}`
+                  const isAplicando = aplicando === key
+                  return (
+                    <div key={c.entidadeId} className="flex items-center justify-between gap-2 text-xs bg-white rounded px-2 py-1.5 border border-amber-200/50">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 uppercase">
+                            {c.entidadeTipo}
+                          </span>
+                          <span className="truncate text-aletis-grafite-escuro" title={c.entidadeDescricao}>
+                            {c.entidadeDescricao}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 mt-0.5 text-[10px] text-aletis-grafite-medio">
+                          <span>{fmtBRL(c.entidadeValor)}</span>
+                          <span>{fmtDate(c.entidadeData)}</span>
+                          <span className="italic">{c.motivo}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-[11px] font-bold ${c.score >= 80 ? 'text-emerald-700' : c.score >= 60 ? 'text-amber-700' : 'text-aletis-grafite-medio'}`}>
+                          {c.score}
+                        </span>
+                        <button
+                          onClick={() => aplicar(s.lancamentoId, c)}
+                          disabled={isAplicando}
+                          className="inline-flex items-center gap-1 rounded bg-aletis-verde px-2 py-1 text-[11px] text-white hover:bg-aletis-verde-escuro disabled:opacity-50"
+                        >
+                          {isAplicando ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                          Vincular
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+          {sugestoes.length > 20 && (
+            <div className="px-4 py-2 text-[11px] text-aletis-grafite-claro italic text-center">
+              Mais {sugestoes.length - 20} sugestão(ões) — refine o filtro para ver as restantes.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ExtratosSection({ competencia, showToast }: { competencia: string; showToast: (t: 'sucesso' | 'erro', m: string) => void }) {
   const [ano, mes] = competencia.split('-').map(Number)
   const ultimoDia = new Date(ano, mes, 0).getDate()
@@ -1088,6 +1424,8 @@ function ExtratosSection({ competencia, showToast }: { competencia: string; show
           {importResumo.totais.criados} lançamentos criados, {importResumo.totais.duplicados} já existentes.
         </div>
       )}
+
+      <ReconciliacaoSugestoes showToast={showToast} onReconciliado={refetch} />
 
       <div className="rounded-xl border border-aletis-borda/60 bg-white shadow-sm overflow-hidden">
         <table className="w-full text-sm">

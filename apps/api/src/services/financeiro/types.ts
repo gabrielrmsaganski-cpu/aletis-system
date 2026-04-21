@@ -119,6 +119,18 @@ export interface Despesa {
     nome: string
     cpfCnpj?: string
   }
+  /**
+   * Vínculo opcional com um cliente específico — habilita cálculo de margem
+   * por caso/cliente. Quando preenchido, esta despesa é atribuída ao cliente
+   * (ex.: viagem a SP para reunião do cliente X, honorário de perito no caso Y).
+   * Sem vínculo = despesa estrutural (aluguel, contabilidade, etc).
+   */
+  clienteVinculo?: {
+    nome: string
+    cpfCnpj?: string
+    casoId?: string // vínculo opcional com caso específico
+    propostaId?: string // vínculo opcional com proposta específica
+  }
   categoria: CategoriaDespesa
   valor: number
   dataEmissao: string // ISO
@@ -287,12 +299,78 @@ export interface CalculoDAS {
   memoriaCalculo: string
 }
 
+/**
+ * Margem consolidada por cliente — receita atribuída menos despesas vinculadas.
+ * Despesas sem `clienteVinculo` NÃO entram aqui (são estruturais) — o rateio
+ * estrutural fica a cargo do DRE geral. A chave é `cpfCnpj` quando disponível,
+ * senão o nome normalizado (upper + trim).
+ */
+export interface MargemCliente {
+  /** Identificador único do cliente (cpfCnpj limpo ou nome normalizado). */
+  clienteKey: string
+  nome: string
+  cpfCnpj?: string
+  receitaBruta: number
+  receitaLiquida: number // após retenções
+  despesasAtribuidas: number // só despesas com clienteVinculo
+  margem: number // receitaLiquida - despesasAtribuidas
+  margemPct: number // (margem / receitaBruta) * 100 — 0 se receita = 0
+  numReceitas: number
+  numDespesas: number
+  /** Última receita/despesa do cliente — útil para ordenar recência. */
+  ultimaAtividade?: string // ISO
+  /**
+   * Classificação do cliente em função da margem percentual:
+   *  ouro (>=50%) · prata (30-49%) · bronze (10-29%) · prejuizo (<10% ou negativo)
+   */
+  classificacao: 'ouro' | 'prata' | 'bronze' | 'prejuizo'
+}
+
+/**
+ * Projeção de caixa dos próximos N dias — baseada em recebíveis e pagáveis
+ * agendados. Serve de "farol" para decisões de investimento/contratação.
+ *
+ * Saldo inicial = soma dos saldos iniciais + net dos lançamentos bancários já
+ * registrados. Cada bucket é uma semana (ISO, segunda a domingo) ou o restante
+ * quando a janela não fecha em semana completa.
+ */
+export interface ProjecaoCaixa {
+  /** Horizonte em dias (default 90). */
+  diasHorizonte: number
+  saldoInicial: number
+  /** Buckets por semana. */
+  semanas: Array<{
+    inicio: string // YYYY-MM-DD
+    fim: string
+    entradas: number // soma dos recebíveis previstos na semana
+    saidas: number // soma das despesas + impostos vencendo
+    resultado: number
+    saldoFinal: number
+    /** Flag: saldo ficará negativo nessa semana — alerta de caixa. */
+    alertaNegativo: boolean
+  }>
+  /** Agregados de todo o horizonte. */
+  totais: {
+    entradas: number
+    saidas: number
+    resultado: number
+    saldoFinalProjetado: number
+  }
+  /** Se qualquer semana tem saldo negativo, apontamos a primeira para UI. */
+  primeiroGap?: { semanaInicio: string; deficit: number }
+  geradoEm: string
+}
+
 export interface DashboardFinanceiro {
   mesAtual: string // YYYY-MM
   dreAtual: DREMensal
   faturamento12m: number
   rbt12: number
   dasProximo?: CalculoDAS
+  /** Top clientes pelo lucro bruto (receita - despesas vinculadas). */
+  margensPorCliente: MargemCliente[]
+  /** Projeção de caixa dos próximos 90 dias. */
+  projecaoCaixa90d: ProjecaoCaixa
   contasReceber: {
     total: number
     atrasadas: number
@@ -341,6 +419,53 @@ export interface ChecklistFechamento {
     detalhe: string
   }>
   pronto: boolean
+}
+
+/**
+ * Sugestão de reconciliação de um lançamento bancário OFX com um lançamento
+ * manual (receita, despesa ou imposto). Vem do motor de matching por valor
+ * e proximidade de data.
+ */
+export interface SugestaoReconciliacao {
+  lancamentoId: string
+  lancamento: {
+    id: string
+    data: string
+    descricao: string
+    valor: number
+    tipo: 'credito' | 'debito'
+  }
+  candidatos: Array<{
+    /** Tipo da entidade candidata ao match. */
+    entidadeTipo: 'receita' | 'despesa' | 'imposto'
+    entidadeId: string
+    entidadeDescricao: string
+    entidadeValor: number
+    entidadeData: string
+    /** 0-100 — quão forte é a correspondência. */
+    score: number
+    /** Quebra do score para transparência na UI. */
+    criterios: {
+      valorExato: boolean
+      diffDias: number
+      keywordMatch: boolean
+      mesmaCompetencia: boolean
+    }
+    motivo: string
+  }>
+}
+
+/**
+ * Resultado da materialização mensal de despesas recorrentes. Cria a próxima
+ * ocorrência quando não existe despesa equivalente (mesmo fornecedor/descrição)
+ * na competência-alvo. Idempotente — chamar múltiplas vezes é seguro.
+ */
+export interface ResultadoMaterializacao {
+  competencia: string
+  criadas: string[] // ids das despesas criadas
+  puladas: number // recorrências já presentes na competência
+  inativas: number // recorrências desligadas
+  executadoEm: string
 }
 
 export interface PacoteFechamento {

@@ -32,6 +32,10 @@ import type {
   Anexo,
   StatusReceita,
   StatusDespesa,
+  MargemCliente,
+  ProjecaoCaixa,
+  SugestaoReconciliacao,
+  ResultadoMaterializacao,
 } from './types.js'
 import { CATEGORIAS_DESPESA } from './types.js'
 import { calcularDAS, alertaLimiteSimples } from './simples-nacional.js'
@@ -510,6 +514,453 @@ export class FinanceiroService {
     }
   }
 
+  /**
+   * Margem por cliente — receita bruta/líquida menos despesas explicitamente
+   * vinculadas ao cliente via `clienteVinculo`. Somente despesas com vínculo
+   * entram; despesas estruturais (aluguel, contabilidade) ficam fora do cálculo
+   * de margem por caso — o rateio estrutural é tratado no DRE geral.
+   */
+  calcularMargensPorCliente(filtro?: { ano?: number; limite?: number }): MargemCliente[] {
+    type Bucket = {
+      nome: string
+      cpfCnpj?: string
+      receitaBruta: number
+      retencoes: number
+      despesas: number
+      numReceitas: number
+      numDespesas: number
+      ultimaAtividade?: string
+    }
+    const mapa = new Map<string, Bucket>()
+
+    const chave = (nome: string, cpfCnpj?: string): string => {
+      if (cpfCnpj) return cpfCnpj.replace(/\D/g, '')
+      return nome.trim().toUpperCase()
+    }
+
+    // Receitas
+    for (const r of this.receitas.values()) {
+      if (r.status === 'cancelada') continue
+      if (filtro?.ano && !r.competencia.startsWith(`${filtro.ano}-`)) continue
+      if (!r.cliente?.nome) continue
+      const key = chave(r.cliente.nome, r.cliente.cpfCnpj)
+      const b = mapa.get(key) ?? {
+        nome: r.cliente.nome,
+        cpfCnpj: r.cliente.cpfCnpj,
+        receitaBruta: 0,
+        retencoes: 0,
+        despesas: 0,
+        numReceitas: 0,
+        numDespesas: 0,
+      }
+      b.receitaBruta += r.valorBruto
+      b.retencoes += r.retencoes ? Object.values(r.retencoes).reduce((s, v) => s + (v ?? 0), 0) : 0
+      b.numReceitas += 1
+      const atividade = r.dataRecebimento || r.dataEmissao
+      if (atividade && (!b.ultimaAtividade || atividade > b.ultimaAtividade)) {
+        b.ultimaAtividade = atividade
+      }
+      mapa.set(key, b)
+    }
+
+    // Despesas com vínculo
+    for (const d of this.despesas.values()) {
+      if (d.status === 'cancelada') continue
+      if (filtro?.ano && !d.competencia.startsWith(`${filtro.ano}-`)) continue
+      if (!d.clienteVinculo?.nome) continue
+      const key = chave(d.clienteVinculo.nome, d.clienteVinculo.cpfCnpj)
+      const b = mapa.get(key) ?? {
+        nome: d.clienteVinculo.nome,
+        cpfCnpj: d.clienteVinculo.cpfCnpj,
+        receitaBruta: 0,
+        retencoes: 0,
+        despesas: 0,
+        numReceitas: 0,
+        numDespesas: 0,
+      }
+      b.despesas += d.valor
+      b.numDespesas += 1
+      const atividade = d.dataPagamento || d.dataEmissao
+      if (atividade && (!b.ultimaAtividade || atividade > b.ultimaAtividade)) {
+        b.ultimaAtividade = atividade
+      }
+      mapa.set(key, b)
+    }
+
+    const resultado: MargemCliente[] = Array.from(mapa.entries()).map(([clienteKey, b]) => {
+      const receitaLiquida = b.receitaBruta - b.retencoes
+      const margem = receitaLiquida - b.despesas
+      const margemPct = b.receitaBruta > 0 ? (margem / b.receitaBruta) * 100 : 0
+      const classificacao: MargemCliente['classificacao'] =
+        margemPct >= 50 ? 'ouro'
+        : margemPct >= 30 ? 'prata'
+        : margemPct >= 10 ? 'bronze'
+        : 'prejuizo'
+      return {
+        clienteKey,
+        nome: b.nome,
+        cpfCnpj: b.cpfCnpj,
+        receitaBruta: Number(b.receitaBruta.toFixed(2)),
+        receitaLiquida: Number(receitaLiquida.toFixed(2)),
+        despesasAtribuidas: Number(b.despesas.toFixed(2)),
+        margem: Number(margem.toFixed(2)),
+        margemPct: Number(margemPct.toFixed(1)),
+        numReceitas: b.numReceitas,
+        numDespesas: b.numDespesas,
+        ultimaAtividade: b.ultimaAtividade,
+        classificacao,
+      }
+    })
+
+    resultado.sort((a, b) => b.receitaBruta - a.receitaBruta)
+    return filtro?.limite ? resultado.slice(0, filtro.limite) : resultado
+  }
+
+  /**
+   * Projeção de caixa — olha para frente N dias agregando recebíveis previstos
+   * e pagáveis agendados. Saldo inicial = saldo das contas bancárias (saldo
+   * inicial + net dos lançamentos já registrados até hoje).
+   */
+  calcularProjecaoCaixa(diasHorizonte = 90): ProjecaoCaixa {
+    const hoje = new Date()
+    hoje.setHours(0, 0, 0, 0)
+    const fim = new Date(hoje)
+    fim.setDate(fim.getDate() + diasHorizonte)
+    const hojeStr = this.isoDate(hoje)
+    const fimStr = this.isoDate(fim)
+
+    // 1. Saldo inicial consolidado — saldo contas + net lançamentos bancários
+    const saldoContasIniciais = this.config.contasBancarias
+      .filter((c) => c.ativa)
+      .reduce((s, c) => s + (c.saldoInicial ?? 0), 0)
+    const netLancamentos = Array.from(this.lancamentos.values())
+      .filter((l) => l.data <= hojeStr)
+      .reduce((s, l) => s + l.valor, 0)
+    const saldoInicial = Number((saldoContasIniciais + netLancamentos).toFixed(2))
+
+    // 2. Gera buckets semanais (semana começa segunda-feira em UTC)
+    const semanas: ProjecaoCaixa['semanas'] = []
+    const cursor = new Date(hoje)
+    // Ajusta cursor para a próxima segunda-feira (ou hoje se já for segunda)
+    const diaSemana = cursor.getDay()
+    const diasAteSegunda = diaSemana === 0 ? 1 : 8 - diaSemana
+    // Primeira semana: inicia hoje, vai até o próximo domingo
+    const primeiroFim = new Date(cursor)
+    primeiroFim.setDate(primeiroFim.getDate() + (diasAteSegunda - 1))
+    semanas.push({
+      inicio: this.isoDate(cursor),
+      fim: this.isoDate(primeiroFim > fim ? fim : primeiroFim),
+      entradas: 0,
+      saidas: 0,
+      resultado: 0,
+      saldoFinal: 0,
+      alertaNegativo: false,
+    })
+    const proximoInicio = new Date(primeiroFim)
+    proximoInicio.setDate(proximoInicio.getDate() + 1)
+    while (proximoInicio <= fim) {
+      const proximoFim = new Date(proximoInicio)
+      proximoFim.setDate(proximoFim.getDate() + 6) // +6 = domingo
+      semanas.push({
+        inicio: this.isoDate(proximoInicio),
+        fim: this.isoDate(proximoFim > fim ? fim : proximoFim),
+        entradas: 0,
+        saidas: 0,
+        resultado: 0,
+        saldoFinal: 0,
+        alertaNegativo: false,
+      })
+      proximoInicio.setDate(proximoInicio.getDate() + 7)
+    }
+
+    const bucketParaData = (data: string): number => {
+      for (let i = 0; i < semanas.length; i++) {
+        if (data >= semanas[i].inicio && data <= semanas[i].fim) return i
+      }
+      return -1
+    }
+
+    // 3. Entradas previstas — receitas em aberto com dataPrevisaoRecebimento na janela
+    for (const r of this.receitas.values()) {
+      if (r.status === 'recebida' || r.status === 'cancelada') continue
+      const data = r.dataPrevisaoRecebimento
+      if (!data || data < hojeStr || data > fimStr) continue
+      const idx = bucketParaData(data)
+      if (idx >= 0) semanas[idx].entradas += r.valorLiquido
+    }
+
+    // 4. Saídas previstas — despesas e impostos em aberto dentro da janela
+    for (const d of this.despesas.values()) {
+      if (d.status === 'paga' || d.status === 'cancelada') continue
+      if (d.dataVencimento < hojeStr || d.dataVencimento > fimStr) continue
+      const idx = bucketParaData(d.dataVencimento)
+      if (idx >= 0) semanas[idx].saidas += d.valor
+    }
+    for (const i of this.impostos.values()) {
+      if (i.status === 'pago') continue
+      if (i.dataVencimento < hojeStr || i.dataVencimento > fimStr) continue
+      const idx = bucketParaData(i.dataVencimento)
+      if (idx >= 0) semanas[idx].saidas += i.valor
+    }
+
+    // 5. Rolamento acumulado do saldo
+    let saldoCorrente = saldoInicial
+    let primeiroGap: ProjecaoCaixa['primeiroGap']
+    for (const s of semanas) {
+      s.entradas = Number(s.entradas.toFixed(2))
+      s.saidas = Number(s.saidas.toFixed(2))
+      s.resultado = Number((s.entradas - s.saidas).toFixed(2))
+      saldoCorrente += s.resultado
+      s.saldoFinal = Number(saldoCorrente.toFixed(2))
+      s.alertaNegativo = s.saldoFinal < 0
+      if (s.alertaNegativo && !primeiroGap) {
+        primeiroGap = { semanaInicio: s.inicio, deficit: s.saldoFinal }
+      }
+    }
+
+    const totais = {
+      entradas: Number(semanas.reduce((s, w) => s + w.entradas, 0).toFixed(2)),
+      saidas: Number(semanas.reduce((s, w) => s + w.saidas, 0).toFixed(2)),
+      resultado: 0,
+      saldoFinalProjetado: Number(saldoCorrente.toFixed(2)),
+    }
+    totais.resultado = Number((totais.entradas - totais.saidas).toFixed(2))
+
+    return {
+      diasHorizonte,
+      saldoInicial,
+      semanas,
+      totais,
+      primeiroGap,
+      geradoEm: new Date().toISOString(),
+    }
+  }
+
+  /**
+   * Materializa despesas recorrentes na competência-alvo. Para cada despesa
+   * com `recorrente.ativo === true`, cria uma nova ocorrência se ainda não
+   * existe (chave de deduplicação: mesmo fornecedor + descrição no mês).
+   *
+   * Seguro chamar múltiplas vezes — idempotente.
+   */
+  materializarRecorrencias(competencia?: string): ResultadoMaterializacao {
+    const comp = competencia ?? new Date().toISOString().slice(0, 7)
+    const [ano, mes] = comp.split('-').map(Number)
+    const criadas: string[] = []
+    let puladas = 0
+    let inativas = 0
+
+    // Chaves já presentes na competência-alvo — evita duplicar
+    const chaves = new Set(
+      Array.from(this.despesas.values())
+        .filter((d) => d.competencia === comp)
+        .map((d) => `${(d.fornecedor?.nome ?? '').toUpperCase()}|${d.descricao.toUpperCase()}`)
+    )
+
+    // Modelos de recorrência: cada fornecedor+descrição só deve gerar UMA nova
+    // ocorrência — dedup pelo par fornecedor/descrição na base geral.
+    const modelos = new Map<string, Despesa>()
+    for (const d of this.despesas.values()) {
+      if (!d.recorrente) continue
+      if (!d.recorrente.ativo) {
+        inativas++
+        continue
+      }
+      const chave = `${(d.fornecedor?.nome ?? '').toUpperCase()}|${d.descricao.toUpperCase()}`
+      const atual = modelos.get(chave)
+      // Pega o mais recente como modelo
+      if (!atual || d.criadoEm > atual.criadoEm) modelos.set(chave, d)
+    }
+
+    for (const [chave, modelo] of modelos) {
+      // Frequência mensal é o único suportado no materializador (bimestral/tri-
+      // mestral etc. entram em roadmap — evitamos duplicação até decidirmos
+      // a regra de ancoragem por fornecedor).
+      if (modelo.recorrente!.frequencia !== 'mensal') {
+        puladas++
+        continue
+      }
+      if (chaves.has(chave)) {
+        puladas++
+        continue
+      }
+      // Monta próxima data de vencimento usando diaVencimento
+      const diaVenc = Math.min(modelo.recorrente!.diaVencimento, 28)
+      const dataVencimento = `${comp}-${String(diaVenc).padStart(2, '0')}`
+      const dataEmissao = `${comp}-01`
+      const nova = this.criarDespesa({
+        competencia: comp,
+        descricao: modelo.descricao,
+        fornecedor: modelo.fornecedor,
+        clienteVinculo: modelo.clienteVinculo,
+        categoria: modelo.categoria,
+        valor: modelo.valor,
+        dataEmissao,
+        dataVencimento,
+        recorrente: modelo.recorrente,
+        observacoes: `Recorrência materializada automaticamente a partir da despesa ${modelo.id}.`,
+        anexos: [],
+      })
+      criadas.push(nova.id)
+    }
+
+    return {
+      competencia: comp,
+      criadas,
+      puladas,
+      inativas,
+      executadoEm: new Date().toISOString(),
+    }
+  }
+
+  /**
+   * Sugere reconciliações entre lançamentos bancários OFX sem vínculo e os
+   * lançamentos manuais (receitas/despesas/impostos) em aberto.
+   *
+   * Score heurístico (0-100):
+   *   • +60 se o valor bate exatamente (±R$ 0,05)
+   *   • +20 se valor bate com diff <= 1% (margem de retenções bancárias)
+   *   • +20 se diffDias <= 2, +10 se <= 7, +0 se >7
+   *   • +10 se há keyword em comum (fornecedor/descrição)
+   *   • +5 se competência coincide
+   *   • Limite de 5 candidatos por lançamento (top score)
+   */
+  sugerirReconciliacoes(opts?: { contaId?: string; limitePorLancamento?: number }): SugestaoReconciliacao[] {
+    const limite = opts?.limitePorLancamento ?? 5
+    const lancamentos = Array.from(this.lancamentos.values()).filter((l) => {
+      if (opts?.contaId && l.contaId !== opts.contaId) return false
+      if (l.origem !== 'ofx') return false
+      if (l.vinculadoA) return false
+      return true
+    })
+    if (lancamentos.length === 0) return []
+
+    const receitasAbertas = Array.from(this.receitas.values()).filter(
+      (r) => r.status !== 'recebida' && r.status !== 'cancelada'
+    )
+    const despesasAbertas = Array.from(this.despesas.values()).filter(
+      (d) => d.status !== 'paga' && d.status !== 'cancelada'
+    )
+    const impostosAbertos = Array.from(this.impostos.values()).filter((i) => i.status !== 'pago')
+
+    const resultado: SugestaoReconciliacao[] = []
+
+    for (const l of lancamentos) {
+      const valorAbs = Math.abs(l.valor)
+      const pool: Array<{
+        entidadeTipo: 'receita' | 'despesa' | 'imposto'
+        entidade: { id: string; descricao: string; valor: number; data: string; competencia?: string; fornecedor?: string }
+      }> = []
+
+      if (l.tipo === 'credito') {
+        for (const r of receitasAbertas) {
+          pool.push({
+            entidadeTipo: 'receita',
+            entidade: {
+              id: r.id,
+              descricao: `${r.cliente?.nome ? `${r.cliente.nome} — ` : ''}${r.descricao}`,
+              valor: r.valorLiquido,
+              data: r.dataPrevisaoRecebimento || r.dataEmissao,
+              competencia: r.competencia,
+              fornecedor: r.cliente?.nome,
+            },
+          })
+        }
+      } else {
+        for (const d of despesasAbertas) {
+          pool.push({
+            entidadeTipo: 'despesa',
+            entidade: {
+              id: d.id,
+              descricao: `${d.fornecedor?.nome ? `${d.fornecedor.nome} — ` : ''}${d.descricao}`,
+              valor: d.valor,
+              data: d.dataVencimento,
+              competencia: d.competencia,
+              fornecedor: d.fornecedor?.nome,
+            },
+          })
+        }
+        for (const i of impostosAbertos) {
+          pool.push({
+            entidadeTipo: 'imposto',
+            entidade: {
+              id: i.id,
+              descricao: `${i.tipo.toUpperCase()}: ${i.descricao}`,
+              valor: i.valor,
+              data: i.dataVencimento,
+              competencia: i.competencia,
+            },
+          })
+        }
+      }
+
+      const lancDescUp = l.descricao.toUpperCase()
+      const tokensLanc = lancDescUp.split(/\W+/).filter((t) => t.length >= 4)
+      const compLanc = l.data.slice(0, 7)
+
+      const scored = pool
+        .map(({ entidadeTipo, entidade }) => {
+          const diffValor = Math.abs(entidade.valor - valorAbs)
+          const diffRelativa = entidade.valor > 0 ? diffValor / entidade.valor : 1
+          const valorExato = diffValor <= 0.05
+          const diffDias = this.diasEntre(l.data, entidade.data)
+          const diffDiasAbs = Math.abs(diffDias)
+          const mesmaCompetencia = entidade.competencia === compLanc
+
+          const entDescUp = (entidade.descricao + ' ' + (entidade.fornecedor ?? '')).toUpperCase()
+          const keywordMatch = tokensLanc.some((t) => entDescUp.includes(t))
+
+          let score = 0
+          if (valorExato) score += 60
+          else if (diffRelativa <= 0.01) score += 20
+          else if (diffRelativa <= 0.05) score += 5
+          else return null // diferença > 5% descarta
+
+          if (diffDiasAbs <= 2) score += 20
+          else if (diffDiasAbs <= 7) score += 10
+
+          if (keywordMatch) score += 10
+          if (mesmaCompetencia) score += 5
+
+          // Sem valor-exato nem diff pequeno não vira sugestão
+          if (score < 25) return null
+
+          const motivo = [
+            valorExato ? 'valor idêntico' : `diff R$ ${diffValor.toFixed(2)}`,
+            `${diffDiasAbs}d de diferença`,
+            keywordMatch ? 'keyword OK' : '',
+            mesmaCompetencia ? 'mesma competência' : '',
+          ].filter(Boolean).join(' · ')
+
+          return {
+            entidadeTipo,
+            entidadeId: entidade.id,
+            entidadeDescricao: entidade.descricao,
+            entidadeValor: entidade.valor,
+            entidadeData: entidade.data,
+            score: Math.min(100, score),
+            criterios: { valorExato, diffDias: diffDiasAbs, keywordMatch, mesmaCompetencia },
+            motivo,
+          }
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limite)
+
+      if (scored.length > 0) {
+        resultado.push({
+          lancamentoId: l.id,
+          lancamento: { id: l.id, data: l.data, descricao: l.descricao, valor: l.valor, tipo: l.tipo },
+          candidatos: scored,
+        })
+      }
+    }
+
+    // Ordena por força da melhor sugestão — UI trata os "gimme" primeiro
+    resultado.sort((a, b) => (b.candidatos[0]?.score ?? 0) - (a.candidatos[0]?.score ?? 0))
+    return resultado
+  }
+
   /** Dashboard principal. */
   calcularDashboard(): DashboardFinanceiro {
     const hoje = new Date()
@@ -743,12 +1194,38 @@ export class FinanceiroService {
       })
     }
 
+    const margensPorCliente = this.calcularMargensPorCliente({ ano: hoje.getFullYear(), limite: 10 })
+    const projecaoCaixa90d = this.calcularProjecaoCaixa(90)
+
+    // Alerta de projeção de caixa — primeiro gap detectado na janela
+    if (projecaoCaixa90d.primeiroGap) {
+      alertas.push({
+        tipo: 'vencimento',
+        severidade: 'critico',
+        titulo: `Caixa projetado fica negativo em ${projecaoCaixa90d.primeiroGap.semanaInicio}`,
+        detalhe: `Déficit projetado: ${this.formatBRL(Math.abs(projecaoCaixa90d.primeiroGap.deficit))}. Revise recebíveis e prazos de pagamento.`,
+      })
+    }
+    // Alerta de cliente em prejuízo — sinal de precificação ruim
+    const prejuizos = margensPorCliente.filter((m) => m.classificacao === 'prejuizo' && m.receitaBruta > 0)
+    if (prejuizos.length > 0) {
+      const pior = prejuizos.reduce((a, b) => (b.margem < a.margem ? b : a))
+      alertas.push({
+        tipo: 'pendencia',
+        severidade: 'atencao',
+        titulo: `${prejuizos.length} cliente(s) operando em prejuízo`,
+        detalhe: `Pior caso: ${pior.nome} com margem ${pior.margemPct.toFixed(1)}% (${this.formatBRL(pior.margem)}). Revise escopo ou precificação.`,
+      })
+    }
+
     return {
       mesAtual,
       dreAtual,
       faturamento12m: Number(faturamento12m.toFixed(2)),
       rbt12,
       dasProximo,
+      margensPorCliente,
+      projecaoCaixa90d,
       contasReceber,
       contasPagar,
       fluxoCaixa12m,
@@ -843,6 +1320,14 @@ export class FinanceiroService {
     return Math.round((d1 - d2) / 86400000)
   }
 
+  /** Converte Date → YYYY-MM-DD (UTC-safe). */
+  private isoDate(d: Date): string {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dia = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${dia}`
+  }
+
   private diasEntre(dataInicio: string, dataFim: string): number {
     if (!dataInicio || !dataFim) return 0
     const d1 = new Date(dataInicio + 'T00:00:00Z').getTime()
@@ -859,11 +1344,33 @@ export class FinanceiroService {
 
 let singleton: FinanceiroService | null = null
 
+/**
+ * Agenda materialização de recorrências — roda a cada 24h no processo da API.
+ * Não depende de lib externa (node-cron) para manter o footprint enxuto.
+ * O primeiro run acontece imediatamente ao subir o serviço.
+ */
+function agendarRecorrencias(svc: FinanceiroService): void {
+  const executar = () => {
+    try {
+      const r = svc.materializarRecorrencias()
+      if (r.criadas.length > 0) {
+        console.log(`[FinanceiroService] Recorrências materializadas em ${r.competencia}: ${r.criadas.length} criada(s), ${r.puladas} pulada(s)`)
+      }
+    } catch (err) {
+      console.error('[FinanceiroService] Falha ao materializar recorrências:', err)
+    }
+  }
+  executar()
+  const UM_DIA_MS = 24 * 60 * 60 * 1000
+  setInterval(executar, UM_DIA_MS).unref()
+}
+
 export function getFinanceiroService(): FinanceiroService {
   if (!singleton) {
     const storageRoot = join(process.cwd(), 'storage', 'financeiro')
     mkdirSync(storageRoot, { recursive: true })
     singleton = new FinanceiroService(storageRoot)
+    agendarRecorrencias(singleton)
   }
   return singleton
 }
