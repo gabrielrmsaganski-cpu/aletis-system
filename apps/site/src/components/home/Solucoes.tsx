@@ -1,11 +1,11 @@
 import Link from 'next/link'
 import {
+  Stethoscope,
   RefreshCw,
   Scale,
+  TrendingUp,
   BarChart3,
-  Users,
-  Bot,
-  FileCheck,
+  LifeBuoy,
   ArrowUpRight,
 } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
@@ -15,11 +15,20 @@ import { Eyebrow } from '@/components/ui/Eyebrow'
 
 const solucoes = [
   {
+    icone: Stethoscope,
+    titulo: 'Diagnóstico Financeiro',
+    sub: 'Porta de entrada · 72h',
+    descricao:
+      'Toda a dívida do produtor em uma única memória de cálculo auditável, com abusividade mapeada, DSCR dimensionado e plano priorizado.',
+    tag: 'Gratuito',
+    href: '/solucoes#diagnostico',
+  },
+  {
     icone: RefreshCw,
     titulo: 'Reestruturação de Dívida',
     sub: 'Multi-credor · DSCR realista',
     descricao:
-      'Projetamos o plano financeiro do produtor nos próximos 60–120 meses e sentamos à mesa com todos os credores ao mesmo tempo — banco, cooperativa, revenda, PJ rural.',
+      'Mesa técnica única com banco, cooperativa, revenda e cerealista simultaneamente. Plano executável em 60–120 meses com contratos prontos para assinar.',
     tag: 'Serviço principal',
     href: '/solucoes#reestruturacao',
   },
@@ -28,45 +37,36 @@ const solucoes = [
     titulo: 'Revisional & Abusividade',
     sub: 'Anatocismo · Crédito rural',
     descricao:
-      'Auditoria técnica de CCBs, CPRs e cédulas rurais para identificar abusividade, capitalização indevida e descaracterização.',
+      'Auditoria técnica de CCBs, CPRs e cédulas rurais. Identifica anatocismo, capitalização indevida e descaracterização sob Res. BCB 4.966/21.',
     tag: 'Alta conversão',
     href: '/solucoes#revisional',
   },
   {
+    icone: TrendingUp,
+    titulo: 'Estruturação Financeira',
+    sub: 'Prevenção · profissionalização',
+    descricao:
+      'Visibilidade de caixa, DRE por fazenda, política de endividamento e governança de garantias. Para grupos que cresceram sem área financeira.',
+    tag: 'Preventivo',
+    href: '/solucoes#estruturacao',
+  },
+  {
     icone: BarChart3,
     titulo: 'Inteligência de Mercado',
-    sub: 'Commodities · Basis · Clima',
+    sub: 'Commodities · Basis · Timing',
     descricao:
-      'Brief diário com sazonalidade, basis regional, câmbio, clima e curva futura — insumo direto para decisões de comercialização.',
+      'Quando vender, quanto travar, em que basis, com que hedge. Decisão de comercialização deixa de ser calendário e vira tese.',
     tag: 'Recorrente',
     href: '/solucoes#mercado',
   },
   {
-    icone: FileCheck,
-    titulo: 'Contratos Estratégicos',
-    sub: 'CPR · Confissão · Acordos',
+    icone: LifeBuoy,
+    titulo: 'Gestão de Crise',
+    sub: 'Turn-around · urgência',
     descricao:
-      'Gerador proprietário de CPR-F, CPR-Física, confissão de dívida, termo de renegociação, acordo extrajudicial e transação excepcional.',
-    tag: 'Jurídico',
-    href: '/solucoes#contratos',
-  },
-  {
-    icone: Users,
-    titulo: 'CRM & Workflow',
-    sub: 'Pipeline · Atendimento',
-    descricao:
-      'CRM de produtor rural com workflow de reestruturação, histórico de negociação, controle de garantias e portal do cliente.',
-    tag: 'Tecnologia',
-    href: '/solucoes#tecnologia',
-  },
-  {
-    icone: Bot,
-    titulo: 'ALIX · IA Aplicada',
-    sub: 'Assistente consultivo',
-    descricao:
-      'IA treinada em legislação, jurisprudência e metodologia ALETIS. Apoia triagem, geração de peças e atendimento ao cliente.',
-    tag: 'Inovação',
-    href: '/solucoes#alix',
+      'Para o produtor em estágio crítico: protesto, execução, risco patrimonial. Triagem em 24h e estabilização do perímetro antes da reestruturação formal.',
+    tag: 'Emergência',
+    href: '/solucoes#crise',
   },
 ]
 
@@ -76,15 +76,19 @@ export function Solucoes() {
       <Container>
         <div className="flex flex-col items-start justify-between gap-8 md:flex-row md:items-end">
           <Reveal>
-            <Eyebrow>Soluções</Eyebrow>
+            <Eyebrow>Consultoria</Eyebrow>
             <h2 className="mt-6 display-lg max-w-2xl text-aletis-grafite-escuro">
-              Um portfólio construído para o ciclo{' '}
-              <span className="italic text-aletis-verde-escuro">inteiro</span> do produtor.
+              Seis frentes.{' '}
+              <span className="italic text-aletis-verde-escuro">Uma única mesa.</span>
             </h2>
+            <p className="mt-5 max-w-lg text-[15px] leading-relaxed text-aletis-grafite-medio">
+              Consultoria financeira estratégica para o agro — do diagnóstico ao acompanhamento
+              pós-acordo. Sem vender software, sem vender parecer. Entregando decisão.
+            </p>
           </Reveal>
           <Reveal delay={100}>
             <Link href="/solucoes" className="btn-secondary">
-              Ver catálogo completo
+              Ver todas as frentes
               <ArrowUpRight className="h-4 w-4" />
             </Link>
           </Reveal>
@@ -103,7 +107,7 @@ export function Solucoes() {
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-aletis-dourado/40 bg-aletis-dourado/10 text-aletis-verde-escuro transition group-hover:bg-aletis-dourado/20">
                       <Icon className="h-5 w-5" />
                     </div>
-                    <span className="rounded-full border border-aletis-borda bg-aletis-marfim px-2.5 py-1 text-[10px] font-display font-semibold uppercase tracking-wider text-aletis-grafite-medio">
+                    <span className="rounded-full border border-aletis-borda bg-aletis-marfim px-2.5 py-1 text-[10px] font-display font-semibold uppercase tracking-wider text-aletis-grafite-escuro">
                       {s.tag}
                     </span>
                   </div>

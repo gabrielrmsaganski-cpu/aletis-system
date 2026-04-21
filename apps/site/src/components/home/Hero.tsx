@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, PlayCircle, ShieldCheck, Scale, Sparkles } from 'lucide-react'
+import { ArrowRight, PlayCircle, ShieldCheck, Scale, Handshake } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
 import { Reveal } from '@/components/ui/Reveal'
 import { Eyebrow } from '@/components/ui/Eyebrow'
@@ -49,8 +49,8 @@ export function Hero() {
             <Reveal delay={160}>
               <p className="mt-7 max-w-xl text-lg leading-relaxed text-white/75 md:text-[19px]">
                 Diagnóstico financeiro auditável, revisão contratual fundamentada e
-                negociação multi-credor — em uma única mesa, com tecnologia proprietária e
-                vivência de campo.
+                negociação multi-credor — em uma única mesa técnica independente, do lado do
+                produtor.
               </p>
             </Reveal>
 
@@ -82,8 +82,8 @@ export function Hero() {
                   Lei 14.181/21 · Res. BCB 4.966/21
                 </span>
                 <span className="inline-flex items-center gap-2">
-                  <Sparkles className="h-3.5 w-3.5 text-aletis-dourado" />
-                  ALIX · IA consultiva
+                  <Handshake className="h-3.5 w-3.5 text-aletis-dourado" />
+                  Mesa multi-credor simultânea
                 </span>
               </div>
             </Reveal>
@@ -98,10 +98,10 @@ export function Hero() {
                   <div className="flex items-center gap-2">
                     <div className="h-2 w-2 rounded-full bg-emerald-400" />
                     <span className="text-[11px] font-display font-semibold uppercase tracking-wider text-white/60">
-                      Diagnóstico em tempo real
+                      Diagnóstico auditável
                     </span>
                   </div>
-                  <span className="font-display text-xs text-aletis-dourado">ALETIS · v4.2</span>
+                  <span className="font-display text-xs text-aletis-dourado">Memória de cálculo</span>
                 </div>
 
                 <div className="mt-5 space-y-4">

@@ -21,9 +21,9 @@ const linhas = [
     aletis: 'Safra, basis, clima e câmbio dentro do modelo',
   },
   {
-    tema: 'Tecnologia',
-    convencional: 'Planilhas, e-mail e retrabalho',
-    aletis: 'Sistema proprietário, CRM, IA e portal do cliente',
+    tema: 'Rigor técnico',
+    convencional: 'Planilhas genéricas e retrabalho manual',
+    aletis: 'Memória de cálculo auditável apoiada por mesa digital interna',
   },
   {
     tema: 'Negociação',
@@ -34,6 +34,11 @@ const linhas = [
     tema: 'Entrega final',
     convencional: 'Parecer jurídico ou simulação frágil',
     aletis: 'Plano executável, contratos prontos e acompanhamento pós-acordo',
+  },
+  {
+    tema: 'Pós-acordo',
+    convencional: 'Fecha o contrato e desaparece',
+    aletis: 'Monitoramento mensal de DSCR e renegociação preventiva',
   },
 ]
 

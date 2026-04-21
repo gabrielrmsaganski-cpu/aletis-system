@@ -11,37 +11,59 @@ interface RevealProps {
 }
 
 /**
- * Componente de entrada suave por IntersectionObserver.
- * Mantém o HTML acessível e funcional mesmo sem JS (css .reveal base cuida disso).
+ * Fade-up por IntersectionObserver com fallback seguro.
+ * Padrão SSR: visível. JS esconde apenas se o elemento estiver fora do
+ * viewport na hidratação, evitando conteúdo bloqueado para crawlers,
+ * reader-mode, ou usuários sem JS.
  */
 export function Reveal({ children, className, delay = 0, as: Tag = 'div' }: RevealProps) {
   const ref = useRef<HTMLElement | null>(null)
-  const [visible, setVisible] = useState(false)
+  const [state, setState] = useState<'idle' | 'hidden' | 'visible'>('idle')
 
   useEffect(() => {
     const el = ref.current
-    if (!el || visible) return
+    if (!el) return
 
+    if (typeof IntersectionObserver === 'undefined') {
+      setState('visible')
+      return
+    }
+
+    const rect = el.getBoundingClientRect()
+    const viewportH = window.innerHeight || document.documentElement.clientHeight
+    const alreadyVisible = rect.top < viewportH - 60
+
+    if (alreadyVisible) {
+      setState('visible')
+      return
+    }
+
+    setState('hidden')
     const obs = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => {
           if (e.isIntersecting) {
-            setVisible(true)
+            setState('visible')
             obs.disconnect()
           }
         })
       },
-      { threshold: 0.12, rootMargin: '0px 0px -60px 0px' },
+      { threshold: 0.08, rootMargin: '0px 0px -40px 0px' },
     )
     obs.observe(el)
     return () => obs.disconnect()
-  }, [visible])
+  }, [])
 
   const Component = Tag as any
   return (
     <Component
       ref={ref}
-      className={cn('reveal', visible && 'is-visible', className)}
+      className={cn(
+        'reveal',
+        state === 'hidden' && 'is-hidden',
+        state === 'visible' && 'is-visible',
+        className,
+      )}
       style={{ ['--reveal-delay' as any]: `${delay}ms` }}
     >
       {children}

@@ -102,7 +102,7 @@ export function Footer() {
         </div>
 
         <FooterColumn title="Empresa" items={nav.footer.empresa} />
-        <FooterColumn title="Soluções" items={nav.footer.solucoes} />
+        <FooterColumn title="Consultoria" items={nav.footer.solucoes} />
         <FooterColumn title="Ferramentas" items={nav.footer.ferramentas} />
       </div>
 

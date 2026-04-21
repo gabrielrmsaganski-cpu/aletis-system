@@ -1,11 +1,11 @@
-import { BrainCircuit, LineChart, Wheat, Cpu, ArrowUpRight } from 'lucide-react'
+import { BrainCircuit, LineChart, Wheat, Handshake, ArrowUpRight } from 'lucide-react'
 import Link from 'next/link'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { Reveal } from '@/components/ui/Reveal'
 import { Eyebrow } from '@/components/ui/Eyebrow'
 
-const ICONS = { BrainCircuit, LineChart, Wheat, Cpu }
+const ICONS = { BrainCircuit, LineChart, Wheat, Handshake }
 
 const itens = [
   {
@@ -45,15 +45,15 @@ const itens = [
     ],
   },
   {
-    icone: 'Cpu' as const,
+    icone: 'Handshake' as const,
     numero: '04',
-    titulo: 'Tecnologia Proprietária',
+    titulo: 'Execução até o fim',
     descricao:
-      'Sistema interno, CRM, pipelines de dados de mercado e ALIX — a IA que pensa junto com o consultor sênior.',
+      'O plano não termina na assinatura. Acompanhamos DSCR mensal, pactos entre credores e gatilhos de atenção por toda a vigência do acordo.',
     detalhes: [
-      'Dashboard de exposição consolidada',
-      'CRM com workflows de reestruturação',
-      'ALIX · IA treinada em contratos',
+      'Monitoramento de DSCR mensal',
+      'Alertas de descumprimento precoces',
+      'Renegociação preventiva quando necessário',
     ],
   },
 ]
@@ -64,15 +64,15 @@ export function Pilares() {
       <Container>
         <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
           <Reveal className="lg:sticky lg:top-28 lg:self-start">
-            <Eyebrow>O que fazemos</Eyebrow>
+            <Eyebrow>Como pensamos</Eyebrow>
             <h2 className="mt-6 display-lg text-aletis-grafite-escuro">
               Quatro disciplinas.{' '}
               <span className="italic text-aletis-verde-escuro">Uma única mesa.</span>
             </h2>
             <p className="mt-6 max-w-md text-base leading-relaxed text-aletis-grafite-medio">
-              A ALETIS não é escritório de advocacia, não é corretora e não é software.
-              Somos a mesa técnica que une as três capacidades em uma entrega integrada —
-              cirurgicamente pensada para o agro brasileiro.
+              A ALETIS não é escritório de advocacia, não é corretora e não vende software.
+              Somos consultoria financeira estratégica para o agro — uma mesa técnica que une
+              finanças, direito e vivência de campo em uma entrega integrada.
             </p>
             <Link
               href="/solucoes"

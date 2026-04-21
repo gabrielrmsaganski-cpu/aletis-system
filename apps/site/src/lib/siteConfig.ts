@@ -28,7 +28,7 @@ export const siteConfig = {
 export const nav = {
   primary: [
     { label: 'Sobre', href: '/sobre' },
-    { label: 'Soluções', href: '/solucoes' },
+    { label: 'Consultoria', href: '/solucoes' },
     { label: 'Para quem é', href: '/para-quem-e' },
     { label: 'Calculadoras', href: '/calculadoras' },
     { label: 'Insights', href: '/insights' },
@@ -42,11 +42,12 @@ export const nav = {
       { label: 'Contato', href: '/contato' },
     ],
     solucoes: [
-      { label: 'Reestruturação de dívida', href: '/solucoes#reestruturacao' },
-      { label: 'Revisional & abusividade', href: '/solucoes#revisional' },
-      { label: 'Inteligência de mercado', href: '/solucoes#mercado' },
-      { label: 'CRM e automação', href: '/solucoes#tecnologia' },
-      { label: 'ALIX — IA aplicada', href: '/solucoes#alix' },
+      { label: 'Diagnóstico Financeiro', href: '/solucoes#diagnostico' },
+      { label: 'Reestruturação de Dívida', href: '/solucoes#reestruturacao' },
+      { label: 'Revisional & Abusividade', href: '/solucoes#revisional' },
+      { label: 'Estruturação Financeira', href: '/solucoes#estruturacao' },
+      { label: 'Inteligência de Mercado', href: '/solucoes#mercado' },
+      { label: 'Gestão de Crise', href: '/solucoes#crise' },
     ],
     ferramentas: [
       { label: 'Simulador de reestruturação', href: '/calculadoras/reestruturacao' },
@@ -84,11 +85,11 @@ export const pilares = [
     icone: 'Wheat',
   },
   {
-    key: 'tecnologia',
-    titulo: 'Tecnologia Proprietária',
+    key: 'execucao',
+    titulo: 'Execução até o fim',
     descricao:
-      'Sistema interno, CRM, pipelines de dados de mercado e ALIX — IA que pensa junto com o consultor.',
-    icone: 'Cpu',
+      'O plano não termina na assinatura. DSCR mensal, alertas precoces e renegociação preventiva por toda a vigência do acordo.',
+    icone: 'Handshake',
   },
 ] as const
 

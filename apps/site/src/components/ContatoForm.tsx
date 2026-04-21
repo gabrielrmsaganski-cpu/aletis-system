@@ -16,7 +16,7 @@ import {
 import { cn } from '@/lib/cn'
 
 type Segmento = '' | 'produtor' | 'grupo' | 'coop' | 'cerealista' | 'empresa' | 'outro'
-type Interesse = '' | 'reestruturacao' | 'revisional' | 'mercado' | 'tecnologia' | 'diagnostico' | 'outro'
+type Interesse = '' | 'reestruturacao' | 'revisional' | 'mercado' | 'estruturacao' | 'crise' | 'diagnostico' | 'outro'
 type Tamanho = '' | 'ate_500ha' | '500_2000' | '2000_5000' | 'mais_5000' | 'nao_rural'
 
 interface FormState {
@@ -186,8 +186,9 @@ export function ContatoForm() {
             <option value="diagnostico">Diagnóstico gratuito</option>
             <option value="reestruturacao">Reestruturação de dívida</option>
             <option value="revisional">Revisional / abusividade</option>
+            <option value="estruturacao">Estruturação financeira</option>
             <option value="mercado">Inteligência de mercado</option>
-            <option value="tecnologia">Tecnologia / CRM / ALIX</option>
+            <option value="crise">Gestão de crise</option>
             <option value="outro">Outro</option>
           </select>
         </Field>

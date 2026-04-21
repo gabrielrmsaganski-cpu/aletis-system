@@ -42,7 +42,7 @@ const publicos = [
     titulo: 'Cooperativa',
     sub: 'Cooperativas agropecuárias',
     dor: 'Cooperados em inadimplência, risco sistêmico na carteira, necessidade de reestruturar sem perder relacionamento.',
-    solucao: 'Apoio técnico na estruturação de acordos com cooperados, modelos de renegociação em escala, ALIX para triagem.',
+    solucao: 'Apoio técnico na estruturação de acordos com cooperados, modelos de renegociação em escala e triagem rápida de carteira.',
     resultado: 'Carteira regularizada, cooperado ativo e previsibilidade financeira para a cooperativa.',
   },
   {
