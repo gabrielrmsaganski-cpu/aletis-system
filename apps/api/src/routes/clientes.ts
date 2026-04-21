@@ -16,6 +16,7 @@ import {
   type ClienteParaAnalise,
 } from '../services/cliente/AutoCalcOrchestrator.js'
 import type { AnaliseCliente } from '../services/cliente/types.js'
+import { getAnalisesBus } from '../services/cliente/AnalisesBus.js'
 
 /* ========================================================================
  *  Portal do Cliente — tipos anexados
@@ -755,29 +756,107 @@ async function enrichAndApply(
 function scheduleAnalises(cliente: Cliente, motivo: string): void {
   const orch = getAutoCalcOrchestrator()
   orch.schedule(cliente as unknown as ClienteParaAnalise)
-  // Quando concluir, hidrata `cliente.analises` e (se algo mudou) registra evento.
+  // Quando concluir, hidrata `cliente.analises` e (se algo mudou) registra eventos.
   setImmediate(async () => {
     try {
       const analise = await orch.orchestrate(cliente as unknown as ClienteParaAnalise)
       const antes = cliente.analises
       cliente.analises = analise
-      const mudouSrai =
-        antes?.srai?.scoreTotal !== analise.srai?.scoreTotal ||
-        antes?.srai?.classificacao !== analise.srai?.classificacao
-      if (mudouSrai && analise.srai) {
-        cliente.timeline.push({
-          data: new Date().toISOString().slice(0, 10),
-          tipo: 'analise',
-          descricao: antes?.srai
-            ? `Score SRAI atualizado: ${antes.srai.scoreTotal} → ${analise.srai.scoreTotal} (${analise.srai.classificacao})`
-            : `Análise automática concluída: SRAI ${analise.srai.scoreTotal} (${analise.srai.classificacao})`,
-          detalhes: motivo,
-        })
+      registrarDiffsNaTimeline(cliente, antes, analise, motivo)
+      try {
+        getAnalisesBus().emitAtualizada({ clienteId: cliente.id, analise })
+      } catch {
+        // best-effort
       }
     } catch {
       // erros já são logados pelo orquestrador
     }
   })
+}
+
+/**
+ * Compara o snapshot anterior e o novo e empurra para `timeline` apenas as
+ * mudanças que o consultor precisa ver. Evita registrar quando o hash bateu
+ * e nada mudou (orquestrador já pulou o recálculo).
+ */
+function registrarDiffsNaTimeline(
+  cliente: Cliente,
+  antes: AnaliseCliente | undefined,
+  depois: AnaliseCliente,
+  motivo: string,
+): void {
+  const hoje = new Date().toISOString().slice(0, 10)
+  if (antes && antes.inputHash === depois.inputHash) return
+
+  const eventos: string[] = []
+
+  if (depois.srai) {
+    const antesSrai = antes?.srai
+    if (!antesSrai) {
+      eventos.push(`Análise automática concluída: SRAI ${depois.srai.scoreTotal} (${depois.srai.classificacao})`)
+    } else if (
+      antesSrai.scoreTotal !== depois.srai.scoreTotal ||
+      antesSrai.classificacao !== depois.srai.classificacao
+    ) {
+      eventos.push(`Score SRAI atualizado: ${antesSrai.scoreTotal} → ${depois.srai.scoreTotal} (${depois.srai.classificacao})`)
+    }
+  }
+
+  if (depois.abs && antes?.abs && antes.abs.nivelElegibilidade !== depois.abs.nivelElegibilidade) {
+    eventos.push(`AB+S: elegibilidade ${antes.abs.nivelElegibilidade} → ${depois.abs.nivelElegibilidade}`)
+  }
+
+  if (depois.saldoRecalculado && antes?.saldoRecalculado) {
+    const antesTotal = antes.saldoRecalculado.totalSaldoRecalculado
+    const depoisTotal = depois.saldoRecalculado.totalSaldoRecalculado
+    if (antesTotal > 0) {
+      const variacao = Math.abs(depoisTotal - antesTotal) / antesTotal
+      if (variacao >= 0.05) {
+        const pct = ((depoisTotal - antesTotal) / antesTotal) * 100
+        eventos.push(`Saldo recalculado ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}% (R$ ${depoisTotal.toLocaleString('pt-BR', { maximumFractionDigits: 0 })})`)
+      }
+    }
+  }
+
+  if (depois.margemCliente && antes?.margemCliente && antes.margemCliente.classificacao !== depois.margemCliente.classificacao) {
+    eventos.push(`Margem financeira: ${antes.margemCliente.classificacao} → ${depois.margemCliente.classificacao}`)
+  }
+
+  const criticosAntes = new Set(
+    (antes?.alertasTop ?? []).filter((a) => a.nivel === 'critico').map((a) => a.mensagem),
+  )
+  const criticosDepois = new Set(
+    depois.alertasTop.filter((a) => a.nivel === 'critico').map((a) => a.mensagem),
+  )
+  for (const msg of criticosDepois) {
+    if (!criticosAntes.has(msg)) eventos.push(`Alerta crítico: ${msg}`)
+  }
+  for (const msg of criticosAntes) {
+    if (!criticosDepois.has(msg)) eventos.push(`Alerta resolvido: ${msg}`)
+  }
+
+  for (const descricao of eventos) {
+    cliente.timeline.push({ data: hoje, tipo: 'analise', descricao, detalhes: motivo })
+  }
+}
+
+/** Localiza cliente por CPF/CNPJ (digits-only) — usado pelo listener do bus. */
+function buscarClientePorCpfCnpj(cpfCnpj: string): Cliente | null {
+  const digits = cpfCnpj.replace(/\D/g, '')
+  if (!digits) return null
+  for (const c of clientes.values()) {
+    if (c.cpfCnpj.replace(/\D/g, '') === digits) return c
+  }
+  return null
+}
+
+/** Janela de frescor do snapshot antes de agendar refresh automático. */
+const SNAPSHOT_TTL_MS = 24 * 60 * 60 * 1000 // 24h
+
+function snapshotEstaVelho(analise: AnaliseCliente): boolean {
+  const geradoEm = Date.parse(analise.geradoEm)
+  if (!Number.isFinite(geradoEm)) return true
+  return Date.now() - geradoEm > SNAPSHOT_TTL_MS
 }
 
 /** Backfill de análises ao boot — garante que seeds tenham snapshot inicial. */
@@ -803,11 +882,32 @@ function backfillSeedAnalises(): void {
  *  Roteador
  * ======================================================================== */
 
+/**
+ * Garante que o listener de invalidação (Financeiro → clientes) seja
+ * registrado apenas uma vez — mesmo se o plugin for registrado múltiplas
+ * vezes em testes.
+ */
+let _busSubscriberAtivo = false
+
+function registrarSubscriberDoBus(): void {
+  if (_busSubscriberAtivo) return
+  _busSubscriberAtivo = true
+  getAnalisesBus().onInvalidar(({ cpfCnpj, clienteId, motivo }) => {
+    let cliente: Cliente | null = null
+    if (clienteId) cliente = clientes.get(clienteId) ?? null
+    if (!cliente && cpfCnpj) cliente = buscarClientePorCpfCnpj(cpfCnpj)
+    if (!cliente) return
+    scheduleAnalises(cliente, `[bus] ${motivo}`)
+  })
+}
+
 export default async function (fastify: FastifyInstance) {
   // Backfill seed clients with CAR data when the module registers.
   backfillSeedEnrichment()
   // Hidrata seeds com o snapshot de análises (após enriquecimento).
   backfillSeedAnalises()
+  // Assina o bus para reagir a mudanças do Financeiro (margem por cliente).
+  registrarSubscriberDoBus()
 
   /* ---- LIST ---- */
   fastify.get('/api/clientes', async (request: FastifyRequest, _reply: FastifyReply) => {
@@ -1278,7 +1378,13 @@ export default async function (fastify: FastifyInstance) {
     return { success: true, data: { ...resultado, input } }
   })
 
-  /* ---- SNAPSHOT DE ANÁLISES AUTOMÁTICAS (Cliente Inteligente) ---- */
+  /* ---- SNAPSHOT DE ANÁLISES AUTOMÁTICAS (Cliente Inteligente) ----
+   *
+   * Stale-while-revalidate: se o snapshot existe mas passou da janela de
+   * frescor (24h), serve o cache imediatamente e agenda um refresh em
+   * background. Garante resposta rápida (<50ms) sem perder consistência
+   * eventual com entradas externas (commodities, dívidas externas, etc).
+   */
   fastify.get('/api/clientes/:id/analises', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string }
     const cliente = clientes.get(id)
@@ -1289,9 +1395,13 @@ export default async function (fastify: FastifyInstance) {
     const orch = getAutoCalcOrchestrator()
     let analise = cliente.analises ?? orch.get(id)
     if (!analise) {
-      // Primeira leitura — força a execução síncrona (≈50-200ms)
+      // Primeira leitura — força execução síncrona (≈50-200ms).
       analise = await orch.orchestrate(cliente as unknown as ClienteParaAnalise)
       cliente.analises = analise
+    } else if (snapshotEstaVelho(analise)) {
+      // Cache válido porém velho — agenda refresh em background e devolve o
+      // cache agora. O frontend pegará o novo snapshot na próxima abertura.
+      scheduleAnalises(cliente, 'stale-while-revalidate')
     }
     return { success: true, data: analise }
   })

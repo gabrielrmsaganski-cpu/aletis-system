@@ -77,3 +77,6 @@ apps/api/storage/prospeccao/blacklist.json
 
 # Financeiro runtime data (db.json + anexos + fechamentos gerados)
 apps/api/storage/financeiro/
+
+# Cliente Inteligente — snapshots de análises automáticas (regeneráveis)
+apps/api/storage/clientes/

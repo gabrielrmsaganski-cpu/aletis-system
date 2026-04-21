@@ -39,6 +39,7 @@ import type {
 } from './types.js'
 import { CATEGORIAS_DESPESA } from './types.js'
 import { calcularDAS, alertaLimiteSimples } from './simples-nacional.js'
+import { getAnalisesBus } from '../cliente/AnalisesBus.js'
 
 const CATEGORIA_NOMES: Record<string, string> = Object.fromEntries(
   CATEGORIAS_DESPESA.map((c) => [c.id, c.nome])
@@ -157,6 +158,20 @@ export class FinanceiroService {
     return join(this.anexosDir, nomeArmazenado)
   }
 
+  /**
+   * Notifica o bus de análises que a margem de um cliente pode ter mudado.
+   * Best-effort: qualquer exceção nos listeners é contida aqui — financeiro
+   * continua funcionando mesmo se a camada cliente estiver indisponível.
+   */
+  private invalidarAnalisesCliente(cpfCnpj: string | undefined, motivo: string): void {
+    if (!cpfCnpj) return
+    try {
+      getAnalisesBus().emitInvalidar({ cpfCnpj, motivo })
+    } catch (err) {
+      console.warn('[FinanceiroService] falha emitindo invalidar', err)
+    }
+  }
+
   /* ────────────────── Receitas ────────────────── */
 
   criarReceita(dados: Omit<Receita, 'id' | 'criadoEm' | 'atualizadoEm' | 'valorLiquido' | 'status'> & { status?: StatusReceita }): Receita {
@@ -178,6 +193,7 @@ export class FinanceiroService {
     }
     this.receitas.set(id, receita)
     this.save()
+    this.invalidarAnalisesCliente(receita.cliente?.cpfCnpj, `receita criada (${receita.competencia})`)
     return receita
   }
 
@@ -195,12 +211,21 @@ export class FinanceiroService {
     }
     this.receitas.set(id, merged)
     this.save()
+    this.invalidarAnalisesCliente(merged.cliente?.cpfCnpj, `receita atualizada (${merged.competencia})`)
+    // Se o cliente foi trocado, invalida também o antigo
+    if (r.cliente?.cpfCnpj && r.cliente.cpfCnpj !== merged.cliente?.cpfCnpj) {
+      this.invalidarAnalisesCliente(r.cliente.cpfCnpj, 'receita desassociada')
+    }
     return merged
   }
 
   deletarReceita(id: string): boolean {
+    const r = this.receitas.get(id)
     const ok = this.receitas.delete(id)
-    if (ok) this.save()
+    if (ok) {
+      this.save()
+      this.invalidarAnalisesCliente(r?.cliente?.cpfCnpj, 'receita removida')
+    }
     return ok
   }
 
@@ -238,6 +263,7 @@ export class FinanceiroService {
     }
     this.despesas.set(id, despesa)
     this.save()
+    this.invalidarAnalisesCliente(despesa.clienteVinculo?.cpfCnpj, `despesa criada (${despesa.competencia})`)
     return despesa
   }
 
@@ -252,12 +278,20 @@ export class FinanceiroService {
     }
     this.despesas.set(id, merged)
     this.save()
+    this.invalidarAnalisesCliente(merged.clienteVinculo?.cpfCnpj, `despesa atualizada (${merged.competencia})`)
+    if (d.clienteVinculo?.cpfCnpj && d.clienteVinculo.cpfCnpj !== merged.clienteVinculo?.cpfCnpj) {
+      this.invalidarAnalisesCliente(d.clienteVinculo.cpfCnpj, 'despesa desassociada')
+    }
     return merged
   }
 
   deletarDespesa(id: string): boolean {
+    const d = this.despesas.get(id)
     const ok = this.despesas.delete(id)
-    if (ok) this.save()
+    if (ok) {
+      this.save()
+      this.invalidarAnalisesCliente(d?.clienteVinculo?.cpfCnpj, 'despesa removida')
+    }
     return ok
   }
 
