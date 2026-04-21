@@ -255,6 +255,12 @@ interface Stats {
   porFaixaDivida: Array<{ faixa: string; count: number }>
   topSignals: Array<{ signal: string; count: number }>
   manifest: { fonte: string; atualizadoEm: string }
+  fontes?: Array<{
+    fonte: string
+    descricao: string
+    contagem: number
+    lastIngestAt: string | null
+  }>
 }
 
 const OUTCOME_LABEL: Record<ContactOutcomeTipo, { label: string; tone: 'green' | 'amber' | 'sky' | 'red' | 'slate' }> = {
@@ -947,6 +953,19 @@ function HeroOODA({
               <Sparkles size={14} className="text-aletis-dourado" />
               {loading ? 'carregando…' : stats ? `${fmtNum(stats.totalLeads)} leads indexados` : '—'}
             </div>
+            {stats?.fontes && stats.fontes.length > 0 && (
+              <div className="flex flex-wrap justify-end gap-1 max-w-[320px]">
+                {stats.fontes.map((f) => (
+                  <span
+                    key={f.fonte}
+                    title={`${f.descricao}${f.lastIngestAt ? ' · ' + new Date(f.lastIngestAt).toLocaleDateString('pt-BR') : ''}`}
+                    className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-white/60"
+                  >
+                    {f.fonte} · {fmtNum(f.contagem)}
+                  </span>
+                ))}
+              </div>
+            )}
             <SicarStatusBadge status={sicarStatus} />
           </div>
         </div>

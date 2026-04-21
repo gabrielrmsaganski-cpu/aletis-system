@@ -1,5 +1,7 @@
 import { join } from 'path'
 import { PGFNSource } from './PGFNSource'
+import { LeadSourceRegistry } from './sources/LeadSourceRegistry'
+import type { LeadSourceManifest } from './sources/LeadSource'
 import { BrasilAPISource, isAgroCnae } from './BrasilAPISource'
 import { AreaEstimator } from './AreaEstimator'
 import { ScoringEngine } from './ScoringEngine'
@@ -48,6 +50,7 @@ const OUTCOMES_QUE_EXCLUEM: Record<ContactOutcomeTipo, string | null> = {
  */
 export class ProspeccaoService {
   private pgfn: PGFNSource
+  private sources: LeadSourceRegistry
   private brasil: BrasilAPISource
   private area: AreaEstimator
   private scorer: ScoringEngine
@@ -64,6 +67,10 @@ export class ProspeccaoService {
 
   constructor(storageDir: string) {
     this.pgfn = new PGFNSource(storageDir)
+    // O registry é o ponto único de consulta a "todos os leads crus" — hoje
+    // só envolve a PGFN, mas novas fontes (CAR, CNPJ-CNAE) podem ser
+    // plugadas sem tocar em nenhum consumidor.
+    this.sources = new LeadSourceRegistry(storageDir, [this.pgfn])
     this.brasil = new BrasilAPISource()
     this.area = new AreaEstimator()
     this.scorer = new ScoringEngine()
@@ -95,7 +102,7 @@ export class ProspeccaoService {
     filters: ProspeccaoFilters,
     opts: { prioridade?: JobPrioridade; motivo?: string } = {},
   ): { batchId: string; enfileirados: number; jaNaFila: number; total: number } {
-    const targets = this.pgfn.all().filter((raw) => {
+    const targets = this.sources.all().filter((raw) => {
       const decorated = this.buildBasic(raw)
       if (decorated.status === 'excluido') return false
       if (decorated.status === 'completa') return false
@@ -192,7 +199,7 @@ export class ProspeccaoService {
       registradoPor?: string
     }
   ): { outcome: ContactOutcome; lead?: LeadFull; excluido?: BlacklistEntry } | null {
-    const raw = this.pgfn.find(cpfCnpj)
+    const raw = this.sources.find(cpfCnpj)
     if (!raw) return null
     const outcome = this.repo.addContato({
       cpfCnpj: raw.cpfCnpj,
@@ -222,7 +229,7 @@ export class ProspeccaoService {
     const alerts: HotLeadAlert[] = []
     const hoje = Date.now()
 
-    for (const raw of this.pgfn.all()) {
+    for (const raw of this.sources.all()) {
       const lead = this.buildBasic(raw)
       if (lead.status === 'excluido') continue
       if (lead.score.classificacao !== 'quente') continue
@@ -278,7 +285,7 @@ export class ProspeccaoService {
   /** Leads com outcome "retornar" ou "interessado" prontos para reengajamento. */
   leadsParaReengajar(limite = 20): LeadFull[] {
     const out: LeadFull[] = []
-    for (const raw of this.pgfn.all()) {
+    for (const raw of this.sources.all()) {
       const lead = this.buildBasic(raw)
       if (lead.status === 'excluido') continue
       if (lead.feedback?.reengajar) out.push(lead)
@@ -299,7 +306,7 @@ export class ProspeccaoService {
     pageSize: number
     counts: { pendentes: number; completas: number; excluidos: number; todos: number }
   } {
-    const all = this.pgfn.all().map((r) => this.buildBasic(r))
+    const all = this.sources.all().map((r) => this.buildBasic(r))
     const uf = filters.uf
       ? Array.isArray(filters.uf)
         ? filters.uf.map((u) => u.toUpperCase())
@@ -365,14 +372,14 @@ export class ProspeccaoService {
   }
 
   getLead(cpfCnpj: string): LeadFull | null {
-    const raw = this.pgfn.find(cpfCnpj)
+    const raw = this.sources.find(cpfCnpj)
     if (!raw) return null
     return this.buildBasic(raw)
   }
 
   /** Enriquece: chama BrasilAPI, recomputa área com capital social + CNAE, rescore, persiste. */
   async enrichLead(cpfCnpj: string, codImovel?: string): Promise<LeadFull | null> {
-    const raw = this.pgfn.find(cpfCnpj)
+    const raw = this.sources.find(cpfCnpj)
     if (!raw) return null
 
     let cnpjInfo = null
@@ -652,7 +659,7 @@ export class ProspeccaoService {
   /** Consulta SICAR (live) e já persiste como lead enriquecido. */
   async consultarCar(cpfCnpj: string, codImovel: string): Promise<CarConsultaResult> {
     const result = await this.sicar.consultarPorCodigo(codImovel)
-    const raw = this.pgfn.find(cpfCnpj)
+    const raw = this.sources.find(cpfCnpj)
     if (raw) {
       // atualiza enrichment persistido com novo CAR
       const previous = this.repo.getEnriched(raw.cpfCnpjClean)
@@ -670,7 +677,7 @@ export class ProspeccaoService {
 
   /** Marca um lead como excluído (soft-delete via blacklist). */
   excluirLead(cpfCnpj: string, motivo: string): BlacklistEntry | null {
-    const raw = this.pgfn.find(cpfCnpj)
+    const raw = this.sources.find(cpfCnpj)
     if (!raw) return null
     const entry = this.repo.addToBlacklist(
       { cpfCnpj: raw.cpfCnpj, cpfCnpjClean: raw.cpfCnpjClean },
@@ -702,7 +709,7 @@ export class ProspeccaoService {
     const { batchId, onProgress } = options
     const concurrency = Math.min(8, Math.max(1, options.concurrency || 3))
 
-    const targets = this.pgfn.all().filter((raw) => {
+    const targets = this.sources.all().filter((raw) => {
       const decorated = this.buildBasic(raw)
       if (decorated.status === 'excluido') return false
       if (decorated.status === 'completa') return false // já enriquecido
@@ -814,7 +821,7 @@ export class ProspeccaoService {
   } {
     const targets: LeadRaw[] = []
     let jaCompletos = 0
-    for (const raw of this.pgfn.all()) {
+    for (const raw of this.sources.all()) {
       const decorated = this.buildBasic(raw)
       if (decorated.status === 'excluido') continue
       if (decorated.status === 'completa') {
@@ -894,7 +901,7 @@ export class ProspeccaoService {
   }
 
   stats(): ProspeccaoStats {
-    const all = this.pgfn.all().map((r) => this.buildBasic(r))
+    const all = this.sources.all().map((r) => this.buildBasic(r))
     const ativos = all.filter((l) => l.status !== 'excluido')
     const totalLeads = ativos.length
     const totalDivida = ativos.reduce((s, l) => s + l.totalDivida, 0)
@@ -957,7 +964,8 @@ export class ProspeccaoService {
       if (l.feedback?.reengajar) leadsParaReengajar++
     }
 
-    const m = this.pgfn.getManifest()
+    const manifests = this.sources.manifests()
+    const principal = manifests[0]
     return {
       totalLeads,
       totalDivida,
@@ -972,10 +980,26 @@ export class ProspeccaoService {
       porFaixaDivida,
       topSignals,
       manifest: {
-        fonte: m?.source || 'PGFN Dívida Ativa',
-        atualizadoEm: m?.generatedAt || new Date().toISOString(),
+        fonte: principal?.descricao || 'PGFN Dívida Ativa',
+        atualizadoEm: principal?.lastIngestAt || new Date().toISOString(),
       },
+      fontes: manifests.map((m) => ({
+        fonte: m.fonte,
+        descricao: m.descricao,
+        contagem: m.contagem,
+        lastIngestAt: m.lastIngestAt,
+      })),
     }
+  }
+
+  /** Manifest detalhado de todas as fontes — consumido por rotas REST. */
+  listarFontes(): LeadSourceManifest[] {
+    return this.sources.manifests()
+  }
+
+  /** Recarrega o registry — útil após ingest offline. */
+  recarregarFontes(): void {
+    this.sources.reload()
   }
 }
 

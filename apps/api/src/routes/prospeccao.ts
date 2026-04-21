@@ -445,4 +445,25 @@ export default async function prospeccaoRoutes(app: FastifyInstance) {
       return reply.send(csv)
     }
   )
+
+  // Fontes ativas — UI de admin e telemetria consomem daqui.
+  app.get('/api/prospeccao/fontes', async () => {
+    try {
+      const fontes = service.listarFontes()
+      return { success: true, data: { fontes } }
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Falha listando fontes' }
+    }
+  })
+
+  // Força recarregamento das fontes (uso admin — após ingest offline).
+  app.post('/api/prospeccao/fontes/reload', async () => {
+    try {
+      service.recarregarFontes()
+      const fontes = service.listarFontes()
+      return { success: true, data: { fontes } }
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Falha recarregando fontes' }
+    }
+  })
 }

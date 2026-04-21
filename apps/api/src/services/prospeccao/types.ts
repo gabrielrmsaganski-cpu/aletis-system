@@ -35,6 +35,12 @@ export interface LeadRaw {
   primeiraInscricao: string
   ultimaInscricao: string
   temAjuizada: boolean
+  /**
+   * Procedência — preenchido pelo `LeadSourceRegistry` quando o lead é
+   * consolidado a partir de múltiplas fontes. Pode estar ausente em dados
+   * legados (gravados antes da multi-fonte). Ordem = ordem de entrada.
+   */
+  sources?: Array<{ fonte: string; ingestedAt: string }>
 }
 
 /** Enriquecimento via BrasilAPI (CNPJ → sócios, CNAE, endereço). */
@@ -349,4 +355,11 @@ export interface ProspeccaoStats {
     fonte: string
     atualizadoEm: string
   }
+  /** Todas as fontes ativas — útil p/ mostrar "Fontes: PGFN (N), CAR (M)". */
+  fontes?: Array<{
+    fonte: string
+    descricao: string
+    contagem: number
+    lastIngestAt: string | null
+  }>
 }
