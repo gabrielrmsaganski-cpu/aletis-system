@@ -22,6 +22,14 @@ import {
   buscarMCRPorTema,
   buscarLinhasPorPublico,
 } from '@aletis/knowledge-base';
+import {
+  runClaude,
+  isLLMEnabled,
+  CLAUDE_MODEL_SONNET,
+  type ClaudeTool,
+  type ClaudeToolRegistry,
+  type ClaudeMessage,
+} from './llm/ClaudeFoundryClient.js';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -470,6 +478,18 @@ export class AlixService {
     raw: string,
     session: ChatSession,
   ): Promise<{ content: string; sources?: string[]; toolsUsed?: string[]; metadata?: Record<string, unknown> }> {
+    // Cérebro LLM (Claude Sonnet 4.6 via Foundry) é a primeira tentativa.
+    // Se falhar por qualquer motivo (rede/auth/limite), cai para o switch
+    // rule-based a seguir — garantia de que o Alix nunca fica mudo.
+    if (isLLMEnabled()) {
+      try {
+        const llmResult = await this.runLLMPath(raw, session);
+        if (llmResult && llmResult.content) return llmResult;
+      } catch (err) {
+        console.warn('[Alix] LLM path falhou, usando regras:', (err as Error).message);
+      }
+    }
+
     switch (intent.tipo) {
       case 'saudacao':
         return {
@@ -1349,6 +1369,515 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
     } catch (err: any) {
       return { content: `Erro: ${err.message}`, sources: [], toolsUsed: [] };
     }
+  }
+
+  // ── LLM path (Claude Sonnet 4.6 via Foundry) ──────────
+
+  /**
+   * Constroi tools + system prompt + histórico e deixa o Claude orquestrar.
+   * Tools retornam dados estruturados (strings prontas das handlers existentes,
+   * que já vêm formatadas). Claude sintetiza a resposta final em linguagem natural.
+   */
+  private async runLLMPath(
+    userMessage: string,
+    session: ChatSession,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
+    const { tools, registry } = this.buildAlixTools();
+    const systemPrompt = this.buildAlixSystemPrompt();
+    const convo = this.sessionToClaudeMessages(session);
+
+    // Se a última mensagem ainda não é user (edge case onde push não aconteceu),
+    // adiciona. Normalmente session.messages já inclui o userMessage atual.
+    if (convo.length === 0 || convo[convo.length - 1].role !== 'user') {
+      convo.push({ role: 'user', content: userMessage });
+    }
+
+    const toolsUsedAggregate: string[] = [];
+    const sourcesAggregate = new Set<string>();
+
+    const result = await runClaude(convo, {
+      model: CLAUDE_MODEL_SONNET,
+      maxTokens: 2048,
+      system: [
+        { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },
+      ],
+      tools,
+      toolRegistry: registry,
+      maxIterations: 6,
+      temperature: 0.2,
+      onToolCall: (name, _input, result: any) => {
+        toolsUsedAggregate.push(name);
+        if (result && typeof result === 'object' && Array.isArray((result as any).sources)) {
+          for (const s of (result as any).sources) sourcesAggregate.add(String(s));
+        }
+      },
+    });
+
+    return {
+      content: result.text || '[Alix sem resposta]',
+      sources: Array.from(sourcesAggregate),
+      toolsUsed: Array.from(new Set(toolsUsedAggregate)),
+      metadata: {
+        llm: true,
+        model: CLAUDE_MODEL_SONNET,
+        iterations: result.iterations,
+        stopReason: result.stopReason,
+        tokens: result.usage,
+      },
+    };
+  }
+
+  /**
+   * Converte histórico de sessão em mensagens no formato Anthropic.
+   * Ignora mensagens 'system' (o Alix usa system prompt separado) e compacta
+   * metadata pra economizar contexto.
+   */
+  private sessionToClaudeMessages(session: ChatSession): ClaudeMessage[] {
+    // Limita a últimas 20 mensagens pra não estourar contexto
+    const recent = session.messages.slice(-20);
+    const out: ClaudeMessage[] = [];
+    for (const m of recent) {
+      if (m.role === 'system') continue;
+      if (!m.content || !m.content.trim()) continue;
+      out.push({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content,
+      });
+    }
+    return out;
+  }
+
+  private buildAlixSystemPrompt(): string {
+    const hoje = new Date().toISOString().slice(0, 10);
+    return `Você é a **ALIX** — Agente de Leitura e Inteligência Estratégica da ALETIS, consultoria financeira agro do Christian Kohler.
+
+**Quem é o Christian:** sócio-fundador da ALETIS, reestrutura dívidas de produtores rurais e cooperativas (casos como Paulo Luciano / Fertiflora, Ailton / Sicoob). Atua 100% no agronegócio brasileiro.
+
+**Data de hoje:** ${hoje}.
+
+**Sua missão:** responder com precisão cirúrgica usando SEMPRE as ferramentas disponíveis para buscar dados reais (cotações, indicadores, clima, CRM, súmulas, MCR, financeiro interno). Nunca invente números — sempre puxe da tool.
+
+**Regras de voz:**
+- Linguagem direta, técnica, SEM floreio. Sem "claro!", "com prazer!", sem emojis salvo quando a ferramenta retornar um.
+- Valores em BRL formatados (R$ 1.234,56). Datas em YYYY-MM-DD ou pt-BR.
+- Sempre cite as fontes que a tool retornar.
+- Se a tool falhar, diga exatamente o que falhou — não simule sucesso.
+- Quando o usuário pedir análise ("o que fazer?"), cite dados + precedentes + recomendação. Ancore em súmulas STJ, MCR, ou o Plano Safra vigente.
+- Respostas curtas quando possível (2-6 linhas). Use bullets quando listar 3+ itens.
+
+**Contexto ALETIS (pano de fundo):**
+- Base jurídica: ${Object.keys(SUMULAS_STJ).length} súmulas STJ, ${Object.keys(MCR_SECOES).length} seções do MCR, Plano Safra 2025/26, Proagro.
+- Fontes live: BCB (Selic/IPCA/IGPM/CDI/PTAX), AwesomeAPI (câmbio), CONAB (commodities), ANP (combustível), NASA FIRMS (incêndios), Open-Meteo (clima), SICOR (crédito rural), Focus (expectativas).
+- CRM interno: clientes, propostas (padrão e inteligentes de 15 seções).
+- Financeiro da ALETIS: DRE mensal, DAS Simples Nacional, contas a receber/pagar, fechamento pro contador.
+
+**Priorize:**
+1. Se o usuário faz pergunta que requer dado vivo → chama a tool apropriada.
+2. Se é pergunta jurídica → busca súmula/MCR/precedente.
+3. Se é pergunta sobre cliente/proposta → consulta CRM.
+4. Se é ambígua → faz UMA pergunta de clareza curta, não duas.
+
+**O que NÃO fazer:**
+- Não dar conselho jurídico final sem citar a base legal.
+- Não prometer garantias ("vai funcionar 100%"). Diga "historicamente funciona em X% dos casos similares".
+- Não expor dados sensíveis de outros clientes quando falando de um caso específico.`;
+  }
+
+  /**
+   * Define todas as tools expostas ao Claude e seus handlers.
+   * Handlers delegam para métodos existentes do AlixService — zero duplicação.
+   */
+  private buildAlixTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
+    const specs: Array<{ spec: ClaudeTool; handler: (input: Record<string, unknown>) => any }> = [
+      // ── Câmbio ─────────────────────────────────────────
+      {
+        spec: {
+          name: 'cambio_atual',
+          description: 'Retorna cotação atual de moeda(s) (USD, EUR, GBP, CNY, ARS, JPY). Se moeda omitida, retorna todas.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              moeda: { type: 'string', description: 'Código da moeda (USD, EUR, etc). Omita para listar todas.' },
+            },
+          },
+        },
+        handler: (i) => this.cambioAtual(i.moeda as string | undefined),
+      },
+      {
+        spec: {
+          name: 'cambio_historico',
+          description: 'Histórico diário de uma moeda nos últimos N dias. Use para comparar variação, máxima, mínima.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              moeda: { type: 'string', description: 'Código da moeda (USD, EUR...)' },
+              dias: { type: 'number', description: 'Quantidade de dias (1-90). Default 30.' },
+            },
+            required: ['moeda'],
+          },
+        },
+        handler: (i) => this.cambioHistorico(String(i.moeda), Number(i.dias || 30)),
+      },
+
+      // ── Indicadores ────────────────────────────────────
+      {
+        spec: {
+          name: 'indicadores_macro',
+          description: 'Indicadores macro brasileiros: Selic, IPCA, IGP-M, CDI, PTAX, crédito rural. Sempre retorna o conjunto.',
+          input_schema: { type: 'object', properties: {} },
+        },
+        handler: () => this.todosIndicadores(),
+      },
+      {
+        spec: {
+          name: 'indicador_especifico',
+          description: 'Um indicador específico do BCB: Selic, IPCA, IGP-M ou CDI.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              nome: { type: 'string', enum: ['selic', 'ipca', 'igpm', 'cdi'] },
+            },
+            required: ['nome'],
+          },
+        },
+        handler: (i) => {
+          const n = String(i.nome).toLowerCase() as 'selic' | 'ipca' | 'igpm' | 'cdi';
+          const label = { selic: 'Selic', ipca: 'IPCA', igpm: 'IGP-M', cdi: 'CDI' }[n] || n;
+          return this.indicador(label, n);
+        },
+      },
+      {
+        spec: {
+          name: 'expectativas_focus',
+          description: 'Relatório Focus (BCB) — expectativas de mercado para Selic, IPCA, PIB, câmbio. Indicador opcional filtra um.',
+          input_schema: {
+            type: 'object',
+            properties: { indicador: { type: 'string', description: 'ex: Selic, IPCA, PIB Total, Câmbio' } },
+          },
+        },
+        handler: (i) => this.expectativas(i.indicador as string | undefined),
+      },
+      {
+        spec: {
+          name: 'icbr',
+          description: 'ICBR (Índice Commodities Brasil) — agro, metal, energia. Publicado pelo BCB.',
+          input_schema: { type: 'object', properties: {} },
+        },
+        handler: () => this.icbr(),
+      },
+      {
+        spec: {
+          name: 'sicor_agregado',
+          description: 'SICOR agregado — crédito rural no Brasil (últimos 12 meses). Total, contratos, top produtos, top UFs.',
+          input_schema: { type: 'object', properties: {} },
+        },
+        handler: () => this.sicorAgregado(),
+      },
+      {
+        spec: {
+          name: 'diesel_atual',
+          description: 'Preço do diesel no Brasil (ANP) — média nacional, min, max.',
+          input_schema: { type: 'object', properties: {} },
+        },
+        handler: () => this.combustivel(),
+      },
+      {
+        spec: {
+          name: 'incendios_brasil',
+          description: 'Focos de incêndio no Brasil (NASA FIRMS) últimas 24h por UF.',
+          input_schema: { type: 'object', properties: {} },
+        },
+        handler: () => this.incendios(),
+      },
+
+      // ── Commodities ────────────────────────────────────
+      {
+        spec: {
+          name: 'commodity_preco',
+          description: 'Preço CONAB semanal de um produto agro (soja, milho, cafe, algodao, trigo, arroz, feijao).',
+          input_schema: {
+            type: 'object',
+            properties: { produto: { type: 'string', description: 'soja | milho | cafe_arabica | algodao | trigo | arroz | feijao' } },
+            required: ['produto'],
+          },
+        },
+        handler: (i) => this.commodityPreco(String(i.produto)),
+      },
+      {
+        spec: {
+          name: 'commodity_todos',
+          description: 'Cotações CONAB de todos os produtos agro da semana corrente.',
+          input_schema: { type: 'object', properties: {} },
+        },
+        handler: () => this.commodityTodos(),
+      },
+      {
+        spec: {
+          name: 'commodity_por_uf',
+          description: 'Preços de todas as commodities em um UF específico (MT, GO, PR, RS, MS...).',
+          input_schema: {
+            type: 'object',
+            properties: { uf: { type: 'string', description: 'Sigla do estado (2 letras)' } },
+            required: ['uf'],
+          },
+        },
+        handler: (i) => this.commodityPorUF(String(i.uf).toUpperCase()),
+      },
+
+      // ── Clima ─────────────────────────────────────────
+      {
+        spec: {
+          name: 'clima_atual',
+          description: 'Condição climática atual em um município brasileiro (usa Open-Meteo + IBGE).',
+          input_schema: {
+            type: 'object',
+            properties: { cidade: { type: 'string', description: 'Nome do município' } },
+            required: ['cidade'],
+          },
+        },
+        handler: (i) => this.climaAtual(String(i.cidade)),
+      },
+      {
+        spec: {
+          name: 'clima_previsao',
+          description: 'Previsão 7 dias para um município brasileiro.',
+          input_schema: {
+            type: 'object',
+            properties: { cidade: { type: 'string' } },
+            required: ['cidade'],
+          },
+        },
+        handler: (i) => this.climaPrevisao(String(i.cidade)),
+      },
+
+      // ── CRM ──────────────────────────────────────────
+      {
+        spec: {
+          name: 'buscar_cliente',
+          description: 'Busca cliente no CRM da ALETIS por nome, CPF, cidade. Retorna o primeiro match.',
+          input_schema: {
+            type: 'object',
+            properties: { termo: { type: 'string', description: 'Nome, CPF ou cidade do cliente' } },
+            required: ['termo'],
+          },
+        },
+        handler: (i) => this.clienteBuscar(String(i.termo)),
+      },
+      {
+        spec: {
+          name: 'listar_clientes',
+          description: 'Lista os clientes cadastrados no CRM (primeiros 10).',
+          input_schema: { type: 'object', properties: {} },
+        },
+        handler: () => this.clientesListar(),
+      },
+      {
+        spec: {
+          name: 'listar_propostas',
+          description: 'Lista propostas do CRM, com filtro opcional por status (ex: aprovada, pendente).',
+          input_schema: {
+            type: 'object',
+            properties: { status: { type: 'string', description: 'Filtro opcional: aprovada, pendente, rejeitada...' } },
+          },
+        },
+        handler: (i) => this.propostasListar(i.status as string | undefined),
+      },
+      {
+        spec: {
+          name: 'listar_propostas_inteligentes',
+          description: 'Lista propostas inteligentes (15-seções) já geradas pelo sistema.',
+          input_schema: { type: 'object', properties: {} },
+        },
+        handler: () => this.propostasInteligentesListar(),
+      },
+
+      // ── Base de conhecimento ──────────────────────────
+      {
+        spec: {
+          name: 'sumula_stj',
+          description: 'Consulta súmula STJ por número OU por termo (palavra-chave). Use número quando conhecer; termo para pesquisa.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              numero: { type: 'number', description: 'Número da súmula (ex: 298)' },
+              termo: { type: 'string', description: 'Palavra-chave (ex: "juros capitalizados")' },
+            },
+          },
+        },
+        handler: (i) => this.sumula(i.numero as number | undefined, i.termo as string | undefined),
+      },
+      {
+        spec: {
+          name: 'mcr_secao',
+          description: 'Consulta seção do Manual de Crédito Rural (MCR/BCB) por número (ex: 2-6-4) ou termo.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              secao: { type: 'string', description: 'Número da seção (ex: "2-6-4")' },
+              termo: { type: 'string', description: 'Palavra-chave' },
+            },
+          },
+        },
+        handler: (i) => this.mcr(i.secao as string | undefined, i.termo as string | undefined),
+      },
+      {
+        spec: {
+          name: 'plano_safra',
+          description: 'Linhas de crédito do Plano Safra 2025/26 por programa. Se omitido, retorna resumo geral.',
+          input_schema: {
+            type: 'object',
+            properties: { programa: { type: 'string', enum: ['pronaf', 'pronamp', 'empresarial'] } },
+          },
+        },
+        handler: (i) => this.planoSafra(i.programa as any),
+      },
+      {
+        spec: {
+          name: 'precedentes_busca',
+          description: 'Busca precedentes do STJ/TJ por tema. Omita termo para listar todos.',
+          input_schema: {
+            type: 'object',
+            properties: { termo: { type: 'string' } },
+          },
+        },
+        handler: (i) => this.precedentes(i.termo as string | undefined),
+      },
+      {
+        spec: {
+          name: 'busca_conhecimento',
+          description: 'Busca geral na base de conhecimento (súmulas + MCR + precedentes) por termo livre. Use quando não souber onde está a resposta.',
+          input_schema: {
+            type: 'object',
+            properties: { termo: { type: 'string' } },
+            required: ['termo'],
+          },
+        },
+        handler: (i) => this.buscaGeral(String(i.termo)),
+      },
+      {
+        spec: {
+          name: 'proagro_regras',
+          description: 'Regras do Proagro 2025/26 — cobertura, adesão, culturas cobertas.',
+          input_schema: { type: 'object', properties: {} },
+        },
+        handler: () => this.proagro(),
+      },
+
+      // ── Market intelligence ───────────────────────────
+      {
+        spec: {
+          name: 'market_brief',
+          description: 'Boletim executivo de mercado (câmbio + commodities + macro + clima crítico). Use para abrir o dia ou resumir condições.',
+          input_schema: { type: 'object', properties: {} },
+        },
+        handler: () => this.marketBrief(),
+      },
+      {
+        spec: {
+          name: 'sazonalidade',
+          description: 'Padrão sazonal histórico de uma commodity (índices mensais, melhor/pior mês pra vender).',
+          input_schema: {
+            type: 'object',
+            properties: { commodity: { type: 'string', description: 'soja | milho | boi | cafe | algodao | trigo' } },
+            required: ['commodity'],
+          },
+        },
+        handler: (i) => this.sazonalidade(String(i.commodity)),
+      },
+      {
+        spec: {
+          name: 'contratos_tipos',
+          description: 'Lista os tipos de contrato que o sistema ALETIS gera (CPR financeira/física, confissão dívida, termo renegociação, acordo extrajudicial, transação excepcional).',
+          input_schema: { type: 'object', properties: {} },
+        },
+        handler: () => this.contratosTipos(),
+      },
+
+      // ── Financeiro interno ALETIS ─────────────────────
+      {
+        spec: {
+          name: 'financeiro_dashboard',
+          description: 'Painel financeiro da ALETIS: receita do mês, despesas, resultado, DAS, contas a receber/pagar, RBT12.',
+          input_schema: { type: 'object', properties: {} },
+        },
+        handler: () => this.finDashboard(),
+      },
+      {
+        spec: {
+          name: 'financeiro_faturamento',
+          description: 'Faturamento da ALETIS em uma competência (YYYY-MM). Default = mês atual.',
+          input_schema: {
+            type: 'object',
+            properties: { competencia: { type: 'string', description: 'YYYY-MM (ex: 2026-04)' } },
+          },
+        },
+        handler: (i) => this.finFaturamentoMes(i.competencia as string | undefined),
+      },
+      {
+        spec: {
+          name: 'financeiro_despesas',
+          description: 'Despesas da ALETIS em uma competência (YYYY-MM). Default = mês atual.',
+          input_schema: {
+            type: 'object',
+            properties: { competencia: { type: 'string' } },
+          },
+        },
+        handler: (i) => this.finDespesasMes(i.competencia as string | undefined),
+      },
+      {
+        spec: {
+          name: 'financeiro_das_previsto',
+          description: 'DAS (Simples Nacional) previsto para a competência informada. Detalha partilha, alíquota, vencimento.',
+          input_schema: {
+            type: 'object',
+            properties: { competencia: { type: 'string' } },
+          },
+        },
+        handler: (i) => this.finDasPrevisto(i.competencia as string | undefined),
+      },
+      {
+        spec: {
+          name: 'financeiro_inadimplencia',
+          description: 'Receitas atrasadas da ALETIS — lista clientes com pagamento pendente e dias de atraso.',
+          input_schema: { type: 'object', properties: {} },
+        },
+        handler: () => this.finInadimplencia(),
+      },
+      {
+        spec: {
+          name: 'financeiro_fechamento',
+          description: 'Checklist do fechamento mensal para envio ao contador (ALETIS). Pendências e status.',
+          input_schema: {
+            type: 'object',
+            properties: { competencia: { type: 'string' } },
+          },
+        },
+        handler: (i) => this.finFechamentoContador(i.competencia as string | undefined),
+      },
+
+      // ── Operacional ───────────────────────────────────
+      {
+        spec: {
+          name: 'status_fontes',
+          description: 'Status de todas as fontes de dados (BCB, CONAB, ANP, NASA...) — online/offline/degradadas.',
+          input_schema: { type: 'object', properties: {} },
+        },
+        handler: () => this.reportFontes(),
+      },
+    ];
+
+    const tools: ClaudeTool[] = specs.map((s) => s.spec);
+    const registry: ClaudeToolRegistry = {};
+    for (const s of specs) {
+      registry[s.spec.name] = {
+        spec: s.spec,
+        handler: async (input) => {
+          const r = await Promise.resolve(s.handler(input));
+          return r ?? { content: 'Tool retornou vazio', sources: [], toolsUsed: [] };
+        },
+      };
+    }
+    return { tools, registry };
   }
 
   // ── Generic fallback ───────────────────────────────────

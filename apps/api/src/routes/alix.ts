@@ -7,6 +7,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { join } from 'path'
 import { DataSourceManager } from '../services/DataSourceManager.js'
 import { AlixService, registerStores } from '../services/AlixService.js'
+import { pingFoundry, isLLMEnabled, CLAUDE_MODEL_SONNET } from '../services/llm/ClaudeFoundryClient.js'
 import { clientes } from './clientes.js'
 import { propostas, propostasInteligentes } from './propostas.js'
 
@@ -144,5 +145,19 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
     }
   })
 
-  console.log('[ALIX] Rotas registradas: POST /api/alix/chat, GET/POST/DELETE /api/alix/session(s)')
+  // ── GET /api/alix/llm/health ─────────────────────────────
+  // Health-check do cérebro LLM (Foundry / Claude Sonnet 4.6)
+  fastify.get('/api/alix/llm/health', async (_request: FastifyRequest, reply: FastifyReply) => {
+    const ping = await pingFoundry()
+    return reply.status(ping.ok ? 200 : 503).send({
+      success: ping.ok,
+      data: {
+        enabled: isLLMEnabled(),
+        model: CLAUDE_MODEL_SONNET,
+        ping,
+      },
+    })
+  })
+
+  console.log('[ALIX] Rotas registradas: POST /api/alix/chat, GET/POST/DELETE /api/alix/session(s), GET /api/alix/llm/health')
 }

@@ -16,6 +16,8 @@
     "@aletis/financial-calc": "workspace:*",
     "@aletis/knowledge-base": "workspace:*",
     "@aletis/shared-types": "workspace:*",
+    "@anthropic-ai/sdk": "^0.90.0",
+    "@azure/identity": "^4.13.1",
     "@fastify/cors": "^10.0.2",
     "@fastify/jwt": "^9.0.2",
     "@fastify/multipart": "^9.0.3",
