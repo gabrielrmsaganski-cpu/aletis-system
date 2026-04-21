@@ -40,7 +40,14 @@ import {
   type ClaudeMessage,
 } from './llm/ClaudeFoundryClient.js';
 import { getDossieRepository } from './cliente/DossieRepository.js';
-import { dossieAgroResumo, type DossieAgro } from '@aletis/shared-types';
+import { getCusteioService } from './custeio/CusteioService.js';
+import {
+  dossieAgroResumo,
+  type DossieAgro,
+  type PlanoCusteio,
+  type StatusPlanoCusteio,
+  type PlanoCusteioListFilters,
+} from '@aletis/shared-types';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -2152,6 +2159,114 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
         },
         handler: (i) => this.calcTaxaEfetiva(Number(i.taxaNominal), Number(i.periodosAno)),
       },
+
+      // ── Plano Simples de Custeio Agrícola 2026 ──────────────
+      {
+        spec: {
+          name: 'listar_planos_custeio',
+          description:
+            'Lista Planos Simples de Custeio Agrícola. Filtros opcionais por cliente, safra e status (rascunho | em_analise | aprovado | rejeitado).',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string', description: 'Filtra por id do cliente (ex: cli-001)' },
+              safra: { type: 'string', description: 'Filtra pela safra (ex: "2025/26")' },
+              status: {
+                type: 'string',
+                enum: ['rascunho', 'em_analise', 'aprovado', 'rejeitado'],
+                description: 'Filtra pelo status do plano',
+              },
+            },
+          },
+        },
+        handler: (i) =>
+          this.custeioListar({
+            clienteId: i.clienteId ? String(i.clienteId) : undefined,
+            safra: i.safra ? String(i.safra) : undefined,
+            status: i.status ? (String(i.status) as StatusPlanoCusteio) : undefined,
+          }),
+      },
+      {
+        spec: {
+          name: 'buscar_plano_custeio',
+          description:
+            'Retorna os detalhes de um plano de custeio específico: proponente, safra, orçamento total, cronograma, glebas e indicadores (se calculados).',
+          input_schema: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Id do plano (ex: custeio_abc123)' },
+            },
+            required: ['id'],
+          },
+        },
+        handler: (i) => this.custeioBuscar(String(i.id)),
+      },
+      {
+        spec: {
+          name: 'custeio_indicadores',
+          description:
+            'Calcula (ou recalcula) os indicadores financeiros do plano: VPL, TIR anual, payback, margem líquida, necessidade de capital de giro. Taxa de desconto padrão = 12% a.a.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Id do plano' },
+              taxaAnual: { type: 'number', description: 'Taxa de desconto anual em % (default 12)' },
+            },
+            required: ['id'],
+          },
+        },
+        handler: (i) =>
+          this.custeioIndicadores(
+            String(i.id),
+            i.taxaAnual !== undefined ? Number(i.taxaAnual) : undefined,
+          ),
+      },
+      {
+        spec: {
+          name: 'gerar_plano_custeio_pdf',
+          description:
+            'Gera o PDF do Plano Simples de Custeio (formato Sicredi). Retorna o link para download via /api/custeio/:id/pdf.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Id do plano' },
+            },
+            required: ['id'],
+          },
+        },
+        handler: (i) => this.custeioGerarPdf(String(i.id)),
+      },
+      {
+        spec: {
+          name: 'duplicar_plano_custeio',
+          description:
+            'Duplica um plano de custeio existente para uma nova safra. Preserva proponente, imóveis e glebas; zera indicadores; status volta a "rascunho".',
+          input_schema: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Id do plano de origem' },
+              novaSafra: { type: 'string', description: 'Safra destino (ex: "2026/27")' },
+            },
+            required: ['id', 'novaSafra'],
+          },
+        },
+        handler: (i) => this.custeioDuplicar(String(i.id), String(i.novaSafra)),
+      },
+      {
+        spec: {
+          name: 'resumo_financeiro_custeio',
+          description:
+            'Resumo financeiro consolidado dos planos de custeio de um cliente: total solicitado, total por safra, VPL e TIR médios, distribuição por status.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string', description: 'Id do cliente (ex: cli-001)' },
+            },
+            required: ['clienteId'],
+          },
+        },
+        handler: (i) => this.custeioResumoFinanceiro(String(i.clienteId)),
+      },
     ];
 
     const tools: ClaudeTool[] = specs.map((s) => s.spec);
@@ -2293,6 +2408,236 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
         sources: [],
         toolsUsed: [],
       };
+    }
+  }
+
+  // ── Plano Simples de Custeio Agrícola 2026 ──────────────
+
+  private fmtPlanoLinha(p: PlanoCusteio): string {
+    const total = p.orcamento.reduce((acc, it) => acc + (it.valorTotal || 0), 0);
+    const tir = p.resultadoEsperado?.tirAnual;
+    const extras: string[] = [];
+    if (tir !== undefined) extras.push(`TIR ${fmtNum(tir, 2)}% a.a.`);
+    const sufixo = extras.length ? ` — ${extras.join(' · ')}` : '';
+    return `• **${p.id}** (${p.safra}) — ${p.proponente?.nome || '?'} — ${p.status} — ${fmtBRL(total)}${sufixo}`;
+  }
+
+  private custeioListar(filtros: PlanoCusteioListFilters): { content: string; sources: string[]; toolsUsed: string[] } {
+    try {
+      const service = getCusteioService();
+      const lista = service.listar(filtros);
+      if (lista.length === 0) {
+        return {
+          content: 'Nenhum plano de custeio encontrado com esses filtros.',
+          sources: ['/api/custeio'],
+          toolsUsed: ['custeio.listar'],
+        };
+      }
+      const linhas: string[] = [
+        `**${lista.length} plano(s) de custeio encontrado(s):**`,
+        '',
+        ...lista.slice(0, 20).map((p) => this.fmtPlanoLinha(p)),
+      ];
+      if (lista.length > 20) linhas.push(`_…e mais ${lista.length - 20} plano(s)_`);
+      return {
+        content: linhas.join('\n'),
+        sources: ['/api/custeio'],
+        toolsUsed: ['custeio.listar'],
+      };
+    } catch (err) {
+      return { content: `Falha ao listar planos (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private custeioBuscar(id: string): { content: string; sources: string[]; toolsUsed: string[] } {
+    try {
+      const plano = getCusteioService().buscar(id);
+      if (!plano) {
+        return {
+          content: `Plano "${id}" não encontrado.`,
+          sources: ['/api/custeio/:id'],
+          toolsUsed: ['custeio.buscar'],
+        };
+      }
+      const custoTotal = plano.orcamento.reduce((acc, it) => acc + (it.valorTotal || 0), 0);
+      const areaTotal = plano.glebas.reduce((acc, g) => acc + (g.areaHa || 0), 0);
+      const linhas: string[] = [
+        `**Plano Custeio ${plano.id}** (v${plano.versao} — ${plano.status})`,
+        '',
+        `• **Proponente:** ${plano.proponente?.nome || '?'} (${plano.proponente?.tipo || '?'} ${plano.proponente?.cpfCnpj || ''})`,
+        `• **Safra:** ${plano.safra} — ciclo ${plano.projeto?.ciclo || '?'}`,
+        `• **Imóveis:** ${plano.imoveis.length} — **Glebas:** ${plano.glebas.length} (${fmtNum(areaTotal, 2)} ha)`,
+        `• **Orçamento:** ${plano.orcamento.length} itens — ${fmtBRL(custoTotal)}`,
+        `• **Cronograma:** ${plano.cronograma.length} parcela(s) de desembolso`,
+      ];
+      if (plano.projeto?.valorSolicitado) linhas.push(`• **Valor solicitado:** ${fmtBRL(plano.projeto.valorSolicitado)}`);
+      if (plano.projeto?.valorContrapartida) linhas.push(`• **Contrapartida:** ${fmtBRL(plano.projeto.valorContrapartida)}`);
+      if (plano.resultadoEsperado) {
+        const ind = plano.resultadoEsperado;
+        linhas.push(
+          '',
+          '**Indicadores:**',
+          `• VPL: ${fmtBRL(ind.vpl)} — TIR: ${fmtNum(ind.tirAnual, 2)}% a.a.`,
+          `• Payback: ${ind.paybackMeses} mês(es) — Margem líquida: ${fmtNum(ind.margemLiquida * 100, 2)}%`,
+          `• Necessidade de K: ${fmtBRL(ind.necessidadeCapitalGiro)}`,
+        );
+      } else {
+        linhas.push('', '_Indicadores ainda não calculados — use `custeio_indicadores` para gerar._');
+      }
+      if (plano.observacoes) linhas.push('', `**Observações:** ${plano.observacoes}`);
+      return {
+        content: linhas.join('\n'),
+        sources: [`/api/custeio/${plano.id}`],
+        toolsUsed: ['custeio.buscar'],
+      };
+    } catch (err) {
+      return { content: `Falha ao buscar plano (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private custeioIndicadores(id: string, taxaAnual?: number): { content: string; sources: string[]; toolsUsed: string[] } {
+    try {
+      const service = getCusteioService();
+      const plano = service.calcularESalvar(id, taxaAnual !== undefined ? { taxaAnual } : {});
+      if (!plano || !plano.resultadoEsperado) {
+        return {
+          content: `Plano "${id}" não encontrado ou sem dados suficientes para calcular indicadores.`,
+          sources: ['/api/custeio/:id/indicadores'],
+          toolsUsed: ['custeio.calcularIndicadores'],
+        };
+      }
+      const ind = plano.resultadoEsperado;
+      const linhas: string[] = [
+        `**Indicadores — Plano ${plano.id}** (safra ${plano.safra})`,
+        '',
+        `• **VPL:** ${fmtBRL(ind.vpl)} @ taxa desc. ${fmtNum(ind.taxaDescontoAnual, 2)}% a.a.`,
+        `• **TIR anual:** ${fmtNum(ind.tirAnual, 2)}%`,
+        `• **Payback:** ${ind.paybackMeses} mês(es)`,
+        `• **Margem líquida:** ${fmtNum(ind.margemLiquida * 100, 2)}%`,
+        `• **Receita bruta projetada:** ${fmtBRL(ind.receitaBrutaTotal)}`,
+        `• **Custo total:** ${fmtBRL(ind.custoTotal)}`,
+        `• **Necessidade de capital de giro:** ${fmtBRL(ind.necessidadeCapitalGiro)}`,
+      ];
+      if (ind.avisos?.length) {
+        linhas.push('', '**Avisos:**');
+        for (const a of ind.avisos) linhas.push(`• ${a}`);
+      }
+      return {
+        content: linhas.join('\n'),
+        sources: [`/api/custeio/${plano.id}`],
+        toolsUsed: ['custeio.calcularIndicadores'],
+      };
+    } catch (err) {
+      return { content: `Falha no cálculo (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private custeioGerarPdf(id: string): { content: string; sources: string[]; toolsUsed: string[] } {
+    try {
+      const plano = getCusteioService().buscar(id);
+      if (!plano) {
+        return {
+          content: `Plano "${id}" não encontrado — não é possível gerar PDF.`,
+          sources: [],
+          toolsUsed: ['custeio.pdf'],
+        };
+      }
+      const url = `/api/custeio/${plano.id}/pdf`;
+      const filename = `plano-custeio-${plano.id}-${plano.safra.replace(/\//g, '-')}.pdf`;
+      return {
+        content:
+          `PDF do plano **${plano.id}** (safra ${plano.safra}) pronto para download.\n\n` +
+          `• **Link:** ${url}\n` +
+          `• **Arquivo:** \`${filename}\`\n\n` +
+          `_O PDF é gerado sob demanda no servidor (pdf-lib). Abra o link para baixar._`,
+        sources: [url],
+        toolsUsed: ['custeio.pdf'],
+      };
+    } catch (err) {
+      return { content: `Falha ao preparar PDF (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private custeioDuplicar(id: string, novaSafra: string): { content: string; sources: string[]; toolsUsed: string[] } {
+    try {
+      const novo = getCusteioService().duplicar(id, novaSafra);
+      if (!novo) {
+        return {
+          content: `Plano "${id}" não encontrado — nada a duplicar.`,
+          sources: [],
+          toolsUsed: ['custeio.duplicar'],
+        };
+      }
+      return {
+        content:
+          `Plano duplicado com sucesso.\n\n` +
+          `• **Origem:** ${id}\n` +
+          `• **Novo plano:** ${novo.id} (v${novo.versao}, safra ${novo.safra}, status ${novo.status})\n` +
+          `• **Proponente/imóveis/glebas preservados** — orçamento e cronograma prontos para ajuste.`,
+        sources: [`/api/custeio/${novo.id}`],
+        toolsUsed: ['custeio.duplicar'],
+      };
+    } catch (err) {
+      return { content: `Falha ao duplicar plano (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private custeioResumoFinanceiro(clienteId: string): { content: string; sources: string[]; toolsUsed: string[] } {
+    try {
+      const lista = getCusteioService().listarPorCliente(clienteId);
+      if (lista.length === 0) {
+        return {
+          content: `Cliente **${clienteId}** não tem planos de custeio cadastrados.`,
+          sources: [`/api/custeio?clienteId=${clienteId}`],
+          toolsUsed: ['custeio.resumo'],
+        };
+      }
+      let totalSolicitado = 0;
+      let totalOrcamento = 0;
+      const porSafra = new Map<string, { count: number; total: number }>();
+      const porStatus = new Map<string, number>();
+      const tirs: number[] = [];
+      const vpls: number[] = [];
+      for (const p of lista) {
+        totalSolicitado += p.projeto?.valorSolicitado || 0;
+        const orc = p.orcamento.reduce((acc, it) => acc + (it.valorTotal || 0), 0);
+        totalOrcamento += orc;
+        const bucket = porSafra.get(p.safra) || { count: 0, total: 0 };
+        bucket.count += 1;
+        bucket.total += orc;
+        porSafra.set(p.safra, bucket);
+        porStatus.set(p.status, (porStatus.get(p.status) || 0) + 1);
+        if (p.resultadoEsperado) {
+          tirs.push(p.resultadoEsperado.tirAnual);
+          vpls.push(p.resultadoEsperado.vpl);
+        }
+      }
+      const tirMedia = tirs.length ? tirs.reduce((a, b) => a + b, 0) / tirs.length : 0;
+      const vplMedio = vpls.length ? vpls.reduce((a, b) => a + b, 0) / vpls.length : 0;
+
+      const linhas: string[] = [
+        `**Resumo de Custeio — cliente ${clienteId}**`,
+        '',
+        `• **Planos:** ${lista.length}`,
+        `• **Valor solicitado (total):** ${fmtBRL(totalSolicitado)}`,
+        `• **Orçamento total (consolidado):** ${fmtBRL(totalOrcamento)}`,
+      ];
+      if (tirs.length > 0) linhas.push(`• **TIR média:** ${fmtNum(tirMedia, 2)}% a.a. (em ${tirs.length} plano(s) calculados)`);
+      if (vpls.length > 0) linhas.push(`• **VPL médio:** ${fmtBRL(vplMedio)}`);
+
+      linhas.push('', '**Por safra:**');
+      for (const [safra, b] of porSafra) linhas.push(`• ${safra} — ${b.count} plano(s) — ${fmtBRL(b.total)}`);
+
+      linhas.push('', '**Por status:**');
+      for (const [status, n] of porStatus) linhas.push(`• ${status}: ${n}`);
+
+      return {
+        content: linhas.join('\n'),
+        sources: [`/api/custeio?clienteId=${clienteId}`],
+        toolsUsed: ['custeio.resumo'],
+      };
+    } catch (err) {
+      return { content: `Falha ao montar resumo (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
   }
 
