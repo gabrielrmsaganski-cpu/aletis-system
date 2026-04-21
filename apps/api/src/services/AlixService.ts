@@ -47,7 +47,20 @@ import {
   type PlanoCusteio,
   type StatusPlanoCusteio,
   type PlanoCusteioListFilters,
+  type PlanoCusteioCreatePayload,
+  type PlanoCusteioUpdatePayload,
+  type DadosProponente,
+  type Gleba,
+  type ItemOrcamento,
 } from '@aletis/shared-types';
+// ── Wave 6 — Alix Agente Executor ──────────────────────────
+import {
+  getAlixConfirmationStore,
+  type PendingConfirmation,
+} from './alix/AlixConfirmationStore.js';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname as _dirname } from 'path';
+import { fileURLToPath as _fileURLToPath } from 'url';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -2267,6 +2280,178 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
         },
         handler: (i) => this.custeioResumoFinanceiro(String(i.clienteId)),
       },
+
+      // ── Executor tools (HITL) ────────────────────────────
+      // Mutation-capable tools. NENHUMA delas grava/altera estado
+      // diretamente — todas registram um intent no
+      // AlixConfirmationStore e retornam um payload `pendingConfirmation`.
+      // A execução real só ocorre em
+      // POST /api/alix/confirmations/:id/approve.
+      {
+        spec: {
+          name: 'criar_plano_custeio',
+          description:
+            'Cria um RASCUNHO de plano de custeio agrícola. Não grava imediatamente: registra intent e aguarda aprovação humana. Use para novos projetos/safras.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string', description: 'Id do cliente (ex: cli-001).' },
+              safra: { type: 'string', description: 'Safra (ex: "2025/26").' },
+              proponente: {
+                type: 'object',
+                description: 'Dados do proponente: { nome, tipo ("PF"|"PJ"), cpfCnpj, email?, telefone1?, grupo? }',
+              },
+              orcamento: {
+                type: 'array',
+                description: 'Itens de orçamento (opcional) — objetos com { descricao, quantidade, valorUnitario, valorTotal, ... }.',
+              },
+              glebas: {
+                type: 'array',
+                description: 'Glebas (opcional) — objetos com { id, nome, areaHa, ... }.',
+              },
+              observacoes: { type: 'string', description: 'Observações livres (opcional).' },
+            },
+            required: ['clienteId', 'safra', 'proponente'],
+          },
+        },
+        handler: (i) => this.handle_criar_plano_custeio(i),
+      },
+      {
+        spec: {
+          name: 'atualizar_plano_custeio',
+          description:
+            'Atualiza parcialmente (PATCH) um plano de custeio existente. Não grava imediatamente: registra intent e aguarda aprovação.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Id do plano a atualizar (ex: custeio_abc123).' },
+              patch: {
+                type: 'object',
+                description: 'Subconjunto dos campos do plano (proponente, projeto, orcamento, cronograma, status, observacoes, ...).',
+              },
+            },
+            required: ['id', 'patch'],
+          },
+        },
+        handler: (i) => this.handle_atualizar_plano_custeio(i),
+      },
+      {
+        spec: {
+          name: 'duplicar_e_ajustar_custeio',
+          description:
+            'Duplica um plano de custeio para uma nova safra e ajusta o orçamento em um percentual (ex: +15% para reajuste de insumos). HITL.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Id do plano de origem.' },
+              novaSafra: { type: 'string', description: 'Safra destino (ex: "2026/27").' },
+              ajustePercentual: {
+                type: 'number',
+                description: 'Ajuste a aplicar ao orçamento (ex: 15 = +15%, -5 = -5%). Default 0.',
+              },
+            },
+            required: ['id', 'novaSafra'],
+          },
+        },
+        handler: (i) => this.handle_duplicar_e_ajustar_custeio(i),
+      },
+      {
+        spec: {
+          name: 'criar_evento_cliente',
+          description:
+            'Registra uma entrada na TIMELINE do cliente (reunião realizada, contato por telefone, decisão tomada, etc.). HITL antes de gravar.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string', description: 'Id do cliente.' },
+              tipo: { type: 'string', description: 'Tipo do evento (ex: "reuniao", "ligacao", "decisao", "nota").' },
+              titulo: { type: 'string', description: 'Título curto do evento.' },
+              descricao: { type: 'string', description: 'Descrição detalhada.' },
+            },
+            required: ['clienteId', 'tipo', 'titulo'],
+          },
+        },
+        handler: (i) => this.handle_criar_evento_cliente(i),
+      },
+      {
+        spec: {
+          name: 'criar_tarefa',
+          description:
+            'Cria uma TAREFA / follow-up vinculada a um cliente. Ex: "preparar proposta até sexta". HITL antes de gravar.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string', description: 'Id do cliente.' },
+              titulo: { type: 'string', description: 'Título da tarefa.' },
+              prazo: { type: 'string', description: 'Prazo no formato YYYY-MM-DD (opcional).' },
+              prioridade: {
+                type: 'string',
+                description: 'Prioridade: "baixa" | "media" | "alta" (opcional, default "media").',
+              },
+            },
+            required: ['clienteId', 'titulo'],
+          },
+        },
+        handler: (i) => this.handle_criar_tarefa(i),
+      },
+      {
+        spec: {
+          name: 'agendar_reuniao',
+          description:
+            'Agenda uma REUNIÃO com um cliente. Grava no histórico de agendamentos. HITL antes de gravar.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string', description: 'Id do cliente.' },
+              data: { type: 'string', description: 'Data/hora ISO (ex: 2026-04-25T14:00:00).' },
+              duracaoMin: { type: 'number', description: 'Duração em minutos.' },
+              assunto: { type: 'string', description: 'Assunto / pauta.' },
+            },
+            required: ['clienteId', 'data', 'assunto'],
+          },
+        },
+        handler: (i) => this.handle_agendar_reuniao(i),
+      },
+      {
+        spec: {
+          name: 'enviar_mensagem_whatsapp_intent',
+          description:
+            'PREPARA uma mensagem de WhatsApp para o cliente. IMPORTANTE: NÃO dispara a mensagem — apenas registra na fila de envio manual. HITL obrigatório.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string', description: 'Id do cliente destinatário.' },
+              telefone: { type: 'string', description: 'Telefone com DDI/DDD (ex: 5534999998888).' },
+              mensagem: { type: 'string', description: 'Texto da mensagem.' },
+            },
+            required: ['clienteId', 'telefone', 'mensagem'],
+          },
+        },
+        handler: (i) => this.handle_enviar_mensagem_whatsapp_intent(i),
+      },
+      {
+        spec: {
+          name: 'gerar_proposta_renegociacao_intent',
+          description:
+            'Registra INTENT de geração de proposta de renegociação de dívidas (não gera a proposta final — só enfileira). HITL obrigatório.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string', description: 'Id do cliente.' },
+              dividaIds: {
+                type: 'array',
+                description: 'Lista de ids de dívidas a incluir na proposta.',
+              },
+              parametros: {
+                type: 'object',
+                description: 'Parâmetros livres (prazo, carência, taxa-alvo, estratégia, etc.).',
+              },
+            },
+            required: ['clienteId', 'dividaIds'],
+          },
+        },
+        handler: (i) => this.handle_gerar_proposta_renegociacao_intent(i),
+      },
     ];
 
     const tools: ClaudeTool[] = specs.map((s) => s.spec);
@@ -2639,6 +2824,487 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
     } catch (err) {
       return { content: `Falha ao montar resumo (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
+  }
+
+  // ── Executor tools (HITL) ────────────────────────────────
+  // Cada `handle_*` valida input, grava intent no
+  // AlixConfirmationStore e retorna um payload pendingConfirmation.
+  // Cada `exec_*` é o que roda quando o usuário aprova via
+  // POST /api/alix/confirmations/:id/approve.
+
+  /** Map de executor real — expõe para a rota de aprovação. */
+  public getExecutor(
+    toolName: string,
+  ): ((payload: unknown) => Promise<unknown>) | null {
+    const map: Record<string, (payload: unknown) => Promise<unknown>> = {
+      criar_plano_custeio: (p) => this.exec_criar_plano_custeio(p as Record<string, unknown>),
+      atualizar_plano_custeio: (p) => this.exec_atualizar_plano_custeio(p as Record<string, unknown>),
+      duplicar_e_ajustar_custeio: (p) => this.exec_duplicar_e_ajustar_custeio(p as Record<string, unknown>),
+      criar_evento_cliente: (p) => this.exec_criar_evento_cliente(p as Record<string, unknown>),
+      criar_tarefa: (p) => this.exec_criar_tarefa(p as Record<string, unknown>),
+      agendar_reuniao: (p) => this.exec_agendar_reuniao(p as Record<string, unknown>),
+      enviar_mensagem_whatsapp_intent: (p) => this.exec_enviar_mensagem_whatsapp_intent(p as Record<string, unknown>),
+      gerar_proposta_renegociacao_intent: (p) => this.exec_gerar_proposta_renegociacao_intent(p as Record<string, unknown>),
+    };
+    return map[toolName] ?? null;
+  }
+
+  /**
+   * Gera a resposta padrão de um handler de executor:
+   * cria o intent no store e retorna o payload que o Claude
+   * vai surfaceirar ao usuário.
+   */
+  private buildPendingResponse(
+    toolName: string,
+    description: string,
+    payload: Record<string, unknown>,
+    preview: Record<string, unknown>,
+  ): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const entry = getAlixConfirmationStore().create(toolName, description, payload);
+    return {
+      content:
+        `**Aguardando confirmação:** ${description}\n\n` +
+        `Confirma que posso prosseguir? (ID \`${entry.id}\`)`,
+      sources: [],
+      toolsUsed: [`${toolName}.pending`],
+      metadata: {
+        pendingConfirmation: true,
+        confirmationId: entry.id,
+        toolName,
+        description,
+        preview,
+        expiresAt: new Date(entry.expiresAt).toISOString(),
+      },
+    };
+  }
+
+  private alixStorageDir(bucket: string): string {
+    // apps/api/src/services/AlixService.ts → ../../storage/{bucket}
+    const here = _dirname(_fileURLToPath(import.meta.url));
+    const dir = `${here}/../../storage/${bucket}`;
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  // ── 1. criar_plano_custeio ───────────────────────────────
+  private handle_criar_plano_custeio(
+    input: Record<string, unknown>,
+  ): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    const safra = String(input.safra || '').trim();
+    const proponente = input.proponente as DadosProponente | undefined;
+    if (!clienteId || !safra || !proponente || !proponente.nome) {
+      return {
+        content: 'Faltam campos obrigatórios: clienteId, safra, proponente.nome.',
+        sources: [],
+        toolsUsed: [],
+        metadata: { pendingConfirmation: false, error: 'invalid_input' },
+      };
+    }
+    const orcamento = Array.isArray(input.orcamento) ? (input.orcamento as ItemOrcamento[]) : [];
+    const glebas = Array.isArray(input.glebas) ? (input.glebas as Gleba[]) : [];
+    const totalOrc = orcamento.reduce((acc, it) => acc + (Number((it as any).valorTotal) || 0), 0);
+
+    const description =
+      `Criar rascunho de plano de custeio para cliente ${clienteId} (${proponente.nome}), safra ${safra}. ` +
+      `Serão escritos ${orcamento.length} item(ns) de orçamento totalizando ${fmtBRL(totalOrc)} e ${glebas.length} gleba(s).`;
+
+    return this.buildPendingResponse(
+      'criar_plano_custeio',
+      description,
+      {
+        clienteId,
+        safra,
+        proponente,
+        orcamento,
+        glebas,
+        observacoes: input.observacoes,
+      },
+      {
+        clienteId,
+        safra,
+        proponenteNome: proponente.nome,
+        proponenteTipo: proponente.tipo,
+        orcamentoItens: orcamento.length,
+        orcamentoTotal: totalOrc,
+        glebas: glebas.length,
+      },
+    );
+  }
+
+  private async exec_criar_plano_custeio(payload: Record<string, unknown>): Promise<unknown> {
+    const createPayload: PlanoCusteioCreatePayload = {
+      clienteId: String(payload.clienteId),
+      safra: String(payload.safra),
+      proponente: payload.proponente as DadosProponente,
+      orcamento: (payload.orcamento as ItemOrcamento[] | undefined) ?? [],
+      glebas: (payload.glebas as Gleba[] | undefined) ?? [],
+      observacoes: payload.observacoes as string | undefined,
+    };
+    const plano = getCusteioService().criar(createPayload);
+    return { ok: true, plano };
+  }
+
+  // ── 2. atualizar_plano_custeio ───────────────────────────
+  private handle_atualizar_plano_custeio(
+    input: Record<string, unknown>,
+  ): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const id = String(input.id || '').trim();
+    const patch = (input.patch || {}) as PlanoCusteioUpdatePayload;
+    if (!id || typeof patch !== 'object') {
+      return {
+        content: 'Faltam campos: id e patch (objeto).',
+        sources: [],
+        toolsUsed: [],
+        metadata: { pendingConfirmation: false, error: 'invalid_input' },
+      };
+    }
+    const plano = getCusteioService().buscar(id);
+    if (!plano) {
+      return {
+        content: `Plano "${id}" não encontrado — nada a atualizar.`,
+        sources: [],
+        toolsUsed: [],
+        metadata: { pendingConfirmation: false, error: 'not_found' },
+      };
+    }
+    const campos = Object.keys(patch);
+    const description =
+      `Atualizar plano de custeio ${id} (cliente ${plano.clienteId}, safra ${plano.safra}). ` +
+      `Campos a modificar: ${campos.length ? campos.join(', ') : '(nenhum)'}.`;
+
+    return this.buildPendingResponse(
+      'atualizar_plano_custeio',
+      description,
+      { id, patch },
+      {
+        id,
+        clienteId: plano.clienteId,
+        safra: plano.safra,
+        camposAfetados: campos,
+      },
+    );
+  }
+
+  private async exec_atualizar_plano_custeio(payload: Record<string, unknown>): Promise<unknown> {
+    const id = String(payload.id);
+    const patch = payload.patch as PlanoCusteioUpdatePayload;
+    const plano = getCusteioService().atualizar(id, patch);
+    if (!plano) return { ok: false, error: 'not_found' };
+    return { ok: true, plano };
+  }
+
+  // ── 3. duplicar_e_ajustar_custeio ────────────────────────
+  private handle_duplicar_e_ajustar_custeio(
+    input: Record<string, unknown>,
+  ): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const id = String(input.id || '').trim();
+    const novaSafra = String(input.novaSafra || '').trim();
+    const ajustePercentual = Number(input.ajustePercentual ?? 0);
+    if (!id || !novaSafra) {
+      return {
+        content: 'Faltam campos: id e novaSafra.',
+        sources: [],
+        toolsUsed: [],
+        metadata: { pendingConfirmation: false, error: 'invalid_input' },
+      };
+    }
+    const origem = getCusteioService().buscar(id);
+    if (!origem) {
+      return {
+        content: `Plano "${id}" não encontrado — nada a duplicar.`,
+        sources: [],
+        toolsUsed: [],
+        metadata: { pendingConfirmation: false, error: 'not_found' },
+      };
+    }
+    const orcTotal = origem.orcamento.reduce((acc, it) => acc + (it.valorTotal || 0), 0);
+    const orcNovo = orcTotal * (1 + ajustePercentual / 100);
+
+    const description =
+      `Duplicar plano ${id} (cliente ${origem.clienteId}, safra ${origem.safra}) para safra ${novaSafra} ` +
+      `e aplicar ajuste de ${ajustePercentual >= 0 ? '+' : ''}${ajustePercentual}% no orçamento ` +
+      `(${fmtBRL(orcTotal)} → ${fmtBRL(orcNovo)}).`;
+
+    return this.buildPendingResponse(
+      'duplicar_e_ajustar_custeio',
+      description,
+      { id, novaSafra, ajustePercentual },
+      {
+        idOrigem: id,
+        clienteId: origem.clienteId,
+        safraOrigem: origem.safra,
+        novaSafra,
+        ajustePercentual,
+        orcamentoAntes: orcTotal,
+        orcamentoDepois: orcNovo,
+      },
+    );
+  }
+
+  private async exec_duplicar_e_ajustar_custeio(payload: Record<string, unknown>): Promise<unknown> {
+    const id = String(payload.id);
+    const novaSafra = String(payload.novaSafra);
+    const ajuste = Number(payload.ajustePercentual ?? 0);
+    const service = getCusteioService();
+    const novo = service.duplicar(id, novaSafra);
+    if (!novo) return { ok: false, error: 'not_found' };
+    // Aplica ajuste percentual ao orçamento e ao cronograma.
+    const fator = 1 + ajuste / 100;
+    const orcamentoAjustado: ItemOrcamento[] = novo.orcamento.map((it) => ({
+      ...it,
+      precoUnitario: Number(((it.precoUnitario || 0) * fator).toFixed(2)),
+      valorTotal: Number(((it.valorTotal || 0) * fator).toFixed(2)),
+    }));
+    const cronogramaAjustado = novo.cronograma.map((p) => ({
+      ...p,
+      valor: Number(((p.valor || 0) * fator).toFixed(2)),
+    }));
+    const atualizado = service.atualizar(novo.id, {
+      orcamento: orcamentoAjustado,
+      cronograma: cronogramaAjustado,
+    });
+    return { ok: true, plano: atualizado ?? novo };
+  }
+
+  // ── 4. criar_evento_cliente ──────────────────────────────
+  private handle_criar_evento_cliente(
+    input: Record<string, unknown>,
+  ): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    const tipo = String(input.tipo || '').trim();
+    const titulo = String(input.titulo || '').trim();
+    const descricao = String(input.descricao || '').trim();
+    if (!clienteId || !tipo || !titulo) {
+      return {
+        content: 'Faltam campos: clienteId, tipo, titulo.',
+        sources: [],
+        toolsUsed: [],
+        metadata: { pendingConfirmation: false, error: 'invalid_input' },
+      };
+    }
+    const description =
+      `Registrar evento "${titulo}" (tipo: ${tipo}) na timeline do cliente ${clienteId}.`;
+    return this.buildPendingResponse(
+      'criar_evento_cliente',
+      description,
+      { clienteId, tipo, titulo, descricao },
+      { clienteId, tipo, titulo },
+    );
+  }
+
+  private async exec_criar_evento_cliente(payload: Record<string, unknown>): Promise<unknown> {
+    const clienteId = String(payload.clienteId).replace(/[^a-zA-Z0-9_-]/g, '');
+    const dir = this.alixStorageDir('eventos');
+    const file = `${dir}/${clienteId}.jsonl`;
+    const entry = {
+      id: `evt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      clienteId,
+      tipo: payload.tipo,
+      titulo: payload.titulo,
+      descricao: payload.descricao || '',
+      criadoEm: new Date().toISOString(),
+      origem: 'alix',
+    };
+    appendFileSync(file, JSON.stringify(entry) + '\n', 'utf8');
+    return { ok: true, evento: entry };
+  }
+
+  // ── 5. criar_tarefa ──────────────────────────────────────
+  private handle_criar_tarefa(
+    input: Record<string, unknown>,
+  ): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    const titulo = String(input.titulo || '').trim();
+    const prazo = input.prazo ? String(input.prazo) : undefined;
+    const prioridade = input.prioridade ? String(input.prioridade) : 'media';
+    if (!clienteId || !titulo) {
+      return {
+        content: 'Faltam campos: clienteId e titulo.',
+        sources: [],
+        toolsUsed: [],
+        metadata: { pendingConfirmation: false, error: 'invalid_input' },
+      };
+    }
+    const description =
+      `Criar tarefa "${titulo}" para cliente ${clienteId}` +
+      (prazo ? ` (prazo ${prazo})` : '') +
+      ` — prioridade ${prioridade}.`;
+    return this.buildPendingResponse(
+      'criar_tarefa',
+      description,
+      { clienteId, titulo, prazo, prioridade },
+      { clienteId, titulo, prazo, prioridade },
+    );
+  }
+
+  private async exec_criar_tarefa(payload: Record<string, unknown>): Promise<unknown> {
+    const clienteId = String(payload.clienteId).replace(/[^a-zA-Z0-9_-]/g, '');
+    const dir = this.alixStorageDir('tarefas');
+    const file = `${dir}/${clienteId}.json`;
+    let arr: unknown[] = [];
+    if (existsSync(file)) {
+      try {
+        arr = JSON.parse(readFileSync(file, 'utf8'));
+        if (!Array.isArray(arr)) arr = [];
+      } catch {
+        arr = [];
+      }
+    }
+    const entry = {
+      id: `task_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      clienteId,
+      titulo: payload.titulo,
+      prazo: payload.prazo,
+      prioridade: payload.prioridade || 'media',
+      status: 'pendente',
+      criadoEm: new Date().toISOString(),
+      origem: 'alix',
+    };
+    arr.push(entry);
+    writeFileSync(file, JSON.stringify(arr, null, 2), 'utf8');
+    return { ok: true, tarefa: entry };
+  }
+
+  // ── 6. agendar_reuniao ───────────────────────────────────
+  private handle_agendar_reuniao(
+    input: Record<string, unknown>,
+  ): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    const data = String(input.data || '').trim();
+    const assunto = String(input.assunto || '').trim();
+    const duracaoMin = Number(input.duracaoMin ?? 30);
+    if (!clienteId || !data || !assunto) {
+      return {
+        content: 'Faltam campos: clienteId, data, assunto.',
+        sources: [],
+        toolsUsed: [],
+        metadata: { pendingConfirmation: false, error: 'invalid_input' },
+      };
+    }
+    const description =
+      `Agendar reunião com cliente ${clienteId} em ${data} (${duracaoMin} min) — assunto: ${assunto}.`;
+    return this.buildPendingResponse(
+      'agendar_reuniao',
+      description,
+      { clienteId, data, duracaoMin, assunto },
+      { clienteId, data, duracaoMin, assunto },
+    );
+  }
+
+  private async exec_agendar_reuniao(payload: Record<string, unknown>): Promise<unknown> {
+    // Grava como um evento do tipo "reuniao_agendada" para reaproveitar
+    // a timeline de eventos. Também registra em tarefas como follow-up.
+    const clienteId = String(payload.clienteId).replace(/[^a-zA-Z0-9_-]/g, '');
+    const dir = this.alixStorageDir('eventos');
+    const file = `${dir}/${clienteId}.jsonl`;
+    const entry = {
+      id: `reu_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      clienteId,
+      tipo: 'reuniao_agendada',
+      titulo: `Reunião — ${payload.assunto}`,
+      data: payload.data,
+      duracaoMin: payload.duracaoMin ?? 30,
+      assunto: payload.assunto,
+      criadoEm: new Date().toISOString(),
+      origem: 'alix',
+    };
+    appendFileSync(file, JSON.stringify(entry) + '\n', 'utf8');
+    return { ok: true, reuniao: entry };
+  }
+
+  // ── 7. enviar_mensagem_whatsapp_intent ───────────────────
+  private handle_enviar_mensagem_whatsapp_intent(
+    input: Record<string, unknown>,
+  ): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    const telefone = String(input.telefone || '').trim();
+    const mensagem = String(input.mensagem || '').trim();
+    if (!clienteId || !telefone || !mensagem) {
+      return {
+        content: 'Faltam campos: clienteId, telefone, mensagem.',
+        sources: [],
+        toolsUsed: [],
+        metadata: { pendingConfirmation: false, error: 'invalid_input' },
+      };
+    }
+    const preview = mensagem.length > 200 ? `${mensagem.slice(0, 200)}…` : mensagem;
+    const description =
+      `Preparar mensagem WhatsApp para cliente ${clienteId} (${telefone}). ` +
+      `Não será disparada automaticamente — vai para fila de envio manual. ` +
+      `Texto: "${preview}".`;
+    return this.buildPendingResponse(
+      'enviar_mensagem_whatsapp_intent',
+      description,
+      { clienteId, telefone, mensagem },
+      { clienteId, telefone, mensagemPreview: preview, caracteres: mensagem.length },
+    );
+  }
+
+  private async exec_enviar_mensagem_whatsapp_intent(
+    payload: Record<string, unknown>,
+  ): Promise<unknown> {
+    // SEGURANÇA: NÃO dispara WhatsApp. Apenas enfileira.
+    const clienteId = String(payload.clienteId).replace(/[^a-zA-Z0-9_-]/g, '');
+    const dir = this.alixStorageDir('mensagens_pendentes');
+    const file = `${dir}/${clienteId}.jsonl`;
+    const entry = {
+      id: `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      clienteId,
+      telefone: payload.telefone,
+      mensagem: payload.mensagem,
+      status: 'aguardando_envio_manual',
+      criadoEm: new Date().toISOString(),
+      origem: 'alix',
+    };
+    appendFileSync(file, JSON.stringify(entry) + '\n', 'utf8');
+    return { ok: true, queued: true, mensagem: entry };
+  }
+
+  // ── 8. gerar_proposta_renegociacao_intent ────────────────
+  private handle_gerar_proposta_renegociacao_intent(
+    input: Record<string, unknown>,
+  ): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    const dividaIds = Array.isArray(input.dividaIds) ? (input.dividaIds as unknown[]).map(String) : [];
+    const parametros = (input.parametros || {}) as Record<string, unknown>;
+    if (!clienteId || dividaIds.length === 0) {
+      return {
+        content: 'Faltam campos: clienteId e dividaIds (array não vazio).',
+        sources: [],
+        toolsUsed: [],
+        metadata: { pendingConfirmation: false, error: 'invalid_input' },
+      };
+    }
+    const description =
+      `Enfileirar intent de proposta de renegociação para cliente ${clienteId} ` +
+      `sobre ${dividaIds.length} dívida(s). A geração final ocorre em pipeline separado.`;
+    return this.buildPendingResponse(
+      'gerar_proposta_renegociacao_intent',
+      description,
+      { clienteId, dividaIds, parametros },
+      { clienteId, dividas: dividaIds.length, parametrosKeys: Object.keys(parametros) },
+    );
+  }
+
+  private async exec_gerar_proposta_renegociacao_intent(
+    payload: Record<string, unknown>,
+  ): Promise<unknown> {
+    const clienteId = String(payload.clienteId).replace(/[^a-zA-Z0-9_-]/g, '');
+    const dir = this.alixStorageDir('propostas_pendentes');
+    const file = `${dir}/${clienteId}.jsonl`;
+    const entry = {
+      id: `prop_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      clienteId,
+      dividaIds: payload.dividaIds,
+      parametros: payload.parametros || {},
+      status: 'enfileirado',
+      criadoEm: new Date().toISOString(),
+      origem: 'alix',
+    };
+    appendFileSync(file, JSON.stringify(entry) + '\n', 'utf8');
+    console.log('[Alix][proposta_intent] enfileirado:', entry.id, 'cliente', clienteId);
+    return { ok: true, queued: true, intent: entry };
   }
 
   // ── Generic fallback ───────────────────────────────────
