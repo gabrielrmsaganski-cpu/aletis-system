@@ -89,3 +89,6 @@ export {
   fluxoCaixaIndireto,
 } from './fluxoCaixa.js';
 export type { LinhaFCIndireto } from './fluxoCaixa.js';
+
+// Balanced Scorecard Agro (Wave 8a)
+export { BSC_KPIS, calcularBSC, listarKpis, listarPorPerspectiva } from './bsc.js';

@@ -9,6 +9,9 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --import tsx/esm __tests__/*.test.ts"
   },
+  "dependencies": {
+    "@aletis/shared-types": "workspace:*"
+  },
   "devDependencies": {
     "tsx": "^4.21.0",
     "typescript": "^5.7.2"

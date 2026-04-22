@@ -13,6 +13,7 @@
     "refresh:sicar": "tsx --env-file=../../.env scripts/refresh-sicar.ts"
   },
   "dependencies": {
+    "@aletis/contabil-calc": "workspace:*",
     "@aletis/financial-calc": "workspace:*",
     "@aletis/knowledge-base": "workspace:*",
     "@aletis/shared-types": "workspace:*",
