@@ -85,3 +85,6 @@ apps/api/storage/clientes/
 
 # Planos de Custeio Agrícola (Wave 4a)
 apps/api/storage/custeio/
+
+# BSC snapshots append-only por cliente (Wave 8a)
+apps/api/storage/bsc/*.jsonl
