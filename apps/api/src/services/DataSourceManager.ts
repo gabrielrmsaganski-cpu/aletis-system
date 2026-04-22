@@ -17,6 +17,9 @@ import { ConabPrecosService } from './sources/ConabPrecosService.js';
 import { NasaFirmsService } from './sources/NasaFirmsService.js';
 import { SicorService } from './sources/SicorService.js';
 import { ComexStatService } from './sources/ComexStatService.js';
+import { DeterService } from './sources/DeterService.js';
+import { ZarcService } from './sources/ZarcService.js';
+import { AbioveService } from './sources/AbioveService.js';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -283,6 +286,28 @@ const SOURCE_REGISTRY: Omit<DataSourceEntry, 'status' | 'ultimaAtualizacao' | 'l
     url: 'https://api-comexstat.mdic.gov.br/general',
     ttlSegundos: 21600,
   },
+  // ── Wave 7a: Integrações Agro 2025/26 ──
+  {
+    nome: 'inpe_deter',
+    descricao: 'INPE/DETER — Alertas de desmatamento (Amazônia + Cerrado), via TerraBrasilis WFS',
+    categoria: 'TERRA',
+    url: 'https://terrabrasilis.dpi.inpe.br/geoserver/deter-amz/deter_amz/wfs',
+    ttlSegundos: 21600,
+  },
+  {
+    nome: 'zarc_mapa',
+    descricao: 'ZARC — Zoneamento Agrícola de Risco Climático safra 2025/26 (MAPA/SPA)',
+    categoria: 'PRODUCAO',
+    url: 'https://indicadores.agricultura.gov.br/zarc/',
+    ttlSegundos: 86400,
+  },
+  {
+    nome: 'abiove_moratoria',
+    descricao: 'ABIOVE — Status da Moratória da Soja + elegibilidade por município (bioma Amazônia)',
+    categoria: 'TERRA',
+    url: 'https://abiove.org.br/sustentabilidade/moratoria-da-soja/',
+    ttlSegundos: 604800,
+  },
 ];
 
 // ── DataSourceManager Class ──────────────────────────────────
@@ -308,6 +333,9 @@ export class DataSourceManager {
   public readonly nasaFirms: NasaFirmsService;
   public readonly sicor: SicorService;
   public readonly comexStat: ComexStatService;
+  public readonly deter: DeterService;
+  public readonly zarc: ZarcService;
+  public readonly abiove: AbioveService;
 
   private constructor() {
     this.statusCache = new NodeCache({ stdTTL: 60, checkperiod: 30 });
@@ -338,6 +366,9 @@ export class DataSourceManager {
     this.nasaFirms = new NasaFirmsService(this);
     this.sicor = new SicorService(this);
     this.comexStat = new ComexStatService(this);
+    this.deter = new DeterService(this);
+    this.zarc = new ZarcService(this);
+    this.abiove = new AbioveService(this);
 
     console.log(`[DataSourceManager] Inicializado com ${this.registry.size} fontes de dados registradas`);
   }
@@ -400,6 +431,20 @@ export class DataSourceManager {
     );
   }
 
+  // ── Wave 7a: Named service accessors ─────────────────────
+
+  getDeterService(): DeterService {
+    return this.deter;
+  }
+
+  getZarcService(): ZarcService {
+    return this.zarc;
+  }
+
+  getAbioveService(): AbioveService {
+    return this.abiove;
+  }
+
   // ── Data Fetch Orchestration ─────────────────────────────
 
   /**
@@ -460,6 +505,12 @@ export class DataSourceManager {
         return this.wrapResult(nome, () => this.sicor.getAgregado(12));
       case 'comexstat_exportacao':
         return this.wrapResult(nome, () => this.comexStat.getExportacoesAgro(12));
+      case 'inpe_deter':
+        return this.wrapResult(nome, () => this.deter.resumoNacional());
+      case 'zarc_mapa':
+        return this.wrapResult(nome, () => this.zarc.buscarJanelasPlantio('soja', 'MT'));
+      case 'abiove_moratoria':
+        return this.wrapResult(nome, async () => this.abiove.statusMoratoriaSoja());
       default:
         return {
           dados: null,

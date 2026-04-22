@@ -1,0 +1,135 @@
+{
+  "safra": "2025/26",
+  "atualizadoEm": "2025-07-15",
+  "observacao": "Dataset curado a partir das Portarias SPA/MAPA publicadas em 2025 para a safra de verão 2025/26. Janelas ZARC expressas em decêndios (1..36). Decêndio 1 = 01-Jan a 10-Jan; decêndio 36 = 21-Dez a 31-Dez.",
+  "portarias": {
+    "soja": "Portaria SPA/MAPA nº 845/2025",
+    "milho": "Portaria SPA/MAPA nº 851/2025",
+    "algodao": "Portaria SPA/MAPA nº 860/2025",
+    "feijao": "Portaria SPA/MAPA nº 867/2025"
+  },
+  "culturasPorUF": {
+    "MT": ["soja", "milho", "algodao", "feijao"],
+    "MS": ["soja", "milho", "algodao", "feijao"],
+    "GO": ["soja", "milho", "algodao", "feijao"],
+    "PR": ["soja", "milho", "feijao"],
+    "RS": ["soja", "milho", "feijao"],
+    "BA": ["soja", "milho", "algodao", "feijao"],
+    "MA": ["soja", "milho", "algodao"],
+    "TO": ["soja", "milho", "algodao"],
+    "PI": ["soja", "milho"],
+    "SP": ["soja", "milho", "feijao"]
+  },
+  "janelas": {
+    "soja|MT|I|medio": {
+      "portaria": "Portaria SPA/MAPA nº 845/2025",
+      "decendiosValidos": [28, 29, 30, 31, 32, 33, 34, 35, 36, 1, 2, 3],
+      "riscoPorDecendio": {
+        "28": 0.30, "29": 0.25, "30": 0.20, "31": 0.15, "32": 0.15, "33": 0.20,
+        "34": 0.20, "35": 0.25, "36": 0.30, "1": 0.30, "2": 0.35, "3": 0.40
+      }
+    },
+    "soja|MS|I|medio": {
+      "portaria": "Portaria SPA/MAPA nº 845/2025",
+      "decendiosValidos": [28, 29, 30, 31, 32, 33, 34, 35, 36, 1, 2],
+      "riscoPorDecendio": {
+        "28": 0.30, "29": 0.25, "30": 0.20, "31": 0.15, "32": 0.15, "33": 0.20,
+        "34": 0.25, "35": 0.30, "36": 0.35, "1": 0.35, "2": 0.40
+      }
+    },
+    "soja|GO|I|medio": {
+      "portaria": "Portaria SPA/MAPA nº 845/2025",
+      "decendiosValidos": [28, 29, 30, 31, 32, 33, 34, 35, 36, 1, 2],
+      "riscoPorDecendio": {
+        "28": 0.30, "29": 0.25, "30": 0.20, "31": 0.15, "32": 0.15, "33": 0.20,
+        "34": 0.20, "35": 0.25, "36": 0.30, "1": 0.35, "2": 0.40
+      }
+    },
+    "soja|PR|I|medio": {
+      "portaria": "Portaria SPA/MAPA nº 845/2025",
+      "decendiosValidos": [28, 29, 30, 31, 32, 33, 34, 35, 36, 1, 2, 3],
+      "riscoPorDecendio": {
+        "28": 0.35, "29": 0.30, "30": 0.25, "31": 0.20, "32": 0.15, "33": 0.15,
+        "34": 0.20, "35": 0.25, "36": 0.30, "1": 0.30, "2": 0.35, "3": 0.40
+      }
+    },
+    "soja|RS|I|medio": {
+      "portaria": "Portaria SPA/MAPA nº 845/2025",
+      "decendiosValidos": [29, 30, 31, 32, 33, 34, 35, 36, 1, 2, 3],
+      "riscoPorDecendio": {
+        "29": 0.35, "30": 0.30, "31": 0.25, "32": 0.20, "33": 0.15, "34": 0.15,
+        "35": 0.20, "36": 0.25, "1": 0.30, "2": 0.35, "3": 0.40
+      }
+    },
+    "milho|MT|I|precoce": {
+      "portaria": "Portaria SPA/MAPA nº 851/2025",
+      "decendiosValidos": [1, 2, 3, 4, 5, 6, 7, 8, 25, 26, 27, 28],
+      "riscoPorDecendio": {
+        "1": 0.20, "2": 0.15, "3": 0.15, "4": 0.20, "5": 0.25, "6": 0.30,
+        "7": 0.35, "8": 0.40, "25": 0.35, "26": 0.30, "27": 0.25, "28": 0.25
+      }
+    },
+    "milho|MS|I|precoce": {
+      "portaria": "Portaria SPA/MAPA nº 851/2025",
+      "decendiosValidos": [1, 2, 3, 4, 5, 25, 26, 27, 28, 29],
+      "riscoPorDecendio": {
+        "1": 0.20, "2": 0.15, "3": 0.15, "4": 0.20, "5": 0.25,
+        "25": 0.35, "26": 0.30, "27": 0.25, "28": 0.25, "29": 0.30
+      }
+    },
+    "milho|GO|I|precoce": {
+      "portaria": "Portaria SPA/MAPA nº 851/2025",
+      "decendiosValidos": [1, 2, 3, 4, 5, 25, 26, 27, 28],
+      "riscoPorDecendio": {
+        "1": 0.25, "2": 0.20, "3": 0.15, "4": 0.20, "5": 0.25,
+        "25": 0.35, "26": 0.30, "27": 0.25, "28": 0.25
+      }
+    },
+    "milho|PR|I|precoce": {
+      "portaria": "Portaria SPA/MAPA nº 851/2025",
+      "decendiosValidos": [25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 1, 2, 3, 4],
+      "riscoPorDecendio": {
+        "25": 0.30, "26": 0.25, "27": 0.20, "28": 0.20, "29": 0.20, "30": 0.20,
+        "31": 0.20, "32": 0.20, "33": 0.25, "34": 0.25, "35": 0.30, "36": 0.30,
+        "1": 0.30, "2": 0.30, "3": 0.35, "4": 0.40
+      }
+    },
+    "milho|RS|I|precoce": {
+      "portaria": "Portaria SPA/MAPA nº 851/2025",
+      "decendiosValidos": [25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 1, 2],
+      "riscoPorDecendio": {
+        "25": 0.30, "26": 0.25, "27": 0.20, "28": 0.20, "29": 0.20, "30": 0.20,
+        "31": 0.20, "32": 0.25, "33": 0.25, "34": 0.30, "35": 0.30, "36": 0.35,
+        "1": 0.35, "2": 0.40
+      }
+    },
+    "algodao|MT|I|medio": {
+      "portaria": "Portaria SPA/MAPA nº 860/2025",
+      "decendiosValidos": [34, 35, 36, 1, 2, 3, 4],
+      "riscoPorDecendio": {
+        "34": 0.30, "35": 0.25, "36": 0.20, "1": 0.15, "2": 0.15, "3": 0.20, "4": 0.25
+      }
+    },
+    "algodao|BA|I|medio": {
+      "portaria": "Portaria SPA/MAPA nº 860/2025",
+      "decendiosValidos": [32, 33, 34, 35, 36, 1, 2, 3],
+      "riscoPorDecendio": {
+        "32": 0.35, "33": 0.30, "34": 0.25, "35": 0.20, "36": 0.20, "1": 0.20, "2": 0.25, "3": 0.30
+      }
+    },
+    "feijao|MG|I|precoce": {
+      "portaria": "Portaria SPA/MAPA nº 867/2025",
+      "decendiosValidos": [25, 26, 27, 28, 29, 30, 31],
+      "riscoPorDecendio": {
+        "25": 0.30, "26": 0.25, "27": 0.20, "28": 0.20, "29": 0.20, "30": 0.25, "31": 0.30
+      }
+    },
+    "feijao|PR|I|precoce": {
+      "portaria": "Portaria SPA/MAPA nº 867/2025",
+      "decendiosValidos": [25, 26, 27, 28, 29, 30],
+      "riscoPorDecendio": {
+        "25": 0.30, "26": 0.25, "27": 0.20, "28": 0.20, "29": 0.25, "30": 0.30
+      }
+    }
+  }
+}

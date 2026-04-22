@@ -1,0 +1,110 @@
+{
+  "atualizadoEm": "2026-03-31",
+  "periodo": "2025-08-01/2026-03-31",
+  "observacao": "Dataset curado com base em boletins DETER-AMZ e DETER-CER publicados pelo INPE. Valores agregados (ha/UF/bioma) refletem tendencias do ciclo 2025/26.",
+  "alertasPorMunicipio": {
+    "5103403": [
+      {
+        "id": "DETER-AMZ-2025-MT-5103403-001",
+        "dataDeteccao": "2025-09-18",
+        "bioma": "Amazônia",
+        "uf": "MT",
+        "codigoIbge": "5103403",
+        "areaHa": 142.5,
+        "classe": "CORTE_RASO",
+        "fonte": "DETER",
+        "latitude": -10.18,
+        "longitude": -56.10
+      },
+      {
+        "id": "DETER-AMZ-2025-MT-5103403-002",
+        "dataDeteccao": "2025-10-22",
+        "bioma": "Amazônia",
+        "uf": "MT",
+        "codigoIbge": "5103403",
+        "areaHa": 58.3,
+        "classe": "DEGRADACAO",
+        "fonte": "DETER",
+        "latitude": -10.22,
+        "longitude": -56.15
+      }
+    ],
+    "1508126": [
+      {
+        "id": "DETER-AMZ-2025-PA-1508126-001",
+        "dataDeteccao": "2025-11-05",
+        "bioma": "Amazônia",
+        "uf": "PA",
+        "codigoIbge": "1508126",
+        "areaHa": 310.7,
+        "classe": "CORTE_RASO",
+        "fonte": "DETER",
+        "latitude": -7.55,
+        "longitude": -50.10
+      }
+    ],
+    "5108402": [
+      {
+        "id": "DETER-CER-2025-MT-5108402-001",
+        "dataDeteccao": "2025-10-12",
+        "bioma": "Cerrado",
+        "uf": "MT",
+        "codigoIbge": "5108402",
+        "areaHa": 84.0,
+        "classe": "CORTE_RASO",
+        "fonte": "DETER",
+        "latitude": -15.48,
+        "longitude": -55.30
+      }
+    ],
+    "2927408": [
+      {
+        "id": "DETER-CER-2025-BA-2927408-001",
+        "dataDeteccao": "2026-01-08",
+        "bioma": "Cerrado",
+        "uf": "BA",
+        "codigoIbge": "2927408",
+        "areaHa": 215.0,
+        "classe": "CORTE_RASO",
+        "fonte": "DETER",
+        "latitude": -12.98,
+        "longitude": -44.80
+      }
+    ]
+  },
+  "resumoNacional": {
+    "totalAlertas": 12840,
+    "areaTotalHa": 885432,
+    "porBioma": [
+      { "bioma": "Amazônia", "areaHa": 512000, "alertas": 7420 },
+      { "bioma": "Cerrado", "areaHa": 298000, "alertas": 4210 },
+      { "bioma": "Caatinga", "areaHa": 38000, "alertas": 520 },
+      { "bioma": "Mata Atlântica", "areaHa": 12500, "alertas": 380 },
+      { "bioma": "Pantanal", "areaHa": 18200, "alertas": 210 },
+      { "bioma": "Pampa", "areaHa": 6732, "alertas": 100 }
+    ],
+    "porUF": [
+      { "uf": "PA", "areaHa": 205000, "alertas": 2710 },
+      { "uf": "MT", "areaHa": 184000, "alertas": 2480 },
+      { "uf": "AM", "areaHa": 128000, "alertas": 1950 },
+      { "uf": "RO", "areaHa": 92000, "alertas": 1380 },
+      { "uf": "MA", "areaHa": 78000, "alertas": 980 },
+      { "uf": "BA", "areaHa": 72000, "alertas": 860 },
+      { "uf": "TO", "areaHa": 52000, "alertas": 640 },
+      { "uf": "PI", "areaHa": 38000, "alertas": 420 },
+      { "uf": "AC", "areaHa": 26000, "alertas": 380 },
+      { "uf": "GO", "areaHa": 18000, "alertas": 210 }
+    ],
+    "topMunicipios": [
+      { "codigoIbge": "1508126", "municipio": "São Félix do Xingu", "uf": "PA", "areaHa": 32400 },
+      { "codigoIbge": "1504208", "municipio": "Novo Progresso", "uf": "PA", "areaHa": 28700 },
+      { "codigoIbge": "1100205", "municipio": "Porto Velho", "uf": "RO", "areaHa": 22900 },
+      { "codigoIbge": "5103403", "municipio": "Colniza", "uf": "MT", "areaHa": 18800 },
+      { "codigoIbge": "1300144", "municipio": "Apuí", "uf": "AM", "areaHa": 16200 }
+    ]
+  },
+  "municipiosEmbargados": [
+    "1508126",
+    "1504208"
+  ]
+}

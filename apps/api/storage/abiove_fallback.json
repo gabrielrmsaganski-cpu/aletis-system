@@ -1,0 +1,77 @@
+{
+  "status": {
+    "vigente": true,
+    "desde": "2006-07-24",
+    "ultimaRevisao": "2024-11-28",
+    "dataLimite": "2008-07-22",
+    "signatarios": [
+      "ABIOVE - Associação Brasileira das Indústrias de Óleos Vegetais",
+      "ANEC - Associação Nacional dos Exportadores de Cereais",
+      "Cargill",
+      "Bunge",
+      "ADM",
+      "COFCO International",
+      "Amaggi",
+      "Louis Dreyfus Company",
+      "Ministério do Meio Ambiente (observador)",
+      "Ministério do Desenvolvimento Agrário (observador)",
+      "Greenpeace (observador civil)",
+      "TNC - The Nature Conservancy (observador civil)"
+    ],
+    "fontes": [
+      "https://abiove.org.br/sustentabilidade/moratoria-da-soja/",
+      "https://www.soja.org.br/moratoria",
+      "https://www.gov.br/mma/pt-br"
+    ],
+    "observacoes": "A Moratória da Soja continua vigente em 2025/26. Ao longo de 2024-25 houve pressão política no Congresso (PL 366/2022) e do executivo estadual de MT para o seu encerramento; a ABIOVE e as principais tradings reafirmaram publicamente a manutenção do compromisso por tempo indeterminado. O monitoramento é feito com imagens Landsat/Sentinel cruzadas com CAR."
+  },
+  "municipiosMonitorados": {
+    "1508126": {
+      "municipio": "São Félix do Xingu",
+      "uf": "PA",
+      "bioma": "Amazônia",
+      "noBiomaAmazonia": true
+    },
+    "5103403": {
+      "municipio": "Colniza",
+      "uf": "MT",
+      "bioma": "Amazônia",
+      "noBiomaAmazonia": true
+    },
+    "1100205": {
+      "municipio": "Porto Velho",
+      "uf": "RO",
+      "bioma": "Amazônia",
+      "noBiomaAmazonia": true
+    },
+    "1504208": {
+      "municipio": "Novo Progresso",
+      "uf": "PA",
+      "bioma": "Amazônia",
+      "noBiomaAmazonia": true
+    },
+    "5107602": {
+      "municipio": "Sorriso",
+      "uf": "MT",
+      "bioma": "Amazônia",
+      "noBiomaAmazonia": true
+    },
+    "5108402": {
+      "municipio": "Tapurah",
+      "uf": "MT",
+      "bioma": "Cerrado",
+      "noBiomaAmazonia": false
+    },
+    "5218805": {
+      "municipio": "Rio Verde",
+      "uf": "GO",
+      "bioma": "Cerrado",
+      "noBiomaAmazonia": false
+    }
+  },
+  "municipiosRestritos": [
+    "1508126",
+    "1504208"
+  ],
+  "atualizadoEm": "2026-03-31"
+}
