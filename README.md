@@ -146,6 +146,12 @@ pnpm --filter ./apps/api build          # gera apps/api/dist/
 pnpm --filter ./apps/api start          # node dist/server.js
 ```
 
+### Deploy completo / migração entre servidores
+
+Guia passo-a-passo (pré-requisitos, `.env`, systemd, nginx com SSE, migração
+do storage runtime, smoke tests, troubleshooting) em
+[`docs/DEPLOY.md`](docs/DEPLOY.md).
+
 ## Stack
 
 - **Backend**: Fastify 5, TypeScript, tsx, node-cache, axios
