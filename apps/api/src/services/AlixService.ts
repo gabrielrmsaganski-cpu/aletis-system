@@ -53,6 +53,19 @@ import type {
   PerspectivaBSC,
   ModalidadeSicor,
 } from '@aletis/shared-types';
+// ── Wave 9 — Intake + Generators + Memory + Briefing ──────────
+import { getDocumentIntakeService } from './alix/intake/DocumentIntakeService.js';
+import { DocumentGeneratorService } from './alix/generators/DocumentGeneratorService.js';
+import type {
+  PropostaInput,
+  ParecerInput,
+  RelatorioBscInput,
+  FluxoCaixaInput,
+  MemoriaInput,
+} from './alix/generators/types.js';
+import { getAlixMemoryService } from './alix/memory/AlixMemoryService.js';
+import { getBriefingService } from './alix/memory/BriefingService.js';
+import type { MemoriaCliente, SecaoNota } from './alix/memory/types.js';
 import {
   dossieAgroResumo,
   type DossieAgro,
@@ -480,7 +493,11 @@ export class AlixService {
 
   // ── Main chat entry point ───────────────────────────────
 
-  async chat(sessionId: string | undefined, userMessage: string): Promise<{ session: ChatSession; reply: ChatMessage }> {
+  async chat(
+    sessionId: string | undefined,
+    userMessage: string,
+    opts?: { attachments?: string[]; clienteId?: string },
+  ): Promise<{ session: ChatSession; reply: ChatMessage }> {
     await this.ensureLoaded();
     let session = sessionId ? this.sessions.get(sessionId) : undefined;
     if (!session) {
@@ -488,16 +505,19 @@ export class AlixService {
     }
 
     const now = Date.now();
+    const attachments = Array.isArray(opts?.attachments) ? opts!.attachments!.filter(Boolean) : undefined;
+    const clienteId = typeof opts?.clienteId === 'string' && opts!.clienteId.trim() ? opts!.clienteId.trim() : undefined;
     const userMsg: ChatMessage = {
       id: `msg_${randomUUID().slice(0, 6)}_${now.toString(36)}`,
       role: 'user',
       content: userMessage,
       timestamp: now,
+      metadata: attachments || clienteId ? { attachments, clienteId } : undefined,
     };
     session.messages.push(userMsg);
 
     const intent = classify(userMessage);
-    const response = await this.respond(intent, userMessage, session);
+    const response = await this.respond(intent, userMessage, session, { attachments, clienteId });
 
     const replyMsg: ChatMessage = {
       id: `msg_${randomUUID().slice(0, 6)}_${Date.now().toString(36)}`,
@@ -525,13 +545,14 @@ export class AlixService {
     intent: Intent,
     raw: string,
     session: ChatSession,
+    opts?: { attachments?: string[]; clienteId?: string },
   ): Promise<{ content: string; sources?: string[]; toolsUsed?: string[]; metadata?: Record<string, unknown> }> {
     // Cérebro LLM (Claude Sonnet 4.6 via Foundry) é a primeira tentativa.
     // Se falhar por qualquer motivo (rede/auth/limite), cai para o switch
     // rule-based a seguir — garantia de que o Alix nunca fica mudo.
     if (isLLMEnabled()) {
       try {
-        const llmResult = await this.runLLMPath(raw, session);
+        const llmResult = await this.runLLMPath(raw, session, opts);
         if (llmResult && llmResult.content) return llmResult;
       } catch (err) {
         console.warn('[Alix] LLM path falhou, usando regras:', (err as Error).message);
@@ -1576,15 +1597,59 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
   private async runLLMPath(
     userMessage: string,
     session: ChatSession,
+    opts?: { attachments?: string[]; clienteId?: string },
   ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
-    const { tools, registry } = this.buildAlixTools();
-    const systemPrompt = this.buildAlixSystemPrompt();
+    const { tools, registry } = this.buildAlixTools({ sessionId: session.id, clienteId: opts?.clienteId });
+    const systemPrompt = await this.buildAlixSystemPrompt(opts?.clienteId);
     const convo = this.sessionToClaudeMessages(session);
 
     // Se a última mensagem ainda não é user (edge case onde push não aconteceu),
     // adiciona. Normalmente session.messages já inclui o userMessage atual.
     if (convo.length === 0 || convo[convo.length - 1].role !== 'user') {
       convo.push({ role: 'user', content: userMessage });
+    }
+
+    // Wave 9: Anexa documentos como blocos multimodais (imagens + texto extraído)
+    if (opts?.attachments && opts.attachments.length > 0) {
+      try {
+        const intake = getDocumentIntakeService();
+        const blocks: Array<Record<string, unknown>> = [];
+        for (const docId of opts.attachments) {
+          const doc = await intake.get(session.id, docId);
+          if (!doc) continue;
+          if (doc.kind === 'image' && doc.imageBase64 && doc.imageMediaType) {
+            blocks.push({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: doc.imageMediaType,
+                data: doc.imageBase64,
+              },
+            });
+            blocks.push({ type: 'text', text: `[Imagem anexada: ${doc.filename}]` });
+          } else if (doc.extractedText && doc.extractedText.trim()) {
+            // Trunca em ~50k chars por documento para não estourar contexto
+            const texto = doc.extractedText.length > 50000
+              ? doc.extractedText.slice(0, 50000) + '\n…(truncado)'
+              : doc.extractedText;
+            blocks.push({
+              type: 'text',
+              text: `<document id="${doc.id}" filename="${doc.filename}" kind="${doc.kind}"${doc.pageCount ? ` pages="${doc.pageCount}"` : ''}>\n${texto}\n</document>`,
+            });
+          }
+        }
+        if (blocks.length > 0) {
+          blocks.push({ type: 'text', text: userMessage });
+          // Substitui o último user turn (que hoje é string) pela versão multimodal
+          if (convo.length > 0 && convo[convo.length - 1].role === 'user') {
+            convo[convo.length - 1] = { role: 'user', content: blocks };
+          } else {
+            convo.push({ role: 'user', content: blocks });
+          }
+        }
+      } catch (err) {
+        console.warn('[Alix] Falha ao anexar documentos:', (err as Error).message);
+      }
     }
 
     const toolsUsedAggregate: string[] = [];
@@ -1642,7 +1707,21 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
     return out;
   }
 
-  private buildAlixSystemPrompt(): string {
+  private async buildAlixSystemPrompt(clienteId?: string): Promise<string> {
+    const base = this.buildAlixSystemPromptBase();
+    if (!clienteId) return base;
+    try {
+      const mem = getAlixMemoryService();
+      const rendered = await mem.render(clienteId);
+      if (!rendered) return base;
+      return `${base}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n**MEMÓRIA PERSISTENTE DO CLIENTE** (clienteId=${clienteId}). Use como contexto prioritário. Se decidir algo novo/relevante, atualize via tool memoria_cliente_adicionar_nota ou memoria_cliente_atualizar.\n\n${rendered}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+    } catch (err) {
+      console.warn('[Alix] Falha ao injetar memória do cliente:', (err as Error).message);
+      return base;
+    }
+  }
+
+  private buildAlixSystemPromptBase(): string {
     const hoje = new Date().toISOString().slice(0, 10);
     return `Você é a **ALIX** — Agente de Leitura e Inteligência Estratégica da ALETIS, consultoria financeira agro do Christian Kohler.
 
@@ -1682,7 +1761,9 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
    * Define todas as tools expostas ao Claude e seus handlers.
    * Handlers delegam para métodos existentes do AlixService — zero duplicação.
    */
-  private buildAlixTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
+  private buildAlixTools(ctx?: { sessionId?: string; clienteId?: string }): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
+    const sessionId = ctx?.sessionId ?? 'anon';
+    const ctxClienteId = ctx?.clienteId;
     const specs: Array<{ spec: ClaudeTool; handler: (input: Record<string, unknown>) => any }> = [
       // ── Câmbio ─────────────────────────────────────────
       {
@@ -2786,6 +2867,215 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
           },
         },
         handler: (i) => this.handle_gerar_proposta_renegociacao_intent(i),
+      },
+
+      // ══════════════════════════════════════════════════════════
+      // ── Wave 9 — Intake (leitura de documentos enviados) ──────
+      // ══════════════════════════════════════════════════════════
+      {
+        spec: {
+          name: 'listar_documentos_sessao',
+          description:
+            'Lista documentos que o usuário anexou nesta sessão (PDFs, planilhas, imagens, Word, CSV, TXT). Use SEMPRE que o usuário mencionar "o arquivo", "o documento", "a planilha", "a foto" etc.',
+          input_schema: { type: 'object', properties: {} },
+        },
+        handler: () => this.tool_listar_documentos_sessao(sessionId),
+      },
+      {
+        spec: {
+          name: 'ler_documento_sessao',
+          description:
+            'Retorna o texto extraído de um documento anexado (ou previews tabulares no caso de planilhas). Use após listar_documentos_sessao ou quando o usuário indicar um id. Retorna até 50k caracteres.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'ID do documento (uuid) retornado por listar_documentos_sessao ou upload.' },
+            },
+            required: ['id'],
+          },
+        },
+        handler: (i) => this.tool_ler_documento_sessao(sessionId, String(i.id)),
+      },
+
+      // ══════════════════════════════════════════════════════════
+      // ── Wave 9 — Geradores REAIS (PDF/DOCX/XLSX) ──────────────
+      // ══════════════════════════════════════════════════════════
+      {
+        spec: {
+          name: 'gerar_proposta_reestruturacao',
+          description:
+            'Gera PDF REAL de proposta de reestruturação de dívida (layout corporativo ALETIS, cronograma Price com carência). Retorna downloadUrl para envio imediato.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string' },
+              clienteNome: { type: 'string' },
+              credorNome: { type: 'string' },
+              dividaAtualBRL: { type: 'number', description: 'Saldo devedor atual em R$.' },
+              parcelasMeses: { type: 'number', description: 'Número de parcelas após a carência.' },
+              taxaMensalPct: { type: 'number', description: 'Taxa de juros mensal em % (ex: 0.85 para 0,85% a.m.).' },
+              carenciaMeses: { type: 'number', description: 'Meses só de juros antes das parcelas regulares.' },
+              observacoes: { type: 'string' },
+              consultor: { type: 'string' },
+            },
+            required: ['clienteId', 'clienteNome', 'credorNome', 'dividaAtualBRL', 'parcelasMeses', 'taxaMensalPct', 'carenciaMeses'],
+          },
+        },
+        handler: (i) => this.tool_gerar_proposta_reestruturacao(i),
+      },
+      {
+        spec: {
+          name: 'gerar_parecer_tecnico',
+          description: 'Gera PDF REAL de parecer técnico (diagnóstico + viabilidade + recomendação + anexos).',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string' },
+              clienteNome: { type: 'string' },
+              assunto: { type: 'string' },
+              diagnostico: { type: 'string' },
+              viabilidade: { type: 'string' },
+              recomendacao: { type: 'string' },
+              anexos: { type: 'array', description: 'Lista textual de anexos (strings).' },
+              consultor: { type: 'string' },
+            },
+            required: ['clienteId', 'clienteNome', 'assunto', 'diagnostico', 'viabilidade', 'recomendacao'],
+          },
+        },
+        handler: (i) => this.tool_gerar_parecer_tecnico(i),
+      },
+      {
+        spec: {
+          name: 'gerar_relatorio_bsc',
+          description: 'Gera PDF REAL de relatório BSC Kaplan-Norton (4 perspectivas com KPIs e semáforo verde/amarelo/vermelho).',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string' },
+              clienteNome: { type: 'string' },
+              periodo: { type: 'string', description: 'Ex: "safra 2025/26" ou "2026-Q1".' },
+              perspectivas: {
+                type: 'array',
+                description: 'Array de 4 perspectivas (Financeira, Cliente, Processos, Aprendizado) cada uma com kpis[].',
+              },
+              observacoes: { type: 'string' },
+              consultor: { type: 'string' },
+            },
+            required: ['clienteId', 'clienteNome', 'periodo', 'perspectivas'],
+          },
+        },
+        handler: (i) => this.tool_gerar_relatorio_bsc(i),
+      },
+      {
+        spec: {
+          name: 'gerar_fluxo_caixa_xlsx',
+          description: 'Gera PLANILHA XLSX REAL de fluxo de caixa 12 meses (receita produção, custo operacional, parcela crédito, saldo, saldo acumulado).',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string' },
+              clienteNome: { type: 'string' },
+              periodoReferencia: { type: 'string', description: 'Ex: "Safra 2025/26".' },
+              meses: {
+                type: 'array',
+                description: 'Array de 12 meses com receitaProducao, custoOperacional, parcelaCredito.',
+              },
+              observacoes: { type: 'string' },
+            },
+            required: ['clienteId', 'clienteNome', 'periodoReferencia', 'meses'],
+          },
+        },
+        handler: (i) => this.tool_gerar_fluxo_caixa_xlsx(i),
+      },
+      {
+        spec: {
+          name: 'gerar_memoria_calculo_docx',
+          description: 'Gera DOCX REAL (Word editável) de memória de cálculo com premissas, itens de cálculo e conclusão.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string' },
+              clienteNome: { type: 'string' },
+              titulo: { type: 'string' },
+              premissas: { type: 'array', description: 'Lista de strings com as premissas utilizadas.' },
+              itens: {
+                type: 'array',
+                description: 'Lista de { titulo, descricao, formula?, resultado? }.',
+              },
+              conclusao: { type: 'string' },
+              consultor: { type: 'string' },
+            },
+            required: ['clienteId', 'clienteNome', 'titulo', 'premissas', 'itens'],
+          },
+        },
+        handler: (i) => this.tool_gerar_memoria_calculo_docx(i),
+      },
+
+      // ══════════════════════════════════════════════════════════
+      // ── Wave 9 — Memória por cliente + Briefing proativo ──────
+      // ══════════════════════════════════════════════════════════
+      {
+        spec: {
+          name: 'memoria_cliente_ler',
+          description: 'Lê a memória persistente de um cliente (perfil, dívidas, decisões, próximas ações, alertas, histórico).',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string', description: 'Se omitido, usa o clienteId desta sessão.' },
+            },
+          },
+        },
+        handler: (i) => this.tool_memoria_cliente_ler(String(i.clienteId || ctxClienteId || '')),
+      },
+      {
+        spec: {
+          name: 'memoria_cliente_atualizar',
+          description:
+            'Atualiza a memória do cliente fazendo MERGE por append (não sobrescreve). Envie apenas os campos que quer acrescentar.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string' },
+              clienteNome: { type: 'string' },
+              perfil: { type: 'array' },
+              dividasAtivas: { type: 'array' },
+              decisoes: { type: 'array' },
+              proximasAcoes: { type: 'array' },
+              alertas: { type: 'array' },
+            },
+          },
+        },
+        handler: (i) => this.tool_memoria_cliente_atualizar(i, ctxClienteId),
+      },
+      {
+        spec: {
+          name: 'memoria_cliente_adicionar_nota',
+          description: 'Atalho para acrescentar uma nota rápida em uma seção específica da memória.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string' },
+              secao: { type: 'string', enum: ['proximas-acoes', 'alertas', 'historico', 'decisoes'] },
+              texto: { type: 'string' },
+            },
+            required: ['secao', 'texto'],
+          },
+        },
+        handler: (i) => this.tool_memoria_cliente_adicionar_nota(i, ctxClienteId),
+      },
+      {
+        spec: {
+          name: 'briefing_cliente',
+          description:
+            'Gera briefing proativo DETERMINÍSTICO (sem LLM) de um cliente: resumo executivo, destaques, dívidas, BSC, próximas ações, sugestão de primeira ação.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              clienteId: { type: 'string' },
+            },
+          },
+        },
+        handler: (i) => this.tool_briefing_cliente(String(i.clienteId || ctxClienteId || '')),
       },
     ];
 
@@ -4111,8 +4401,51 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
     payload: Record<string, unknown>,
   ): Promise<unknown> {
     const clienteId = String(payload.clienteId).replace(/[^a-zA-Z0-9_-]/g, '');
+    const params = (payload.parametros || {}) as Record<string, unknown>;
     const dir = this.alixStorageDir('propostas_pendentes');
     const file = `${dir}/${clienteId}.jsonl`;
+
+    // Se os parâmetros necessários estão presentes, gera PDF REAL (Wave 9).
+    // Caso contrário, mantém o comportamento antigo (enfileirar intent).
+    const clienteNome = String(params.clienteNome || payload.clienteNome || clienteId);
+    const credorNome = String(params.credorNome || payload.credorNome || '');
+    const dividaAtualBRL = Number(params.dividaAtualBRL ?? payload.dividaAtualBRL ?? 0);
+    const parcelasMeses = Number(params.parcelasMeses ?? payload.parcelasMeses ?? 0);
+    const taxaMensalPct = Number(params.taxaMensalPct ?? payload.taxaMensalPct ?? 0);
+    const carenciaMeses = Number(params.carenciaMeses ?? payload.carenciaMeses ?? 0);
+
+    if (credorNome && dividaAtualBRL > 0 && parcelasMeses > 0) {
+      try {
+        const svc = DocumentGeneratorService.getInstance();
+        const doc = await svc.generateProposta({
+          clienteId,
+          clienteNome,
+          credorNome,
+          dividaAtualBRL,
+          parcelasMeses,
+          taxaMensalPct,
+          carenciaMeses,
+          observacoes: typeof params.observacoes === 'string' ? params.observacoes : undefined,
+          consultor: typeof params.consultor === 'string' ? params.consultor : undefined,
+        });
+        const entry = {
+          id: doc.id,
+          clienteId,
+          dividaIds: payload.dividaIds,
+          parametros: params,
+          status: 'gerado',
+          criadoEm: doc.createdAt,
+          origem: 'alix',
+          documento: { filename: doc.filename, downloadUrl: doc.downloadUrl, sizeBytes: doc.sizeBytes },
+        };
+        appendFileSync(file, JSON.stringify(entry) + '\n', 'utf8');
+        console.log('[Alix][proposta] PDF gerado:', doc.filename, 'cliente', clienteId);
+        return { ok: true, queued: false, generated: true, document: doc };
+      } catch (err) {
+        console.warn('[Alix][proposta] Falha ao gerar PDF, enfileirando intent:', (err as Error).message);
+      }
+    }
+
     const entry = {
       id: `prop_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
       clienteId,
@@ -4125,6 +4458,341 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
     appendFileSync(file, JSON.stringify(entry) + '\n', 'utf8');
     console.log('[Alix][proposta_intent] enfileirado:', entry.id, 'cliente', clienteId);
     return { ok: true, queued: true, intent: entry };
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // ── Wave 9 — Tool handlers (intake + generators + memory) ──
+  // ══════════════════════════════════════════════════════════
+
+  private async tool_listar_documentos_sessao(
+    sessionId: string,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
+    const intake = getDocumentIntakeService();
+    const docs = await intake.list(sessionId);
+    if (docs.length === 0) {
+      return {
+        content: 'Nenhum documento anexado nesta sessão.',
+        sources: [],
+        toolsUsed: ['DocumentIntakeService.list'],
+        metadata: { total: 0 },
+      };
+    }
+    const linhas = docs
+      .map(
+        (d) =>
+          `• ${d.filename} — ${d.kind} · ${Math.round(d.sizeBytes / 1024)} KB · id=${d.id}${d.pageCount ? ` · ${d.pageCount} pág` : ''}`,
+      )
+      .join('\n');
+    return {
+      content: `**Documentos da sessão (${docs.length}):**\n${linhas}`,
+      sources: [`intake:session:${sessionId}`],
+      toolsUsed: ['DocumentIntakeService.list'],
+      metadata: { total: docs.length, ids: docs.map((d) => d.id) },
+    };
+  }
+
+  private async tool_ler_documento_sessao(
+    sessionId: string,
+    id: string,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
+    const intake = getDocumentIntakeService();
+    const doc = await intake.get(sessionId, id);
+    if (!doc) {
+      return {
+        content: `Documento id=${id} não encontrado nesta sessão.`,
+        sources: [],
+        toolsUsed: ['DocumentIntakeService.get'],
+        metadata: { found: false },
+      };
+    }
+    const texto = doc.extractedText && doc.extractedText.length > 50000
+      ? doc.extractedText.slice(0, 50000) + '\n…(truncado)'
+      : doc.extractedText || '[sem texto extraído]';
+    const header = `**${doc.filename}** (${doc.kind}${doc.pageCount ? `, ${doc.pageCount} pág` : ''}, ${Math.round(doc.sizeBytes / 1024)} KB)`;
+    return {
+      content: `${header}\n\n${texto}`,
+      sources: [`intake:${doc.id}`],
+      toolsUsed: ['DocumentIntakeService.get'],
+      metadata: {
+        id: doc.id,
+        kind: doc.kind,
+        pageCount: doc.pageCount,
+        sheets: doc.metadata?.sheets,
+      },
+    };
+  }
+
+  private async tool_gerar_proposta_reestruturacao(
+    i: Record<string, unknown>,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
+    try {
+      const svc = DocumentGeneratorService.getInstance();
+      const input: PropostaInput = {
+        clienteId: String(i.clienteId),
+        clienteNome: String(i.clienteNome),
+        credorNome: String(i.credorNome),
+        dividaAtualBRL: Number(i.dividaAtualBRL),
+        parcelasMeses: Number(i.parcelasMeses),
+        taxaMensalPct: Number(i.taxaMensalPct),
+        carenciaMeses: Number(i.carenciaMeses),
+        observacoes: i.observacoes ? String(i.observacoes) : undefined,
+        consultor: i.consultor ? String(i.consultor) : undefined,
+      };
+      const doc = await svc.generateProposta(input);
+      return {
+        content: `**Proposta gerada (PDF):** ${doc.filename}\nTamanho: ${Math.round(doc.sizeBytes / 1024)} KB\nDownload: ${doc.downloadUrl}`,
+        sources: [`generator:proposta:${doc.id}`],
+        toolsUsed: ['DocumentGeneratorService.generateProposta'],
+        metadata: { document: doc },
+      };
+    } catch (err) {
+      return {
+        content: `Erro ao gerar proposta: ${(err as Error).message}`,
+        sources: [],
+        toolsUsed: ['DocumentGeneratorService.generateProposta'],
+        metadata: { error: true },
+      };
+    }
+  }
+
+  private async tool_gerar_parecer_tecnico(
+    i: Record<string, unknown>,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
+    try {
+      const svc = DocumentGeneratorService.getInstance();
+      const input: ParecerInput = {
+        clienteId: String(i.clienteId),
+        clienteNome: String(i.clienteNome),
+        assunto: String(i.assunto),
+        diagnostico: String(i.diagnostico),
+        viabilidade: String(i.viabilidade),
+        recomendacao: String(i.recomendacao),
+        anexos: Array.isArray(i.anexos) ? (i.anexos as unknown[]).map(String) : undefined,
+        consultor: i.consultor ? String(i.consultor) : undefined,
+      };
+      const doc = await svc.generateParecer(input);
+      return {
+        content: `**Parecer gerado (PDF):** ${doc.filename}\nTamanho: ${Math.round(doc.sizeBytes / 1024)} KB\nDownload: ${doc.downloadUrl}`,
+        sources: [`generator:parecer:${doc.id}`],
+        toolsUsed: ['DocumentGeneratorService.generateParecer'],
+        metadata: { document: doc },
+      };
+    } catch (err) {
+      return {
+        content: `Erro ao gerar parecer: ${(err as Error).message}`,
+        sources: [],
+        toolsUsed: ['DocumentGeneratorService.generateParecer'],
+        metadata: { error: true },
+      };
+    }
+  }
+
+  private async tool_gerar_relatorio_bsc(
+    i: Record<string, unknown>,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
+    try {
+      const svc = DocumentGeneratorService.getInstance();
+      const input = i as unknown as RelatorioBscInput;
+      const doc = await svc.generateRelatorioBsc(input);
+      return {
+        content: `**Relatório BSC gerado (PDF):** ${doc.filename}\nTamanho: ${Math.round(doc.sizeBytes / 1024)} KB\nDownload: ${doc.downloadUrl}`,
+        sources: [`generator:bsc:${doc.id}`],
+        toolsUsed: ['DocumentGeneratorService.generateRelatorioBsc'],
+        metadata: { document: doc },
+      };
+    } catch (err) {
+      return {
+        content: `Erro ao gerar relatório BSC: ${(err as Error).message}`,
+        sources: [],
+        toolsUsed: ['DocumentGeneratorService.generateRelatorioBsc'],
+        metadata: { error: true },
+      };
+    }
+  }
+
+  private async tool_gerar_fluxo_caixa_xlsx(
+    i: Record<string, unknown>,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
+    try {
+      const svc = DocumentGeneratorService.getInstance();
+      const input = i as unknown as FluxoCaixaInput;
+      const doc = await svc.generateFluxoCaixaXlsx(input);
+      return {
+        content: `**Fluxo de caixa gerado (XLSX):** ${doc.filename}\nTamanho: ${Math.round(doc.sizeBytes / 1024)} KB\nDownload: ${doc.downloadUrl}`,
+        sources: [`generator:fluxo:${doc.id}`],
+        toolsUsed: ['DocumentGeneratorService.generateFluxoCaixaXlsx'],
+        metadata: { document: doc },
+      };
+    } catch (err) {
+      return {
+        content: `Erro ao gerar fluxo de caixa: ${(err as Error).message}`,
+        sources: [],
+        toolsUsed: ['DocumentGeneratorService.generateFluxoCaixaXlsx'],
+        metadata: { error: true },
+      };
+    }
+  }
+
+  private async tool_gerar_memoria_calculo_docx(
+    i: Record<string, unknown>,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
+    try {
+      const svc = DocumentGeneratorService.getInstance();
+      const input = i as unknown as MemoriaInput;
+      const doc = await svc.generateMemoriaCalculo(input);
+      return {
+        content: `**Memória de cálculo gerada (DOCX):** ${doc.filename}\nTamanho: ${Math.round(doc.sizeBytes / 1024)} KB\nDownload: ${doc.downloadUrl}`,
+        sources: [`generator:memoria:${doc.id}`],
+        toolsUsed: ['DocumentGeneratorService.generateMemoriaCalculo'],
+        metadata: { document: doc },
+      };
+    } catch (err) {
+      return {
+        content: `Erro ao gerar memória de cálculo: ${(err as Error).message}`,
+        sources: [],
+        toolsUsed: ['DocumentGeneratorService.generateMemoriaCalculo'],
+        metadata: { error: true },
+      };
+    }
+  }
+
+  private async tool_memoria_cliente_ler(
+    clienteId: string,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
+    if (!clienteId) {
+      return {
+        content: 'clienteId é obrigatório.',
+        sources: [],
+        toolsUsed: ['AlixMemoryService.get'],
+        metadata: { error: 'missing_clienteId' },
+      };
+    }
+    const mem = getAlixMemoryService();
+    const rendered = await mem.render(clienteId);
+    if (!rendered) {
+      return {
+        content: `Sem memória persistente para clienteId=${clienteId}.`,
+        sources: [],
+        toolsUsed: ['AlixMemoryService.render'],
+        metadata: { exists: false },
+      };
+    }
+    return {
+      content: rendered,
+      sources: [`memory:${clienteId}`],
+      toolsUsed: ['AlixMemoryService.render'],
+      metadata: { exists: true, chars: rendered.length },
+    };
+  }
+
+  private async tool_memoria_cliente_atualizar(
+    i: Record<string, unknown>,
+    fallbackClienteId: string | undefined,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
+    const clienteId = String(i.clienteId || fallbackClienteId || '').trim();
+    if (!clienteId) {
+      return {
+        content: 'clienteId é obrigatório.',
+        sources: [],
+        toolsUsed: ['AlixMemoryService.upsert'],
+        metadata: { error: 'missing_clienteId' },
+      };
+    }
+    try {
+      const mem = getAlixMemoryService();
+      const patch: Partial<MemoriaCliente> = {};
+      if (typeof i.clienteNome === 'string') patch.clienteNome = i.clienteNome;
+      for (const k of ['perfil', 'dividasAtivas', 'decisoes', 'proximasAcoes', 'alertas'] as const) {
+        const v = i[k];
+        if (Array.isArray(v)) {
+          (patch[k] as string[] | undefined) = (v as unknown[]).map(String).filter((s) => s.trim().length > 0);
+        }
+      }
+      const updated = await mem.upsert(clienteId, patch);
+      return {
+        content: `Memória atualizada para ${updated.clienteNome} (${clienteId}). Perfil: ${updated.perfil.length}, dívidas: ${updated.dividasAtivas.length}, próximas ações: ${updated.proximasAcoes.length}, alertas: ${updated.alertas.length}.`,
+        sources: [`memory:${clienteId}`],
+        toolsUsed: ['AlixMemoryService.upsert'],
+        metadata: { clienteId, atualizadoEm: updated.atualizadoEm },
+      };
+    } catch (err) {
+      return {
+        content: `Erro ao atualizar memória: ${(err as Error).message}`,
+        sources: [],
+        toolsUsed: ['AlixMemoryService.upsert'],
+        metadata: { error: true },
+      };
+    }
+  }
+
+  private async tool_memoria_cliente_adicionar_nota(
+    i: Record<string, unknown>,
+    fallbackClienteId: string | undefined,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
+    const clienteId = String(i.clienteId || fallbackClienteId || '').trim();
+    const secao = String(i.secao || '') as SecaoNota;
+    const texto = String(i.texto || '').trim();
+    if (!clienteId || !secao || !texto) {
+      return {
+        content: 'clienteId, secao e texto são obrigatórios.',
+        sources: [],
+        toolsUsed: ['AlixMemoryService.appendNota'],
+        metadata: { error: 'missing_fields' },
+      };
+    }
+    try {
+      const mem = getAlixMemoryService();
+      await mem.appendNota(clienteId, secao, texto);
+      return {
+        content: `Nota registrada em "${secao}" da memória de ${clienteId}.`,
+        sources: [`memory:${clienteId}`],
+        toolsUsed: ['AlixMemoryService.appendNota'],
+        metadata: { clienteId, secao },
+      };
+    } catch (err) {
+      return {
+        content: `Erro ao adicionar nota: ${(err as Error).message}`,
+        sources: [],
+        toolsUsed: ['AlixMemoryService.appendNota'],
+        metadata: { error: true },
+      };
+    }
+  }
+
+  private async tool_briefing_cliente(
+    clienteId: string,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
+    if (!clienteId) {
+      return {
+        content: 'clienteId é obrigatório.',
+        sources: [],
+        toolsUsed: ['BriefingService.gerar'],
+        metadata: { error: 'missing_clienteId' },
+      };
+    }
+    try {
+      const svc = getBriefingService();
+      const briefing = await svc.gerar(clienteId);
+      return {
+        content: briefing.markdown,
+        sources: [`briefing:${clienteId}`],
+        toolsUsed: ['BriefingService.gerar'],
+        metadata: {
+          clienteId,
+          geradoEm: briefing.geradoEm,
+          destaques: briefing.destaques.length,
+          dividasAtivas: briefing.dividasAtivas.length,
+          sugestaoPrimeiraAcao: briefing.sugestaoPrimeiraAcao,
+        },
+      };
+    } catch (err) {
+      return {
+        content: `Erro ao gerar briefing: ${(err as Error).message}`,
+        sources: [],
+        toolsUsed: ['BriefingService.gerar'],
+        metadata: { error: true },
+      };
+    }
   }
 
   // ── Generic fallback ───────────────────────────────────

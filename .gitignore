@@ -88,3 +88,11 @@ apps/api/storage/custeio/
 
 # BSC snapshots append-only por cliente (Wave 8a)
 apps/api/storage/bsc/*.jsonl
+
+# Wave 9 — runtime state da Alix (intake, outputs gerados, memória por cliente)
+apps/api/storage/alix-documents/*/
+apps/api/storage/alix-outputs/*/
+apps/api/storage/alix-memory/*.md
+!apps/api/storage/alix-documents/.gitkeep
+!apps/api/storage/alix-outputs/.gitkeep
+!apps/api/storage/alix-memory/.gitkeep

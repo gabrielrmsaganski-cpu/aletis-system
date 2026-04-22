@@ -45,14 +45,21 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
   const alix = getAlixService()
 
   // ── POST /api/alix/chat ─────────────────────────────────
-  // Body: { sessionId?: string, message: string }
+  // Body: { sessionId?: string, message: string, attachments?: string[], clienteId?: string }
+  // - attachments: IDs de documentos previamente enviados via /api/alix/documents/upload
+  // - clienteId  : dispara auto-injeção da memória persistente do cliente
   // Returns the reply plus the full (updated) session
   fastify.post('/api/alix/chat', async (
-    request: FastifyRequest<{ Body: { sessionId?: string; message?: string } }>,
+    request: FastifyRequest<{ Body: {
+      sessionId?: string
+      message?: string
+      attachments?: string[]
+      clienteId?: string
+    } }>,
     reply: FastifyReply,
   ) => {
     try {
-      const { sessionId, message } = request.body ?? {}
+      const { sessionId, message, attachments, clienteId } = request.body ?? {}
       if (!message || typeof message !== 'string' || message.trim().length === 0) {
         return reply.status(400).send({
           success: false,
@@ -60,7 +67,10 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
         })
       }
 
-      const result = await alix.chat(sessionId, message.trim())
+      const result = await alix.chat(sessionId, message.trim(), {
+        attachments: Array.isArray(attachments) ? attachments.filter((x) => typeof x === 'string') : undefined,
+        clienteId: typeof clienteId === 'string' && clienteId.trim() ? clienteId.trim() : undefined,
+      })
       return reply.status(200).send({
         success: true,
         data: {
@@ -79,6 +89,73 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
       const msg = err instanceof Error ? err.message : 'Erro desconhecido'
       request.log.error({ err }, '[ALIX] chat error')
       return reply.status(500).send({ success: false, error: 'Erro no chat ALIX', detalhes: msg })
+    }
+  })
+
+  // ── POST /api/alix/chat/stream (SSE) ────────────────────
+  // Mesmo body do /chat mas devolve uma sequência de eventos SSE.
+  // Eventos: 'start', 'token' (chunks), 'tool' (nome da tool usada),
+  //          'done' (payload final), 'error'.
+  // Implementação pragmática: roda o chat completo e faz stream por
+  // chunking de palavras (latência similar à real, sem refatorar o
+  // tool-loop do runClaude).
+  fastify.post('/api/alix/chat/stream', async (
+    request: FastifyRequest<{ Body: {
+      sessionId?: string
+      message?: string
+      attachments?: string[]
+      clienteId?: string
+    } }>,
+    reply: FastifyReply,
+  ) => {
+    const { sessionId, message, attachments, clienteId } = request.body ?? {}
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      return reply.status(400).send({ success: false, error: 'Campo "message" é obrigatório' })
+    }
+
+    reply.raw.setHeader('Content-Type', 'text/event-stream')
+    reply.raw.setHeader('Cache-Control', 'no-cache, no-transform')
+    reply.raw.setHeader('Connection', 'keep-alive')
+    reply.raw.setHeader('X-Accel-Buffering', 'no')
+    reply.raw.flushHeaders?.()
+
+    const send = (event: string, payload: unknown) => {
+      reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`)
+    }
+
+    send('start', { sessionId, ts: Date.now() })
+
+    try {
+      const result = await alix.chat(sessionId, message.trim(), {
+        attachments: Array.isArray(attachments) ? attachments.filter((x) => typeof x === 'string') : undefined,
+        clienteId: typeof clienteId === 'string' && clienteId.trim() ? clienteId.trim() : undefined,
+      })
+
+      if (result.reply.toolsUsed) {
+        for (const t of result.reply.toolsUsed) send('tool', { name: t })
+      }
+
+      // Stream content by word chunks (~40 chars each)
+      const content = result.reply.content || ''
+      const CHUNK = 48
+      for (let i = 0; i < content.length; i += CHUNK) {
+        send('token', { text: content.slice(i, i + CHUNK) })
+        // Micro-pausa para UI poder renderizar progressivamente
+        await new Promise((r) => setTimeout(r, 10))
+      }
+
+      send('done', {
+        reply: result.reply,
+        sessionId: result.session.id,
+        sources: result.reply.sources || [],
+        toolsUsed: result.reply.toolsUsed || [],
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro desconhecido'
+      request.log.error({ err }, '[ALIX] stream error')
+      send('error', { error: msg })
+    } finally {
+      reply.raw.end()
     }
   })
 
