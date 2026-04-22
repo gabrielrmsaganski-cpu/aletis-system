@@ -45,6 +45,14 @@ import { getCusteioService } from './custeio/CusteioService.js';
 import { getReformaTributariaService } from './reforma/ReformaTributariaService.js';
 import { getFunruralService } from './funrural/FunruralService.js';
 import { getDesenrolaRuralService } from './desenrola/DesenrolaRuralService.js';
+// ── Wave 8 — BSC + RAG + SICOR ────────────────────────────────
+import { getBscService } from './bsc/BscService.js';
+import { getRagService } from '@aletis/knowledge-base';
+import type {
+  ContextoBSCCalculo,
+  PerspectivaBSC,
+  ModalidadeSicor,
+} from '@aletis/shared-types';
 import {
   dossieAgroResumo,
   type DossieAgro,
@@ -2457,6 +2465,157 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
         handler: (i) => this.simularDesenrolaRural(i),
       },
 
+      // ── Wave 8a — Balanced Scorecard Agro ────────────────
+      {
+        spec: {
+          name: 'listar_kpis_bsc',
+          description:
+            'Lista o catálogo de KPIs do Balanced Scorecard agro (13 indicadores em 4 perspectivas: financeira, clientes, processos_internos, aprendizado_crescimento). Pode filtrar por perspectiva.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              perspectiva: {
+                type: 'string',
+                enum: ['financeira', 'clientes', 'processos_internos', 'aprendizado_crescimento'],
+                description: 'Perspectiva opcional para filtrar.',
+              },
+            },
+          },
+        },
+        handler: (i) => this.listarKpisBsc(i as { perspectiva?: PerspectivaBSC }),
+      },
+      {
+        spec: {
+          name: 'calcular_bsc',
+          description:
+            'Calcula o Balanced Scorecard agro a partir do contexto financeiro e operacional do produtor (receita, EBITDA, dívidas, área plantada, NPS, etc.). Devolve score geral 0-100, score por perspectiva e recomendações.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              receitaBruta: { type: 'number' },
+              receitaLiquida: { type: 'number' },
+              custosProducao: { type: 'number' },
+              despesasOperacionais: { type: 'number' },
+              ebitda: { type: 'number' },
+              lucroLiquido: { type: 'number' },
+              ativoTotal: { type: 'number' },
+              passivoCirculante: { type: 'number' },
+              ativoCirculante: { type: 'number' },
+              estoque: { type: 'number' },
+              contasReceber: { type: 'number' },
+              dividasTotal: { type: 'number' },
+              patrimonioLiquido: { type: 'number' },
+              investimentoCapital: { type: 'number' },
+              areaPlantadaHa: { type: 'number' },
+              producaoTotalTon: { type: 'number' },
+              custoHectare: { type: 'number' },
+              numeroColaboradores: { type: 'number' },
+              horasTreinamento: { type: 'number' },
+              turnoverPct: { type: 'number' },
+              npsCliente: { type: 'number' },
+              prazoMedioRecebimentoDias: { type: 'number' },
+              percInadimplencia: { type: 'number' },
+              tempoCicloProducao: { type: 'number' },
+              periodo: { type: 'string', description: 'Período de referência (ex: "2026-Q1").' },
+              metasOverride: {
+                type: 'object',
+                description: 'Overrides de meta por kpiId (ex: { roic: 0.18 }).',
+              },
+            },
+            required: [
+              'receitaBruta',
+              'receitaLiquida',
+              'custosProducao',
+              'despesasOperacionais',
+              'ebitda',
+              'lucroLiquido',
+              'ativoTotal',
+              'passivoCirculante',
+              'ativoCirculante',
+              'estoque',
+              'contasReceber',
+              'dividasTotal',
+              'patrimonioLiquido',
+              'investimentoCapital',
+              'areaPlantadaHa',
+              'producaoTotalTon',
+              'periodo',
+            ],
+          },
+        },
+        handler: (i) => this.calcularBscHandler(i as unknown as ContextoBSCCalculo),
+      },
+
+      // ── Wave 8b — RAG Knowledge Base ─────────────────────
+      {
+        spec: {
+          name: 'buscar_documentos_rag',
+          description:
+            'Consulta a base de documentos PDF indexados (BM25) — apostilas BPO Financeiro, artigos sobre TIR, slides de Gestão Profissional de Fazendas, etc. Retorna os k trechos mais relevantes com score e fonte.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'Consulta em linguagem natural.' },
+              k: { type: 'number', description: 'Número de resultados (default 5).' },
+            },
+            required: ['query'],
+          },
+        },
+        handler: (i) => this.buscarDocumentosRag(i as { query: string; k?: number }),
+      },
+
+      // ── Wave 8c — SICOR Bacen OData ──────────────────────
+      {
+        spec: {
+          name: 'consultar_sicor_resumo_uf',
+          description:
+            'Resumo consolidado do SICOR (Sistema de Operações do Crédito Rural do Bacen) para uma UF e ano: volume total, nº de contratos, ticket médio, quebra por modalidade (custeio/investimento/comercialização) e top 10 produtos. Dados oficiais OData OLINDA/Bacen.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              uf: { type: 'string', description: 'Sigla da UF (ex: "MT", "PR", "RS").' },
+              ano: { type: 'number', description: 'Ano de emissão (ex: 2025).' },
+            },
+            required: ['uf', 'ano'],
+          },
+        },
+        handler: (i) => this.consultarSicorResumoUf(i as { uf: string; ano: number }),
+      },
+      {
+        spec: {
+          name: 'consultar_sicor_contratos',
+          description:
+            'Busca contratos agregados do SICOR por modalidade (custeio/investimento/comercialização), UF, produto e janela AAAAMM. Retorna lista de registros com nºcontratos, valor, área e programa.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              modalidade: {
+                type: 'string',
+                enum: ['custeio', 'investimento', 'comercializacao'],
+                description: 'Modalidade do crédito rural.',
+              },
+              uf: { type: 'string', description: 'Sigla da UF (opcional).' },
+              produto: { type: 'string', description: 'Nome do produto (opcional, ex: "SOJA").' },
+              anoMesInicial: { type: 'string', description: 'Início AAAAMM (ex: "202501").' },
+              anoMesFinal: { type: 'string', description: 'Fim AAAAMM (ex: "202512").' },
+              top: { type: 'number', description: 'Limite de registros (default 100, máx 5000).' },
+            },
+            required: ['modalidade'],
+          },
+        },
+        handler: (i) =>
+          this.consultarSicorContratos(
+            i as {
+              modalidade: ModalidadeSicor;
+              uf?: string;
+              produto?: string;
+              anoMesInicial?: string;
+              anoMesFinal?: string;
+              top?: number;
+            },
+          ),
+      },
+
       // ── Executor tools (HITL) ────────────────────────────
       // Mutation-capable tools. NENHUMA delas grava/altera estado
       // diretamente — todas registram um intent no
@@ -3291,6 +3450,199 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
       };
     } catch (err) {
       return { content: `Falha na simulação Desenrola Rural (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  // ── Wave 8a — Balanced Scorecard Agro ──────────────────────
+
+  private listarKpisBsc(
+    input: { perspectiva?: PerspectivaBSC },
+  ): { content: string; sources: string[]; toolsUsed: string[] } {
+    try {
+      const svc = getBscService();
+      const kpis = input.perspectiva ? svc.listarPorPerspectiva(input.perspectiva) : svc.listarKpis();
+      const linhas = [`**BSC Agro — catálogo${input.perspectiva ? ` (${input.perspectiva})` : ''}** (${kpis.length} KPIs)`, ''];
+      const porPersp = new Map<PerspectivaBSC, typeof kpis>();
+      for (const k of kpis) {
+        const arr = porPersp.get(k.perspectiva) ?? [];
+        arr.push(k);
+        porPersp.set(k.perspectiva, arr);
+      }
+      for (const [p, list] of porPersp) {
+        linhas.push(`**${p}:**`);
+        for (const k of list) {
+          const meta = k.meta !== undefined ? ` — meta ${k.meta}${k.unidade}` : '';
+          linhas.push(`• **${k.nome}** (\`${k.id}\`, ${k.tendencia})${meta} — ${k.formula}`);
+        }
+        linhas.push('');
+      }
+      return {
+        content: linhas.join('\n'),
+        sources: ['/api/bsc/kpis'],
+        toolsUsed: ['bsc.listar_kpis'],
+      };
+    } catch (err) {
+      return { content: `Falha ao listar KPIs BSC (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private calcularBscHandler(
+    input: ContextoBSCCalculo,
+  ): { content: string; sources: string[]; toolsUsed: string[] } {
+    try {
+      const svc = getBscService();
+      const r = svc.calcular(input);
+      const linhas = [
+        `**Balanced Scorecard — ${r.periodo}**`,
+        '',
+        `🎯 **Score Geral:** ${r.scoreGeral.toFixed(1)} / 100`,
+        '',
+        '**Por perspectiva:**',
+      ];
+      for (const p of r.porPerspectiva) {
+        linhas.push(`• **${p.perspectiva}:** ${p.score.toFixed(1)} (${p.kpis.length} KPIs)`);
+        for (const k of p.kpis.slice(0, 4)) {
+          const icon = k.status === 'acima_meta' ? '🟢' : k.status === 'na_meta' ? '🟡' : k.status === 'abaixo_meta' ? '🔴' : '⚪';
+          linhas.push(`   ${icon} ${k.kpiId}: ${k.valor.toFixed(2)} (score ${(k.score * 100).toFixed(0)}%)`);
+        }
+      }
+      if (r.observacoes.length) {
+        linhas.push('', '**Observações:**');
+        for (const o of r.observacoes) linhas.push(`• ${o}`);
+      }
+      if (r.recomendacoes.length) {
+        linhas.push('', '**Recomendações:**');
+        for (const rec of r.recomendacoes) linhas.push(`• ${rec}`);
+      }
+      return {
+        content: linhas.join('\n'),
+        sources: ['/api/bsc/calcular'],
+        toolsUsed: ['bsc.calcular'],
+      };
+    } catch (err) {
+      return { content: `Falha no cálculo BSC (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  // ── Wave 8b — RAG Knowledge Base ──────────────────────────
+
+  private async buscarDocumentosRag(
+    input: { query: string; k?: number },
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    try {
+      const rag = getRagService();
+      const k = Math.min(Math.max(input.k ?? 5, 1), 15);
+      const hits = await rag.search(input.query, k);
+      if (hits.length === 0) {
+        return {
+          content: `Nenhum trecho relevante encontrado na base RAG para "${input.query}". Verifique se os PDFs estão indexados (rodar \`pnpm -F @aletis/knowledge-base run rag:build\`).`,
+          sources: [],
+          toolsUsed: ['rag.search'],
+        };
+      }
+      const linhas = [`**RAG — top ${hits.length} trechos para: "${input.query}"**`, ''];
+      for (const h of hits) {
+        const pg = h.metadata?.page ? ` p${h.metadata.page}` : '';
+        const excerpt = h.text.length > 350 ? h.text.slice(0, 350) + '…' : h.text;
+        linhas.push(`**[${h.score.toFixed(2)}] ${h.source}${pg}**`);
+        linhas.push(excerpt);
+        linhas.push('');
+      }
+      const fontesUnicas = [...new Set(hits.map((h) => h.source))];
+      return {
+        content: linhas.join('\n'),
+        sources: fontesUnicas.map((s) => `inbox/documentos/${s}`),
+        toolsUsed: ['rag.search'],
+      };
+    } catch (err) {
+      return { content: `Falha na busca RAG (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  // ── Wave 8c — SICOR Bacen OData ───────────────────────────
+
+  private async consultarSicorResumoUf(
+    input: { uf: string; ano: number },
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    try {
+      const svc = this.dsm.getSicorService();
+      const r = await svc.resumoUfAno(input.uf, input.ano);
+      const linhas = [
+        `**SICOR — ${r.uf} / ${r.ano}** (fonte: ${r.fonte})`,
+        '',
+        `• **Volume total:** ${fmtBRL(r.valorTotalBRL)}`,
+        `• **Contratos:** ${r.totalContratos.toLocaleString('pt-BR')}`,
+        `• **Ticket médio:** ${fmtBRL(r.ticketMedioBRL)}`,
+        '',
+        '**Por modalidade:**',
+      ];
+      for (const m of r.porModalidade) {
+        linhas.push(`• ${m.modalidade}: ${fmtBRL(m.valorBRL)} (${m.participacaoPercentual.toFixed(1)}%, ${m.contratos.toLocaleString('pt-BR')} contratos)`);
+      }
+      if (r.topProdutos.length > 0) {
+        linhas.push('', '**Top produtos:**');
+        for (const p of r.topProdutos.slice(0, 8)) {
+          linhas.push(`• ${p.produto}: ${fmtBRL(p.valorBRL)} (${p.participacaoPercentual.toFixed(1)}%)`);
+        }
+      }
+      if (r.observacoes) linhas.push('', `_${r.observacoes}_`);
+      return {
+        content: linhas.join('\n'),
+        sources: [`/api/sicor/resumo/${r.uf}/${r.ano}`, 'olinda.bcb.gov.br/SICOR v2'],
+        toolsUsed: ['sicor.resumoUfAno'],
+      };
+    } catch (err) {
+      return { content: `Falha na consulta SICOR resumo (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private async consultarSicorContratos(
+    input: {
+      modalidade: ModalidadeSicor;
+      uf?: string;
+      produto?: string;
+      anoMesInicial?: string;
+      anoMesFinal?: string;
+      top?: number;
+    },
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    try {
+      const svc = this.dsm.getSicorService();
+      const params = {
+        uf: input.uf,
+        produto: input.produto,
+        anoMesInicial: input.anoMesInicial,
+        anoMesFinal: input.anoMesFinal,
+        top: input.top ?? 100,
+      };
+      const r =
+        input.modalidade === 'custeio'
+          ? await svc.buscarContratosCusteio(params)
+          : input.modalidade === 'investimento'
+            ? await svc.buscarContratosInvestimento(params)
+            : await svc.buscarContratosComercializacao(params);
+      const linhas = [
+        `**SICOR — ${r.modalidade}** (fonte: ${r.fonte})`,
+        `Filtros: UF=${input.uf ?? 'todas'}, produto=${input.produto ?? 'todos'}, janela=${input.anoMesInicial ?? '…'}→${input.anoMesFinal ?? '…'}`,
+        '',
+        `• **Contratos:** ${r.total.toLocaleString('pt-BR')}`,
+        `• **Valor total:** ${fmtBRL(r.valorTotal)}`,
+        `• **Ticket médio:** ${fmtBRL(r.ticketMedio)}`,
+      ];
+      if (r.areaTotalHa > 0) linhas.push(`• **Área total:** ${r.areaTotalHa.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} ha`);
+      if (r.contratos.length > 0) {
+        linhas.push('', `**Top registros (${Math.min(8, r.contratos.length)} de ${r.contratos.length}):**`);
+        for (const c of r.contratos.slice(0, 8)) {
+          linhas.push(`• ${c.nomeUF}/${c.nomeProduto} ${c.anoEmissao}-${c.mesEmissao}: ${fmtBRL(c.valorContratado)} (${c.qtdContratos} contratos)`);
+        }
+      }
+      return {
+        content: linhas.join('\n'),
+        sources: [`/api/sicor/${r.modalidade}`, 'olinda.bcb.gov.br/SICOR v2'],
+        toolsUsed: [`sicor.${r.modalidade}`],
+      };
+    } catch (err) {
+      return { content: `Falha na consulta SICOR (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
   }
 

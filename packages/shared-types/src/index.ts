@@ -27,6 +27,12 @@ export * from './reforma-tributaria.js';
 export * from './funrural.js';
 export * from './desenrola-rural.js';
 
+// ── Wave 8a — Balanced Scorecard Agro ─────────────────────
+export * from './bsc.js';
+
+// ── Wave 8c — SICOR (Bacen OData) ─────────────────────────
+export * from './sicor.js';
+
 // ── Auth & Users ──────────────────────────────────────────
 export type UserRole = 'admin' | 'consultor_senior' | 'consultor_junior' | 'cliente';
 
