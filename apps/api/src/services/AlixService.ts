@@ -1654,6 +1654,7 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
 
     const toolsUsedAggregate: string[] = [];
     const sourcesAggregate = new Set<string>();
+    const documentsAggregate: Array<Record<string, unknown>> = [];
 
     const result = await runClaude(convo, {
       model: CLAUDE_MODEL_SONNET,
@@ -1667,8 +1668,25 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
       temperature: 0.2,
       onToolCall: (name, _input, result: any) => {
         toolsUsedAggregate.push(name);
-        if (result && typeof result === 'object' && Array.isArray((result as any).sources)) {
-          for (const s of (result as any).sources) sourcesAggregate.add(String(s));
+        if (result && typeof result === 'object') {
+          if (Array.isArray((result as any).sources)) {
+            for (const s of (result as any).sources) sourcesAggregate.add(String(s));
+          }
+          // Wave 10: coleta docs gerados ou lidos para o frontend renderizar chips
+          const md = (result as any).metadata;
+          if (md && typeof md === 'object') {
+            if (md.document && typeof md.document === 'object') {
+              documentsAggregate.push({ ...(md.document as Record<string, unknown>), tool: name });
+            }
+            if (md.documento && typeof md.documento === 'object') {
+              documentsAggregate.push({ ...(md.documento as Record<string, unknown>), tool: name });
+            }
+          }
+          // HITL handlers devolvem `{ ok, document }` no topo (sem metadata wrapper)
+          const topDoc = (result as any).document;
+          if (topDoc && typeof topDoc === 'object' && typeof (topDoc as Record<string, unknown>).downloadUrl === 'string') {
+            documentsAggregate.push({ ...(topDoc as Record<string, unknown>), tool: name });
+          }
         }
       },
     });
@@ -1683,6 +1701,7 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
         iterations: result.iterations,
         stopReason: result.stopReason,
         tokens: result.usage,
+        documents: documentsAggregate.length > 0 ? documentsAggregate : undefined,
       },
     };
   }

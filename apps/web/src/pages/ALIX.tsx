@@ -1,12 +1,9 @@
 /**
- * ALIX (Agente de Leitura e Inteligência Estratégica)
+ * ALIX — Agente de Leitura e Inteligência Estratégica
  *
- * Interface de chat com a IA ALIX do sistema ALETIS. Gerencia
- * sessoes de conversa persistidas no backend (/alix/sessions),
- * envia perguntas em linguagem natural e exibe respostas com
- * fontes citadas (BCB, Conab, ANP, NASA FIRMS, CRM, sumulas
- * STJ, MCR, Plano Safra) e renderizacao markdown-lite. Inclui
- * acoes rapidas pre-configuradas (Dolar, Soja, Selic, Clima).
+ * Wave 10 UI: upload multimodal (drag-drop + paperclip), cliente
+ * ativo com badge/briefing, download chips para docs gerados,
+ * SSE streaming e modal de memória persistente.
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
@@ -27,6 +24,16 @@ import {
   Plus,
   MessageSquare,
   ChevronRight,
+  Paperclip,
+  X,
+  Download,
+  UserCircle2,
+  BookOpen,
+  FileSpreadsheet,
+  FileBadge,
+  Image as ImageIcon,
+  AlertTriangle,
+  Zap,
 } from 'lucide-react'
 import { apiFetch } from '../hooks/useApi'
 
@@ -42,6 +49,7 @@ interface ChatMessage {
   sources?: string[]
   toolsUsed?: string[]
   intent?: string
+  metadata?: Record<string, unknown>
 }
 
 interface ChatSession {
@@ -67,11 +75,66 @@ interface ChatResponse {
   session: Omit<ChatSession, 'messages'> & { messageCount: number }
 }
 
+interface AttachmentChip {
+  id: string
+  filename: string
+  kind: 'pdf' | 'docx' | 'xlsx' | 'image' | 'text' | 'unknown'
+  sizeBytes: number
+  pageCount?: number
+  uploading?: boolean
+  error?: string
+}
+
+interface ClienteLite {
+  id: string
+  nome: string
+}
+
+interface BriefingDestaque {
+  titulo: string
+  detalhe: string
+  severidade: 'info' | 'atencao' | 'critico'
+}
+
+interface BriefingDivida {
+  credor: string
+  saldoBRL: number
+  status: string
+}
+
+interface Briefing {
+  clienteId: string
+  clienteNome: string
+  geradoEm: string
+  resumoExecutivo: string
+  destaques: BriefingDestaque[]
+  proximasAcoes: string[]
+  dividasAtivas: BriefingDivida[]
+  sugestaoPrimeiraAcao: string
+  markdown: string
+}
+
+interface DocumentoGerado {
+  id?: string
+  filename?: string
+  downloadUrl?: string
+  sizeBytes?: number
+  kind?: string
+  mimetype?: string
+  tool?: string
+}
+
 // ────────────────────────────────────────────────────────────
-// Local state keys (only the active session ID is persisted locally)
+// Local state keys
 // ────────────────────────────────────────────────────────────
 
 const ACTIVE_SESSION_KEY = 'aletis:alix:activeSession'
+const ACTIVE_CLIENTE_KEY = 'aletis:alix:activeCliente'
+const STREAM_KEY = 'aletis:alix:stream'
+
+// ────────────────────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────────────────────
 
 function greetingByTime(): string {
   const h = new Date().getHours()
@@ -91,8 +154,47 @@ function timeAgo(ts: number): string {
   return `${d}d`
 }
 
+function formatBytes(n: number): string {
+  if (!n) return '0 B'
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
+
+function kindFromFilename(filename: string, mimetype?: string): AttachmentChip['kind'] {
+  const ext = filename.split('.').pop()?.toLowerCase() || ''
+  if (mimetype?.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) return 'image'
+  if (ext === 'pdf' || mimetype?.includes('pdf')) return 'pdf'
+  if (['docx', 'doc'].includes(ext)) return 'docx'
+  if (['xlsx', 'xls', 'csv'].includes(ext)) return 'xlsx'
+  if (['txt', 'md'].includes(ext)) return 'text'
+  return 'unknown'
+}
+
+function iconForKind(kind: AttachmentChip['kind']): React.ElementType {
+  switch (kind) {
+    case 'image': return ImageIcon
+    case 'xlsx': return FileSpreadsheet
+    case 'docx': return FileBadge
+    case 'pdf':
+    case 'text':
+    default: return FileText
+  }
+}
+
+function extractDocumentsFromMessage(msg: ChatMessage): DocumentoGerado[] {
+  const md = msg.metadata as Record<string, unknown> | undefined
+  if (!md) return []
+  const docs = md.documents as unknown
+  if (!Array.isArray(docs)) return []
+  return docs.filter(
+    (d): d is DocumentoGerado =>
+      d !== null && typeof d === 'object' && typeof (d as DocumentoGerado).downloadUrl === 'string',
+  )
+}
+
 // ────────────────────────────────────────────────────────────
-// Markdown-lite renderer (matches server output style)
+// Markdown-lite renderer
 // ────────────────────────────────────────────────────────────
 
 function renderContent(content: string): React.ReactNode {
@@ -143,6 +245,64 @@ const QUICK_ACTIONS = [
 ]
 
 // ────────────────────────────────────────────────────────────
+// SSE helper — parses event-stream from POST /chat/stream
+// ────────────────────────────────────────────────────────────
+
+interface SSEHandlers {
+  onToken?: (text: string) => void
+  onTool?: (name: string) => void
+  onDone?: (payload: { reply: ChatMessage; sessionId: string; sources?: string[]; toolsUsed?: string[] }) => void
+  onError?: (err: string) => void
+}
+
+async function streamChat(
+  body: Record<string, unknown>,
+  handlers: SSEHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch('/api/alix/chat/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  })
+  if (!res.body) throw new Error('Resposta sem body (streaming não suportado pelo navegador)')
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    // Events are delimited by blank line (\n\n)
+    let idx: number
+    while ((idx = buffer.indexOf('\n\n')) !== -1) {
+      const frame = buffer.slice(0, idx)
+      buffer = buffer.slice(idx + 2)
+      let event = 'message'
+      let data = ''
+      for (const line of frame.split('\n')) {
+        if (line.startsWith('event:')) event = line.slice(6).trim()
+        else if (line.startsWith('data:')) data += line.slice(5).trim()
+      }
+      if (!data) continue
+      try {
+        const payload = JSON.parse(data)
+        if (event === 'token' && typeof payload.text === 'string') handlers.onToken?.(payload.text)
+        else if (event === 'tool' && typeof payload.name === 'string') handlers.onTool?.(payload.name)
+        else if (event === 'done') handlers.onDone?.(payload)
+        else if (event === 'error') handlers.onError?.(payload.error || 'erro')
+      } catch {
+        // ignore malformed frame
+      }
+    }
+  }
+}
+
+// ────────────────────────────────────────────────────────────
 // Main Component
 // ────────────────────────────────────────────────────────────
 
@@ -157,22 +317,48 @@ export default function ALIX() {
   const [isLoadingSession, setIsLoadingSession] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+
+  // Wave 10 state
+  const [attachments, setAttachments] = useState<AttachmentChip[]>([])
+  const [dragActive, setDragActive] = useState(false)
+  const [clientes, setClientes] = useState<ClienteLite[]>([])
+  const [activeClienteId, setActiveClienteId] = useState<string | null>(() => {
+    try { return localStorage.getItem(ACTIVE_CLIENTE_KEY) } catch { return null }
+  })
+  const [clienteMenuOpen, setClienteMenuOpen] = useState(false)
+  const [clienteSearch, setClienteSearch] = useState('')
+  const [briefing, setBriefing] = useState<Briefing | null>(null)
+  const [briefingExpanded, setBriefingExpanded] = useState(true)
+  const [memoryOpen, setMemoryOpen] = useState(false)
+  const [memoryMd, setMemoryMd] = useState<string | null>(null)
+  const [memoryLoading, setMemoryLoading] = useState(false)
+  const [streamEnabled, setStreamEnabled] = useState<boolean>(() => {
+    try { return localStorage.getItem(STREAM_KEY) === '1' } catch { return false }
+  })
+
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const dropCounterRef = useRef(0)
 
-  // ── Initial load: fetch all sessions; if active ID persists, load that session
+  const activeCliente = clientes.find((c) => c.id === activeClienteId) || null
+  const activeClienteLabel = activeCliente?.nome
+    || briefing?.clienteNome
+    || (activeClienteId ? `Cliente: ${activeClienteId}` : null)
+
+  // ── Initial load ────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
     apiFetch<SessionSummary[]>('/alix/sessions')
-      .then((list) => {
-        if (cancelled) return
-        setSessions(list || [])
-      })
-      .catch((err) => console.warn('[ALIX] listar sessoes falhou:', err.message))
+      .then((list) => { if (!cancelled) setSessions(list || []) })
+      .catch((err) => console.warn('[ALIX] listar sessões falhou:', err.message))
+    apiFetch<ClienteLite[]>('/clientes')
+      .then((list) => { if (!cancelled) setClientes(list || []) })
+      .catch((err) => console.warn('[ALIX] listar clientes falhou:', err.message))
     return () => { cancelled = true }
   }, [])
 
-  // Load active session messages when id changes
+  // Load active session messages
   useEffect(() => {
     if (!activeSessionId) {
       setMessages([])
@@ -181,31 +367,53 @@ export default function ALIX() {
     let cancelled = false
     setIsLoadingSession(true)
     apiFetch<ChatSession>(`/alix/session/${activeSessionId}`)
-      .then((session) => {
-        if (cancelled) return
-        setMessages(session?.messages || [])
-      })
+      .then((session) => { if (!cancelled) setMessages(session?.messages || []) })
       .catch(() => {
-        if (cancelled) return
-        setActiveSessionId(null)
-        try { localStorage.removeItem(ACTIVE_SESSION_KEY) } catch { /* ignore */ }
+        if (!cancelled) {
+          setActiveSessionId(null)
+          try { localStorage.removeItem(ACTIVE_SESSION_KEY) } catch { /* ignore */ }
+        }
       })
       .finally(() => { if (!cancelled) setIsLoadingSession(false) })
     return () => { cancelled = true }
   }, [activeSessionId])
 
-  // Auto-scroll on new message
+  // Load briefing when clienteId changes
+  useEffect(() => {
+    if (!activeClienteId) {
+      setBriefing(null)
+      return
+    }
+    let cancelled = false
+    apiFetch<Briefing>(`/alix/briefing/${encodeURIComponent(activeClienteId)}`)
+      .then((b) => { if (!cancelled) setBriefing(b) })
+      .catch(() => { if (!cancelled) setBriefing(null) })
+    return () => { cancelled = true }
+  }, [activeClienteId])
+
+  // Auto-scroll
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages, isTyping])
 
-  // Persist active session id
+  // Persist localStorage prefs
   useEffect(() => {
     try {
       if (activeSessionId) localStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId)
       else localStorage.removeItem(ACTIVE_SESSION_KEY)
     } catch { /* ignore */ }
   }, [activeSessionId])
+
+  useEffect(() => {
+    try {
+      if (activeClienteId) localStorage.setItem(ACTIVE_CLIENTE_KEY, activeClienteId)
+      else localStorage.removeItem(ACTIVE_CLIENTE_KEY)
+    } catch { /* ignore */ }
+  }, [activeClienteId])
+
+  useEffect(() => {
+    try { localStorage.setItem(STREAM_KEY, streamEnabled ? '1' : '0') } catch { /* ignore */ }
+  }, [streamEnabled])
 
   // ── Helpers ─────────────────────────────────────────────
 
@@ -216,33 +424,200 @@ export default function ALIX() {
     } catch { /* ignore */ }
   }, [])
 
-  const handleSend = useCallback(async (textOverride?: string) => {
+  const ensureSession = useCallback(async (): Promise<string> => {
+    if (activeSessionId) return activeSessionId
+    const created = await apiFetch<ChatSession>('/alix/session', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Nova conversa' }),
+    })
+    setActiveSessionId(created.id)
+    return created.id
+  }, [activeSessionId])
+
+  // ── File upload ─────────────────────────────────────────
+
+  const uploadFile = useCallback(async (file: File, sessionId: string): Promise<void> => {
+    const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const kindGuess = kindFromFilename(file.name, file.type)
+    setAttachments((prev) => [...prev, {
+      id: tempId,
+      filename: file.name,
+      kind: kindGuess,
+      sizeBytes: file.size,
+      uploading: true,
+    }])
+
+    try {
+      const form = new FormData()
+      form.append('file', file, file.name)
+      const res = await fetch(`/api/alix/documents/upload?sessionId=${encodeURIComponent(sessionId)}`, {
+        method: 'POST',
+        body: form,
+      })
+      const json = await res.json()
+      if (!res.ok || json.success === false) {
+        throw new Error(json.error || `Upload falhou (${res.status})`)
+      }
+      const doc = json.data
+      const realId: string = doc?.id
+      if (!realId) throw new Error('Resposta sem id do documento')
+      setAttachments((prev) => prev.map((a) => a.id === tempId ? {
+        id: realId,
+        filename: doc.filename || file.name,
+        kind: (doc.kind || kindGuess) as AttachmentChip['kind'],
+        sizeBytes: doc.sizeBytes || file.size,
+        pageCount: doc.pageCount,
+        uploading: false,
+      } : a))
+    } catch (err) {
+      const msg = (err as Error).message
+      setAttachments((prev) => prev.map((a) => a.id === tempId ? { ...a, uploading: false, error: msg } : a))
+      // Mantém chip com erro pro usuário remover manualmente
+    }
+  }, [])
+
+  const handleFilePick = useCallback(async (files: FileList | File[]): Promise<void> => {
+    const list = Array.from(files)
+    if (list.length === 0) return
+    const MAX = 20 * 1024 * 1024
+    const valid = list.filter((f) => {
+      if (f.size > MAX) {
+        setAttachments((prev) => [...prev, {
+          id: `err-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          filename: f.name,
+          kind: kindFromFilename(f.name, f.type),
+          sizeBytes: f.size,
+          uploading: false,
+          error: 'Acima de 20 MB',
+        }])
+        return false
+      }
+      return true
+    })
+    if (valid.length === 0) return
+
+    const sid = await ensureSession()
+    await Promise.all(valid.map((f) => uploadFile(f, sid)))
+  }, [ensureSession, uploadFile])
+
+  const handleRemoveAttachment = useCallback(async (id: string): Promise<void> => {
+    const chip = attachments.find((a) => a.id === id)
+    setAttachments((prev) => prev.filter((a) => a.id !== id))
+    if (!chip || chip.error || !activeSessionId) return
+    // Fire and forget — deleção server-side é best-effort
+    fetch(`/api/alix/documents/${encodeURIComponent(activeSessionId)}/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }).catch(() => { /* ignore */ })
+  }, [attachments, activeSessionId])
+
+  // ── Drag-drop ────────────────────────────────────────────
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!e.dataTransfer?.types?.includes('Files')) return
+    dropCounterRef.current += 1
+    setDragActive(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dropCounterRef.current = Math.max(0, dropCounterRef.current - 1)
+    if (dropCounterRef.current === 0) setDragActive(false)
+  }, [])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dropCounterRef.current = 0
+    setDragActive(false)
+    const files = e.dataTransfer?.files
+    if (files && files.length > 0) {
+      handleFilePick(files)
+    }
+  }, [handleFilePick])
+
+  // ── Chat send ────────────────────────────────────────────
+
+  const handleSend = useCallback(async (textOverride?: string): Promise<void> => {
     const text = (textOverride ?? input).trim()
-    if (!text || isTyping) return
+    if ((!text && attachments.length === 0) || isTyping) return
+
+    // Mensagens pendentes (com erro de upload) não vão
+    const readyAttachments = attachments.filter((a) => !a.uploading && !a.error)
+    const attachmentIds = readyAttachments.map((a) => a.id)
 
     const userMsg: ChatMessage = {
       id: `local-u-${Date.now()}`,
       role: 'user',
-      content: text,
+      content: text || '(arquivos enviados)',
       timestamp: Date.now(),
+      metadata: attachmentIds.length > 0 ? { attachments: readyAttachments.map((a) => ({ id: a.id, filename: a.filename, kind: a.kind })) } : undefined,
     }
     setMessages((prev) => [...prev, userMsg])
     setInput('')
     setIsTyping(true)
 
+    const body = {
+      sessionId: activeSessionId || undefined,
+      message: text || 'Revise os documentos anexados e me traga os destaques.',
+      attachments: attachmentIds.length > 0 ? attachmentIds : undefined,
+      clienteId: activeClienteId || undefined,
+    }
+
+    // Só limpa os chips que foram efetivamente enviados; mantém os com erro
+    setAttachments((prev) => prev.filter((a) => a.error || a.uploading))
+
     try {
-      const resp = await apiFetch<ChatResponse>('/alix/chat', {
-        method: 'POST',
-        body: JSON.stringify({
-          sessionId: activeSessionId || undefined,
-          message: text,
-        }),
-      })
-      setMessages((prev) => [...prev, resp.reply])
-      if (!activeSessionId || activeSessionId !== resp.sessionId) {
-        setActiveSessionId(resp.sessionId)
+      if (streamEnabled) {
+        // Streaming path — vai agregando tokens num reply placeholder
+        const placeholderId = `stream-${Date.now()}`
+        let agg = ''
+        const toolsAgg: string[] = []
+        setMessages((prev) => [...prev, {
+          id: placeholderId,
+          role: 'assistant',
+          content: '',
+          timestamp: Date.now(),
+          toolsUsed: [],
+        }])
+        await streamChat(body, {
+          onTool: (name) => {
+            toolsAgg.push(name)
+            setMessages((prev) => prev.map((m) => m.id === placeholderId ? { ...m, toolsUsed: [...(m.toolsUsed || []), name] } : m))
+          },
+          onToken: (t) => {
+            agg += t
+            setMessages((prev) => prev.map((m) => m.id === placeholderId ? { ...m, content: agg } : m))
+          },
+          onDone: (payload) => {
+            setMessages((prev) => prev.map((m) => m.id === placeholderId ? { ...payload.reply, id: payload.reply.id || placeholderId } : m))
+            if (!activeSessionId || activeSessionId !== payload.sessionId) {
+              setActiveSessionId(payload.sessionId)
+            }
+            refreshSessions()
+          },
+          onError: (errMsg) => {
+            setMessages((prev) => prev.map((m) => m.id === placeholderId ? { ...m, content: `Erro no stream: ${errMsg}` } : m))
+          },
+        })
+      } else {
+        const resp = await apiFetch<ChatResponse>('/alix/chat', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        })
+        setMessages((prev) => [...prev, resp.reply])
+        if (!activeSessionId || activeSessionId !== resp.sessionId) {
+          setActiveSessionId(resp.sessionId)
+        }
+        refreshSessions()
       }
-      refreshSessions()
     } catch (err) {
       setMessages((prev) => [...prev, {
         id: `err-${Date.now()}`,
@@ -254,17 +629,19 @@ export default function ALIX() {
       setIsTyping(false)
       setTimeout(() => inputRef.current?.focus(), 50)
     }
-  }, [input, isTyping, activeSessionId, refreshSessions])
+  }, [input, attachments, isTyping, activeSessionId, activeClienteId, streamEnabled, refreshSessions])
 
   const handleNewSession = useCallback(() => {
     setActiveSessionId(null)
     setMessages([])
+    setAttachments([])
     setInput('')
     setTimeout(() => inputRef.current?.focus(), 50)
   }, [])
 
   const handleSelectSession = useCallback((id: string) => {
     setActiveSessionId(id)
+    setAttachments([])
     setInput('')
   }, [])
 
@@ -290,12 +667,101 @@ export default function ALIX() {
     })
   }, [])
 
+  const handleOpenMemory = useCallback(async () => {
+    if (!activeClienteId) return
+    setMemoryOpen(true)
+    setMemoryLoading(true)
+    setMemoryMd(null)
+    try {
+      const res = await apiFetch<{ markdown: string }>(`/alix/memory/${encodeURIComponent(activeClienteId)}`)
+      setMemoryMd(res?.markdown || '_(memória vazia)_')
+    } catch (err) {
+      setMemoryMd(`_Erro: ${(err as Error).message}_`)
+    } finally {
+      setMemoryLoading(false)
+    }
+  }, [activeClienteId])
+
   // ── Render ──────────────────────────────────────────────
 
-  const showWelcome = !activeSessionId && messages.length === 0
+  const showWelcome = !activeSessionId && messages.length === 0 && attachments.length === 0
+  const anyUploading = attachments.some((a) => a.uploading)
+  const anyReady = attachments.some((a) => !a.uploading && !a.error)
+  const sendDisabled = isTyping || anyUploading || (!input.trim() && !anyReady)
+
+  const filteredClientes = clienteSearch.trim()
+    ? clientes.filter((c) => c.nome.toLowerCase().includes(clienteSearch.toLowerCase()) || c.id.toLowerCase().includes(clienteSearch.toLowerCase()))
+    : clientes
 
   return (
-    <div className="h-[calc(100vh-140px)] flex gap-4">
+    <div
+      className="h-[calc(100vh-140px)] flex gap-4 relative"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Drag-drop overlay */}
+      {dragActive && (
+        <div className="absolute inset-0 z-50 bg-aletis-verde/10 backdrop-blur-sm border-2 border-dashed border-aletis-verde rounded-2xl flex items-center justify-center pointer-events-none">
+          <div className="bg-white rounded-2xl shadow-xl px-8 py-6 flex items-center gap-3">
+            <Paperclip className="w-6 h-6 text-aletis-verde" />
+            <div className="text-base font-semibold text-aletis-grafite-escuro">Solte os arquivos pra enviar à Alix</div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,image/*"
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            handleFilePick(e.target.files)
+            e.target.value = ''
+          }
+        }}
+      />
+
+      {/* Memory modal */}
+      {memoryOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setMemoryOpen(false)}>
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[80vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-aletis-borda">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-aletis-verde" />
+                <h2 className="text-lg font-display font-bold text-aletis-grafite-escuro">
+                  Memória — {activeClienteLabel || activeClienteId}
+                </h2>
+              </div>
+              <button
+                onClick={() => setMemoryOpen(false)}
+                className="p-1.5 rounded-lg text-aletis-grafite-claro hover:text-aletis-grafite-escuro hover:bg-aletis-bege"
+                aria-label="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+              {memoryLoading ? (
+                <div className="flex items-center gap-2 text-aletis-grafite-medio">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Carregando memória…</span>
+                </div>
+              ) : (
+                <pre className="text-xs font-mono text-aletis-grafite-escuro whitespace-pre-wrap leading-relaxed">{memoryMd || '_(memória vazia)_'}</pre>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar - Sessions */}
       {sidebarOpen && (
         <aside className="w-64 flex-shrink-0 bg-white rounded-2xl border border-aletis-borda shadow-sm flex flex-col overflow-hidden">
@@ -377,13 +843,156 @@ export default function ALIX() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {/* Cliente selector */}
+            <div className="relative">
+              <button
+                onClick={() => setClienteMenuOpen((v) => !v)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                  activeClienteId
+                    ? 'bg-aletis-verde text-white hover:bg-aletis-verde-escuro'
+                    : 'bg-white border border-aletis-borda text-aletis-grafite-medio hover:bg-aletis-bege'
+                }`}
+                title={activeClienteLabel ? `Cliente ativo: ${activeClienteLabel}` : 'Selecionar cliente ativo'}
+              >
+                <UserCircle2 className="w-3.5 h-3.5" />
+                <span className="max-w-[180px] truncate">{activeClienteLabel || 'Sem cliente ativo'}</span>
+              </button>
+              {clienteMenuOpen && (
+                <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-aletis-borda z-30 overflow-hidden">
+                  <div className="p-2 border-b border-aletis-borda">
+                    <input
+                      type="text"
+                      value={clienteSearch}
+                      onChange={(e) => setClienteSearch(e.target.value)}
+                      placeholder="Buscar cliente..."
+                      className="w-full text-xs px-2 py-1.5 rounded border border-aletis-borda/60 focus:outline-none focus:border-aletis-verde"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="max-h-72 overflow-y-auto custom-scrollbar">
+                    <button
+                      onClick={() => {
+                        setActiveClienteId(null)
+                        setClienteMenuOpen(false)
+                        setClienteSearch('')
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs text-aletis-grafite-claro hover:bg-aletis-bege border-b border-aletis-borda/50"
+                    >
+                      Limpar cliente ativo
+                    </button>
+                    {filteredClientes.length === 0 ? (
+                      <div className="p-4 text-xs text-aletis-grafite-claro">Nenhum cliente.</div>
+                    ) : (
+                      filteredClientes.slice(0, 50).map((c) => (
+                        <button
+                          key={c.id}
+                          onClick={() => {
+                            setActiveClienteId(c.id)
+                            setClienteMenuOpen(false)
+                            setClienteSearch('')
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs border-b border-aletis-borda/30 hover:bg-aletis-bege ${
+                            c.id === activeClienteId ? 'bg-aletis-bege font-semibold text-aletis-verde-escuro' : 'text-aletis-grafite-escuro'
+                          }`}
+                        >
+                          <div className="truncate">{c.nome}</div>
+                          <div className="text-[10px] text-aletis-grafite-claro font-mono truncate">{c.id}</div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Stream toggle */}
+            <button
+              onClick={() => setStreamEnabled((v) => !v)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                streamEnabled
+                  ? 'bg-aletis-dourado/20 text-aletis-dourado border border-aletis-dourado/40'
+                  : 'bg-white border border-aletis-borda text-aletis-grafite-claro hover:text-aletis-grafite-escuro'
+              }`}
+              title="Streaming progressivo de tokens (SSE)"
+            >
+              <Zap className="w-3 h-3" />
+              Stream
+            </button>
+
             <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-positivo/10 text-positivo text-xs font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-positivo animate-pulse" />
               Servidor
             </span>
           </div>
         </div>
+
+        {/* Briefing panel */}
+        {briefing && (
+          <div className="mb-4 bg-white rounded-2xl border border-aletis-borda shadow-sm overflow-hidden">
+            <button
+              onClick={() => setBriefingExpanded((v) => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-aletis-bege/40 transition-colors"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <UserCircle2 className="w-4 h-4 text-aletis-verde flex-shrink-0" />
+                <span className="text-xs font-semibold text-aletis-grafite-escuro truncate">
+                  Briefing — {briefing.clienteNome}
+                </span>
+                <span className="text-[10px] text-aletis-grafite-claro truncate">
+                  {briefing.sugestaoPrimeiraAcao}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => { e.stopPropagation(); handleOpenMemory() }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleOpenMemory() } }}
+                  className="text-[10px] font-semibold text-aletis-verde hover:text-aletis-verde-escuro cursor-pointer"
+                >
+                  Ver memória
+                </span>
+                <ChevronRight className={`w-3.5 h-3.5 text-aletis-grafite-claro transition-transform ${briefingExpanded ? 'rotate-90' : ''}`} />
+              </div>
+            </button>
+            {briefingExpanded && (
+              <div className="px-4 pb-4 pt-1 space-y-3">
+                {briefing.resumoExecutivo && (
+                  <div className="text-xs text-aletis-grafite-medio leading-relaxed">{briefing.resumoExecutivo}</div>
+                )}
+                {briefing.destaques.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {briefing.destaques.slice(0, 6).map((d, i) => {
+                      const color = d.severidade === 'critico'
+                        ? 'bg-alerta/10 text-alerta border-alerta/30'
+                        : d.severidade === 'atencao'
+                        ? 'bg-aletis-dourado/10 text-aletis-dourado border-aletis-dourado/30'
+                        : 'bg-aletis-verde/10 text-aletis-verde-escuro border-aletis-verde/30'
+                      return (
+                        <span key={i} className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full border ${color}`} title={d.detalhe}>
+                          {d.severidade === 'critico' && <AlertTriangle className="w-3 h-3" />}
+                          {d.titulo}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
+                {briefing.proximasAcoes.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-aletis-grafite-claro">Próximas ações</div>
+                    {briefing.proximasAcoes.slice(0, 4).map((a, i) => (
+                      <div key={i} className="text-xs text-aletis-grafite-escuro leading-relaxed flex gap-1.5">
+                        <span className="text-aletis-verde">•</span>
+                        <span>{a}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Chat container */}
         <div className="flex-1 bg-white rounded-2xl border border-aletis-borda shadow-sm flex flex-col overflow-hidden">
@@ -405,7 +1014,7 @@ export default function ALIX() {
                     <span className="text-xs font-semibold text-aletis-dourado">ALIX</span>
                   </div>
                   <div className="text-sm leading-relaxed font-body">
-                    {greetingByTime()} Christian. ALIX aqui — pergunta em linguagem natural, eu consulto dados ao vivo (BCB, Conab, ANP, NASA FIRMS, CRM), súmulas STJ, MCR e Plano Safra. Tudo com citação de fonte.
+                    {greetingByTime()} Christian. ALIX aqui — pergunta em linguagem natural, anexa PDF/XLSX/imagem, escolhe cliente ativo pra eu puxar a memória dele e gerar propostas/pareceres/fluxos de caixa reais com um pedido só.
                   </div>
                 </div>
               </div>
@@ -413,6 +1022,10 @@ export default function ALIX() {
 
             {messages.map((msg) => {
               const isUser = msg.role === 'user'
+              const docs = isUser ? [] : extractDocumentsFromMessage(msg)
+              const userAttachments = isUser && msg.metadata && Array.isArray((msg.metadata as any).attachments)
+                ? (msg.metadata as any).attachments as Array<{ id: string; filename: string; kind: string }>
+                : []
               return (
                 <div key={msg.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'} group`}>
                   <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-5 py-3 ${
@@ -443,9 +1056,46 @@ export default function ALIX() {
                         </button>
                       </div>
                     )}
+                    {userAttachments.length > 0 && (
+                      <div className="mb-2 flex flex-wrap gap-1">
+                        {userAttachments.map((a) => {
+                          const Icon = iconForKind((a.kind as AttachmentChip['kind']) || 'unknown')
+                          return (
+                            <span key={a.id} className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/20 border border-white/30 text-white">
+                              <Icon className="w-3 h-3" />
+                              <span className="max-w-[160px] truncate">{a.filename}</span>
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )}
                     <div className="text-sm leading-relaxed whitespace-pre-wrap font-body">
                       {renderContent(msg.content)}
                     </div>
+                    {docs.length > 0 && (
+                      <div className="mt-3 pt-2 border-t border-aletis-borda/40 flex flex-wrap gap-2">
+                        {docs.map((d, i) => {
+                          const kind = (d.kind as AttachmentChip['kind']) || kindFromFilename(d.filename || '', d.mimetype)
+                          const Icon = iconForKind(kind)
+                          return (
+                            <a
+                              key={d.id || i}
+                              href={d.downloadUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-aletis-verde text-white text-xs font-semibold hover:bg-aletis-verde-escuro transition-colors"
+                            >
+                              <Icon className="w-3.5 h-3.5" />
+                              <span className="max-w-[220px] truncate">{d.filename || 'documento'}</span>
+                              {typeof d.sizeBytes === 'number' && (
+                                <span className="text-[10px] opacity-80">{formatBytes(d.sizeBytes)}</span>
+                              )}
+                              <Download className="w-3 h-3 ml-1" />
+                            </a>
+                          )
+                        })}
+                      </div>
+                    )}
                     {!isUser && msg.sources && msg.sources.length > 0 && (
                       <div className="mt-3 pt-2 border-t border-aletis-borda/40 flex items-center gap-2 flex-wrap">
                         <span className="text-[10px] font-body text-aletis-grafite-claro uppercase tracking-wide">Fontes:</span>
@@ -484,9 +1134,52 @@ export default function ALIX() {
             )}
           </div>
 
+          {/* Attachment chips */}
+          {attachments.length > 0 && (
+            <div className="px-4 pt-3 border-t border-aletis-borda bg-aletis-bege/30 flex flex-wrap gap-2">
+              {attachments.map((a) => {
+                const Icon = iconForKind(a.kind)
+                return (
+                  <span
+                    key={a.id}
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                      a.error
+                        ? 'bg-alerta/10 text-alerta border-alerta/30'
+                        : a.uploading
+                        ? 'bg-white text-aletis-grafite-medio border-aletis-borda'
+                        : 'bg-white text-aletis-grafite-escuro border-aletis-verde/40'
+                    }`}
+                  >
+                    {a.uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Icon className="w-3.5 h-3.5" />}
+                    <span className="max-w-[180px] truncate">{a.filename}</span>
+                    <span className="text-[10px] text-aletis-grafite-claro font-mono">{formatBytes(a.sizeBytes)}</span>
+                    {a.error && <span className="text-[10px] text-alerta">{a.error}</span>}
+                    <button
+                      onClick={() => handleRemoveAttachment(a.id)}
+                      className="text-aletis-grafite-claro hover:text-alerta"
+                      title="Remover"
+                      aria-label="Remover anexo"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )
+              })}
+            </div>
+          )}
+
           {/* Input bar */}
           <div className="border-t border-aletis-borda p-4">
-            <div className="flex gap-3 items-end">
+            <div className="flex gap-2 items-end">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isTyping}
+                className="p-2.5 rounded-xl border border-aletis-borda text-aletis-grafite-medio hover:text-aletis-verde hover:border-aletis-verde transition-colors disabled:opacity-50"
+                title="Anexar arquivo (PDF, Word, Excel, imagem)"
+                aria-label="Anexar arquivo"
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
               <input
                 ref={inputRef}
                 type="text"
@@ -499,13 +1192,13 @@ export default function ALIX() {
                   }
                 }}
                 disabled={isTyping}
-                placeholder="Pergunta em linguagem natural..."
+                placeholder={attachments.length > 0 ? 'Pergunta sobre os arquivos…' : 'Pergunta em linguagem natural…'}
                 className="input-field flex-1 disabled:opacity-60"
                 aria-label="Mensagem para ALIX"
               />
               <button
                 onClick={() => handleSend()}
-                disabled={isTyping || !input.trim()}
+                disabled={sendDisabled}
                 className="btn-primary px-5 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 aria-label="Enviar"
               >
