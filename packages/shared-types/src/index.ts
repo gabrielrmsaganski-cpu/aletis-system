@@ -17,6 +17,16 @@ export * from './fiscal.js';
 // ── Planner Financeiro Anual (orçado vs realizado) ────────
 export * from './planner.js';
 
+// ── Wave 7a — Dados externos agro 2026 ────────────────────
+export * from './desmatamento.js';
+export * from './zarc.js';
+export * from './abiove.js';
+
+// ── Wave 7b — Simuladores regulatórios 2026 ───────────────
+export * from './reforma-tributaria.js';
+export * from './funrural.js';
+export * from './desenrola-rural.js';
+
 // ── Auth & Users ──────────────────────────────────────────
 export type UserRole = 'admin' | 'consultor_senior' | 'consultor_junior' | 'cliente';
 

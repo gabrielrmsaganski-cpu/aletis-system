@@ -41,6 +41,10 @@ import {
 } from './llm/ClaudeFoundryClient.js';
 import { getDossieRepository } from './cliente/DossieRepository.js';
 import { getCusteioService } from './custeio/CusteioService.js';
+// ── Wave 7b — Simuladores regulatórios 2026 ──────────────────
+import { getReformaTributariaService } from './reforma/ReformaTributariaService.js';
+import { getFunruralService } from './funrural/FunruralService.js';
+import { getDesenrolaRuralService } from './desenrola/DesenrolaRuralService.js';
 import {
   dossieAgroResumo,
   type DossieAgro,
@@ -52,6 +56,11 @@ import {
   type DadosProponente,
   type Gleba,
   type ItemOrcamento,
+  type RegimeTributarioRural,
+  type TipoContribuinte,
+  type FaixaCapacidadePagamento,
+  type TipoSoloZarc,
+  type CicloVariedade,
 } from '@aletis/shared-types';
 // ── Wave 6 — Alix Agente Executor ──────────────────────────
 import {
@@ -2281,6 +2290,173 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
         handler: (i) => this.custeioResumoFinanceiro(String(i.clienteId)),
       },
 
+      // ── Wave 7a — Dados externos agro 2026 ──────────────
+      {
+        spec: {
+          name: 'consultar_desmatamento_municipio',
+          description:
+            'Busca alertas DETER/INPE de desmatamento para um município pelo código IBGE. Retorna alertas, área total, bloqueios CMN 5.081/2023 e fonte (api/cache/fallback). Essencial para checar compliance antes de Pronaf/Pronamp.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              codigoIbge: { type: 'string', description: 'Código IBGE do município (7 dígitos, ex: "5103403").' },
+              dataInicio: { type: 'string', description: 'Data ISO opcional (YYYY-MM-DD).' },
+              dataFim: { type: 'string', description: 'Data ISO opcional (YYYY-MM-DD).' },
+            },
+            required: ['codigoIbge'],
+          },
+        },
+        handler: (i) => this.consultarDesmatamentoMunicipio(String(i.codigoIbge), i.dataInicio as string | undefined, i.dataFim as string | undefined),
+      },
+      {
+        spec: {
+          name: 'consultar_desmatamento_nacional',
+          description:
+            'Retorna o resumo nacional DETER (área total, alertas por bioma, por UF e top municípios). Use para painel de overview ou para comparar a região do cliente com o quadro macro.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              periodo: { type: 'string', description: 'Período (ex: "2025-01-01/2025-12-31") — opcional.' },
+            },
+          },
+        },
+        handler: (i) => this.consultarDesmatamentoNacional(i.periodo as string | undefined),
+      },
+      {
+        spec: {
+          name: 'validar_zarc_plano',
+          description:
+            'Valida um plano de plantio (cultura + UF + município + data + solo + ciclo) contra o ZARC safra 2025/26. Retorna se habilita Proagro/Proagro-Mais e a janela mais próxima caso fora da janela. Base: Portarias SPA/MAPA 2025.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              cultura: { type: 'string', description: 'Cultura (ex: "soja", "milho", "algodao", "feijao").' },
+              uf: { type: 'string', description: 'UF (ex: "MT").' },
+              codigoIbge: { type: 'string', description: 'Código IBGE do município.' },
+              dataPlantio: { type: 'string', description: 'Data de plantio ISO YYYY-MM-DD.' },
+              tipoSolo: { type: 'string', enum: ['I', 'II', 'III'], description: 'Tipo de solo ZARC (default I).' },
+              cicloVariedade: { type: 'string', enum: ['precoce', 'medio', 'tardio'], description: 'Ciclo da variedade (default medio).' },
+            },
+            required: ['cultura', 'uf', 'codigoIbge', 'dataPlantio'],
+          },
+        },
+        handler: (i) => this.validarZarcPlano(
+          String(i.cultura),
+          String(i.uf),
+          String(i.codigoIbge),
+          String(i.dataPlantio),
+          (i.tipoSolo as TipoSoloZarc | undefined) ?? 'I',
+          (i.cicloVariedade as CicloVariedade | undefined) ?? 'medio',
+        ),
+      },
+      {
+        spec: {
+          name: 'consultar_moratoria_soja',
+          description:
+            'Consulta o status da Moratória da Soja (ABIOVE/ANEC/GTS). Se `codigoIbge` informado, devolve também a elegibilidade do município para comercialização com tradings signatárias.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              codigoIbge: { type: 'string', description: 'Código IBGE do município (opcional).' },
+              dataDesmatamento: { type: 'string', description: 'Data ISO opcional de desmatamento detectado.' },
+            },
+          },
+        },
+        handler: (i) => this.consultarMoratoriaSoja(
+          i.codigoIbge as string | undefined,
+          i.dataDesmatamento as string | undefined,
+        ),
+      },
+
+      // ── Wave 7b — Simuladores regulatórios 2026 ──────────
+      {
+        spec: {
+          name: 'simular_reforma_tributaria',
+          description:
+            'Simula o impacto da Reforma Tributária (CBS + IBS, LC 214/2025) comparando sistema atual × novo para o ano informado. Aplica imunidade (LC 214/2025 art. 156-A §2º CF) para receita ≤ R$ 3.6M.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              ano: { type: 'number', description: 'Ano-base da simulação (2026..2033).' },
+              regime: {
+                type: 'string',
+                enum: [
+                  'produtor_rural_pf_imune',
+                  'produtor_rural_pf_normal',
+                  'produtor_rural_pj_imune',
+                  'produtor_rural_pj_normal',
+                  'agroindustria',
+                ],
+                description: 'Regime tributário rural do contribuinte.',
+              },
+              receitaBruta: { type: 'number', description: 'Receita bruta anual (BRL).' },
+              comprasInsumos: { type: 'number', description: 'Compras de insumos no ano (BRL) — base para crédito CBS/IBS.' },
+            },
+            required: ['ano', 'regime', 'receitaBruta', 'comprasInsumos'],
+          },
+        },
+        handler: (i) => this.simularReformaTributaria(
+          Number(i.ano),
+          String(i.regime) as RegimeTributarioRural,
+          Number(i.receitaBruta),
+          Number(i.comprasInsumos),
+        ),
+      },
+      {
+        spec: {
+          name: 'calcular_funrural',
+          description:
+            'Calcula o Funrural 2026 pelos dois caminhos (receita bruta × folha) e recomenda a melhor opção. Base legal: Lei 8.212/91 art. 25, Lei 10.256/2001, Lei 13.606/2018, STF Tema 916.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              tipo: {
+                type: 'string',
+                enum: ['PF', 'PJ_empregador_rural', 'agroindustria', 'adquirente'],
+                description: 'Tipo de contribuinte.',
+              },
+              receitaBrutaAnual: { type: 'number', description: 'Receita bruta anual de comercialização rural (BRL).' },
+              folhaPagamentoAnual: { type: 'number', description: 'Folha de pagamento anual (BRL).' },
+              ratMultiplicador: { type: 'number', enum: [1, 2, 3], description: 'Grau de risco (1 leve, 2 médio, 3 grave).' },
+              optouFolha: { type: 'boolean', description: 'Se PF optou explicitamente por folha (default false).' },
+            },
+            required: ['tipo', 'receitaBrutaAnual', 'folhaPagamentoAnual', 'ratMultiplicador'],
+          },
+        },
+        handler: (i) => this.calcularFunrural(
+          String(i.tipo) as TipoContribuinte,
+          Number(i.receitaBrutaAnual),
+          Number(i.folhaPagamentoAnual),
+          (Number(i.ratMultiplicador) as 1 | 2 | 3) || 1,
+          Boolean(i.optouFolha),
+        ),
+      },
+      {
+        spec: {
+          name: 'simular_desenrola_rural',
+          description:
+            'Simula o programa Desenrola Rural (MP 1208/2024 + Lei 14.973/2024) para dívidas PGFN/Receita Federal. Classifica faixa A-D, aplica descontos (até 100% juros + 65% multa) e devolve cronograma proposto.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              dividaId: { type: 'string', description: 'Id interno da dívida (ex: "div-001").' },
+              valorInscrito: { type: 'number', description: 'Valor originalmente inscrito em DA (BRL).' },
+              valorAtualizado: { type: 'number', description: 'Valor atualizado com juros e multa (BRL).' },
+              dataInscricao: { type: 'string', description: 'Data ISO de inscrição em DA (≤ 2023-12-31).' },
+              origem: { type: 'string', enum: ['pgfn', 'receita_federal', 'banco_publico', 'banco_cooperativa', 'outro'], description: 'Origem do débito.' },
+              modalidade: { type: 'string', enum: ['custeio', 'investimento', 'comercializacao', 'outra'], description: 'Modalidade da operação.' },
+              tipoProdutor: { type: 'string', enum: ['PF', 'PJ'], description: 'Tipo do produtor.' },
+              receitaBrutaAnual: { type: 'number', description: 'Receita bruta anual do produtor (BRL).' },
+              ativosDeclarados: { type: 'number', description: 'Ativos declarados: terras, maquinário, estoque (BRL).' },
+              dividasTotal: { type: 'number', description: 'Total de dívidas do produtor somando todas as fontes (BRL).' },
+              faixa: { type: 'string', enum: ['A', 'B', 'C', 'D'], description: 'Faixa forçada (opcional; se omitida, classifica automaticamente).' },
+            },
+            required: ['dividaId', 'valorInscrito', 'valorAtualizado', 'dataInscricao', 'origem', 'modalidade', 'tipoProdutor', 'receitaBrutaAnual', 'ativosDeclarados', 'dividasTotal'],
+          },
+        },
+        handler: (i) => this.simularDesenrolaRural(i),
+      },
+
       // ── Executor tools (HITL) ────────────────────────────
       // Mutation-capable tools. NENHUMA delas grava/altera estado
       // diretamente — todas registram um intent no
@@ -2823,6 +2999,298 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
       };
     } catch (err) {
       return { content: `Falha ao montar resumo (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  // ── Wave 7a — Dados externos agro 2026 ──────────────────
+
+  private async consultarDesmatamentoMunicipio(
+    codigoIbge: string,
+    dataInicio?: string,
+    dataFim?: string,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    try {
+      const svc = this.dsm.getDeterService();
+      const r = await svc.buscarAlertasPorMunicipio(codigoIbge, dataInicio, dataFim);
+      const linhas = [
+        `**Desmatamento — município IBGE ${codigoIbge}** (fonte: ${r.fonte})`,
+        '',
+        `• **Alertas:** ${r.total}`,
+        `• **Área total:** ${fmtNum(r.areaTotalHa, 2)} ha`,
+        `• **Atualizado:** ${r.atualizadoEm}`,
+      ];
+      if (r.bloqueios.length) {
+        linhas.push('', '**Bloqueios/compliance:**');
+        for (const b of r.bloqueios) linhas.push(`• ${b}`);
+      }
+      if (r.alertas.length) {
+        linhas.push('', `**Últimos alertas (até 5):**`);
+        for (const a of r.alertas.slice(0, 5)) {
+          linhas.push(`• ${a.dataDeteccao} — ${a.classe} — ${fmtNum(a.areaHa, 2)} ha — ${a.bioma} — ${a.fonte}`);
+        }
+      }
+      return {
+        content: linhas.join('\n'),
+        sources: [`/api/desmatamento/municipio/${codigoIbge}`],
+        toolsUsed: ['deter.municipio'],
+      };
+    } catch (err) {
+      return { content: `Falha ao consultar DETER (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private async consultarDesmatamentoNacional(
+    periodo?: string,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    try {
+      const svc = this.dsm.getDeterService();
+      const r = await svc.resumoNacional(periodo);
+      const linhas = [
+        `**Desmatamento — panorama nacional** (período ${r.periodo}, fonte ${r.fonte})`,
+        '',
+        `• **Alertas totais:** ${r.totalAlertas}`,
+        `• **Área total:** ${fmtNum(r.areaTotalHa, 2)} ha`,
+        `• **Atualizado:** ${r.atualizadoEm}`,
+        '',
+        '**Por bioma:**',
+      ];
+      for (const b of r.porBioma) linhas.push(`• ${b.bioma}: ${fmtNum(b.areaHa, 2)} ha — ${b.alertas} alerta(s)`);
+      linhas.push('', '**Top municípios:**');
+      for (const m of r.topMunicipios.slice(0, 5)) {
+        linhas.push(`• ${m.municipio}/${m.uf} (IBGE ${m.codigoIbge}): ${fmtNum(m.areaHa, 2)} ha`);
+      }
+      return {
+        content: linhas.join('\n'),
+        sources: ['/api/desmatamento/nacional'],
+        toolsUsed: ['deter.nacional'],
+      };
+    } catch (err) {
+      return { content: `Falha ao consultar resumo DETER (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private async validarZarcPlano(
+    cultura: string,
+    uf: string,
+    codigoIbge: string,
+    dataPlantio: string,
+    solo: TipoSoloZarc,
+    ciclo: CicloVariedade,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    try {
+      const svc = this.dsm.getZarcService();
+      const r = await svc.validarPlano(cultura, uf, codigoIbge, dataPlantio, solo, ciclo);
+      const linhas = [
+        `**Validação ZARC — ${cultura} / ${uf.toUpperCase()}**`,
+        '',
+        `• **Status:** ${r.valido ? 'VÁLIDO' : 'FORA DA JANELA'}`,
+        `• **Decêndio de plantio:** ${r.decendio}`,
+        `• **Proagro/Proagro-Mais:** ${r.proagroElegivel ? 'HABILITADO' : 'NÃO HABILITADO'}`,
+      ];
+      if (typeof r.risco === 'number') linhas.push(`• **Risco climático:** ${(r.risco * 100).toFixed(0)}%`);
+      if (r.janelaMaisProxima) {
+        linhas.push(
+          `• **Janela mais próxima:** decêndio ${r.janelaMaisProxima.decendio} (${r.janelaMaisProxima.dataInicio} a ${r.janelaMaisProxima.dataFim}, risco ${(r.janelaMaisProxima.risco * 100).toFixed(0)}%)`,
+        );
+      }
+      linhas.push('', r.mensagem);
+      return {
+        content: linhas.join('\n'),
+        sources: [`/api/zarc/validar`],
+        toolsUsed: ['zarc.validar'],
+      };
+    } catch (err) {
+      return { content: `Falha ao validar ZARC (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private async consultarMoratoriaSoja(
+    codigoIbge?: string,
+    dataDesmatamento?: string,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
+    try {
+      const svc = this.dsm.getAbioveService();
+      const status = svc.statusMoratoriaSoja();
+      const linhas = [
+        `**Moratória da Soja — status**`,
+        '',
+        `• **Vigente:** ${status.vigente ? 'SIM' : 'NÃO'} (desde ${status.desde})`,
+        `• **Última revisão:** ${status.ultimaRevisao}`,
+        `• **Data-corte:** ${status.dataLimite}`,
+        `• **Signatários:** ${status.signatarios.join(', ')}`,
+      ];
+      if (status.observacoes) linhas.push(`• **Obs.:** ${status.observacoes}`);
+      const sources: string[] = ['/api/abiove/moratoria/status'];
+      if (codigoIbge) {
+        const eleg = svc.elegibilidadeImovel(codigoIbge, dataDesmatamento);
+        linhas.push(
+          '',
+          `**Elegibilidade — ${eleg.municipio}/${eleg.uf} (IBGE ${codigoIbge})**`,
+          `• **Bioma Amazônia:** ${eleg.noBiomaAmazonia ? 'SIM' : 'NÃO'}`,
+          `• **Pode comprar soja:** ${eleg.elegivelAComprarSoja ? 'SIM' : 'NÃO'}`,
+        );
+        if (eleg.restricoes.length) {
+          linhas.push('', '**Restrições:**');
+          for (const r of eleg.restricoes) linhas.push(`• ${r}`);
+        }
+        if (eleg.alternativas.length) {
+          linhas.push('', '**Alternativas:**');
+          for (const a of eleg.alternativas) linhas.push(`• ${a}`);
+        }
+        sources.push(`/api/abiove/moratoria/elegibilidade/${codigoIbge}`);
+      }
+      return {
+        content: linhas.join('\n'),
+        sources,
+        toolsUsed: ['abiove.moratoria'],
+      };
+    } catch (err) {
+      return { content: `Falha ao consultar Moratória da Soja (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  // ── Wave 7b — Simuladores regulatórios 2026 ─────────────
+
+  private simularReformaTributaria(
+    ano: number,
+    regime: RegimeTributarioRural,
+    receitaBruta: number,
+    comprasInsumos: number,
+  ): { content: string; sources: string[]; toolsUsed: string[] } {
+    try {
+      const svc = getReformaTributariaService();
+      const r = svc.simular({ ano, regime, receitaBruta, comprasInsumos });
+      const sinal = r.diferencaAbsoluta < 0 ? 'ECONOMIA' : r.diferencaAbsoluta > 0 ? 'CUSTO ADICIONAL' : 'NEUTRO';
+      const linhas = [
+        `**Reforma Tributária — simulação ${ano} (${regime})**`,
+        '',
+        `• **Alíquotas do ano:** CBS ${(r.aliquotasAno.cbs * 100).toFixed(2)}% / IBS ${(r.aliquotasAno.ibs * 100).toFixed(2)}%`,
+        '',
+        '**Sistema atual:**',
+        `• PIS/COFINS: ${fmtBRL(r.sistemaAtual.pisCofins)}`,
+        `• ICMS: ${fmtBRL(r.sistemaAtual.icms)}`,
+        `• IPI: ${fmtBRL(r.sistemaAtual.ipi)}`,
+        `• Funrural: ${fmtBRL(r.sistemaAtual.funrural)}`,
+        `• **Total atual:** ${fmtBRL(r.sistemaAtual.total)}`,
+        '',
+        '**Sistema novo (CBS + IBS):**',
+        `• CBS: ${fmtBRL(r.sistemaNovo.cbs)}`,
+        `• IBS: ${fmtBRL(r.sistemaNovo.ibs)}`,
+        `• Créditos sobre compras: −${fmtBRL(r.sistemaNovo.creditosCompras)}`,
+        `• Funrural remanescente: ${fmtBRL(r.sistemaNovo.funruralRemanescente)}`,
+        `• **Total novo:** ${fmtBRL(r.sistemaNovo.total)}`,
+        '',
+        `**${sinal}:** ${fmtBRL(Math.abs(r.diferencaAbsoluta))} (${fmtPct(r.diferencaPercentual)})`,
+      ];
+      if (r.observacoes.length) {
+        linhas.push('', '**Observações:**');
+        for (const o of r.observacoes) linhas.push(`• ${o}`);
+      }
+      if (r.recomendacoes.length) {
+        linhas.push('', '**Recomendações:**');
+        for (const rec of r.recomendacoes) linhas.push(`• ${rec}`);
+      }
+      return {
+        content: linhas.join('\n'),
+        sources: ['/api/reforma/simular'],
+        toolsUsed: ['reforma.simular'],
+      };
+    } catch (err) {
+      return { content: `Falha na simulação CBS/IBS (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private calcularFunrural(
+    tipo: TipoContribuinte,
+    receitaBrutaAnual: number,
+    folhaPagamentoAnual: number,
+    ratMultiplicador: 1 | 2 | 3,
+    optouFolha: boolean,
+  ): { content: string; sources: string[]; toolsUsed: string[] } {
+    try {
+      const svc = getFunruralService();
+      const r = svc.calcular({ tipo, receitaBrutaAnual, folhaPagamentoAnual, ratMultiplicador, optouFolha });
+      const linhas = [
+        `**Funrural ${r.ano} — ${tipo}**`,
+        '',
+        `• **Opção receita:** ${fmtBRL(r.opcaoReceita.total)} (alíq. ${(r.opcaoReceita.aliquotaTotal * 100).toFixed(2)}%)`,
+        `• **Opção folha:** ${fmtBRL(r.opcaoFolha.total)} (alíq. ${(r.opcaoFolha.aliquotaTotal * 100).toFixed(2)}%, RAT×${ratMultiplicador})`,
+        `• **Melhor opção:** ${r.melhorOpcao.toUpperCase()}`,
+        `• **Economia:** ${fmtBRL(r.economia)}`,
+      ];
+      if (r.observacoes.length) {
+        linhas.push('', '**Observações:**');
+        for (const o of r.observacoes) linhas.push(`• ${o}`);
+      }
+      if (r.baseLegal.length) {
+        linhas.push('', '**Base legal:**');
+        for (const b of r.baseLegal) linhas.push(`• ${b}`);
+      }
+      return {
+        content: linhas.join('\n'),
+        sources: ['/api/funrural/calcular'],
+        toolsUsed: ['funrural.calcular'],
+      };
+    } catch (err) {
+      return { content: `Falha no cálculo Funrural (${(err as Error).message}).`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private simularDesenrolaRural(
+    input: Record<string, unknown>,
+  ): { content: string; sources: string[]; toolsUsed: string[] } {
+    try {
+      const svc = getDesenrolaRuralService();
+      const divida = {
+        id: String(input.dividaId),
+        valorInscrito: Number(input.valorInscrito),
+        valorAtualizado: Number(input.valorAtualizado),
+        dataInscricao: String(input.dataInscricao),
+        origem: String(input.origem) as 'pgfn' | 'receita_federal' | 'banco_publico' | 'banco_cooperativa' | 'outro',
+        modalidade: String(input.modalidade) as 'custeio' | 'investimento' | 'comercializacao' | 'outra',
+      };
+      const faixaSolicitada = input.faixa ? (String(input.faixa) as FaixaCapacidadePagamento) : undefined;
+      const perfilBase = {
+        tipo: String(input.tipoProdutor) as 'PF' | 'PJ',
+        receitaBrutaAnual: Number(input.receitaBrutaAnual),
+        ativosDeclarados: Number(input.ativosDeclarados),
+        dividasTotal: Number(input.dividasTotal),
+        capacidadePagamento: 'D' as FaixaCapacidadePagamento,
+      };
+      const faixaAuto = svc.classificarFaixa(perfilBase);
+      const perfil = { ...perfilBase, capacidadePagamento: faixaSolicitada ?? faixaAuto };
+      const r = svc.simular(divida, perfil);
+      const linhas = [
+        `**Desenrola Rural — simulação dívida ${divida.id}**`,
+        '',
+        `• **Faixa:** ${perfil.capacidadePagamento}${faixaSolicitada ? ' (forçada)' : ` (auto — calculada de ratio dívida/ativos)`}`,
+        `• **Elegível:** ${r.elegivel ? 'SIM' : 'NÃO'}`,
+        `• **Prazo de adesão:** ${r.prazoAdesao}`,
+        '',
+        '**Descontos aplicados:**',
+        `• Juros: ${(r.descontoJurosPct * 100).toFixed(0)}%`,
+        `• Multa: ${(r.descontoMultaPct * 100).toFixed(0)}%`,
+        `• Encargos legais: ${(r.descontoEncargosLegaisPct * 100).toFixed(0)}%`,
+        '',
+        '**Quitação proposta:**',
+        `• Valor atualizado: ${fmtBRL(r.valorAtualizado)}`,
+        `• Valor a pagar: ${fmtBRL(r.valorAPagar)}`,
+        `• Economia: ${fmtBRL(r.economia)}`,
+        `• Entrada mínima: ${fmtBRL(r.entradaMinima)}`,
+        `• Parcelamento: até ${r.parcelamentoMaximoMeses} meses`,
+      ];
+      if (r.motivos.length) {
+        linhas.push('', '**Motivos (elegibilidade):**');
+        for (const m of r.motivos) linhas.push(`• ${m}`);
+      }
+      linhas.push('', `**Base legal:** ${r.baseLegal.join(' | ')}`);
+      return {
+        content: linhas.join('\n'),
+        sources: ['/api/desenrola/simular'],
+        toolsUsed: ['desenrola.simular'],
+      };
+    } catch (err) {
+      return { content: `Falha na simulação Desenrola Rural (${(err as Error).message}).`, sources: [], toolsUsed: [] };
     }
   }
 
