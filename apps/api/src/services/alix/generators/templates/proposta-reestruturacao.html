@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<title>Proposta de Reestruturação — {{CLIENTE_NOME}}</title>
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    color: #1a1a1a;
+    font-size: 11pt;
+    line-height: 1.55;
+  }
+  header.brand {
+    background: linear-gradient(135deg, #0b2942 0%, #154a73 100%);
+    color: #ffffff;
+    padding: 24px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 4px solid #2d6a4f;
+  }
+  header.brand .logo {
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: #2d6a4f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: bold;
+    font-size: 20pt;
+    font-family: 'Georgia', serif;
+  }
+  header.brand .title-block h1 {
+    margin: 0;
+    font-size: 14pt;
+    letter-spacing: 1.2px;
+  }
+  header.brand .title-block p {
+    margin: 2px 0 0;
+    font-size: 9pt;
+    opacity: 0.85;
+  }
+  .cover {
+    padding: 80px 60px 60px;
+    text-align: center;
+    border-bottom: 1px solid #d9d9d9;
+  }
+  .cover h2 {
+    color: #0b2942;
+    font-size: 24pt;
+    margin: 0 0 30px;
+    letter-spacing: 1px;
+  }
+  .cover .subtitle {
+    color: #2d6a4f;
+    font-size: 13pt;
+    margin-bottom: 50px;
+    font-style: italic;
+  }
+  .cover .meta {
+    display: inline-block;
+    text-align: left;
+    border-left: 4px solid #2d6a4f;
+    padding: 10px 20px;
+    background: #f7faf8;
+  }
+  .cover .meta p { margin: 6px 0; font-size: 11pt; }
+  .cover .meta strong { color: #0b2942; }
+
+  section {
+    page-break-inside: avoid;
+    padding: 28px 40px 12px;
+  }
+  section h3 {
+    color: #0b2942;
+    border-bottom: 2px solid #2d6a4f;
+    padding-bottom: 6px;
+    margin: 0 0 14px;
+    font-size: 13pt;
+  }
+  section p { margin: 6px 0 10px; text-align: justify; }
+
+  table.proposta-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 18px;
+    font-size: 10pt;
+  }
+  table.proposta-table th,
+  table.proposta-table td {
+    border: 1px solid #cfd8dc;
+    padding: 8px 10px;
+    text-align: left;
+  }
+  table.proposta-table th {
+    background: #0b2942;
+    color: #fff;
+    font-weight: bold;
+  }
+  table.proposta-table tr:nth-child(even) td { background: #f4f6f8; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .highlight-box {
+    background: #e8f1ec;
+    border-left: 5px solid #2d6a4f;
+    padding: 12px 16px;
+    margin: 10px 0 16px;
+  }
+
+  .signature {
+    margin-top: 80px;
+    padding: 0 40px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .signature .block {
+    text-align: center;
+    width: 45%;
+  }
+  .signature .line {
+    border-top: 1px solid #000;
+    margin-bottom: 4px;
+  }
+  .signature p { margin: 0; font-size: 10pt; }
+  .signature p.name { font-weight: bold; color: #0b2942; }
+
+  footer.page-footer {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    padding: 8px 30px;
+    font-size: 8pt;
+    color: #666;
+    border-top: 1px solid #e0e0e0;
+    background: #fff;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+<header class="brand">
+  <div style="display:flex;align-items:center;gap:16px;">
+    <div class="logo">A</div>
+    <div class="title-block">
+      <h1>ALETIS CONSULTORIA AGRO</h1>
+      <p>Christian Kohler — Reestruturação de Dívidas Agropecuárias</p>
+    </div>
+  </div>
+  <div style="text-align:right;font-size:9pt;">
+    <div>Documento Confidencial</div>
+    <div>{{DATA_EMISSAO}}</div>
+  </div>
+</header>
+
+<div class="cover">
+  <h2>PROPOSTA DE REESTRUTURAÇÃO DE DÍVIDA</h2>
+  <p class="subtitle">Preparada por ALETIS Consultoria Agro</p>
+  <div class="meta">
+    <p><strong>Cliente:</strong> {{CLIENTE_NOME}}</p>
+    <p><strong>Credor:</strong> {{CREDOR_NOME}}</p>
+    <p><strong>Data de Emissão:</strong> {{DATA_EMISSAO}}</p>
+    <p><strong>Consultor Responsável:</strong> {{CONSULTOR}}</p>
+  </div>
+</div>
+
+<section>
+  <h3>1. Contexto da Dívida</h3>
+  <p>Esta proposta refere-se à reestruturação da dívida de titularidade do(a) cliente <strong>{{CLIENTE_NOME}}</strong>
+  junto ao(à) credor(a) <strong>{{CREDOR_NOME}}</strong>. O saldo devedor atualizado considerado como base para esta
+  negociação é de <strong>{{DIVIDA_FORMATADA}}</strong>. Os termos apresentados visam restabelecer a capacidade de
+  pagamento da operação, preservando o fluxo de caixa da atividade rural do cliente.</p>
+  <div class="highlight-box">
+    <strong>Dívida atualizada:</strong> {{DIVIDA_FORMATADA}}<br/>
+    <strong>Taxa mensal proposta:</strong> {{TAXA_PCT}}% a.m.<br/>
+    <strong>Prazo:</strong> {{PARCELAS}} parcelas (com {{CARENCIA}} meses de carência)
+  </div>
+</section>
+
+<section>
+  <h3>2. Proposta Comercial</h3>
+  <table class="proposta-table">
+    <thead>
+      <tr>
+        <th>Parâmetro</th>
+        <th>Valor Proposto</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Saldo devedor considerado</td><td class="num">{{DIVIDA_FORMATADA}}</td></tr>
+      <tr><td>Carência de capital</td><td class="num">{{CARENCIA}} meses</td></tr>
+      <tr><td>Número de parcelas após carência</td><td class="num">{{PARCELAS}}</td></tr>
+      <tr><td>Taxa nominal mensal</td><td class="num">{{TAXA_PCT}}%</td></tr>
+      <tr><td>Valor estimado da parcela</td><td class="num">{{PARCELA_FORMATADA}}</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h3>3. Cronograma de Pagamento</h3>
+  <table class="proposta-table">
+    <thead>
+      <tr>
+        <th class="num">Mês</th>
+        <th class="num">Parcela</th>
+        <th class="num">Juros</th>
+        <th class="num">Amortização</th>
+        <th class="num">Saldo Devedor</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{CRONOGRAMA_ROWS}}
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h3>4. Observações</h3>
+  <p>{{OBSERVACOES}}</p>
+</section>
+
+<section>
+  <h3>5. Aceite</h3>
+  <div class="signature">
+    <div class="block">
+      <div class="line"></div>
+      <p class="name">{{CLIENTE_NOME}}</p>
+      <p>Cliente</p>
+    </div>
+    <div class="block">
+      <div class="line"></div>
+      <p class="name">{{CONSULTOR}}</p>
+      <p>ALETIS Consultoria Agro</p>
+    </div>
+  </div>
+</section>
+
+<footer class="page-footer">
+  <span>ALETIS Consultoria Agro — Christian Kohler</span>
+  <span>Emitido em {{DATA_EMISSAO}}</span>
+</footer>
+</body>
+</html>
