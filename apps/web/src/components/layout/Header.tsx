@@ -1,11 +1,12 @@
 /**
- * Header (Barra Superior)
+ * Header (Barra Superior) — v2.
  *
- * Barra superior global do sistema ALETIS com ticker de cotacoes
- * (soja, milho, boi, cafe, dolar, Selic) consumido de
- * /api/mercado/precos e /api/mercado/indicadores, campo de busca,
- * toggle de tema claro/escuro, notificacoes e menu do usuario
- * (perfil, configuracoes, sair).
+ * Ticker de cotações (soja, milho, boi, café, dólar, SELIC) consumido
+ * de /api/mercado/precos e /api/mercado/indicadores, gatilho da paleta
+ * de comandos (⌘K), toggle de tema, notificações e menu do usuário.
+ *
+ * A antiga "busca de clientes/propostas" foi promovida a busca global
+ * via CommandPalette — o input aqui agora é apenas um trigger visual.
  */
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -39,7 +40,7 @@ const FALLBACK_TICKER: TickerItem[] = [
   { label: 'Selic', value: '14,75%', change: '', positive: true },
 ]
 
-function formatTickerValue(val: number, unit: string): string {
+function formatTickerValue(val: number, _unit: string): string {
   if (val >= 1000) return `R$${val.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
   return `R$${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
@@ -85,8 +86,8 @@ function useTickerData(): TickerItem[] {
 function TickerBadge({ item }: { item: TickerItem }) {
   const arrow = item.change
     ? item.positive
-      ? '\u25B2'
-      : '\u25BC'
+      ? '▲'
+      : '▼'
     : ''
   return (
     <span className="inline-flex items-center gap-2 px-4 whitespace-nowrap text-xs">
@@ -112,11 +113,11 @@ function TickerBadge({ item }: { item: TickerItem }) {
 
 interface HeaderProps {
   onMobileMenuToggle: () => void
+  onOpenPalette: () => void
 }
 
-export default function Header({ onMobileMenuToggle }: HeaderProps) {
+export default function Header({ onMobileMenuToggle, onOpenPalette }: HeaderProps) {
   const [darkMode, setDarkMode] = useState(false)
-  const [searchFocused, setSearchFocused] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const tickerData = useTickerData()
@@ -139,7 +140,6 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
     navigate('/portal-cliente')
   }
 
-  // Dark mode toggle
   const toggleDarkMode = () => {
     setDarkMode((prev) => {
       const next = !prev
@@ -148,7 +148,6 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
     })
   }
 
-  // Close user dropdown on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
@@ -159,13 +158,16 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  const shortcutHint = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
+    ? '⌘K'
+    : 'Ctrl K'
+
   return (
     <header className="sticky top-0 z-30">
       {/* Market ticker bar */}
       <div className="bg-aletis-bege dark:bg-aletis-grafite-escuro border-b border-aletis-borda dark:border-white/10 overflow-hidden">
         <div className="ticker-wrapper h-8 flex items-center">
           <div className="ticker-content" aria-label="Cotações do mercado">
-            {/* Render twice for seamless loop */}
             {[...tickerData, ...tickerData].map((item, idx) => (
               <TickerBadge key={`${item.label}-${idx}`} item={item} />
             ))}
@@ -184,52 +186,47 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
           <Menu size={22} />
         </button>
 
-        {/* Search bar */}
-        <div className="flex-1 max-w-md relative">
+        {/* Palette trigger (substitui o antigo input de busca) */}
+        <button
+          type="button"
+          onClick={onOpenPalette}
+          className="
+            group flex-1 max-w-md inline-flex items-center gap-3
+            px-3 py-2 rounded-xl
+            bg-aletis-bege dark:bg-white/5
+            border border-transparent hover:border-aletis-verde/30
+            hover:bg-white dark:hover:bg-white/10
+            text-left transition-all duration-200
+          "
+          aria-label="Abrir paleta de comandos"
+        >
           <Search
             size={16}
-            className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-200 ${
-              searchFocused
-                ? 'text-aletis-verde'
-                : 'text-aletis-grafite-claro dark:text-white/40'
-            }`}
+            className="text-aletis-grafite-claro dark:text-white/40 group-hover:text-aletis-verde flex-shrink-0"
             aria-hidden="true"
           />
-          <input
-            type="search"
-            placeholder="Buscar clientes, propostas..."
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-            className="
-              w-full pl-9 pr-4 py-2 rounded-xl text-sm
-              bg-aletis-bege dark:bg-white/5 border border-transparent
-              text-aletis-grafite-escuro dark:text-white
-              placeholder:text-aletis-grafite-claro dark:placeholder:text-white/30
-              focus:outline-none focus:ring-2 focus:ring-aletis-verde/30
-              focus:border-aletis-verde focus:bg-white dark:focus:bg-white/10
-              transition-all duration-200
-            "
-            aria-label="Campo de busca"
-          />
-        </div>
+          <span className="flex-1 text-sm text-aletis-grafite-claro dark:text-white/40 truncate">
+            Buscar ferramentas, clientes, relatórios…
+          </span>
+          <span className="hidden sm:inline-flex items-center gap-0.5 text-[10px] font-mono text-aletis-grafite-claro dark:text-white/40 px-1.5 py-0.5 rounded border border-aletis-borda dark:border-white/10">
+            {shortcutHint}
+          </span>
+        </button>
 
         {/* Right-side actions */}
         <div className="flex items-center gap-1">
-          {/* Notifications */}
           <button
             className="relative p-2 rounded-lg text-aletis-grafite-medio dark:text-white/60 hover:bg-aletis-bege dark:hover:bg-white/10 transition-colors"
             aria-label="Notificações"
             title="Notificações"
           >
             <Bell size={20} />
-            {/* Red badge dot */}
             <span
               className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-alerta ring-2 ring-white dark:ring-aletis-grafite-escuro"
               aria-label="Novas notificações"
             />
           </button>
 
-          {/* Dark mode toggle */}
           <button
             onClick={toggleDarkMode}
             className="p-2 rounded-lg text-aletis-grafite-medio dark:text-white/60 hover:bg-aletis-bege dark:hover:bg-white/10 transition-colors"
@@ -239,10 +236,8 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
             {darkMode ? <Sun size={20} /> : <Moon size={20} />}
           </button>
 
-          {/* Separator */}
           <div className="hidden sm:block w-px h-6 bg-aletis-borda dark:bg-white/10 mx-2" />
 
-          {/* User avatar dropdown */}
           <div className="relative" ref={userMenuRef}>
             <button
               onClick={() => setUserMenuOpen((prev) => !prev)}
@@ -267,7 +262,6 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
               />
             </button>
 
-            {/* Dropdown menu */}
             {userMenuOpen && (
               <div
                 className="
@@ -285,7 +279,7 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
                     Christian Kohler
                   </p>
                   <p className="text-xs text-aletis-grafite-claro dark:text-white/50">
-                    Consultor Sênior
+                    Consultor sênior
                   </p>
                 </div>
                 <button
@@ -294,7 +288,7 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
                   role="menuitem"
                 >
                   <User size={16} />
-                  Meu Perfil
+                  Meu perfil
                 </button>
                 <button
                   onClick={() => goTo('/configuracoes')}

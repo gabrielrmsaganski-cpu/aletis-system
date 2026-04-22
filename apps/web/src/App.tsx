@@ -29,6 +29,7 @@ const ALIX = lazy(() => import('./pages/ALIX'))
 const Prospeccao = lazy(() => import('./pages/Prospeccao'))
 const Financeiro = lazy(() => import('./pages/Financeiro'))
 const CusteioAgricola = lazy(() => import('./pages/CusteioAgricola'))
+const Ferramentas = lazy(() => import('./pages/Ferramentas'))
 
 function RouteFallback() {
   return (
@@ -75,6 +76,7 @@ export default function App() {
                 <Route path="/relatorios" element={<Relatorios />} />
                 <Route path="/clima" element={<Clima />} />
                 <Route path="/configuracoes" element={<Configuracoes />} />
+                <Route path="/ferramentas" element={<Ferramentas />} />
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>

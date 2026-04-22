@@ -9,9 +9,11 @@
  * /mercado/incendios e /mercado/combustiveis/diesel.
  */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useApi, useApiFull } from '../hooks/useApi'
 import { DataSourceBadge } from '../components/DataSourceBadge'
+import { CATEGORIES, TOOL_CATALOG } from '../navigation/toolCatalog'
+import { Command, ArrowRight, Sparkles as SparklesIcon } from 'lucide-react'
 import {
   AreaChart,
   Area,
@@ -490,6 +492,74 @@ export default function Dashboard() {
           </div>
         </div>
       </header>
+
+      {/* ═══════════════════════════════════════════════════════
+           SECTION 0 — NAVEGAÇÃO POR CATEGORIA
+           Atalho editorial pra todas as ferramentas. Cada chip conta
+           quantas tools a categoria tem e leva direto ao catálogo
+           filtrado. O CTA ⌘K abre a paleta global.
+           ═══════════════════════════════════════════════════════ */}
+      <section className="mb-8 rounded-3xl bg-white border border-aletis-borda overflow-hidden shadow-[0_10px_40px_-20px_rgba(15,76,53,0.15)]">
+        <div className="px-6 lg:px-8 py-6 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 border-b border-aletis-borda/70">
+          <div className="max-w-xl">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-[10px] font-semibold tracking-[0.24em] uppercase text-aletis-dourado-escuro">
+                Por onde começar
+              </span>
+              <span className="h-px flex-1 max-w-[80px] bg-gradient-to-r from-aletis-dourado/60 to-transparent" />
+            </div>
+            <h2 className="font-display text-2xl lg:text-[26px] leading-tight text-aletis-grafite-escuro">
+              Tudo que o sistema faz, em seis trilhas.
+            </h2>
+            <p className="mt-1.5 text-[13.5px] text-aletis-grafite-medio leading-relaxed">
+              Escolha uma categoria ou abra a paleta global para pular direto a qualquer ferramenta por nome.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event('aletis:palette:open'))}
+              className="inline-flex items-center gap-2 rounded-xl bg-aletis-verde hover:bg-aletis-verde-medio text-white px-4 py-2.5 text-[13px] font-semibold transition-colors"
+            >
+              <Command size={14} />
+              Buscar ferramenta
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-mono text-white/70 px-1.5 py-0.5 rounded border border-white/20">
+                ⌘K
+              </span>
+            </button>
+            <Link
+              to="/ferramentas"
+              className="inline-flex items-center gap-2 rounded-xl border border-aletis-borda hover:border-aletis-verde/40 bg-white px-4 py-2.5 text-[13px] font-semibold text-aletis-grafite-escuro transition-colors"
+            >
+              <SparklesIcon size={13} />
+              Ver catálogo completo
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 divide-x divide-aletis-borda/60 border-t border-aletis-borda/70">
+          {CATEGORIES.map((cat) => {
+            const count = TOOL_CATALOG.filter((t) => t.category === cat.id).length
+            return (
+              <Link
+                key={cat.id}
+                to={`/ferramentas#${cat.id}`}
+                className="group flex flex-col items-start gap-1.5 px-5 py-4 hover:bg-aletis-bege/40 transition-colors"
+              >
+                <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-aletis-dourado-escuro group-hover:text-aletis-verde transition-colors">
+                  {cat.label}
+                </span>
+                <span className="text-[12.5px] text-aletis-grafite-medio leading-snug line-clamp-2">
+                  {cat.subtitle}
+                </span>
+                <span className="mt-0.5 text-[11px] font-semibold text-aletis-grafite-claro group-hover:text-aletis-verde transition-colors">
+                  {count} {count === 1 ? 'ferramenta' : 'ferramentas'} →
+                </span>
+              </Link>
+            )
+          })}
+        </div>
+      </section>
 
       {/* ═══════════════════════════════════════════════════════
            SECTION 1 — KPI CARDS
