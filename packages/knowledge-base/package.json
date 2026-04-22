@@ -20,6 +20,15 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "lint": "echo 'no lint configured'"
+    "lint": "echo 'no lint configured'",
+    "rag:build": "tsx scripts/build-rag-index.ts"
+  },
+  "dependencies": {
+    "pdf-parse": "^2.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/pdf-parse": "^1.1.5",
+    "tsx": "^4.21.0"
   }
 }

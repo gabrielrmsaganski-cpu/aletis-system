@@ -57,6 +57,12 @@ export {
   PRECEDENTES,
 } from './precedentes-judiciais.js'
 
+// ----------------------------------------------------------------------------
+// RAG BM25 (Wave 8b): indexa PDFs de inbox/documentos para busca semantica leve.
+// A API completa esta em `./rag/index.js`; re-exportamos o essencial aqui.
+// ----------------------------------------------------------------------------
+export * from './rag/index.js'
+
 import { SUMULAS_STJ } from './sumulas-stj.js'
 import { MCR_SECOES } from './mcr-secoes.js'
 import { PRONAF_LINHAS, PRONAMP_LINHAS, EMPRESARIAL_LINHAS, PLANO_SAFRA_2025_26 } from './plano-safra-2025-26.js'
