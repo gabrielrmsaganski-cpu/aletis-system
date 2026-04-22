@@ -20,6 +20,7 @@ import { ComexStatService } from './sources/ComexStatService.js';
 import { DeterService } from './sources/DeterService.js';
 import { ZarcService } from './sources/ZarcService.js';
 import { AbioveService } from './sources/AbioveService.js';
+import { SicorBacenService } from './sources/SicorBacenService.js';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -308,6 +309,14 @@ const SOURCE_REGISTRY: Omit<DataSourceEntry, 'status' | 'ultimaAtualizacao' | 'l
     url: 'https://abiove.org.br/sustentabilidade/moratoria-da-soja/',
     ttlSegundos: 604800,
   },
+  // ── Wave 8c: SICOR Bacen OData (custeio/investimento/comercialização) ──
+  {
+    nome: 'sicor_bacen',
+    descricao: 'SICOR — Operações Contratadas por UF/produto/mês (Bacen OLINDA OData v2): custeio, investimento e comercialização',
+    categoria: 'CREDITO',
+    url: 'https://olinda.bcb.gov.br/olinda/servico/SICOR/versao/v2/odata/',
+    ttlSegundos: 21600,
+  },
 ];
 
 // ── DataSourceManager Class ──────────────────────────────────
@@ -336,6 +345,7 @@ export class DataSourceManager {
   public readonly deter: DeterService;
   public readonly zarc: ZarcService;
   public readonly abiove: AbioveService;
+  public readonly sicorBacen: SicorBacenService;
 
   private constructor() {
     this.statusCache = new NodeCache({ stdTTL: 60, checkperiod: 30 });
@@ -369,6 +379,7 @@ export class DataSourceManager {
     this.deter = new DeterService(this);
     this.zarc = new ZarcService(this);
     this.abiove = new AbioveService(this);
+    this.sicorBacen = new SicorBacenService(this);
 
     console.log(`[DataSourceManager] Inicializado com ${this.registry.size} fontes de dados registradas`);
   }
@@ -445,6 +456,12 @@ export class DataSourceManager {
     return this.abiove;
   }
 
+  // ── Wave 8c: SICOR Bacen accessor ────────────────────────
+
+  getSicorService(): SicorBacenService {
+    return this.sicorBacen;
+  }
+
   // ── Data Fetch Orchestration ─────────────────────────────
 
   /**
@@ -511,6 +528,10 @@ export class DataSourceManager {
         return this.wrapResult(nome, () => this.zarc.buscarJanelasPlantio('soja', 'MT'));
       case 'abiove_moratoria':
         return this.wrapResult(nome, async () => this.abiove.statusMoratoriaSoja());
+      case 'sicor_bacen':
+        return this.wrapResult(nome, () =>
+          this.sicorBacen.buscarContratosCusteio({ top: 10 })
+        );
       default:
         return {
           dados: null,
