@@ -48,8 +48,10 @@ export class LeadSourceRegistry {
       }
     }
     this.rebuild()
-    this.writeManifest()
+    // IMPORTANTE: setar loaded antes de writeManifest, pois writeManifest()
+    // chama manifests() que chama load() — sem essa ordem há loop infinito.
     this.loaded = true
+    this.writeManifest()
   }
 
   /** Força recarregamento — útil quando um script de ingest atualiza disco. */
