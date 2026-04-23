@@ -165,10 +165,11 @@ export class SocioExpansionSource implements LeadSource {
  */
 export async function expandSociosFromPJs(
   pjs: Array<{ cnpj: string; nome: string; uf: string }>,
-  opts: { maxPerRun?: number; delayMs?: number } = {},
+  opts: { maxPerRun?: number; delayMs?: number; checkpointEvery?: number; onCheckpoint?: (socios: SocioEnriched[], pjsScanned: number) => void } = {},
 ): Promise<{ pjsScanned: number; sociosExtracted: number; uniqueSocios: number; socios: SocioEnriched[] }> {
   const maxPerRun = opts.maxPerRun ?? 100;
   const delayMs = opts.delayMs ?? 600; // ~1.6 req/s
+  const checkpointEvery = opts.checkpointEvery ?? 50;
   const target = pjs.slice(0, maxPerRun);
 
   const allSocios: SocioEnriched[] = [];
@@ -222,6 +223,10 @@ export async function expandSociosFromPJs(
       }
     } catch (err) {
       console.warn(`[SocioExpansion] fetch falhou ${clean}:`, (err as Error).message);
+    }
+    // Checkpoint progressivo — salva a cada N para não perder tudo se der timeout
+    if (opts.onCheckpoint && pjsScanned > 0 && pjsScanned % checkpointEvery === 0) {
+      try { opts.onCheckpoint([...allSocios], pjsScanned); } catch { /* ignore */ }
     }
     await new Promise(res => setTimeout(res, delayMs));
   }

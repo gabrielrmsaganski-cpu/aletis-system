@@ -33,7 +33,20 @@ async function main() {
     .map(l => ({ cnpj: l.cpfCnpj, nome: l.nome, uf: l.uf }));
 
   console.log(`[ingest:socios] Expandindo sócios de ${pjs.length} PJs (max ${maxPerRun})...`);
-  const ret = await expandSociosFromPJs(pjs, { maxPerRun, delayMs: 600 });
+  let lastCheckpointAt = Date.now();
+  const ret = await expandSociosFromPJs(pjs, {
+    maxPerRun, delayMs: 600, checkpointEvery: 50,
+    onCheckpoint: (partials, scanned) => {
+      svc.socios.saveSocios(partials, {
+        pjsScanned: scanned,
+        sociosExtracted: partials.length,
+        uniqueSocios: partials.length,
+      });
+      const now = Date.now();
+      console.log(`  [checkpoint] ${scanned}/${maxPerRun} PJs processadas — ${partials.length} sócios acumulados (+${Math.round((now - lastCheckpointAt) / 1000)}s)`);
+      lastCheckpointAt = now;
+    },
+  });
   svc.socios.saveSocios(ret.socios, {
     pjsScanned: ret.pjsScanned,
     sociosExtracted: ret.sociosExtracted,
