@@ -284,12 +284,15 @@ export async function runClaude(
     iteration++;
     let client = await getClient();
 
+    // Opus 4.7 não aceita `temperature` (deprecated). Omite para qualquer modelo opus.
+    const supportsTemperature = !/opus/i.test(model);
+
     let response;
     try {
       response = await client.messages.create({
         model,
         max_tokens: maxTokens,
-        temperature,
+        ...(supportsTemperature ? { temperature } : {}),
         ...(thinking ? { thinking: thinking as any } : {}),
         ...(system ? { system: system as any } : {}),
         ...(tools && tools.length > 0 ? { tools: tools as any } : {}),
@@ -305,7 +308,7 @@ export async function runClaude(
         response = await client.messages.create({
           model,
           max_tokens: maxTokens,
-          temperature,
+          ...(supportsTemperature ? { temperature } : {}),
           ...(thinking ? { thinking: thinking as any } : {}),
           ...(system ? { system: system as any } : {}),
           ...(tools && tools.length > 0 ? { tools: tools as any } : {}),
@@ -317,7 +320,7 @@ export async function runClaude(
         response = await client.messages.create({
           model,
           max_tokens: maxTokens,
-          temperature,
+          ...(supportsTemperature ? { temperature } : {}),
           ...(thinking ? { thinking: thinking as any } : {}),
           ...(system ? { system: system as any } : {}),
           ...(tools && tools.length > 0 ? { tools: tools as any } : {}),
