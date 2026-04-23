@@ -60,9 +60,28 @@ test('CRMWriterAgent F4 tem 4 tools HITL (criar_cliente, promover_lead, criar_pr
   assert.deepStrictEqual(names, ['atualizar_proposta', 'criar_cliente', 'criar_proposta_inteligente', 'promover_lead_para_cliente']);
 });
 
-test('DocGeneratorAgent stub', () => {
-  const a = new DocGeneratorAgent();
+test('DocGeneratorAgent F5 tem 6 tools reais (gerar_proposta, parecer, bsc, fluxo, memoria, custeio_pdf)', () => {
+  const fakeAlix = {
+    getDocGeneratorHandlers: () => ({
+      tool_gerar_proposta_reestruturacao: () => ({}),
+      tool_gerar_parecer_tecnico: () => ({}),
+      tool_gerar_relatorio_bsc: () => ({}),
+      tool_gerar_fluxo_caixa_xlsx: () => ({}),
+      tool_gerar_memoria_calculo_docx: () => ({}),
+      tool_gerar_plano_custeio_pdf: () => ({}),
+    }),
+  };
+  const a = new DocGeneratorAgent(fakeAlix as any);
   assert.strictEqual(a.name, 'DocGenerator');
   const { tools } = a.buildTools(ctxBase);
-  assert.strictEqual(tools.length, 0);
+  assert.strictEqual(tools.length, 6);
+  const names = tools.map(t => t.name).sort();
+  assert.deepStrictEqual(names, [
+    'gerar_fluxo_caixa_xlsx',
+    'gerar_memoria_calculo_docx',
+    'gerar_parecer_tecnico',
+    'gerar_plano_custeio_pdf',
+    'gerar_proposta_reestruturacao',
+    'gerar_relatorio_bsc',
+  ]);
 });

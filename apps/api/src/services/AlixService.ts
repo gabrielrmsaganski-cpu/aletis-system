@@ -4594,6 +4594,18 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
     };
   }
 
+  /** Alix Insano F5 — expõe os geradores ao DocGeneratorAgent (bind preserva this). */
+  public getDocGeneratorHandlers() {
+    return {
+      tool_gerar_proposta_reestruturacao: (i: Record<string, unknown>) => this.tool_gerar_proposta_reestruturacao(i),
+      tool_gerar_parecer_tecnico: (i: Record<string, unknown>) => this.tool_gerar_parecer_tecnico(i),
+      tool_gerar_relatorio_bsc: (i: Record<string, unknown>) => this.tool_gerar_relatorio_bsc(i),
+      tool_gerar_fluxo_caixa_xlsx: (i: Record<string, unknown>) => this.tool_gerar_fluxo_caixa_xlsx(i),
+      tool_gerar_memoria_calculo_docx: (i: Record<string, unknown>) => this.tool_gerar_memoria_calculo_docx(i),
+      tool_gerar_plano_custeio_pdf: (i: Record<string, unknown>) => this.custeioGerarPdf(String(i.planoId || i.id)),
+    };
+  }
+
   private async tool_gerar_proposta_reestruturacao(
     i: Record<string, unknown>,
   ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {

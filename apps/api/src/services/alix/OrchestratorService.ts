@@ -36,7 +36,7 @@ export class OrchestratorService {
     this.dealAnalyzer = new DealAnalyzerAgent({ thinkingSupported: opts.thinkingSupported });
     this.webResearcher = new WebResearcherAgent();
     this.crmWriter = new CRMWriterAgent(this.alix);
-    this.docGenerator = new DocGeneratorAgent();
+    this.docGenerator = new DocGeneratorAgent(this.alix);
   }
 
   static async create(dsm: DataSourceManager, storageDir: string): Promise<OrchestratorService> {
