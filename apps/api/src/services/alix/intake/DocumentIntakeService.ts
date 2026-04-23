@@ -15,6 +15,7 @@ import type {
   ParserResult,
 } from './types.js'
 import { MAX_FILE_BYTES } from './types.js'
+import { classifyAgroDoc } from './AgroDocClassifier.js'
 
 import { parsePdf } from './PdfParser.js'
 import { parseDocx } from './DocxParser.js'
@@ -103,6 +104,9 @@ export class DocumentIntakeService {
     const id = randomUUID()
     const now = new Date().toISOString()
 
+    // Alix Insano F9 — classificação agro automática
+    const agroClass = classifyAgroDoc(parsed.extractedText ?? '')
+
     const doc: IngestedDocument = {
       id,
       sessionId: file.sessionId || 'anon',
@@ -116,7 +120,17 @@ export class DocumentIntakeService {
       summary: buildSummary(parsed.extractedText ?? ''),
       imageBase64: parsed.imageBase64,
       imageMediaType: parsed.imageMediaType,
-      metadata: parsed.metadata ?? {},
+      metadata: {
+        ...(parsed.metadata ?? {}),
+        ...(agroClass.tipo !== 'OUTRO' && agroClass.confianca >= 0.5
+          ? {
+              agroTipo: agroClass.tipo,
+              agroConfianca: agroClass.confianca,
+              agroCampos: agroClass.camposExtraidos,
+              agroIndicadores: agroClass.indicadores,
+            }
+          : {}),
+      },
     }
 
     await this.persist(doc)
