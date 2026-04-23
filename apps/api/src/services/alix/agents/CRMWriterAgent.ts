@@ -48,6 +48,8 @@ ${ctx.leadCpfCnpj ? `- leadCpfCnpj: ${ctx.leadCpfCnpj}` : ''}`;
       handle_promover_lead_para_cliente: (i) => this.alix.handle_promover_lead_para_cliente(i),
       handle_criar_proposta_inteligente: (i) => this.alix.handle_criar_proposta_inteligente(i),
       handle_atualizar_proposta: (i) => this.alix.handle_atualizar_proposta(i),
+      handle_atualizar_dossie_dividas: (i) => this.alix.handle_atualizar_dossie_dividas(i),
+      handle_anexar_documento_cliente: (i) => this.alix.handle_anexar_documento_cliente(i),
     });
   }
 }

@@ -11,6 +11,8 @@ export interface CrmWriterHandlers {
   handle_promover_lead_para_cliente: (i: Record<string, unknown>) => unknown;
   handle_criar_proposta_inteligente: (i: Record<string, unknown>) => unknown;
   handle_atualizar_proposta: (i: Record<string, unknown>) => unknown;
+  handle_atualizar_dossie_dividas: (i: Record<string, unknown>) => unknown;
+  handle_anexar_documento_cliente: (i: Record<string, unknown>) => unknown;
 }
 
 export function buildCrmWriterTools(h: CrmWriterHandlers): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
@@ -75,6 +77,34 @@ export function buildCrmWriterTools(h: CrmWriterHandlers): { tools: ClaudeTool[]
         required: ['id'],
       },
     },
+    {
+      name: 'atualizar_dossie_dividas',
+      description: 'Atualiza a estrutura de dívidas (bancárias, fornecedores, terras) do dossiê de um cliente existente. ALTO IMPACTO — HITL.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          clienteId: { type: 'string' },
+          dividas: {
+            type: 'object',
+            description: 'Estrutura com bancarias[], fornecedores[], terras[], dataBase',
+          },
+        },
+        required: ['clienteId', 'dividas'],
+      },
+    },
+    {
+      name: 'anexar_documento_cliente',
+      description: 'Anexa um documento previamente enviado (documentoId da sessão Alix) ao cliente — registra na memória como nota na seção "documentos". ALTO IMPACTO — HITL.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          clienteId: { type: 'string' },
+          documentoId: { type: 'string', description: 'ID do documento retornado por listar_documentos_sessao' },
+          titulo: { type: 'string' },
+        },
+        required: ['clienteId', 'documentoId'],
+      },
+    },
   ];
 
   const registry: ClaudeToolRegistry = {
@@ -82,6 +112,8 @@ export function buildCrmWriterTools(h: CrmWriterHandlers): { tools: ClaudeTool[]
     promover_lead_para_cliente: { spec: tools[1], handler: async (i) => h.handle_promover_lead_para_cliente(i) },
     criar_proposta_inteligente: { spec: tools[2], handler: async (i) => h.handle_criar_proposta_inteligente(i) },
     atualizar_proposta: { spec: tools[3], handler: async (i) => h.handle_atualizar_proposta(i) },
+    atualizar_dossie_dividas: { spec: tools[4], handler: async (i) => h.handle_atualizar_dossie_dividas(i) },
+    anexar_documento_cliente: { spec: tools[5], handler: async (i) => h.handle_anexar_documento_cliente(i) },
   };
 
   return { tools, registry };

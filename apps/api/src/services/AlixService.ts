@@ -4027,6 +4027,8 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
       promover_lead_para_cliente: (p) => this.exec_promover_lead_para_cliente(p as Record<string, unknown>),
       criar_proposta_inteligente: (p) => this.exec_criar_proposta_inteligente(p as Record<string, unknown>),
       atualizar_proposta: (p) => this.exec_atualizar_proposta(p as Record<string, unknown>),
+      atualizar_dossie_dividas: (p) => this.exec_atualizar_dossie_dividas(p as Record<string, unknown>),
+      anexar_documento_cliente: (p) => this.exec_anexar_documento_cliente(p as Record<string, unknown>),
     };
     return map[toolName] ?? null;
   }
@@ -5021,6 +5023,69 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
     const ok = b.updateProposta(id, partial);
     if (!ok) throw new Error(`Proposta ${id} não encontrada`);
     return { id, atualizado: true, campos: Object.keys(partial) };
+  }
+
+  // ── F5 · atualizar_dossie_dividas ──────────────────────
+  public handle_atualizar_dossie_dividas(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    if (!clienteId) return this.invalidInput('clienteId obrigatório');
+    const dividas = input.dividas as Record<string, unknown> | undefined;
+    if (!dividas || typeof dividas !== 'object') {
+      return this.invalidInput('Campo "dividas" obrigatório (objeto com bancarias, fornecedores, terras, dataBase)');
+    }
+    const contagem = {
+      bancarias: Array.isArray((dividas as any).bancarias) ? (dividas as any).bancarias.length : 0,
+      fornecedores: Array.isArray((dividas as any).fornecedores) ? (dividas as any).fornecedores.length : 0,
+      terras: Array.isArray((dividas as any).terras) ? (dividas as any).terras.length : 0,
+    };
+    return this.buildPendingResponse('atualizar_dossie_dividas',
+      `Atualizar dívidas do dossiê ${clienteId} (${contagem.bancarias} bancárias, ${contagem.fornecedores} fornecedores, ${contagem.terras} terras)`,
+      { clienteId, dividas },
+      { clienteId, contagem });
+  }
+
+  private async exec_atualizar_dossie_dividas(payload: Record<string, unknown>): Promise<unknown> {
+    const clienteId = String(payload.clienteId);
+    const dividas = payload.dividas as Record<string, unknown>;
+    const repo = getDossieRepository();
+    const current = repo.get(clienteId);
+    if (!current) throw new Error(`Dossiê do cliente ${clienteId} não encontrado`);
+    const updated = {
+      ...current,
+      dividas: {
+        ...current.dividas,
+        ...dividas,
+      } as any,
+      atualizadoEm: new Date().toISOString(),
+      atualizadoPor: 'alix',
+    };
+    repo.save(updated as any);
+    return { clienteId, ok: true, dividas: updated.dividas };
+  }
+
+  // ── F5 · anexar_documento_cliente ──────────────────────
+  public handle_anexar_documento_cliente(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    const documentoId = String(input.documentoId || '').trim();
+    if (!clienteId || !documentoId) return this.invalidInput('clienteId e documentoId obrigatórios');
+    const titulo = String(input.titulo || '').trim();
+    return this.buildPendingResponse('anexar_documento_cliente',
+      `Anexar documento ${documentoId}${titulo ? ` ("${titulo}")` : ''} ao cliente ${clienteId}`,
+      { clienteId, documentoId, titulo },
+      { clienteId, documentoId, titulo });
+  }
+
+  private async exec_anexar_documento_cliente(payload: Record<string, unknown>): Promise<unknown> {
+    const clienteId = String(payload.clienteId);
+    const documentoId = String(payload.documentoId);
+    const titulo = String(payload.titulo || '');
+    try {
+      const mem = getAlixMemoryService();
+      await mem.appendNota(clienteId, 'historico', `Documento anexado: ${titulo || documentoId} (id=${documentoId})`);
+      return { clienteId, documentoId, ok: true, titulo };
+    } catch (err) {
+      throw new Error(`Falha anexando documento: ${(err as Error).message}`);
+    }
   }
 }
 

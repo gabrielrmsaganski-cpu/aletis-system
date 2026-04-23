@@ -45,19 +45,27 @@ test('DealAnalyzerAgent.buildTools inclui tools de prospecção', () => {
   assert.ok(names.includes('listar_leads_filtrados'));
 });
 
-test('CRMWriterAgent F4 tem 4 tools HITL (criar_cliente, promover_lead, criar_proposta, atualizar_proposta)', () => {
-  // Mock AlixService-like object com os 4 handlers.
+test('CRMWriterAgent F4+F5 tem 6 tools HITL', () => {
   const fakeAlix = {
     handle_criar_cliente: () => ({}),
     handle_promover_lead_para_cliente: () => ({}),
     handle_criar_proposta_inteligente: () => ({}),
     handle_atualizar_proposta: () => ({}),
+    handle_atualizar_dossie_dividas: () => ({}),
+    handle_anexar_documento_cliente: () => ({}),
   };
   const a = new CRMWriterAgent(fakeAlix as any);
   const { tools } = a.buildTools(ctxBase);
-  assert.strictEqual(tools.length, 4);
+  assert.strictEqual(tools.length, 6);
   const names = tools.map(t => t.name).sort();
-  assert.deepStrictEqual(names, ['atualizar_proposta', 'criar_cliente', 'criar_proposta_inteligente', 'promover_lead_para_cliente']);
+  assert.deepStrictEqual(names, [
+    'anexar_documento_cliente',
+    'atualizar_dossie_dividas',
+    'atualizar_proposta',
+    'criar_cliente',
+    'criar_proposta_inteligente',
+    'promover_lead_para_cliente',
+  ]);
 });
 
 test('DocGeneratorAgent F5 tem 6 tools reais (gerar_proposta, parecer, bsc, fluxo, memoria, custeio_pdf)', () => {
