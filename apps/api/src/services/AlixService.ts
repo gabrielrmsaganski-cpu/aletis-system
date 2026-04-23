@@ -90,6 +90,13 @@ import {
 } from './alix/AlixConfirmationStore.js';
 // ── Alix Insano F1 — tools de prospecção ──────────────
 import { buildProspeccaoTools } from './alix/tools/prospeccao.js';
+// ── Alix Insano F2 — web search + scrapers ────────────
+import { WebSearchProviderFactory } from './alix/tools/websearch/WebSearchProviderFactory.js';
+import type { WebSearchProvider } from './alix/tools/websearch/types.js';
+import { buildFetchUrlTool } from './alix/tools/websearch/fetchUrl.js';
+import { buildCnpjTool } from './alix/tools/websearch/scrapers/cnpj.js';
+import { buildCvmTool } from './alix/tools/websearch/scrapers/cvm.js';
+import { buildJusbrasilTool } from './alix/tools/websearch/scrapers/jusbrasil.js';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname as _dirname } from 'path';
 import { fileURLToPath as _fileURLToPath } from 'url';
@@ -419,6 +426,11 @@ export class AlixService {
   private storageDir: string;
   private sessions = new Map<string, ChatSession>();
   private loaded = false;
+  private webSearchProvider: WebSearchProvider | null = null;
+
+  setWebSearchProvider(p: WebSearchProvider): void {
+    this.webSearchProvider = p;
+  }
 
   constructor(dsm: DataSourceManager, storageDir: string) {
     this.dsm = dsm;
@@ -3107,6 +3119,31 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
         spec: t,
         handler: prospeccaoKit.registry[t.name].handler as any,
       });
+    }
+
+    // ── Alix Insano F2 — web_search + fetch_url + scrapers ──
+    if (this.webSearchProvider) {
+      const provider = this.webSearchProvider;
+      const nativeTool = provider.asClaudeTool();
+      if (nativeTool) {
+        specs.push({
+          spec: nativeTool,
+          handler: async (input) => {
+            // Para TavilyWebSearch, o handler é chamado com { query, ... }.
+            // Para ClaudeNativeWebSearch, o LLM executa — o handler é stub.
+            if (provider.name === 'tavily') {
+              return provider.search(String(input.query || ''), input as any);
+            }
+            return { note: 'web_search nativa é executada pelo LLM (Claude)' };
+          },
+        });
+      }
+    }
+    const webToolkits = [buildFetchUrlTool(), buildCnpjTool(), buildCvmTool(), buildJusbrasilTool()];
+    for (const kit of webToolkits) {
+      for (const t of kit.tools) {
+        specs.push({ spec: t, handler: kit.registry[t.name].handler as any });
+      }
     }
 
     const tools: ClaudeTool[] = specs.map((s) => s.spec);

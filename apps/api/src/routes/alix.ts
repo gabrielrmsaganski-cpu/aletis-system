@@ -8,6 +8,7 @@ import { join } from 'path'
 import { DataSourceManager } from '../services/DataSourceManager.js'
 import { AlixService, registerStores } from '../services/AlixService.js'
 import { pingFoundry, isLLMEnabled, CLAUDE_MODEL_SONNET } from '../services/llm/ClaudeFoundryClient.js'
+import { WebSearchProviderFactory } from '../services/alix/tools/websearch/WebSearchProviderFactory.js'
 import { clientes } from './clientes.js'
 import { propostas, propostasInteligentes } from './propostas.js'
 
@@ -36,6 +37,15 @@ function getAlixService(): AlixService {
   })
 
   console.log('[ALIX] AlixService initialized — storage:', storageDir)
+
+  // Warm-up do WebSearch provider — injeta no Alix quando resolver
+  WebSearchProviderFactory.warmUp()
+    .then((provider) => {
+      alixInstance!.setWebSearchProvider(provider)
+      console.log('[ALIX] WebSearch provider ativo:', provider.name)
+    })
+    .catch((err) => console.warn('[ALIX] WebSearch warmUp falhou:', (err as Error).message))
+
   return alixInstance
 }
 
