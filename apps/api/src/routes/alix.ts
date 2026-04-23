@@ -11,6 +11,8 @@ import { pingFoundry, isLLMEnabled, CLAUDE_MODEL_SONNET } from '../services/llm/
 import { WebSearchProviderFactory } from '../services/alix/tools/websearch/WebSearchProviderFactory.js'
 import { OrchestratorService } from '../services/alix/OrchestratorService.js'
 import { getProspeccaoService } from '../services/prospeccao/ProspeccaoService.js'
+import { aggregateTelemetry, telemetryPath, type TelemetryRecord } from '../services/alix/telemetry.js'
+import { readFileSync, existsSync } from 'fs'
 import { clientes } from './clientes.js'
 import { propostas, propostasInteligentes } from './propostas.js'
 
@@ -285,5 +287,25 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
     })
   })
 
-  console.log('[ALIX] Rotas registradas: POST /api/alix/chat, GET/POST/DELETE /api/alix/session(s), GET /api/alix/llm/health')
+  // ── Alix Insano F7 — Telemetria ───────────────────────
+  fastify.get(
+    '/api/alix/telemetry/:sessionId',
+    async (request: FastifyRequest<{ Params: { sessionId: string } }>, reply: FastifyReply) => {
+      const storageDir = join(process.cwd(), 'storage', 'alix-sessions')
+      const path = telemetryPath(storageDir, request.params.sessionId)
+      if (!existsSync(path)) {
+        return reply.status(404).send({ success: false, error: 'Sem telemetria para esta sessão' })
+      }
+      try {
+        const raw = readFileSync(path, 'utf-8').trim().split('\n').filter(Boolean)
+        const records: TelemetryRecord[] = raw.map(line => JSON.parse(line))
+        const agg = aggregateTelemetry(records)
+        return reply.send({ success: true, data: { aggregate: agg, records } })
+      } catch (err) {
+        return reply.status(500).send({ success: false, error: (err as Error).message })
+      }
+    },
+  )
+
+  console.log('[ALIX] Rotas registradas: POST /api/alix/chat, GET/POST/DELETE /api/alix/session(s), GET /api/alix/llm/health, GET /api/alix/telemetry/:sessionId')
 }

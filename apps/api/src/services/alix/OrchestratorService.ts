@@ -17,6 +17,7 @@ import { DocGeneratorAgent } from './agents/DocGeneratorAgent.js';
 import type { SubAgent, SubAgentContext, SubAgentResult } from './agents/types.js';
 import { buildProspeccaoTools } from './tools/prospeccao.js';
 import { getAlixConfirmationStore } from './AlixConfirmationStore.js';
+import { appendTelemetry, estimateCostUsd, type TelemetryRecord } from './telemetry.js';
 
 export interface OrchestratorOpts {
   thinkingSupported?: boolean;
@@ -215,6 +216,7 @@ Data: ${hoje}`;
       .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
     const toolsUsed: string[] = [];
+    const startedAt = Date.now();
     const result = await runClaude(messages, {
       model: this.model,
       maxTokens: 4000,
@@ -224,6 +226,24 @@ Data: ${hoje}`;
       toolRegistry: registry,
       onToolCall: (n) => toolsUsed.push(n),
     });
+    const latencyMs = Date.now() - startedAt;
+
+    // Telemetria
+    const rec: TelemetryRecord = {
+      ts: new Date().toISOString(),
+      sessionId: session.id,
+      agent: 'Orchestrator',
+      model: this.model,
+      iter: result.iterations ?? 1,
+      toolCalls: toolsUsed,
+      inputTokens: result.usage?.input_tokens ?? 0,
+      outputTokens: result.usage?.output_tokens ?? 0,
+      cacheRead: result.usage?.cache_read_input_tokens ?? 0,
+      cacheCreate: result.usage?.cache_creation_input_tokens ?? 0,
+      latencyMs,
+    };
+    rec.costUsd = estimateCostUsd(rec);
+    appendTelemetry(this.storageDir, rec);
 
     const assistant: ChatMessage = {
       id: randomUUID(),
