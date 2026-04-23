@@ -170,7 +170,81 @@ export default async function alixConfirmationsRoutes(
     },
   );
 
+  // ── Alix Insano F4 — batch endpoints ─────────────────────
+
+  // GET /batches
+  fastify.get('/api/alix/confirmations/batches', async (_req: FastifyRequest, reply: FastifyReply) => {
+    const items = store.listBatches().map(b => ({
+      batchId: b.batchId, sessionId: b.sessionId, title: b.title, status: b.status,
+      createdAt: new Date(b.createdAt).toISOString(),
+      updatedAt: new Date(b.updatedAt).toISOString(),
+      pendingCount: b.pendings.length,
+    }));
+    return reply.send({ success: true, data: items, total: items.length });
+  });
+
+  // GET /batch/:batchId
+  fastify.get(
+    '/api/alix/confirmations/batch/:batchId',
+    async (req: FastifyRequest<{ Params: { batchId: string } }>, reply: FastifyReply) => {
+      const batch = store.getBatch(req.params.batchId);
+      if (!batch) return reply.status(404).send({ success: false, error: 'Batch não encontrado' });
+      return reply.send({ success: true, data: batch });
+    },
+  );
+
+  // POST /batch/:batchId/apply
+  fastify.post(
+    '/api/alix/confirmations/batch/:batchId/apply',
+    async (
+      req: FastifyRequest<{ Params: { batchId: string }; Body: { only?: string[] } }>,
+      reply: FastifyReply,
+    ) => {
+      const batch = store.getBatch(req.params.batchId);
+      if (!batch) return reply.status(404).send({ success: false, error: 'Batch não encontrado' });
+      const alix = getAlixServiceForExecutors();
+      try {
+        const results = await store.applyBatch(req.params.batchId, async (p) => {
+          const run = alix.getExecutor(p.toolName);
+          if (!run) throw new Error(`Executor não registrado: ${p.toolName}`);
+          return run(p.payload);
+        }, req.body ?? {});
+        return reply.send({
+          success: true,
+          data: { batchId: req.params.batchId, ...results, status: store.getBatch(req.params.batchId)?.status },
+        });
+      } catch (err) {
+        return reply.status(500).send({ success: false, error: (err as Error).message });
+      }
+    },
+  );
+
+  // POST /batch/:batchId/cancel
+  fastify.post(
+    '/api/alix/confirmations/batch/:batchId/cancel',
+    async (req: FastifyRequest<{ Params: { batchId: string } }>, reply: FastifyReply) => {
+      const batch = store.cancelBatch(req.params.batchId);
+      if (!batch) return reply.status(404).send({ success: false, error: 'Batch não encontrado' });
+      return reply.send({ success: true, data: { batchId: batch.batchId, status: batch.status } });
+    },
+  );
+
+  // GET /stream (SSE)
+  fastify.get('/api/alix/confirmations/stream', async (request, reply) => {
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    const write = (ev: unknown) => reply.raw.write(`data: ${JSON.stringify(ev)}\n\n`);
+    write({ type: 'hello', ts: new Date().toISOString() });
+    const unsub = store.on((ev) => write(ev));
+    const keepalive = setInterval(() => reply.raw.write(': keepalive\n\n'), 25_000);
+    request.raw.on('close', () => { clearInterval(keepalive); unsub(); });
+  });
+
   console.log(
-    '[ALIX] Confirmations rotas registradas: GET /api/alix/confirmations(/:id), POST /api/alix/confirmations/:id/{approve,reject}',
+    '[ALIX] Confirmations rotas registradas: GET /api/alix/confirmations(/:id), POST /api/alix/confirmations/:id/{approve,reject}, batch endpoints + /stream',
   );
 }
