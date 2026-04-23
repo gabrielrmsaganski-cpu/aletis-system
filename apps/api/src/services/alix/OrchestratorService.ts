@@ -16,6 +16,7 @@ import { CRMWriterAgent } from './agents/CRMWriterAgent.js';
 import { DocGeneratorAgent } from './agents/DocGeneratorAgent.js';
 import type { SubAgent, SubAgentContext, SubAgentResult } from './agents/types.js';
 import { buildProspeccaoTools } from './tools/prospeccao.js';
+import { getAlixConfirmationStore } from './AlixConfirmationStore.js';
 
 export interface OrchestratorOpts {
   thinkingSupported?: boolean;
@@ -158,7 +159,28 @@ Data: ${hoje}`;
     tools.push(crmWriterTool);
     registry['delegate_crm_writer'] = {
       spec: crmWriterTool,
-      handler: async (i) => runSubAgent(this.crmWriter, `${i.intent}\n\nPayload:\n${JSON.stringify(i.payload, null, 2)}`),
+      handler: async (i) => {
+        const sub = await runSubAgent(this.crmWriter, `${i.intent}\n\nPayload:\n${JSON.stringify(i.payload, null, 2)}`);
+        // Se sub-agente criou 2+ pendings, agrupa em batch (heurística: N depende de N-1)
+        if (sub.pendingConfirmations && sub.pendingConfirmations.length >= 2) {
+          const store = getAlixConfirmationStore();
+          const individuals = sub.pendingConfirmations
+            .map(id => store.get(id))
+            .filter((p): p is NonNullable<typeof p> => Boolean(p));
+          if (individuals.length >= 2) {
+            const items = individuals.map((p, idx) => ({
+              toolName: p.toolName,
+              description: p.description,
+              payload: p.payload,
+              dependsOn: idx > 0 ? idx - 1 : undefined,
+            }));
+            for (const id of sub.pendingConfirmations) store.consume(id);
+            const batch = store.createBatch(sessionId, `Pipeline ${sub.agent}`, items);
+            return { ...sub, batch: { batchId: batch.batchId, pendingCount: batch.pendings.length } };
+          }
+        }
+        return sub;
+      },
     };
 
     const docGenTool: ClaudeTool = {

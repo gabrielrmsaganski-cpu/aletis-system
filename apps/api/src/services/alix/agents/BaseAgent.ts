@@ -33,6 +33,7 @@ export abstract class BaseAgent implements SubAgent {
     const system = this.buildSystemPrompt(ctx);
     const { tools, registry } = this.buildTools(ctx);
     const toolCalls: string[] = [];
+    const pendingConfirmations: string[] = [];
     const startedAt = Date.now();
 
     const messages: ClaudeMessage[] = [{ role: 'user', content: goal }];
@@ -45,8 +46,13 @@ export abstract class BaseAgent implements SubAgent {
       tools,
       toolRegistry: registry,
       ...(this.thinking ? { thinking: this.thinking } : {}),
-      onToolCall: (toolName) => {
+      onToolCall: (toolName, _input, out) => {
         toolCalls.push(toolName);
+        // Se a tool retornou um pending confirmation, captura o ID
+        const meta = (out as { metadata?: { confirmationId?: string; pendingConfirmation?: boolean } } | undefined)?.metadata;
+        if (meta?.pendingConfirmation && typeof meta.confirmationId === 'string') {
+          pendingConfirmations.push(meta.confirmationId);
+        }
       },
     });
 
@@ -56,6 +62,7 @@ export abstract class BaseAgent implements SubAgent {
       agent: this.name,
       summary: result.text,
       toolCalls,
+      pendingConfirmations: pendingConfirmations.length > 0 ? pendingConfirmations : undefined,
       usage: {
         inputTokens: result.usage?.input_tokens ?? 0,
         outputTokens: result.usage?.output_tokens ?? 0,
