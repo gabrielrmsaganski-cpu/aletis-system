@@ -37,26 +37,26 @@ function buildSpecs(): ToolSpec[] {
     {
       spec: {
         name: 'listar_leads_filtrados',
-        description: 'Lista leads da Prospecção com filtros. Suporta UF, área (ha), valor de dívida, flag de ajuizamento, CNAE agro. Retorna paginado com stats.',
+        description: 'Lista leads da Prospecção com filtros. Suporta UF, tipoPessoa (PF/PJ), área (ha), valor de dívida, flag de ajuizamento, CNAE agro, termo de busca por nome. Retorna paginado com stats. Fontes atuais: PGFN (PJ agro com dívida ativa), SocioExpansion (sócios PF das PJs agro via BrasilAPI), DOU (futuro — RJ/falências).',
         input_schema: {
           type: 'object',
           properties: {
-            uf: { type: 'string' },
-            ufs: { type: 'array', items: { type: 'string' } },
+            uf: { type: 'string', description: 'UF (ex: MT, SP, PR)' },
+            tipoPessoa: { type: 'string', enum: ['PF', 'PJ'], description: 'PF = sócios PF de PJ agro; PJ = empresa direta com dívida PGFN' },
+            termo: { type: 'string', description: 'Busca por nome (case-insensitive)' },
             minHa: { type: 'number' },
-            maxHa: { type: 'number' },
             minDivida: { type: 'number' },
-            maxDivida: { type: 'number' },
-            temAjuizada: { type: 'boolean' },
-            cnaeAgro: { type: 'boolean', description: 'Filtra CNAE agrícola' },
+            temAjuizada: { type: 'boolean', description: 'Alias: apenasAjuizadas' },
+            apenasAjuizadas: { type: 'boolean' },
+            cnaeAgro: { type: 'boolean' },
             page: { type: 'number' },
-            limit: { type: 'number', description: 'Máx 50. Default 20.' },
+            pageSize: { type: 'number', description: 'Máx 200. Default 50.' },
             sortBy: { type: 'string', enum: ['score', 'divida', 'hectares', 'recencia'] },
           },
         },
       },
       handler: (i) => {
-        const filters: ProspeccaoFilters = { ...(i as any), limit: Math.min(Number(i.limit ?? 20), 50) };
+        const filters: ProspeccaoFilters = { ...(i as any), pageSize: Math.min(Number(i.pageSize ?? i.limit ?? 50), 200) };
         return svc.buscar(filters);
       },
     },
