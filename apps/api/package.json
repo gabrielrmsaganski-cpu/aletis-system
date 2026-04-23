@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node --env-file=../../.env dist/server.js",
     "test": "node --import tsx --test 'tests/**/*.test.ts'",
+    "typecheck": "tsc --noEmit",
     "ingest:pgfn": "tsx scripts/ingest-pgfn.ts",
     "ingest:sicar": "tsx scripts/ingest-sicar.ts",
     "download:sicar": "tsx --env-file=../../.env scripts/download-sicar.ts",

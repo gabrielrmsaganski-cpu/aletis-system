@@ -149,6 +149,8 @@ export interface ClaudeRunOpts {
   maxIterations?: number;
   temperature?: number;
   onToolCall?: (name: string, input: Record<string, unknown>, result: unknown) => void;
+  /** Extended thinking (Claude 4). Só use com Opus 4.7. */
+  thinking?: { type: 'enabled'; budget_tokens: number };
 }
 
 export interface ClaudeRunResult {
@@ -183,6 +185,7 @@ export async function runClaude(
     maxIterations = 6,
     temperature = 0.2,
     onToolCall,
+    thinking,
   } = opts;
 
   const toolsUsed: string[] = [];
@@ -205,6 +208,7 @@ export async function runClaude(
         model,
         max_tokens: maxTokens,
         temperature,
+        ...(thinking ? { thinking: thinking as any } : {}),
         ...(system ? { system: system as any } : {}),
         ...(tools && tools.length > 0 ? { tools: tools as any } : {}),
         messages: convo as any,
@@ -218,6 +222,7 @@ export async function runClaude(
           model,
           max_tokens: maxTokens,
           temperature,
+          ...(thinking ? { thinking: thinking as any } : {}),
           ...(system ? { system: system as any } : {}),
           ...(tools && tools.length > 0 ? { tools: tools as any } : {}),
           messages: convo as any,
