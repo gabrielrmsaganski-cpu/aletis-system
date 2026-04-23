@@ -9,12 +9,32 @@ import { DataSourceManager } from '../services/DataSourceManager.js'
 import { AlixService, registerStores } from '../services/AlixService.js'
 import { pingFoundry, isLLMEnabled, CLAUDE_MODEL_SONNET } from '../services/llm/ClaudeFoundryClient.js'
 import { WebSearchProviderFactory } from '../services/alix/tools/websearch/WebSearchProviderFactory.js'
+import { OrchestratorService } from '../services/alix/OrchestratorService.js'
 import { clientes } from './clientes.js'
 import { propostas, propostasInteligentes } from './propostas.js'
 
 // ── Singleton ─────────────────────────────────────────────
 
 let alixInstance: AlixService | null = null
+let orchestratorInstance: OrchestratorService | null = null
+let orchestratorInit: Promise<OrchestratorService> | null = null
+
+function isMultiagentEnabled(): boolean {
+  return (process.env.ALIX_MULTIAGENT_ENABLED ?? 'true').toLowerCase() !== 'false'
+}
+
+async function getOrchestrator(): Promise<OrchestratorService> {
+  if (orchestratorInstance) return orchestratorInstance
+  if (orchestratorInit) return orchestratorInit
+  orchestratorInit = (async () => {
+    const dsm = DataSourceManager.getInstance()
+    const storageDir = join(process.cwd(), 'storage', 'alix-sessions')
+    orchestratorInstance = await OrchestratorService.create(dsm, storageDir)
+    console.log('[ALIX] OrchestratorService pronto (feature flag ALIX_MULTIAGENT_ENABLED)')
+    return orchestratorInstance
+  })()
+  return orchestratorInit
+}
 
 function getAlixService(): AlixService {
   if (alixInstance) return alixInstance
@@ -77,10 +97,13 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
         })
       }
 
-      const result = await alix.chat(sessionId, message.trim(), {
-        attachments: Array.isArray(attachments) ? attachments.filter((x) => typeof x === 'string') : undefined,
-        clienteId: typeof clienteId === 'string' && clienteId.trim() ? clienteId.trim() : undefined,
-      })
+      const multi = isMultiagentEnabled()
+      const result = multi
+        ? await (await getOrchestrator()).chat(sessionId, message.trim())
+        : await alix.chat(sessionId, message.trim(), {
+            attachments: Array.isArray(attachments) ? attachments.filter((x) => typeof x === 'string') : undefined,
+            clienteId: typeof clienteId === 'string' && clienteId.trim() ? clienteId.trim() : undefined,
+          })
       return reply.status(200).send({
         success: true,
         data: {
@@ -93,6 +116,7 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
             updatedAt: result.session.updatedAt,
             messageCount: result.session.messages.length,
           },
+          mode: multi ? 'multiagent' : 'legacy',
         },
       })
     } catch (err) {
