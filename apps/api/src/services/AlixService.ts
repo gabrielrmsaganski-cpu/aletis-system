@@ -88,6 +88,8 @@ import {
   getAlixConfirmationStore,
   type PendingConfirmation,
 } from './alix/AlixConfirmationStore.js';
+// ── Alix Insano F1 — tools de prospecção ──────────────
+import { buildProspeccaoTools } from './alix/tools/prospeccao.js';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname as _dirname } from 'path';
 import { fileURLToPath as _fileURLToPath } from 'url';
@@ -3097,6 +3099,15 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
         handler: (i) => this.tool_briefing_cliente(String(i.clienteId || ctxClienteId || '')),
       },
     ];
+
+    // ── Alix Insano F1 — tools de prospecção ────────────
+    const prospeccaoKit = buildProspeccaoTools();
+    for (const t of prospeccaoKit.tools) {
+      specs.push({
+        spec: t,
+        handler: prospeccaoKit.registry[t.name].handler as any,
+      });
+    }
 
     const tools: ClaudeTool[] = specs.map((s) => s.spec);
     const registry: ClaudeToolRegistry = {};
