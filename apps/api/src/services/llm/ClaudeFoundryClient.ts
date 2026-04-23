@@ -6,7 +6,40 @@
 // ============================================================
 
 import Anthropic from '@anthropic-ai/sdk';
-import { DefaultAzureCredential, type AccessToken } from '@azure/identity';
+import { DefaultAzureCredential, AzureCliCredential, ChainedTokenCredential, type AccessToken, type TokenCredential, type GetTokenOptions } from '@azure/identity';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * Credential custom que delega para `az account get-access-token --subscription <id>`.
+ * Útil quando a VM tem múltiplas contas Azure e `AzureCliCredential` por tenantId
+ * escolhe o user errado. O az CLI resolve internamente o user certo pela subscription.
+ */
+class AzSubscriptionCliCredential implements TokenCredential {
+  constructor(private subscriptionId: string) {}
+  async getToken(scopes: string | string[], _opts?: GetTokenOptions): Promise<AccessToken | null> {
+    const scopeList = Array.isArray(scopes) ? scopes : [scopes];
+    const resource = scopeList[0].replace(/\/\.default$/, '');
+    try {
+      const { stdout } = await execFileAsync('az', [
+        'account', 'get-access-token',
+        '--resource', resource,
+        '--subscription', this.subscriptionId,
+        '--output', 'json',
+      ], { timeout: 15_000 });
+      const parsed = JSON.parse(stdout) as { accessToken: string; expiresOn: string };
+      return {
+        token: parsed.accessToken,
+        expiresOnTimestamp: new Date(parsed.expiresOn).getTime(),
+      };
+    } catch (err) {
+      const msg = (err as { stderr?: string; message?: string }).stderr || (err as Error).message;
+      throw new Error(`AzSubscriptionCliCredential falhou: ${msg}`);
+    }
+  }
+}
 
 // ── Config via env (todos com defaults sensatos) ─────────────
 
@@ -28,12 +61,23 @@ const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 // ── Token cache ─────────────────────────────────────────────
 
 class TokenCache {
-  private cred: DefaultAzureCredential | null = null;
+  private cred: TokenCredential | null = null;
   private cached: AccessToken | null = null;
   private inflight: Promise<AccessToken> | null = null;
 
-  private getCred(): DefaultAzureCredential {
-    if (!this.cred) this.cred = new DefaultAzureCredential();
+  private getCred(): TokenCredential {
+    if (!this.cred) {
+      // Em VMs com múltiplas subscriptions/tenants, AzSubscriptionCliCredential
+      // resolve o user correto via `az account get-access-token --subscription X`
+      // — mais robusto que AzureCliCredential que usa apenas --tenant.
+      const subscriptionId = process.env.AZURE_SUBSCRIPTION_ID;
+      const tenantId = process.env.AZURE_TENANT_ID;
+      const chain: TokenCredential[] = [];
+      if (subscriptionId) chain.push(new AzSubscriptionCliCredential(subscriptionId));
+      chain.push(new AzureCliCredential(tenantId ? { tenantId } : undefined));
+      chain.push(new DefaultAzureCredential(tenantId ? { tenantId } : undefined));
+      this.cred = new ChainedTokenCredential(...chain);
+    }
     return this.cred;
   }
 
@@ -56,7 +100,8 @@ class TokenCache {
       const tok = await this.inflight;
       this.cached = tok;
       return tok.token;
-    } catch {
+    } catch (err) {
+      console.warn('[Foundry] DefaultAzureCredential falhou:', (err as Error).message);
       return null;
     } finally {
       this.inflight = null;
@@ -75,10 +120,42 @@ const tokenCache = new TokenCache();
 let anthropicInstance: Anthropic | null = null;
 let usingKeyAuth = false;
 
+/**
+ * Se FOUNDRY_PREFER_KEY=1 ou a VM tem múltiplos tenants AAD (caso aisaganski),
+ * forçamos api-key auth desde o início e evitamos o erro "Token tenant does not match".
+ */
+function shouldPreferKeyAuth(): boolean {
+  const flag = (process.env.FOUNDRY_PREFER_KEY || '').toLowerCase();
+  return flag === '1' || flag === 'true' || flag === 'yes';
+}
+
+function buildKeyClient(): Anthropic {
+  if (!API_KEY_FALLBACK) {
+    throw new Error('Foundry auth indisponível: sem AZURE_SPEECH_KEY/AZURE_AI_SERVICES_KEY para fallback');
+  }
+  return new Anthropic({
+    baseURL: `${BASE_URL}/anthropic`,
+    apiKey: 'dummy-not-used',
+    defaultHeaders: {
+      'anthropic-version': ANTHROPIC_VERSION,
+      'api-key': API_KEY_FALLBACK,
+    },
+    defaultQuery: { 'api-version': API_VERSION },
+  });
+}
+
 async function getClient(): Promise<Anthropic> {
   if (anthropicInstance) return anthropicInstance;
 
-  // 1) Tenta AAD Bearer token
+  // 1) Flag explícita força api-key (útil em VMs com múltiplos tenants)
+  if (shouldPreferKeyAuth() && API_KEY_FALLBACK) {
+    anthropicInstance = buildKeyClient();
+    usingKeyAuth = true;
+    console.log('[Foundry] auth=api-key (FOUNDRY_PREFER_KEY)');
+    return anthropicInstance;
+  }
+
+  // 2) Tenta AAD Bearer token
   const token = await tokenCache.get();
   if (token) {
     anthropicInstance = new Anthropic({
@@ -91,20 +168,25 @@ async function getClient(): Promise<Anthropic> {
     return anthropicInstance;
   }
 
-  // 2) Fallback para api-key header (AZURE_SPEECH_KEY)
+  // 3) Fallback para api-key header (AZURE_SPEECH_KEY)
   if (!API_KEY_FALLBACK) {
     throw new Error('Foundry auth indisponível: sem token AAD e sem AZURE_SPEECH_KEY/AZURE_AI_SERVICES_KEY');
   }
-  anthropicInstance = new Anthropic({
-    baseURL: `${BASE_URL}/anthropic`,
-    apiKey: 'dummy-not-used',
-    defaultHeaders: {
-      'anthropic-version': ANTHROPIC_VERSION,
-      'api-key': API_KEY_FALLBACK,
-    },
-    defaultQuery: { 'api-version': API_VERSION },
-  });
+  anthropicInstance = buildKeyClient();
   usingKeyAuth = true;
+  console.log('[Foundry] auth=api-key (fallback sem AAD)');
+  return anthropicInstance;
+}
+
+/** Força switch para api-key auth — usado quando AAD token funcionou mas foi rejeitado pelo resource. */
+function switchToKeyAuth(): Anthropic {
+  if (!API_KEY_FALLBACK) {
+    throw new Error('Falha AAD e sem API_KEY_FALLBACK disponível');
+  }
+  tokenCache.reset();
+  anthropicInstance = buildKeyClient();
+  usingKeyAuth = true;
+  console.warn('[Foundry] switch forçado: AAD → api-key (provável tenant mismatch)');
   return anthropicInstance;
 }
 
@@ -149,6 +231,8 @@ export interface ClaudeRunOpts {
   maxIterations?: number;
   temperature?: number;
   onToolCall?: (name: string, input: Record<string, unknown>, result: unknown) => void;
+  /** Extended thinking (Claude 4). Só use com Opus 4.7. */
+  thinking?: { type: 'enabled'; budget_tokens: number };
 }
 
 export interface ClaudeRunResult {
@@ -183,6 +267,7 @@ export async function runClaude(
     maxIterations = 6,
     temperature = 0.2,
     onToolCall,
+    thinking,
   } = opts;
 
   const toolsUsed: string[] = [];
@@ -199,25 +284,44 @@ export async function runClaude(
     iteration++;
     let client = await getClient();
 
+    // Opus 4.7 não aceita `temperature` (deprecated). Omite para qualquer modelo opus.
+    const supportsTemperature = !/opus/i.test(model);
+
     let response;
     try {
       response = await client.messages.create({
         model,
         max_tokens: maxTokens,
-        temperature,
+        ...(supportsTemperature ? { temperature } : {}),
+        ...(thinking ? { thinking: thinking as any } : {}),
         ...(system ? { system: system as any } : {}),
         ...(tools && tools.length > 0 ? { tools: tools as any } : {}),
         messages: convo as any,
       });
     } catch (err: any) {
-      // Token expirou mid-request? Tenta uma vez renovando.
       const msg = String(err?.message || err || '');
-      if (/401|403|invalid_model_endpoint_authentication|token|expired/i.test(msg)) {
+
+      // Tenant mismatch: AAD devolveu token de tenant diferente do resource.
+      // Força fallback para api-key — funciona em VMs com múltiplas subscriptions.
+      if (/tenant.*does not match|Token tenant|resource tenant/i.test(msg) && !usingKeyAuth) {
+        client = switchToKeyAuth();
+        response = await client.messages.create({
+          model,
+          max_tokens: maxTokens,
+          ...(supportsTemperature ? { temperature } : {}),
+          ...(thinking ? { thinking: thinking as any } : {}),
+          ...(system ? { system: system as any } : {}),
+          ...(tools && tools.length > 0 ? { tools: tools as any } : {}),
+          messages: convo as any,
+        });
+      } else if (/401|403|invalid_model_endpoint_authentication|token|expired/i.test(msg)) {
+        // Token expirou mid-request? Tenta uma vez renovando.
         client = await refreshClientToken();
         response = await client.messages.create({
           model,
           max_tokens: maxTokens,
-          temperature,
+          ...(supportsTemperature ? { temperature } : {}),
+          ...(thinking ? { thinking: thinking as any } : {}),
           ...(system ? { system: system as any } : {}),
           ...(tools && tools.length > 0 ? { tools: tools as any } : {}),
           messages: convo as any,
@@ -346,4 +450,50 @@ export function isLLMEnabled(): boolean {
   if (flag === 'false' || flag === '0' || flag === 'off') return false;
   // Default: habilitado se houver credencial disponível.
   return true;
+}
+
+/**
+ * Verifica se o Foundry expõe a tool nativa `web_search_20250305`.
+ * Faz 1 chamada pequena; retorna true se a API aceitou o tool, false caso contrário.
+ */
+export async function pingFoundryWebSearch(): Promise<{ supported: boolean; error?: string }> {
+  try {
+    const client = await getClient();
+    await client.messages.create({
+      model: CLAUDE_MODEL_SONNET,
+      max_tokens: 256,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' } as any],
+      messages: [{ role: 'user', content: 'Qual a capital do Brasil?' }],
+    });
+    return { supported: true };
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (/400|unsupported|invalid.*tool|web_search/i.test(msg)) {
+      return { supported: false, error: msg };
+    }
+    // Outros erros (401, rede) não decidem suporte — repropaga
+    throw err;
+  }
+}
+
+/**
+ * Verifica se o Foundry suporta extended thinking em Opus 4.7.
+ */
+export async function pingFoundryThinking(): Promise<{ supported: boolean; error?: string }> {
+  try {
+    const client = await getClient();
+    await (client.messages.create as any)({
+      model: CLAUDE_MODEL_OPUS,
+      max_tokens: 1024,
+      thinking: { type: 'enabled', budget_tokens: 512 },
+      messages: [{ role: 'user', content: 'Diga "ok".' }],
+    });
+    return { supported: true };
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (/400|unsupported|invalid|thinking/i.test(msg)) {
+      return { supported: false, error: msg };
+    }
+    throw err;
+  }
 }

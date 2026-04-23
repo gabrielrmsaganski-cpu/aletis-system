@@ -7,6 +7,8 @@
     "dev": "tsx watch --env-file=../../.env src/server.ts",
     "build": "tsc",
     "start": "node --env-file=../../.env dist/server.js",
+    "test": "node --import tsx --test 'tests/**/*.test.ts'",
+    "typecheck": "tsc --noEmit",
     "ingest:pgfn": "tsx scripts/ingest-pgfn.ts",
     "ingest:sicar": "tsx scripts/ingest-sicar.ts",
     "download:sicar": "tsx --env-file=../../.env scripts/download-sicar.ts",
@@ -18,6 +20,8 @@
     "@aletis/knowledge-base": "workspace:*",
     "@aletis/shared-types": "workspace:*",
     "@anthropic-ai/sdk": "^0.90.0",
+    "@mozilla/readability": "^0.5.0",
+    "jsdom": "^25.0.1",
     "@azure/identity": "^4.13.1",
     "@fastify/cors": "^10.0.2",
     "@fastify/jwt": "^9.0.2",
@@ -40,6 +44,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/jsdom": "^21.1.7",
     "@types/node": "^22.10.1",
     "@types/pdf-parse": "^1.1.5",
     "tsx": "^4.19.2",

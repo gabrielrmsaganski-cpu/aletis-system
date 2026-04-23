@@ -88,6 +88,15 @@ import {
   getAlixConfirmationStore,
   type PendingConfirmation,
 } from './alix/AlixConfirmationStore.js';
+// ── Alix Insano F1 — tools de prospecção ──────────────
+import { buildProspeccaoTools } from './alix/tools/prospeccao.js';
+// ── Alix Insano F2 — web search + scrapers ────────────
+import { WebSearchProviderFactory } from './alix/tools/websearch/WebSearchProviderFactory.js';
+import type { WebSearchProvider } from './alix/tools/websearch/types.js';
+import { buildFetchUrlTool } from './alix/tools/websearch/fetchUrl.js';
+import { buildCnpjTool } from './alix/tools/websearch/scrapers/cnpj.js';
+import { buildCvmTool } from './alix/tools/websearch/scrapers/cvm.js';
+import { buildJusbrasilTool } from './alix/tools/websearch/scrapers/jusbrasil.js';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname as _dirname } from 'path';
 import { fileURLToPath as _fileURLToPath } from 'url';
@@ -417,6 +426,11 @@ export class AlixService {
   private storageDir: string;
   private sessions = new Map<string, ChatSession>();
   private loaded = false;
+  private webSearchProvider: WebSearchProvider | null = null;
+
+  setWebSearchProvider(p: WebSearchProvider): void {
+    this.webSearchProvider = p;
+  }
 
   constructor(dsm: DataSourceManager, storageDir: string) {
     this.dsm = dsm;
@@ -3098,6 +3112,40 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
       },
     ];
 
+    // ── Alix Insano F1 — tools de prospecção ────────────
+    const prospeccaoKit = buildProspeccaoTools();
+    for (const t of prospeccaoKit.tools) {
+      specs.push({
+        spec: t,
+        handler: prospeccaoKit.registry[t.name].handler as any,
+      });
+    }
+
+    // ── Alix Insano F2 — web_search + fetch_url + scrapers ──
+    if (this.webSearchProvider) {
+      const provider = this.webSearchProvider;
+      const nativeTool = provider.asClaudeTool();
+      if (nativeTool) {
+        specs.push({
+          spec: nativeTool,
+          handler: async (input) => {
+            // Para TavilyWebSearch, o handler é chamado com { query, ... }.
+            // Para ClaudeNativeWebSearch, o LLM executa — o handler é stub.
+            if (provider.name === 'tavily') {
+              return provider.search(String(input.query || ''), input as any);
+            }
+            return { note: 'web_search nativa é executada pelo LLM (Claude)' };
+          },
+        });
+      }
+    }
+    const webToolkits = [buildFetchUrlTool(), buildCnpjTool(), buildCvmTool(), buildJusbrasilTool()];
+    for (const kit of webToolkits) {
+      for (const t of kit.tools) {
+        specs.push({ spec: t, handler: kit.registry[t.name].handler as any });
+      }
+    }
+
     const tools: ClaudeTool[] = specs.map((s) => s.spec);
     const registry: ClaudeToolRegistry = {};
     for (const s of specs) {
@@ -3974,6 +4022,11 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
       agendar_reuniao: (p) => this.exec_agendar_reuniao(p as Record<string, unknown>),
       enviar_mensagem_whatsapp_intent: (p) => this.exec_enviar_mensagem_whatsapp_intent(p as Record<string, unknown>),
       gerar_proposta_renegociacao_intent: (p) => this.exec_gerar_proposta_renegociacao_intent(p as Record<string, unknown>),
+      // ── Alix Insano F4 ──
+      criar_cliente: (p) => this.exec_criar_cliente(p as Record<string, unknown>),
+      promover_lead_para_cliente: (p) => this.exec_promover_lead_para_cliente(p as Record<string, unknown>),
+      criar_proposta_inteligente: (p) => this.exec_criar_proposta_inteligente(p as Record<string, unknown>),
+      atualizar_proposta: (p) => this.exec_atualizar_proposta(p as Record<string, unknown>),
     };
     return map[toolName] ?? null;
   }
@@ -4823,6 +4876,140 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
       toolsUsed: [],
     };
   }
+
+  // ── Alix Insano F4 — 4 handlers HITL CRUD ──────────────
+
+  private invalidInput(msg: string): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    return { content: msg, sources: [], toolsUsed: [], metadata: { pendingConfirmation: false, error: 'invalid_input' } };
+  }
+
+  public handle_criar_cliente(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const nome = String(input.nome || '').trim();
+    const tipoPessoa = String(input.tipoPessoa || 'PF').toUpperCase();
+    const cpfCnpj = String(input.cpfCnpj || '').replace(/\D/g, '');
+    const uf = String(input.uf || '').toUpperCase();
+    if (!nome || !cpfCnpj) return this.invalidInput('Faltam campos obrigatórios: nome e cpfCnpj');
+    if (!['PF', 'PJ'].includes(tipoPessoa)) return this.invalidInput('tipoPessoa deve ser PF ou PJ');
+    const payload = {
+      nome, tipoPessoa, cpfCnpj, uf,
+      email: String(input.email || ''),
+      telefone: String(input.telefone || ''),
+      dividaTotal: Number(input.dividaTotal ?? 0),
+      origem: String(input.origem || 'alix'),
+    };
+    return this.buildPendingResponse('criar_cliente',
+      `Criar cliente ${nome} (${tipoPessoa} ${cpfCnpj})`, payload,
+      { nome, tipoPessoa, cpfCnpj, uf });
+  }
+
+  private async exec_criar_cliente(payload: Record<string, unknown>): Promise<unknown> {
+    const b = getCrmWriteBackends();
+    if (!b.setCliente) throw new Error('Backend setCliente não registrado');
+    const id = `cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const now = new Date().toISOString();
+    const cliente = {
+      id, nome: payload.nome, tipoPessoa: payload.tipoPessoa, cpfCnpj: payload.cpfCnpj,
+      uf: payload.uf, email: payload.email, telefone: payload.telefone,
+      dividaTotal: Number(payload.dividaTotal ?? 0),
+      statusAtendimento: 'ativo', origem: payload.origem,
+      criadoEm: now, atualizadoEm: now,
+    };
+    b.setCliente(cliente);
+    return { id, cliente };
+  }
+
+  public handle_promover_lead_para_cliente(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const cpfCnpj = String(input.cpfCnpj || '').replace(/\D/g, '');
+    if (!cpfCnpj) return this.invalidInput('cpfCnpj obrigatório');
+    const b = getCrmWriteBackends();
+    const lead = b.getLead ? b.getLead(cpfCnpj) : null;
+    if (!lead) return this.invalidInput(`Lead ${cpfCnpj} não encontrado na prospecção`);
+    const l = lead as { nome?: string; uf?: string; totalDivida?: number };
+    return this.buildPendingResponse('promover_lead_para_cliente',
+      `Promover lead ${l.nome ?? cpfCnpj} para cliente no CRM`,
+      { cpfCnpj, lead: l },
+      { cpfCnpj, nome: l.nome, uf: l.uf, divida: l.totalDivida });
+  }
+
+  private async exec_promover_lead_para_cliente(payload: Record<string, unknown>): Promise<unknown> {
+    const b = getCrmWriteBackends();
+    if (!b.setCliente || !b.getLead) throw new Error('Backends CRM não registrados');
+    const cpfCnpj = String(payload.cpfCnpj);
+    const lead = b.getLead(cpfCnpj) as {
+      nome?: string; tipoPessoa?: string; uf?: string; totalDivida?: number;
+      enrichment?: { razaoSocial?: string; email?: string; telefone1?: string };
+    };
+    if (!lead) throw new Error('Lead sumiu entre handle e apply');
+    const id = `cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const now = new Date().toISOString();
+    const cliente = {
+      id,
+      nome: lead.enrichment?.razaoSocial ?? lead.nome ?? `Lead ${cpfCnpj}`,
+      tipoPessoa: lead.tipoPessoa ?? 'PF',
+      cpfCnpj, uf: lead.uf ?? '',
+      email: lead.enrichment?.email ?? '',
+      telefone: lead.enrichment?.telefone1 ?? '',
+      dividaTotal: Number(lead.totalDivida ?? 0),
+      statusAtendimento: 'ativo', origem: 'prospeccao',
+      leadCpfCnpj: cpfCnpj,
+      criadoEm: now, atualizadoEm: now,
+    };
+    b.setCliente(cliente);
+    return { id, cliente };
+  }
+
+  public handle_criar_proposta_inteligente(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    const dividaTotal = Number(input.dividaTotal ?? 0);
+    const estrategia = String(input.estrategia || 'padrão').trim();
+    const bancos = Array.isArray(input.bancos) ? (input.bancos as string[]) : [];
+    if (!clienteId || dividaTotal <= 0) return this.invalidInput('clienteId e dividaTotal > 0 obrigatórios');
+    return this.buildPendingResponse('criar_proposta_inteligente',
+      `Criar proposta para cliente ${clienteId} (R$ ${dividaTotal.toLocaleString('pt-BR')}, ${estrategia})`,
+      { clienteId, dividaTotal, estrategia, bancos, observacao: String(input.observacao || '') },
+      { clienteId, dividaTotal, estrategia, bancosCount: bancos.length });
+  }
+
+  private async exec_criar_proposta_inteligente(payload: Record<string, unknown>): Promise<unknown> {
+    const b = getCrmWriteBackends();
+    if (!b.setPropostaInteligente) throw new Error('Backend setPropostaInteligente não registrado');
+    const id = `prop-int-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const proposta = {
+      id, clienteId: payload.clienteId,
+      dividaTotal: Number(payload.dividaTotal ?? 0),
+      estrategia: payload.estrategia, bancos: payload.bancos, observacao: payload.observacao,
+      criadoEm: new Date().toISOString(), criadoPor: 'alix',
+      secoes: Array(15).fill(0).map((_, i) => ({ ordem: i + 1, titulo: `Seção ${i + 1}`, status: 'rascunho' })),
+    };
+    b.setPropostaInteligente(proposta);
+    return { id, proposta };
+  }
+
+  public handle_atualizar_proposta(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const id = String(input.id || '').trim();
+    if (!id) return this.invalidInput('id obrigatório');
+    const partial: Record<string, unknown> = {};
+    for (const k of ['estrategia', 'dividaTotal', 'observacao', 'status', 'valor', 'prazoMeses', 'taxaNominal']) {
+      if (input[k] !== undefined) partial[k] = input[k];
+    }
+    if (Object.keys(partial).length === 0) {
+      return this.invalidInput('Envie ao menos um de: estrategia, dividaTotal, observacao, status, valor, prazoMeses, taxaNominal');
+    }
+    return this.buildPendingResponse('atualizar_proposta',
+      `Atualizar proposta ${id} (${Object.keys(partial).join(', ')})`,
+      { id, partial },
+      { id, campos: Object.keys(partial) });
+  }
+
+  private async exec_atualizar_proposta(payload: Record<string, unknown>): Promise<unknown> {
+    const b = getCrmWriteBackends();
+    if (!b.updateProposta) throw new Error('Backend updateProposta não registrado');
+    const id = String(payload.id);
+    const partial = (payload.partial as Record<string, unknown>) ?? {};
+    const ok = b.updateProposta(id, partial);
+    if (!ok) throw new Error(`Proposta ${id} não encontrada`);
+    return { id, atualizado: true, campos: Object.keys(partial) };
+  }
 }
 
 // ── Store accessors (set via registerStores) ───────────────
@@ -4844,3 +5031,16 @@ export function registerStores(accessors: {
 function getClientesStore(): any[] { return _getClientes(); }
 function getPropostasStore(): any[] { return _getPropostas(); }
 function getPropostasInteligentesList(): any[] { return _getPropostasInteligentes(); }
+
+// ── Alix Insano F4 — backends de escrita no CRM ──────────────
+interface CrmWriteBackends {
+  setCliente?: (cliente: { id: string; [key: string]: unknown }) => void;
+  setPropostaInteligente?: (p: { id: string; [key: string]: unknown }) => void;
+  updateProposta?: (id: string, partial: Record<string, unknown>) => boolean;
+  getLead?: (cpfCnpj: string) => unknown;
+}
+let crmWriteBackends: CrmWriteBackends = {};
+export function registerCrmWriteBackends(b: CrmWriteBackends): void {
+  crmWriteBackends = { ...crmWriteBackends, ...b };
+}
+function getCrmWriteBackends(): CrmWriteBackends { return crmWriteBackends; }

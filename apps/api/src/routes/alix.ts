@@ -6,14 +6,38 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { join } from 'path'
 import { DataSourceManager } from '../services/DataSourceManager.js'
-import { AlixService, registerStores } from '../services/AlixService.js'
+import { AlixService, registerStores, registerCrmWriteBackends } from '../services/AlixService.js'
 import { pingFoundry, isLLMEnabled, CLAUDE_MODEL_SONNET } from '../services/llm/ClaudeFoundryClient.js'
+import { WebSearchProviderFactory } from '../services/alix/tools/websearch/WebSearchProviderFactory.js'
+import { OrchestratorService } from '../services/alix/OrchestratorService.js'
+import { getProspeccaoService } from '../services/prospeccao/ProspeccaoService.js'
+import { aggregateTelemetry, telemetryPath, type TelemetryRecord } from '../services/alix/telemetry.js'
+import { readFileSync, existsSync } from 'fs'
 import { clientes } from './clientes.js'
 import { propostas, propostasInteligentes } from './propostas.js'
 
 // ── Singleton ─────────────────────────────────────────────
 
 let alixInstance: AlixService | null = null
+let orchestratorInstance: OrchestratorService | null = null
+let orchestratorInit: Promise<OrchestratorService> | null = null
+
+function isMultiagentEnabled(): boolean {
+  return (process.env.ALIX_MULTIAGENT_ENABLED ?? 'true').toLowerCase() !== 'false'
+}
+
+async function getOrchestrator(): Promise<OrchestratorService> {
+  if (orchestratorInstance) return orchestratorInstance
+  if (orchestratorInit) return orchestratorInit
+  orchestratorInit = (async () => {
+    const dsm = DataSourceManager.getInstance()
+    const storageDir = join(process.cwd(), 'storage', 'alix-sessions')
+    orchestratorInstance = await OrchestratorService.create(dsm, storageDir)
+    console.log('[ALIX] OrchestratorService pronto (feature flag ALIX_MULTIAGENT_ENABLED)')
+    return orchestratorInstance
+  })()
+  return orchestratorInit
+}
 
 function getAlixService(): AlixService {
   if (alixInstance) return alixInstance
@@ -35,7 +59,30 @@ function getAlixService(): AlixService {
     })),
   })
 
+  // Alix Insano F4 — backends de escrita no CRM
+  registerCrmWriteBackends({
+    setCliente: (c) => { clientes.set(c.id as string, c as any); },
+    setPropostaInteligente: (p) => { propostasInteligentes.set(p.id as string, p as any); },
+    updateProposta: (id, partial) => {
+      const p = propostas.get(id);
+      if (!p) return false;
+      Object.assign(p as any, partial, { atualizadoEm: new Date().toISOString() });
+      propostas.set(id, p);
+      return true;
+    },
+    getLead: (cpfCnpj) => getProspeccaoService().getLead(cpfCnpj),
+  });
+
   console.log('[ALIX] AlixService initialized — storage:', storageDir)
+
+  // Warm-up do WebSearch provider — injeta no Alix quando resolver
+  WebSearchProviderFactory.warmUp()
+    .then((provider) => {
+      alixInstance!.setWebSearchProvider(provider)
+      console.log('[ALIX] WebSearch provider ativo:', provider.name)
+    })
+    .catch((err) => console.warn('[ALIX] WebSearch warmUp falhou:', (err as Error).message))
+
   return alixInstance
 }
 
@@ -67,10 +114,13 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
         })
       }
 
-      const result = await alix.chat(sessionId, message.trim(), {
-        attachments: Array.isArray(attachments) ? attachments.filter((x) => typeof x === 'string') : undefined,
-        clienteId: typeof clienteId === 'string' && clienteId.trim() ? clienteId.trim() : undefined,
-      })
+      const multi = isMultiagentEnabled()
+      const result = multi
+        ? await (await getOrchestrator()).chat(sessionId, message.trim())
+        : await alix.chat(sessionId, message.trim(), {
+            attachments: Array.isArray(attachments) ? attachments.filter((x) => typeof x === 'string') : undefined,
+            clienteId: typeof clienteId === 'string' && clienteId.trim() ? clienteId.trim() : undefined,
+          })
       return reply.status(200).send({
         success: true,
         data: {
@@ -83,6 +133,7 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
             updatedAt: result.session.updatedAt,
             messageCount: result.session.messages.length,
           },
+          mode: multi ? 'multiagent' : 'legacy',
         },
       })
     } catch (err) {
@@ -236,5 +287,25 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
     })
   })
 
-  console.log('[ALIX] Rotas registradas: POST /api/alix/chat, GET/POST/DELETE /api/alix/session(s), GET /api/alix/llm/health')
+  // ── Alix Insano F7 — Telemetria ───────────────────────
+  fastify.get(
+    '/api/alix/telemetry/:sessionId',
+    async (request: FastifyRequest<{ Params: { sessionId: string } }>, reply: FastifyReply) => {
+      const storageDir = join(process.cwd(), 'storage', 'alix-sessions')
+      const path = telemetryPath(storageDir, request.params.sessionId)
+      if (!existsSync(path)) {
+        return reply.status(404).send({ success: false, error: 'Sem telemetria para esta sessão' })
+      }
+      try {
+        const raw = readFileSync(path, 'utf-8').trim().split('\n').filter(Boolean)
+        const records: TelemetryRecord[] = raw.map(line => JSON.parse(line))
+        const agg = aggregateTelemetry(records)
+        return reply.send({ success: true, data: { aggregate: agg, records } })
+      } catch (err) {
+        return reply.status(500).send({ success: false, error: (err as Error).message })
+      }
+    },
+  )
+
+  console.log('[ALIX] Rotas registradas: POST /api/alix/chat, GET/POST/DELETE /api/alix/session(s), GET /api/alix/llm/health, GET /api/alix/telemetry/:sessionId')
 }
