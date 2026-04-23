@@ -36,6 +36,8 @@ import {
   Zap,
 } from 'lucide-react'
 import { apiFetch } from '../hooks/useApi'
+import { AlixConfirmationsPanel } from '../components/alix/AlixConfirmationBatch'
+import { SubagentIndicator, detectLastSubagent } from '../components/alix/SubagentIndicator'
 
 // ────────────────────────────────────────────────────────────
 // Types — mirror AlixService.ts server types
@@ -1035,7 +1037,7 @@ export default function ALIX() {
                   }`}>
                     {!isUser && (
                       <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-aletis-borda/40">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <div className="w-5 h-5 rounded-full bg-aletis-dourado flex items-center justify-center">
                             <Bot className="w-3 h-3 text-white" />
                           </div>
@@ -1043,6 +1045,8 @@ export default function ALIX() {
                           {msg.intent && (
                             <span className="text-[10px] text-aletis-grafite-claro font-mono">• {msg.intent}</span>
                           )}
+                          {/* Alix Insano — indicator do sub-agente que respondeu */}
+                          <SubagentIndicator active={detectLastSubagent(msg.toolsUsed)} />
                         </div>
                         <button
                           onClick={() => handleCopy(msg.id, msg.content)}
@@ -1135,6 +1139,11 @@ export default function ALIX() {
           </div>
 
           {/* Attachment chips */}
+          {/* Alix Insano — painel de pending confirmations + batches (SSE stream) */}
+          <div className="px-4 pt-3 border-t border-aletis-borda bg-zinc-950">
+            <AlixConfirmationsPanel />
+          </div>
+
           {attachments.length > 0 && (
             <div className="px-4 pt-3 border-t border-aletis-borda bg-aletis-bege/30 flex flex-wrap gap-2">
               {attachments.map((a) => {
