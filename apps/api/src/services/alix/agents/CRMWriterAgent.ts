@@ -1,10 +1,12 @@
 // ============================================================
-// CRMWriterAgent — escrita no CRM (F3: stub; F4 adiciona tools HITL)
+// CRMWriterAgent — 4 tools HITL (F4)
 // ============================================================
 
 import { BaseAgent } from './BaseAgent.js';
 import type { SubAgentContext } from './types.js';
 import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js';
+import { buildCrmWriterTools } from '../crm/writer-tools.js';
+import type { AlixService } from '../../AlixService.js';
 
 export class CRMWriterAgent extends BaseAgent {
   name = 'CRMWriter';
@@ -12,24 +14,39 @@ export class CRMWriterAgent extends BaseAgent {
   maxTokens = 4000;
   maxIterations = 10;
 
+  constructor(private alix: AlixService) {
+    super();
+  }
+
   buildSystemPrompt(ctx: SubAgentContext): string {
     return `Você é o CRMWriter da ALETIS — sub-agente do Alix.
 
 Missão: executar ações de escrita no CRM com precisão.
 
-Em F3, stub: você não tem tools HITL ainda (F4 trará criar_cliente, criar_proposta, promover_lead, etc). Por ora, descreva o plano de ação ao orquestrador — quais payloads precisaria, o que validar antes, quais confirmações seriam criadas.
+Você tem 4 tools HITL (todas alto impacto — criam pending confirmation):
+- criar_cliente: novo cliente do zero
+- promover_lead_para_cliente: converte lead Prospecção em cliente (reaproveita enriquecimento)
+- criar_proposta_inteligente: proposta 15 seções
+- atualizar_proposta: patch em proposta existente
+
+Regras:
+1. Valide payload antes de chamar: campos obrigatórios preenchidos?
+2. Após tool retornar confirmationId, pare — o orquestrador vai agrupar e entregar ao user.
+3. Se faltar dado, diga ao orquestrador o que falta.
+4. Nunca invente IDs.
 
 Contexto:
 - sessionId: ${ctx.sessionId}
-${ctx.clienteId ? `- clienteId alvo: ${ctx.clienteId}` : ''}
-
-Regras:
-1. Valide payload antes — se falta dado, explicite o que falta.
-2. Retorne um mini-plano estruturado (JSON + markdown).
-3. Nunca invente IDs.`;
+${ctx.clienteId ? `- clienteId: ${ctx.clienteId}` : ''}
+${ctx.leadCpfCnpj ? `- leadCpfCnpj: ${ctx.leadCpfCnpj}` : ''}`;
   }
 
   buildTools(_ctx: SubAgentContext): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-    return { tools: [], registry: {} };
+    return buildCrmWriterTools({
+      handle_criar_cliente: (i) => this.alix.handle_criar_cliente(i),
+      handle_promover_lead_para_cliente: (i) => this.alix.handle_promover_lead_para_cliente(i),
+      handle_criar_proposta_inteligente: (i) => this.alix.handle_criar_proposta_inteligente(i),
+      handle_atualizar_proposta: (i) => this.alix.handle_atualizar_proposta(i),
+    });
   }
 }

@@ -8,7 +8,7 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import type { DataSourceManager } from '../DataSourceManager.js';
-import type { ChatSession, ChatMessage } from '../AlixService.js';
+import { AlixService, type ChatSession, type ChatMessage } from '../AlixService.js';
 import { runClaude, type ClaudeTool, type ClaudeToolRegistry, type ClaudeMessage, isLLMEnabled, pingFoundryThinking } from '../llm/ClaudeFoundryClient.js';
 import { DealAnalyzerAgent } from './agents/DealAnalyzerAgent.js';
 import { WebResearcherAgent } from './agents/WebResearcherAgent.js';
@@ -19,6 +19,7 @@ import { buildProspeccaoTools } from './tools/prospeccao.js';
 
 export interface OrchestratorOpts {
   thinkingSupported?: boolean;
+  alix?: AlixService;
 }
 
 export class OrchestratorService {
@@ -26,11 +27,13 @@ export class OrchestratorService {
   private webResearcher: WebResearcherAgent;
   private crmWriter: CRMWriterAgent;
   private docGenerator: DocGeneratorAgent;
+  private alix: AlixService;
 
   constructor(private dsm: DataSourceManager, private storageDir: string, opts: OrchestratorOpts = {}) {
+    this.alix = opts.alix ?? new AlixService(dsm, storageDir);
     this.dealAnalyzer = new DealAnalyzerAgent({ thinkingSupported: opts.thinkingSupported });
     this.webResearcher = new WebResearcherAgent();
-    this.crmWriter = new CRMWriterAgent();
+    this.crmWriter = new CRMWriterAgent(this.alix);
     this.docGenerator = new DocGeneratorAgent();
   }
 
