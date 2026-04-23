@@ -23,11 +23,12 @@ async function main() {
   const maxPerRun = parseFlag('max', 100);
   const svc = getProspeccaoService();
 
-  // Top-N PJs por score (que ainda não foram processadas)
-  const result = svc.buscar({ pageSize: maxPerRun * 3, sortBy: 'score' as any });
-  const allLeads = result.leads;
-  const pjs = allLeads
+  // Iteramos TODOS os leads (raw, sem cap de pageSize do buscar()).
+  // Filtra PJs e pega N em ordem de score (já pré-ordenado pelo ScoringEngine).
+  const allRaw = svc.sourcesRegistry.all();
+  const pjs = allRaw
     .filter(l => l.tipoPessoa === 'PJ' && l.cpfCnpj?.length >= 14)
+    .sort((a, b) => (b.totalDivida || 0) - (a.totalDivida || 0))
     .slice(0, maxPerRun)
     .map(l => ({ cnpj: l.cpfCnpj, nome: l.nome, uf: l.uf }));
 

@@ -158,8 +158,23 @@ function cleanDoc(doc: string): string {
  * Detecta keywords de crise + agro num bloco de texto do DOU.
  * Retorna array de crise keywords encontradas.
  */
+// Exclui falsos positivos: menções ao órgão "Ministério da Agricultura e Pecuária"
+// aparecem como cabeçalho em TODA publicação DOU do MAPA — não indicam contexto agro.
+const AGRO_FALSE_POSITIVES = [
+  'ministério da agricultura',
+  'secretaria de agricultura',
+  'superintendência de agricultura',
+  'universidade federal', // muitos resultados de universidade aparecem
+  'siape',
+  'pesquisadora lotad',
+];
+
 export function detectCrisisAgro(text: string): { crisis: string[]; agro: string[] } {
-  const lower = text.toLowerCase();
+  let lower = text.toLowerCase();
+  // Remove blocos de cabeçalho conhecidos para não gerar falso positivo
+  for (const fp of AGRO_FALSE_POSITIVES) {
+    lower = lower.replace(new RegExp(fp.replace(/\s+/g, '\\s+'), 'g'), '');
+  }
   const crisis = CRISIS_KEYWORDS.filter(k => lower.includes(k.toLowerCase()));
   const agro = AGRO_KEYWORDS_DOU.filter(k => lower.includes(k.toLowerCase()));
   return { crisis, agro };
@@ -235,6 +250,105 @@ export function atoToLeads(ato: {
  * A API oficial é o in.gov.br/consulta — aceita query por texto.
  * Retorna atos recentes (últimos 30 dias por padrão).
  */
+/**
+ * Scraper Puppeteer para o DOU — renderiza a página com Liferay AJAX
+ * e extrai os links dos atos com título completo.
+ *
+ * É o caminho "de produção": o HTML estático do DOU não contém os
+ * resultados (carregados por JavaScript). Puppeteer resolve isso.
+ */
+export async function fetchDOUAtosViaPuppeteer(opts: { query?: string; days?: number } = {}): Promise<Array<{ titulo: string; texto: string; dataPublicacao: string; url?: string }>> {
+  // Import dinâmico para não penalizar boot do server quando não usa
+  const puppeteerMod = await import('puppeteer');
+  const puppeteer = puppeteerMod.default ?? puppeteerMod;
+
+  const queries = opts.query
+    ? [opts.query]
+    : [
+        'recuperação judicial agropecuária',
+        'falência agropecuária',
+        'leilão judicial fazenda',
+        'alienação judicial imóvel rural',
+      ];
+  const days = opts.days ?? 30;
+  const end = new Date();
+  const start = new Date(end.getTime() - days * 86400_000);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, '');
+
+  let browser: any = null;
+  const allAtos: Array<{ titulo: string; texto: string; dataPublicacao: string; url?: string }> = [];
+  const seen = new Set<string>();
+  try {
+    browser = await puppeteer.launch({
+      headless: 'new' as any,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    });
+    for (const query of queries) {
+      try {
+        const page = await browser.newPage();
+        await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0');
+        const url = `https://www.in.gov.br/consulta/-/buscar/dou?q=${encodeURIComponent(query)}&publishFrom=${fmt(start)}&publishTo=${fmt(end)}&s=todos&exactDate=personalizado&delta=50`;
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: 45_000 });
+        // Espera a lista de resultados carregar via AJAX
+        try {
+          await page.waitForSelector('.resultado, .resultados, .search-results-resultado, a[href*="/web/dou/-/"]', { timeout: 10_000 });
+        } catch {
+          // Pode não ter resultados — ok
+        }
+
+        // Extrai o bloco-resultado completo (título + snippet do corpo) —
+        // o DOU renderiza cada resultado num container com texto circundante.
+        const atos = (await page.evaluate(() => {
+          const out: Array<{ titulo: string; url: string; snippet: string }> = [];
+          // Tenta vários seletores conhecidos
+          const containers = Array.from(document.querySelectorAll<HTMLElement>(
+            'div.resultado, div.search-result, div.card-resultado, .row.entry'
+          ));
+          if (containers.length > 0) {
+            for (const c of containers) {
+              const link = c.querySelector<HTMLAnchorElement>('a[href*="/dou/-/"]');
+              if (!link) continue;
+              const titulo = (link.textContent || '').replace(/\s+/g, ' ').trim();
+              const snippet = (c.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 500);
+              out.push({ titulo, url: link.href, snippet });
+            }
+          } else {
+            // Fallback: pega links + texto do container pai
+            const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="/web/dou/-/"], a[href*="/en/web/dou/-/"]'));
+            for (const a of links) {
+              const titulo = (a.textContent || '').replace(/\s+/g, ' ').trim();
+              if (titulo.length < 10) continue;
+              const parent = a.closest('article, div, li, section');
+              const snippet = parent ? (parent.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 500) : titulo;
+              out.push({ titulo, url: a.href, snippet });
+            }
+          }
+          return out;
+        })) as Array<{ titulo: string; url: string; snippet: string }>;
+
+        for (const a of atos) {
+          if (seen.has(a.url)) continue;
+          seen.add(a.url);
+          allAtos.push({
+            titulo: a.titulo.slice(0, 250),
+            // Texto = snippet completo (tem contexto agro+crise se houver)
+            texto: `${a.titulo}\n\n${a.snippet}`,
+            dataPublicacao: end.toISOString().slice(0, 10),
+            url: a.url,
+          });
+        }
+        await page.close();
+      } catch (err) {
+        console.warn(`[DOUSource/puppeteer] query="${query}" erro:`, (err as Error).message);
+      }
+    }
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+  console.log(`[DOUSource/puppeteer] ${allAtos.length} atos únicos das ${queries.length} queries`);
+  return allAtos;
+}
+
 export async function fetchDOUAtos(opts: { query?: string; days?: number } = {}): Promise<Array<{ titulo: string; texto: string; dataPublicacao: string; url?: string }>> {
   const queries = opts.query
     ? [opts.query]
@@ -317,8 +431,19 @@ export async function fetchDOUAtoDetalhe(atoUrl: string): Promise<string | null>
 /**
  * Pipeline completo de ingest: busca DOU, extrai leads agro em crise, persiste.
  */
-export async function ingestDOUOnce(source: DOUSource): Promise<{ scanned: number; matched: number; agroMatched: number; newLeads: number }> {
-  const atos = await fetchDOUAtos({ days: 30 });
+export async function ingestDOUOnce(source: DOUSource, opts: { usePuppeteer?: boolean } = {}): Promise<{ scanned: number; matched: number; agroMatched: number; newLeads: number; enrichedByDetail: number }> {
+  const usePuppeteer = opts.usePuppeteer ?? ((process.env.DOU_USE_PUPPETEER ?? 'true').toLowerCase() !== 'false');
+  let atos: Array<{ titulo: string; texto: string; dataPublicacao: string; url?: string }> = [];
+  if (usePuppeteer) {
+    try {
+      atos = await fetchDOUAtosViaPuppeteer({ days: 30 });
+    } catch (err) {
+      console.warn('[DOUSource] Puppeteer falhou, fallback para fetch HTML:', (err as Error).message);
+      atos = await fetchDOUAtos({ days: 30 });
+    }
+  } else {
+    atos = await fetchDOUAtos({ days: 30 });
+  }
   let matched = 0;
   let agroMatched = 0;
   const allLeads: LeadRaw[] = [];
@@ -361,5 +486,5 @@ export async function ingestDOUOnce(source: DOUSource): Promise<{ scanned: numbe
 
   const stats = { scanned: atos.length, matched, agroMatched };
   source.saveLeads(allLeads, stats);
-  return { ...stats, newLeads: allLeads.length };
+  return { ...stats, newLeads: allLeads.length, enrichedByDetail: enriched };
 }

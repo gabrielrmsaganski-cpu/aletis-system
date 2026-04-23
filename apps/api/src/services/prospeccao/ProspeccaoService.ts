@@ -70,6 +70,9 @@ export class ProspeccaoService {
   public dou: DOUSource
   public socios: SocioExpansionSource
 
+  /** Exposição pública do registry — necessária para scripts que precisam iterar TODOS os leads sem cap de pageSize. */
+  public get sourcesRegistry() { return this.sources }
+
   constructor(storageDir: string) {
     this.pgfn = new PGFNSource(storageDir)
     this.dou = new DOUSource(storageDir)

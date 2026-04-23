@@ -1,11 +1,11 @@
 {
   "manifest": {
-    "generatedAt": "2026-04-23T17:27:56.311Z",
+    "generatedAt": "2026-04-23T17:53:38.829Z",
     "source": "Diário Oficial da União (in.gov.br)",
-    "searchedAt": "2026-04-23T17:27:56.311Z",
+    "searchedAt": "2026-04-23T17:53:38.829Z",
     "stats": {
-      "scanned": 0,
-      "matched": 0,
+      "scanned": 126,
+      "matched": 126,
       "agroMatched": 0
     }
   },
