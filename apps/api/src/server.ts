@@ -133,6 +133,20 @@ async function start(): Promise<void> {
     const routes = app.printRoutes()
     console.log(routes)
 
+    // Alix Insano F8 — ProactiveService (ingest + insights)
+    if ((process.env.ALIX_PROACTIVE_ENABLED ?? 'true').toLowerCase() !== 'false') {
+      try {
+        const { getProspeccaoService } = await import('./services/prospeccao/ProspeccaoService.js')
+        const { getProactiveService } = await import('./services/alix/ProactiveService.js')
+        const { join } = await import('path')
+        const storageDir = join(process.cwd(), 'storage')
+        const proactive = getProactiveService(getProspeccaoService(), storageDir)
+        proactive.start()
+      } catch (err) {
+        console.warn('[server] ProactiveService não iniciou:', (err as Error).message)
+      }
+    }
+
     // Sondagem periódica das fontes de dados — primeira após 15s,
     // repetição a cada 10 minutos. Isso mantém o dashboard "Fontes"
     // com status atualizados em vez de "Desconhecido".

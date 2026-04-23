@@ -1,0 +1,398 @@
+{
+  "manifest": {
+    "generatedAt": "2026-04-23T17:30:55.473Z",
+    "source": "BrasilAPI CNPJ /cnpj/v1 (sócios-administradores)",
+    "stats": {
+      "pjsScanned": 20,
+      "sociosExtracted": 35,
+      "uniqueSocios": 35
+    }
+  },
+  "socios": [
+    {
+      "pseudoDoc": "SOC_719b64fe1b8ffe",
+      "nome": "JOSE DELGIZE MOREIRA",
+      "qualificacao": "Sócio-Administrador",
+      "faixaEtaria": "Entre 61 a 70 anos",
+      "dataEntrada": "2009-08-06",
+      "cpfParcial": "***383871**",
+      "cnpjOrigem": "06977792000135",
+      "nomeOrigem": "AGROFAL AGROPECUARIA LTDA",
+      "ufOrigem": "GO"
+    },
+    {
+      "pseudoDoc": "SOC_99fdf3197b7220",
+      "nome": "DENISE CORONADO ANTUNES DEPES",
+      "qualificacao": "Sócio",
+      "faixaEtaria": "Entre 51 a 60 anos",
+      "dataEntrada": "2013-12-02",
+      "cpfParcial": "***932868**",
+      "cnpjOrigem": "19364505000163",
+      "nomeOrigem": "AGRICOLA SANTA FE DO BRASIL LTDA",
+      "ufOrigem": "SP"
+    },
+    {
+      "pseudoDoc": "SOC_11665a03ef8023",
+      "nome": "WALDIMIR CORONADO ANTUNES JUNIOR",
+      "qualificacao": "Sócio-Administrador",
+      "faixaEtaria": "Entre 61 a 70 anos",
+      "dataEntrada": "2013-12-02",
+      "cpfParcial": "***865198**",
+      "cnpjOrigem": "19364505000163",
+      "nomeOrigem": "AGRICOLA SANTA FE DO BRASIL LTDA",
+      "ufOrigem": "SP"
+    },
+    {
+      "pseudoDoc": "SOC_f6da58f9bb026e",
+      "nome": "FELIPE RAKSA GARCIA",
+      "qualificacao": "Sócio",
+      "faixaEtaria": "Entre 31 a 40 anos",
+      "dataEntrada": "2019-03-28",
+      "cpfParcial": "***776019**",
+      "cnpjOrigem": "26716686000105",
+      "nomeOrigem": "CEREALISTA CAMINHOS DE ARAUCARIA LTDA",
+      "ufOrigem": "PR"
+    },
+    {
+      "pseudoDoc": "SOC_af3305fada0fb2",
+      "nome": "IZAIAS JACINTO GARCIA",
+      "qualificacao": "Sócio-Administrador",
+      "faixaEtaria": "Entre 51 a 60 anos",
+      "dataEntrada": "2016-12-14",
+      "cpfParcial": "***202579**",
+      "cnpjOrigem": "26716686000105",
+      "nomeOrigem": "CEREALISTA CAMINHOS DE ARAUCARIA LTDA",
+      "ufOrigem": "PR"
+    },
+    {
+      "pseudoDoc": "SOC_55a8a2e7fdd60f",
+      "nome": "LUIZ CARLOS DE ARAUJO LIMA",
+      "qualificacao": "Sócio-Administrador",
+      "faixaEtaria": "Entre 41 a 50 anos",
+      "dataEntrada": "2000-03-13",
+      "cpfParcial": "***618687**",
+      "cnpjOrigem": "03703999000123",
+      "nomeOrigem": "CEREALISTA ARAUJO LIMA LTDA",
+      "ufOrigem": "ES"
+    },
+    {
+      "pseudoDoc": "SOC_c13ad609e55279",
+      "nome": "RAFAELA BELLAN",
+      "qualificacao": "Sócio-Administrador",
+      "faixaEtaria": "Entre 31 a 40 anos",
+      "dataEntrada": "2022-10-28",
+      "cpfParcial": "***941881**",
+      "cnpjOrigem": "03154507000198",
+      "nomeOrigem": "A7 AVIACAO AGRICOLA LTDA",
+      "ufOrigem": "MS"
+    },
+    {
+      "pseudoDoc": "SOC_b8f9fa5bd31ca1",
+      "nome": "MARCIO DA SILVA BILHALVA",
+      "qualificacao": "Sócio-Administrador",
+      "faixaEtaria": "Entre 41 a 50 anos",
+      "dataEntrada": "2024-10-01",
+      "cpfParcial": "***843020**",
+      "cnpjOrigem": "14930540000189",
+      "nomeOrigem": "CEREALISTA MSB LTDA",
+      "ufOrigem": "RS"
+    },
+    {
+      "pseudoDoc": "SOC_03c3c2f149f68c",
+      "nome": "EURICO SOARES ANDRADE FILHO",
+      "qualificacao": "Diretor",
+      "faixaEtaria": "Entre 71 a 80 anos",
+      "dataEntrada": "2009-01-23",
+      "cpfParcial": "***844298**",
+      "cnpjOrigem": "60487493000168",
+      "nomeOrigem": "MOURA ANDRADE S A PASTORIL E AGRICOLA",
+      "ufOrigem": "SP"
+    },
+    {
+      "pseudoDoc": "SOC_def0e4575f2d35",
+      "nome": "NELSON ALMEIDA DE ANDRADE",
+      "qualificacao": "Presidente",
+      "faixaEtaria": "Maiores de 80 anos",
+      "dataEntrada": "2009-01-23",
+      "cpfParcial": "***656018**",
+      "cnpjOrigem": "60487493000168",
+      "nomeOrigem": "MOURA ANDRADE S A PASTORIL E AGRICOLA",
+      "ufOrigem": "SP"
+    },
+    {
+      "pseudoDoc": "SOC_7410334b079e59",
+      "nome": "FRANCISCO FLAVIO TERRA NETO",
+      "qualificacao": "Sócio-Administrador",
+      "faixaEtaria": "Entre 51 a 60 anos",
+      "dataEntrada": "2008-07-22",
+      "cpfParcial": "***365638**",
+      "cnpjOrigem": "04919407000178",
+      "nomeOrigem": "SANTA CLARA COMERCIO E REPRESENTACAO AGRICOLA LTDA",
+      "ufOrigem": "MT"
+    },
+    {
+      "pseudoDoc": "SOC_1cb90cfcb566be",
+      "nome": "MARIA CRISTINA ALVES BENETTI",
+      "qualificacao": "Sócio",
+      "faixaEtaria": "Entre 71 a 80 anos",
+      "dataEntrada": "2010-08-24",
+      "cpfParcial": "***898598**",
+      "cnpjOrigem": "66926130000168",
+      "nomeOrigem": "EMPRESA HOTEIS FAZENDA DO MAR VIRADO LTDA",
+      "ufOrigem": "SP"
+    },
+    {
+      "pseudoDoc": "SOC_91692585c05a65",
+      "nome": "PAULO LOPES",
+      "qualificacao": "Sócio-Administrador",
+      "faixaEtaria": "Entre 71 a 80 anos",
+      "dataEntrada": "2002-11-27",
+      "cpfParcial": "***094108**",
+      "cnpjOrigem": "66926130000168",
+      "nomeOrigem": "EMPRESA HOTEIS FAZENDA DO MAR VIRADO LTDA",
+      "ufOrigem": "SP"
+    },
+    {
+      "pseudoDoc": "SOC_1cdec749fb434a",
+      "nome": "ANDREAS KOPROWSKI",
+      "qualificacao": "Sócio-Administrador",
+      "faixaEtaria": "Entre 31 a 40 anos",
+      "dataEntrada": "2012-06-15",
+      "cpfParcial": "***510579**",
+      "cnpjOrigem": "06984217000160",
+      "nomeOrigem": "AGROPECUARIA E TURISMO CAMPO DO ZINCO LTDA",
+      "ufOrigem": "SC"
+    },
+    {
+      "pseudoDoc": "SOC_0851471db264c5",
+      "nome": "LEO VICTOR KOPROWSKI",
+      "qualificacao": "Sócio",
+      "faixaEtaria": "Entre 31 a 40 anos",
+      "dataEntrada": "2019-03-28",
+      "cpfParcial": "***602739**",
+      "cnpjOrigem": "06984217000160",
+      "nomeOrigem": "AGROPECUARIA E TURISMO CAMPO DO ZINCO LTDA",
+      "ufOrigem": "SC"
+    },
+    {
+      "pseudoDoc": "SOC_4c4509580a910b",
+      "nome": "CLEDSON LUIS FERNANDES NUNES",
+      "qualificacao": "Administrador",
+      "faixaEtaria": "Entre 51 a 60 anos",
+      "dataEntrada": "2022-03-31",
+      "cpfParcial": "***731924**",
+      "cnpjOrigem": "08198184000158",
+      "nomeOrigem": "RENOVARE UPANEMA AGROPECUARIA LTDA",
+      "ufOrigem": "RN"
+    },
+    {
+      "pseudoDoc": "SOC_6d4606c8a44efd",
+      "nome": "FABIOLA MARIA TAVARES DE OLIVEIRA PINHEIRO",
+      "qualificacao": "Sócio-Administrador",
+      "faixaEtaria": "Entre 51 a 60 anos",
+      "dataEntrada": "2006-07-25",
+      "cpfParcial": "***491894**",
+      "cnpjOrigem": "08198184000158",
+      "nomeOrigem": "RENOVARE UPANEMA AGROPECUARIA LTDA",
+      "ufOrigem": "RN"
+    },
+    {
+      "pseudoDoc": "SOC_bef49584949d42",
+      "nome": "JOSE ROBERTO CERQUEIRA LEITE",
+      "qualificacao": "Presidente",
+      "faixaEtaria": "Entre 71 a 80 anos",
+      "dataEntrada": "1999-12-27",
+      "cpfParcial": "***953498**",
+      "cnpjOrigem": "03571156000110",
+      "nomeOrigem": "AGROPECUARIA TERRA NOSTRA S.A.",
+      "ufOrigem": "SP"
+    },
+    {
+      "pseudoDoc": "SOC_bce0c6dad4e919",
+      "nome": "CESAR SATOSHI MATSUO",
+      "qualificacao": "Sócio-Administrador",
+      "faixaEtaria": "Entre 61 a 70 anos",
+      "dataEntrada": "2018-06-14",
+      "cpfParcial": "***084668**",
+      "cnpjOrigem": "30705519000136",
+      "nomeOrigem": "AGRICOLA MATSUO LTDA",
+      "ufOrigem": "SP"
+    },
+    {
+      "pseudoDoc": "SOC_eb19b3c11a917e",
+      "nome": "MARCOS ANTONIO FAVARO",
+      "qualificacao": "Sócio-Administrador",
+      "faixaEtaria": "Entre 61 a 70 anos",
+      "dataEntrada": "2007-07-23",
+      "cpfParcial": "***376498**",
+      "cnpjOrigem": "08954399000151",
+      "nomeOrigem": "AGROPECUARIA AGUA DOCE LTDA.",
+      "ufOrigem": "SP"
+    },
+    {
+      "pseudoDoc": "SOC_d72e57b0eddd66",
+      "nome": "VINICIUS CAMARGO PIMENTEL",
+      "qualificacao": "Sócio-Administrador",
+      "faixaEtaria": "Entre 61 a 70 anos",
+      "dataEntrada": "2007-07-23",
+      "cpfParcial": "***127488**",
+      "cnpjOrigem": "08954399000151",
+      "nomeOrigem": "AGROPECUARIA AGUA DOCE LTDA.",
+      "ufOrigem": "SP"
+    },
+    {
+      "pseudoDoc": "SOC_d34fd62eff906f",
+      "nome": "VALMIR DE SOUSA PEREIRA",
+      "qualificacao": "Sócio-Administrador",
+      "faixaEtaria": "Entre 51 a 60 anos",
+      "dataEntrada": "2010-01-11",
+      "cpfParcial": "***362391**",
+      "cnpjOrigem": "11453079000122",
+      "nomeOrigem": "AGROPECUARIA NOVA LTDA",
+      "ufOrigem": "GO"
+    },
+    {
+      "pseudoDoc": "SOC_b63b9f3453dbae",
+      "nome": "ADENILTO CAIRES COELHO",
+      "qualificacao": "Administrador",
+      "faixaEtaria": "Entre 61 a 70 anos",
+      "dataEntrada": "2006-03-27",
+      "cpfParcial": "***239995**",
+      "cnpjOrigem": "07940275000154",
+      "nomeOrigem": "AGROPECUARIA CAMPO LIMPO LTDA",
+      "ufOrigem": "BA"
+    },
+    {
+      "pseudoDoc": "SOC_31f24ab41e9801",
+      "nome": "ANDREA ATTILIO FERRARI",
+      "qualificacao": "Sócio Pessoa Física Residente no Exterior",
+      "faixaEtaria": "Entre 61 a 70 anos",
+      "dataEntrada": "2006-03-27",
+      "cpfParcial": "***675401**",
+      "cnpjOrigem": "07940275000154",
+      "nomeOrigem": "AGROPECUARIA CAMPO LIMPO LTDA",
+      "ufOrigem": "BA"
+    },
+    {
+      "pseudoDoc": "SOC_93f046cefe401d",
+      "nome": "ANTONIO BELLIN",
+      "qualificacao": "Sócio Pessoa Física Residente no Exterior",
+      "faixaEtaria": "Maiores de 80 anos",
+      "dataEntrada": "2006-03-27",
+      "cpfParcial": "***676211**",
+      "cnpjOrigem": "07940275000154",
+      "nomeOrigem": "AGROPECUARIA CAMPO LIMPO LTDA",
+      "ufOrigem": "BA"
+    },
+    {
+      "pseudoDoc": "SOC_91781c1eab8124",
+      "nome": "FABIO PAGLIARUSCO",
+      "qualificacao": "Sócio Pessoa Física Residente no Exterior",
+      "faixaEtaria": "Entre 71 a 80 anos",
+      "dataEntrada": "2006-03-27",
+      "cpfParcial": "***739775**",
+      "cnpjOrigem": "07940275000154",
+      "nomeOrigem": "AGROPECUARIA CAMPO LIMPO LTDA",
+      "ufOrigem": "BA"
+    },
+    {
+      "pseudoDoc": "SOC_10700945627d80",
+      "nome": "GABRIELE GIUSEPPE FERRARI",
+      "qualificacao": "Sócio Pessoa Física Residente no Exterior",
+      "faixaEtaria": "Entre 71 a 80 anos",
+      "dataEntrada": "2006-03-27",
+      "cpfParcial": "***675161**",
+      "cnpjOrigem": "07940275000154",
+      "nomeOrigem": "AGROPECUARIA CAMPO LIMPO LTDA",
+      "ufOrigem": "BA"
+    },
+    {
+      "pseudoDoc": "SOC_05030d73f168ff",
+      "nome": "GIUSEPPE MARIANO FERRARI",
+      "qualificacao": "Sócio Pessoa Física Residente no Exterior",
+      "faixaEtaria": "Entre 61 a 70 anos",
+      "dataEntrada": "2006-03-27",
+      "cpfParcial": "***675751**",
+      "cnpjOrigem": "07940275000154",
+      "nomeOrigem": "AGROPECUARIA CAMPO LIMPO LTDA",
+      "ufOrigem": "BA"
+    },
+    {
+      "pseudoDoc": "SOC_6c16c8537529ca",
+      "nome": "MAURIZIO FERRARI",
+      "qualificacao": "Sócio Pessoa Física Residente no Exterior",
+      "faixaEtaria": "Entre 71 a 80 anos",
+      "dataEntrada": "2006-03-27",
+      "cpfParcial": "***624411**",
+      "cnpjOrigem": "07940275000154",
+      "nomeOrigem": "AGROPECUARIA CAMPO LIMPO LTDA",
+      "ufOrigem": "BA"
+    },
+    {
+      "pseudoDoc": "SOC_41dada11549442",
+      "nome": "RENZO FERRARI",
+      "qualificacao": "Sócio Pessoa Física Residente no Exterior",
+      "faixaEtaria": "Entre 71 a 80 anos",
+      "dataEntrada": "2006-03-27",
+      "cpfParcial": "***676051**",
+      "cnpjOrigem": "07940275000154",
+      "nomeOrigem": "AGROPECUARIA CAMPO LIMPO LTDA",
+      "ufOrigem": "BA"
+    },
+    {
+      "pseudoDoc": "SOC_528bcf8d4540a0",
+      "nome": "LELIO RAVAGNANI FILHO",
+      "qualificacao": "Sócio-Administrador",
+      "faixaEtaria": "Entre 71 a 80 anos",
+      "dataEntrada": "1992-09-30",
+      "cpfParcial": "***054228**",
+      "cnpjOrigem": "24940314000132",
+      "nomeOrigem": "AGROPECUARIA COREMA LTDA",
+      "ufOrigem": "SP"
+    },
+    {
+      "pseudoDoc": "SOC_1c6cb58038e9c7",
+      "nome": "INEZ INETI LAZAROTTO",
+      "qualificacao": "Sócio",
+      "faixaEtaria": "Entre 51 a 60 anos",
+      "dataEntrada": "1990-10-26",
+      "cpfParcial": "***900420**",
+      "cnpjOrigem": "90314154000140",
+      "nomeOrigem": "AGROPECUARIA GUARANI LTDA",
+      "ufOrigem": "RS"
+    },
+    {
+      "pseudoDoc": "SOC_593dbb8239343b",
+      "nome": "LOURDES TEREZINHA LAZZAROTO TEIKOWSKI",
+      "qualificacao": "Sócio",
+      "faixaEtaria": "Entre 61 a 70 anos",
+      "dataEntrada": "2025-08-15",
+      "cpfParcial": "***121890**",
+      "cnpjOrigem": "90314154000140",
+      "nomeOrigem": "AGROPECUARIA GUARANI LTDA",
+      "ufOrigem": "RS"
+    },
+    {
+      "pseudoDoc": "SOC_86d623afc3de7e",
+      "nome": "VALDIR LAZZAROTO",
+      "qualificacao": "Sócio-Administrador",
+      "faixaEtaria": "Entre 61 a 70 anos",
+      "dataEntrada": "1985-02-21",
+      "cpfParcial": "***420760**",
+      "cnpjOrigem": "90314154000140",
+      "nomeOrigem": "AGROPECUARIA GUARANI LTDA",
+      "ufOrigem": "RS"
+    },
+    {
+      "pseudoDoc": "SOC_1759d2204513f1",
+      "nome": "AILSON DIAS DE CARVALHO",
+      "qualificacao": "Diretor",
+      "faixaEtaria": "Entre 71 a 80 anos",
+      "dataEntrada": "1998-08-10",
+      "cpfParcial": "***948875**",
+      "cnpjOrigem": "32625782000140",
+      "nomeOrigem": "CIA  AGROINDUSTRIAL NOVA ESPERANCA",
+      "ufOrigem": "BA"
+    }
+  ]
+}

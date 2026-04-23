@@ -18,6 +18,8 @@ import type { SubAgent, SubAgentContext, SubAgentResult } from './agents/types.j
 import { buildProspeccaoTools } from './tools/prospeccao.js';
 import { getAlixConfirmationStore } from './AlixConfirmationStore.js';
 import { appendTelemetry, estimateCostUsd, type TelemetryRecord } from './telemetry.js';
+import { getProactiveService } from './ProactiveService.js';
+import { getProspeccaoService } from '../prospeccao/ProspeccaoService.js';
 
 export interface OrchestratorOpts {
   thinkingSupported?: boolean;
@@ -251,12 +253,48 @@ Data de hoje: ${hoje}`;
     return { tools, registry };
   }
 
+  /**
+   * Monta um bloco de insights proativos para injetar no contexto do Alix.
+   * Só retorna algo se houver insights ainda não surfaceados (últimas 48h).
+   */
+  private async buildInsightsContext(): Promise<string | null> {
+    try {
+      const proactive = getProactiveService(getProspeccaoService(), this.storageDir.includes('alix-sessions') ? this.storageDir.replace(/\/alix-sessions$/, '') : this.storageDir);
+      const insights = await proactive.getUnsurfacedInsights(2);
+      if (insights.length === 0) return null;
+      const criticos = insights.filter(i => i.urgencia === 'critico').slice(0, 3);
+      const importantes = insights.filter(i => i.urgencia === 'importante').slice(0, 3);
+      if (criticos.length === 0 && importantes.length === 0) return null;
+
+      const lines: string[] = ['**NOVIDADES DESDE NOSSA ÚLTIMA CONVERSA** (surfaceado automaticamente):'];
+      if (criticos.length) {
+        lines.push('\n🔴 **Crítico:**');
+        for (const i of criticos) lines.push(`- ${i.titulo} — ${i.detalhes}`);
+      }
+      if (importantes.length) {
+        lines.push('\n🟡 **Importante:**');
+        for (const i of importantes) lines.push(`- ${i.titulo} — ${i.detalhes}`);
+      }
+      lines.push('\nSe o Christian perguntar sobre essas novidades, use as tools para aprofundar. Ele pode também ignorar e focar em outra coisa.');
+      return lines.join('\n');
+    } catch (err) {
+      console.warn('[Orchestrator] buildInsightsContext falhou:', (err as Error).message);
+      return null;
+    }
+  }
+
   async chat(sessionId: string | undefined, message: string): Promise<{ reply: string; session: ChatSession }> {
     const session = await this.loadOrCreateSession(sessionId);
     session.messages.push({ id: randomUUID(), role: 'user', content: message, timestamp: Date.now() });
 
     const { tools, registry } = this.buildTools(session.id, session.messages);
-    const system = this.buildSystemPrompt();
+    let system = this.buildSystemPrompt();
+
+    // Alix proativa — injeta insights não-surfaceados
+    const insightsContext = await this.buildInsightsContext();
+    if (insightsContext) {
+      system += `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${insightsContext}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+    }
 
     const messages: ClaudeMessage[] = session.messages
       .filter(m => m.role !== 'system')

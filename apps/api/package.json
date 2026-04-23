@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit",
     "ingest:pgfn": "tsx scripts/ingest-pgfn.ts",
     "ingest:sicar": "tsx scripts/ingest-sicar.ts",
+    "ingest:dou": "tsx --env-file=../../.env scripts/ingest-dou.ts",
+    "ingest:socios": "tsx --env-file=../../.env scripts/ingest-socios.ts",
     "download:sicar": "tsx --env-file=../../.env scripts/download-sicar.ts",
     "refresh:sicar": "tsx --env-file=../../.env scripts/refresh-sicar.ts"
   },

@@ -287,6 +287,24 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
     })
   })
 
+  // ── Alix Insano F8 — Insights proativos ────────────────
+  fastify.get(
+    '/api/alix/insights',
+    async (request: FastifyRequest<{ Querystring: { days?: string } }>, reply: FastifyReply) => {
+      try {
+        const { getProactiveService } = await import('../services/alix/ProactiveService.js')
+        const { getProspeccaoService } = await import('../services/prospeccao/ProspeccaoService.js')
+        const storageDir = join(process.cwd(), 'storage')
+        const proactive = getProactiveService(getProspeccaoService(), storageDir)
+        const days = Math.min(Number(request.query?.days ?? 7) || 7, 30)
+        const insights = await proactive.getRecentInsights(days)
+        return reply.send({ success: true, data: insights, total: insights.length })
+      } catch (err) {
+        return reply.status(500).send({ success: false, error: (err as Error).message })
+      }
+    },
+  )
+
   // ── Alix Insano F7 — Telemetria ───────────────────────
   fastify.get(
     '/api/alix/telemetry/:sessionId',

@@ -11,8 +11,11 @@ import { createReadStream, writeFileSync, readdirSync, mkdirSync } from 'fs'
 import { createInterface } from 'readline'
 import { join } from 'path'
 
-// Agro signal patterns in NOME_DEVEDOR — very conservative, prioritizes precision
+// Agro signal patterns in NOME_DEVEDOR — ampliados Wave Prospecção 4 (2026-04-23)
+// Objetivo: capturar mais PF agro (empresário individual, produtor rural, MEI rural)
+// e variantes pouco comuns de agronegócio.
 const AGRO_PATTERNS = [
+  // Originais — core agro
   /\bFAZENDA\b/i,
   /\bAGROPECUARIA\b/i,
   /\bAGROPECU[AÁ]RIA\b/i,
@@ -36,13 +39,67 @@ const AGRO_PATTERNS = [
   /\bMILHO\b/i,
   /\bALGOD[AÃ]O\b/i,
   /\bAGROEXP/i,
+  // Wave 4 — propriedades rurais (capturam mais PF)
+  /\bEST[AÂ]NCIA\b/i,
+  /\bHARAS\b/i,
+  /\bGRANJA\b/i,
+  /\bVIN[IÍ]COLA\b/i,
+  /\bLAVOURA\b/i,
+  /\bPLANTIO\b/i,
+  /\bCOLHEITA\b/i,
+  /\bCULTIVO\b/i,
+  /\bOLARIA\s+RURAL/i,
+  // Pecuária + derivados
+  /\bBOVINOCULTURA\b/i,
+  /\bSUINOCULTURA\b/i,
+  /\bAVICULTURA\b/i,
+  /\bCAPRINOCULTURA\b/i,
+  /\bPISCICULTURA\b/i,
+  /\bLAT[IÍ]C[IÍ]NIO/i,
+  /\bFRIGOR[IÍ]FICO\b/i,
+  // Culturas específicas
+  /\bCANA\s*(DE\s*A[CÇ][UÚ]CAR)?\b/i,
+  /\bARROZ\b/i,
+  /\bFEIJ[AÃ]O\b/i,
+  /\bTRIGO\b/i,
+  /\bLARANJA\b/i,
+  /\bCACAU\b/i,
+  /\bBORRACHA\b/i,
+  /\bCAST[AÂ]NHA\b/i,
+  /\bUVA\b/i,
+  /\bMANGA\b/i,
+  /\bMAMAO\b/i,
+  /\bMA[CÇ][AÃ]\b/i,
+  // Empresariais agro
+  /\bAGROPROP(?:RIEDADE)?\b/i,
+  /\bCOOPERATIV[AO]\s+AGR/i,
+  /\bCOOPERATIV[AO]\s+RURAL/i,
+  /\bLATIC[IÍ]NIO/i,
+  /\bINSUMOS?\s+AGR/i,
+  /\bDEFENSIVOS?\s+AGR/i,
+  /\bFERTILIZANT/i,
+  /\bIRRIGA[CÇ][AÃ]O\b/i,
+  /\bMAQUIN[AÁ]RI[AO]\s+AGR/i,
+  /\bSILO/i,
+  /\bARMAZ[EÉ]NS?\s+(GER|R[UÚ]STIC|CEREA)/i,
+  // PF / empresário individual patterns
+  /\bEMPRES[AÁ]RIO\s+RURAL\b/i,
+  /\bMEI\s+RURAL\b/i,
+  /\bPROD\.\s*RURAL\b/i,
+  /\bPROD\s+AGROPEC/i,
+  // Regionais agro conhecidos
+  /\bSERTANEJO\s+RURAL/i,
+  /\bPANTANAL\s+(?:AGRO|FAZENDA|RURAL)/i,
 ]
 
-// Suppress signals that match agro word but are clearly non-agro businesses
+// Suppress signals que batem com agro mas são claramente outras coisas
 const NEGATIVE_PATTERNS = [
   /\bIGREJA\b/i,
-  /\bASSOCIA[CÇ][AÃ]O\b.*\b(MORADOR|BAIRRO)/i,
+  /\bASSOCIA[CÇ][AÃ]O\b.*\b(MORADOR|BAIRRO|PROFESSOR|SERVIDOR)/i,
   /\bCLUBE\b.*\bCAMPO\b/i,
+  /\bCOND[OÓ]M[IÍ]NIO\b/i,
+  /\bLOTEAMENTO\b/i,
+  /\bINCORPORADORA\b/i,
 ]
 
 interface DebtRecord {

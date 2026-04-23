@@ -1,5 +1,7 @@
 import { join } from 'path'
 import { PGFNSource } from './PGFNSource'
+import { DOUSource } from './sources/DOUSource'
+import { SocioExpansionSource } from './sources/SocioExpansionSource'
 import { LeadSourceRegistry } from './sources/LeadSourceRegistry'
 import type { LeadSourceManifest } from './sources/LeadSource'
 import { BrasilAPISource, isAgroCnae } from './BrasilAPISource'
@@ -65,12 +67,16 @@ export class ProspeccaoService {
   /** Controle de lotes em execução (key = batchId). */
   private activeBatches = new Map<string, { cancelled: boolean }>()
 
+  public dou: DOUSource
+  public socios: SocioExpansionSource
+
   constructor(storageDir: string) {
     this.pgfn = new PGFNSource(storageDir)
-    // O registry é o ponto único de consulta a "todos os leads crus" — hoje
-    // só envolve a PGFN, mas novas fontes (CAR, CNPJ-CNAE) podem ser
-    // plugadas sem tocar em nenhum consumidor.
-    this.sources = new LeadSourceRegistry(storageDir, [this.pgfn])
+    this.dou = new DOUSource(storageDir)
+    this.socios = new SocioExpansionSource(storageDir)
+    // O registry é o ponto único de consulta a "todos os leads crus".
+    // Wave Prospecção 4 (2026-04-23): +DOU (falências/RJ/leilões) +Sócios PF agro.
+    this.sources = new LeadSourceRegistry(storageDir, [this.pgfn, this.dou, this.socios])
     this.brasil = new BrasilAPISource()
     this.area = new AreaEstimator()
     this.scorer = new ScoringEngine()

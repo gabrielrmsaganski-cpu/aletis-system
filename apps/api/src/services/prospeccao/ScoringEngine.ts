@@ -117,12 +117,31 @@ export class ScoringEngine {
     const pFit = FIT_REGIONAL_POR_UF[uf] ?? 4
     const labelFit = FIT_REGIONAL_LABEL[uf] ?? `${uf || 'UF desconhecida'} — fora do raio prioritário`
 
-    const total = pDivida + pAjuiz + pRec + pAgro + pHa + pVel + pFit
+    // 8. Multi-fonte bonus (Wave Prospecção 4) — lead que aparece em 2+ fontes
+    // é infinitamente mais quente: PGFN + DOU = empresa cuja dívida ativa acabou
+    // de virar RJ/falência. +15 pontos é suficiente para "fervendo".
+    const numSources = Array.isArray(lead.sources) ? lead.sources.length : 1
+    let pMultiSource = 0
+    let explicacaoMultiSource = ''
+    if (numSources >= 3) {
+      pMultiSource = 20
+      explicacaoMultiSource = `Lead visto em ${numSources} fontes distintas — prioridade máxima`
+    } else if (numSources === 2) {
+      pMultiSource = 15
+      explicacaoMultiSource = `Lead cruzado em 2 fontes — convergência de sinais`
+    }
+
+    // 9. Crise DOU bonus — signals "DOU:recuperação judicial|falência|leilão"
+    // são janelas de ouro (30-90 dias antes do preço da empresa ir a zero).
+    const hasDouCrise = Array.isArray(lead.agroSignals) && lead.agroSignals.some(s => s.startsWith('DOU:'))
+    const pDouCrise = hasDouCrise ? 10 : 0
+
+    const total = pDivida + pAjuiz + pRec + pAgro + pHa + pVel + pFit + pMultiSource + pDouCrise
 
     let classificacao: LeadScore['classificacao']
-    if (total >= 75) classificacao = 'quente'
-    else if (total >= 55) classificacao = 'morno'
-    else if (total >= 35) classificacao = 'frio'
+    if (total >= 85) classificacao = 'quente'
+    else if (total >= 65) classificacao = 'morno'
+    else if (total >= 45) classificacao = 'frio'
     else classificacao = 'reativo'
 
     return {
@@ -135,11 +154,15 @@ export class ScoringEngine {
         hectares: pHa,
         velocity: pVel,
         fitRegional: pFit,
-      },
+        multiSource: pMultiSource,
+        douCrise: pDouCrise,
+      } as any,
       motivos: {
         velocity: velocityResult.explicacao,
         fitRegional: labelFit,
-      },
+        ...(explicacaoMultiSource ? { multiSource: explicacaoMultiSource } : {}),
+        ...(hasDouCrise ? { douCrise: 'Lead em crise pública (RJ/falência/leilão) — janela de intervenção curta' } : {}),
+      } as any,
       classificacao,
       honorariosEstimados: this.estimarHonorarios(lead.totalDivida),
     }
