@@ -352,3 +352,49 @@ export function isLLMEnabled(): boolean {
   // Default: habilitado se houver credencial disponível.
   return true;
 }
+
+/**
+ * Verifica se o Foundry expõe a tool nativa `web_search_20250305`.
+ * Faz 1 chamada pequena; retorna true se a API aceitou o tool, false caso contrário.
+ */
+export async function pingFoundryWebSearch(): Promise<{ supported: boolean; error?: string }> {
+  try {
+    const client = await getClient();
+    await client.messages.create({
+      model: CLAUDE_MODEL_SONNET,
+      max_tokens: 256,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' } as any],
+      messages: [{ role: 'user', content: 'Qual a capital do Brasil?' }],
+    });
+    return { supported: true };
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (/400|unsupported|invalid.*tool|web_search/i.test(msg)) {
+      return { supported: false, error: msg };
+    }
+    // Outros erros (401, rede) não decidem suporte — repropaga
+    throw err;
+  }
+}
+
+/**
+ * Verifica se o Foundry suporta extended thinking em Opus 4.7.
+ */
+export async function pingFoundryThinking(): Promise<{ supported: boolean; error?: string }> {
+  try {
+    const client = await getClient();
+    await (client.messages.create as any)({
+      model: CLAUDE_MODEL_OPUS,
+      max_tokens: 1024,
+      thinking: { type: 'enabled', budget_tokens: 512 },
+      messages: [{ role: 'user', content: 'Diga "ok".' }],
+    });
+    return { supported: true };
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (/400|unsupported|invalid|thinking/i.test(msg)) {
+      return { supported: false, error: msg };
+    }
+    throw err;
+  }
+}
