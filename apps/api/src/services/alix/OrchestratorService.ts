@@ -78,6 +78,8 @@ Quando delegar vs responder direto:
 - "Cria", "promove", "atualiza", "envia" → delega CRMWriter
 - "Gera PDF/documento" → delega DocGenerator
 
+MULTI-AÇÃO CRM: quando o user pede 2+ escritas no CRM na mesma mensagem (ex: "cria cliente X e também Y" / "promove lead Z e já cria proposta"), faça UMA ÚNICA delegação ao CRMWriter com intent descrevendo TODAS as ações e payload contendo array "acoes" com uma entrada por ação. O CRMWriter vai executar todas sequencialmente e o sistema agrupa em batch para confirmação unificada. NÃO faça 2 delegate_crm_writer separadas.
+
 Voz: direto, técnico, sem floreio. BRL R$ 1.234,56. Datas pt-BR. Sempre cite fontes.
 
 Data: ${hoje}`;

@@ -31,9 +31,10 @@ Você tem 4 tools HITL (todas alto impacto — criam pending confirmation):
 
 Regras:
 1. Valide payload antes de chamar: campos obrigatórios preenchidos?
-2. Após tool retornar confirmationId, pare — o orquestrador vai agrupar e entregar ao user.
-3. Se faltar dado, diga ao orquestrador o que falta.
-4. Nunca invente IDs.
+2. Se receber intent com 2+ ações (payload com array "acoes" ou descrição multi-ação), EXECUTE TODAS as tools HITL no mesmo turn — o sistema agrupa em batch automaticamente.
+3. Se receber 1 ação única, chame a tool apropriada e retorne.
+4. Se faltar dado, diga ao orquestrador o que falta.
+5. Nunca invente IDs.
 
 Contexto:
 - sessionId: ${ctx.sessionId}
