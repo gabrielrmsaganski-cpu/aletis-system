@@ -6,10 +6,11 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { join } from 'path'
 import { DataSourceManager } from '../services/DataSourceManager.js'
-import { AlixService, registerStores } from '../services/AlixService.js'
+import { AlixService, registerStores, registerCrmWriteBackends } from '../services/AlixService.js'
 import { pingFoundry, isLLMEnabled, CLAUDE_MODEL_SONNET } from '../services/llm/ClaudeFoundryClient.js'
 import { WebSearchProviderFactory } from '../services/alix/tools/websearch/WebSearchProviderFactory.js'
 import { OrchestratorService } from '../services/alix/OrchestratorService.js'
+import { getProspeccaoService } from '../services/prospeccao/ProspeccaoService.js'
 import { clientes } from './clientes.js'
 import { propostas, propostasInteligentes } from './propostas.js'
 
@@ -55,6 +56,20 @@ function getAlixService(): AlixService {
       secoes: Array.isArray(p.secoes) ? p.secoes.length : 15,
     })),
   })
+
+  // Alix Insano F4 — backends de escrita no CRM
+  registerCrmWriteBackends({
+    setCliente: (c) => { clientes.set(c.id as string, c as any); },
+    setPropostaInteligente: (p) => { propostasInteligentes.set(p.id as string, p as any); },
+    updateProposta: (id, partial) => {
+      const p = propostas.get(id);
+      if (!p) return false;
+      Object.assign(p as any, partial, { atualizadoEm: new Date().toISOString() });
+      propostas.set(id, p);
+      return true;
+    },
+    getLead: (cpfCnpj) => getProspeccaoService().getLead(cpfCnpj),
+  });
 
   console.log('[ALIX] AlixService initialized — storage:', storageDir)
 
