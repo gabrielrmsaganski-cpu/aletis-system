@@ -39,6 +39,8 @@ logs/
 *.swo
 .DS_Store
 Thumbs.db
+.serena/
+.cursor/
 
 # OS & temp
 *.bak
@@ -96,3 +98,27 @@ apps/api/storage/alix-memory/*.md
 !apps/api/storage/alix-documents/.gitkeep
 !apps/api/storage/alix-outputs/.gitkeep
 !apps/api/storage/alix-memory/.gitkeep
+
+# Wave 9b — runtime state adicional ALIX (insights diários, push, feedback,
+# confirmations, contatos, surfaced state)
+apps/api/storage/alix-confirmations/
+apps/api/storage/alix-feedback/
+apps/api/storage/alix-insights/*.jsonl
+apps/api/storage/alix-push/
+apps/api/storage/inventario/
+apps/api/storage/.surfaced.json
+apps/api/storage/prospeccao/contatos.json
+
+# Auditoria interna (relatórios + screenshots gerados pelo sistema)
+aletis-audit/
+
+# Drizzle cache local
+.drizzle/
+
+# Coverage HTML (Vitest)
+coverage/
+
+# Playwright artifacts
+playwright-report/
+test-results/
+.playwright-mcp/
