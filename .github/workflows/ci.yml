@@ -13,7 +13,7 @@ concurrency:
 
 env:
   PNPM_VERSION: 9.15.4
-  NODE_VERSION: 20
+  NODE_VERSION: 22
 
 jobs:
   install:
