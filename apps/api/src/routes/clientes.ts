@@ -1,4 +1,11 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import {
+  upsertCliente as pgUpsertCliente,
+  listClientes as pgListClientes,
+  deleteCliente as pgDeleteCliente,
+} from '../db/ClienteRepository.js'
+import { isPgEnabled } from '../db/client.js'
+import { auditAsync } from '../db/AuditLog.js'
 import { getProspeccaoService } from '../services/prospeccao/ProspeccaoService'
 import type { CarConsultaResult, ClimaAgro, CnpjEnrichment, GeoEnrichment, LeadFull, ProducaoMunicipal } from '../services/prospeccao/types'
 import { calcularSRAI } from '../services/ScoreSRAI.js'
@@ -323,6 +330,70 @@ interface Cliente {
 
 export const clientes: Map<string, Cliente> = new Map()
 
+/**
+ * Helper unificado: grava no Map (source of truth runtime) e tenta
+ * espelhar no Postgres via dual-write. Erros do PG são best-effort —
+ * nunca falham o caller. Também emite trilha de auditoria LGPD.
+ */
+function persistCliente(c: Cliente, ator = 'system'): void {
+  const anterior = clientes.get(c.id)
+  clientes.set(c.id, c)
+  // fire-and-forget no upsert PG (não bloqueia o request).
+  void pgUpsertCliente(c as unknown as Record<string, unknown> as Parameters<typeof pgUpsertCliente>[0])
+  auditAsync({
+    ator,
+    acao: anterior ? 'update' : 'create',
+    recurso: `cliente:${c.id}`,
+    // Snapshots leves (chaves principais) para não estourar JSONB.
+    // Caller que precisa do diff completo consulta `payload` na tabela cliente.
+    dadosAntes: anterior
+      ? { estagio: anterior.estagio, valorTotalDivida: anterior.valorTotalDivida, valorTotalPago: anterior.valorTotalPago }
+      : null,
+    dadosDepois: { estagio: c.estagio, valorTotalDivida: c.valorTotalDivida, valorTotalPago: c.valorTotalPago },
+  })
+}
+
+/**
+ * Variante que NÃO toca PG — usada pelo seed inicial. O seed roda em
+ * module-load e não pode sobrescrever um PG já populado (perderia
+ * mutações persistidas). A sincronização Map→PG é decidida depois
+ * por `hydrateOrSeedClientesPg()` que respeita o que já está no banco.
+ */
+function setClienteLocal(c: Cliente): void {
+  clientes.set(c.id, c)
+}
+
+/**
+ * Boot orchestrator (chamado pelo server.ts após app.listen):
+ *   - Se PG está OFF → no-op (Map é a fonte e está cheia via seed).
+ *   - Se PG tem ≥ 1 cliente → SOBRESCREVE o Map com os dados do PG
+ *     (estado persistido vence o seed em memória).
+ *   - Se PG está vazio → semeia o PG com os clientes em Map agora
+ *     (one-shot: o seed em memória é preservado no banco).
+ *
+ * Retorna { hydrated, seeded } para log do servidor.
+ */
+export async function hydrateOrSeedClientesPg(): Promise<{ hydrated: number; seeded: number }> {
+  if (!isPgEnabled()) return { hydrated: 0, seeded: 0 }
+  const fromPg = await pgListClientes()
+  if (fromPg.length > 0) {
+    // Sobrescreve Map (PG vence seed)
+    clientes.clear()
+    for (const c of fromPg) clientes.set(c.id as string, c as unknown as Cliente)
+    return { hydrated: fromPg.length, seeded: 0 }
+  }
+  // PG vazio: dump do Map atual no banco (one-shot)
+  let seeded = 0
+  for (const c of clientes.values()) {
+    await pgUpsertCliente(c as unknown as Record<string, unknown> as Parameters<typeof pgUpsertCliente>[0])
+    seeded++
+  }
+  return { hydrated: 0, seeded }
+}
+
+/** Backward-compat: alias da função antiga. */
+export const hydrateClientesFromPg = hydrateOrSeedClientesPg
+
 function seed() {
   const data: Cliente[] = [
     /* ---- CASO REAL 1: Ailton Caeiro da Silva ---- */
@@ -416,7 +487,9 @@ function seed() {
   ]
 
   for (const c of data) {
-    clientes.set(c.id, c)
+    // Seed inicial só popula o Map; o PG é decidido pelo
+    // `hydrateOrSeedClientesPg` no boot (PG vence se já tiver dados).
+    setClienteLocal(c)
   }
 }
 
@@ -1020,7 +1093,7 @@ export default async function (fastify: FastifyInstance) {
       enrichStatus: { cnpj: 'pendente', geo: 'pendente', tentadoEm: new Date().toISOString() },
     }
 
-    clientes.set(id, novo)
+    persistCliente(novo)
 
     // Enriquecimento CAR — async, com timeout curto para offline; falha não bloqueia cadastro.
     // Se offline não achar, retorna imediatamente; live (codImovel) pode levar 15-30s.
@@ -1130,7 +1203,7 @@ export default async function (fastify: FastifyInstance) {
       carEnrichmentStatus = waitResult === 'done' ? 'applied' : 'pending'
     }
 
-    clientes.set(id, cliente)
+    persistCliente(cliente)
     // Qualquer PATCH pode mudar dívidas/área/cultura/estágio/exposição — o
     // orquestrador usa hash(input) então, se nada afetar análises, é no-op.
     scheduleAnalises(cliente, 'patch cliente')
@@ -1157,7 +1230,7 @@ export default async function (fastify: FastifyInstance) {
       codImovel,
       motivo: codImovel ? `live via código ${codImovel}` : 'reconsulta manual',
     })
-    clientes.set(id, cliente)
+    persistCliente(cliente)
     // Área e CAR acabaram de mudar — ABS/SRAI dependem disso.
     scheduleAnalises(cliente, 'reenriquecimento CAR manual')
 
@@ -1325,7 +1398,7 @@ export default async function (fastify: FastifyInstance) {
       }
     }
 
-    clientes.set(id, novo)
+    persistCliente(novo)
 
     // Enriquecimento em background (geo + clima + produção). Fire-and-forget.
     // Após o enrichment concluir, roda o orquestrador com o estado já completo.

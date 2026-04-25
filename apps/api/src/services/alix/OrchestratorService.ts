@@ -16,10 +16,28 @@ import { CRMWriterAgent } from './agents/CRMWriterAgent.js';
 import { DocGeneratorAgent } from './agents/DocGeneratorAgent.js';
 import type { SubAgent, SubAgentContext, SubAgentResult } from './agents/types.js';
 import { buildProspeccaoTools } from './tools/prospeccao.js';
+import { safeWrapRegistry } from './tools/safe-handler.js';
+import { buildCalculatorTools } from './tools/calculators.js';
+import { buildCrmReadTools } from './tools/crm-read.js';
+import { buildNewsTools } from './tools/news.js';
+import { buildCalendarioSafraTools } from './tools/calendario-safra.js';
+import { buildOnboardingTools } from './tools/onboarding.js';
+import { buildFeedbackTools } from './tools/feedback.js';
+import { getFeedbackService } from './learning/FeedbackService.js';
+import { buildPlaybooksTools } from './tools/playbooks.js';
+import { buildSimilaridadeTools } from './tools/similaridade.js';
+import { buildClimaTools } from './tools/clima.js';
+import { buildSicarLiveTools } from './tools/sicar-live.js';
+import { buildTjProcessosTools } from './tools/tj-processos.js';
+import { buildIncraSigefTools } from './tools/incra-sigef.js';
+import { buildInventarioTools } from './tools/inventario.js';
 import { getAlixConfirmationStore } from './AlixConfirmationStore.js';
 import { appendTelemetry, estimateCostUsd, type TelemetryRecord } from './telemetry.js';
 import { getProactiveService } from './ProactiveService.js';
 import { getProspeccaoService } from '../prospeccao/ProspeccaoService.js';
+import { MarketBriefService } from '../MarketBriefService.js';
+import { getAlixMemoryService } from './memory/AlixMemoryService.js';
+import { getDocumentIntakeService } from './intake/DocumentIntakeService.js';
 
 export interface OrchestratorOpts {
   thinkingSupported?: boolean;
@@ -90,8 +108,33 @@ você delega a sub-agentes.
 Você é PM dos sub-agentes. Eles reportam a você. Você sintetiza para o Christian.
 
 # Tools leves diretas (responda sem delegar)
-buscar_lead, listar_leads_filtrados, stats_prospeccao, top_leads_by_score — para
-perguntas factuais rápidas.
+**Prospecção:** buscar_lead, listar_leads_filtrados, stats_prospeccao, top_leads_by_score
+**CRM (leitura):** buscar_cliente, listar_clientes, listar_propostas_cliente, resumo_portfolio_crm
+**Mercado/contexto:** cotacoes_hoje — panorama diário (commodities, câmbio, macro)
+**Cálculo agro-financeiro:**
+  - simular_desenrola_rural (MP 1208/2024 — descontos PGFN/RFB rural)
+  - simular_reforma_tributaria (LC 214/2025 — comparativo atual × CBS/IBS)
+  - calcular_funrural (receita × folha)
+  - avaliar_projeto_custeio (VPL, TIR, payback)
+  - financeiro_interno_dashboard / projecao_caixa / margens_clientes (ALETIS própria)
+**Clientes:** briefing_cliente, memoria_cliente — leia SEMPRE antes de recomendar ação
+  sobre um cliente que o Christian mencionar (por id ou por nome)
+**Operação:** agenda_casos — o que está em andamento agora (insights críticos,
+  confirmações HITL pendentes). Use proativamente quando o Christian abre a conversa
+  sem contexto específico.
+
+# Quando NÃO delegar — pipeline completo com tools leves
+Se a pergunta é "estrutura para esse lead", **CHAME onboarding_lead_blueprint** — ela
+faz enriquecimento + Desenrola + Funrural + blueprint de ações de uma vez só. Depois
+apresente o resumo ao Christian e, se ele confirmar execução, delegue as ações
+recomendadas ao sub-agente indicado no blueprint (CRMWriter/DocGenerator) em UMA
+ÚNICA delegação composta — o sistema agrupa em batch HITL.
+
+Para timing comercial correto (plantio/colheita/venda), use **calendario_safra** com
+a cultura predominante da UF do lead.
+
+SÓ DELEGUE ao DealAnalyzer se precisar de análise macro profunda (>5 tools cruzados,
+cenários múltiplos, due-diligence web).
 
 # Como o Christian pensa
 - Números com fonte, não frases vagas
@@ -132,6 +175,20 @@ O sistema agrupa em batch para confirmação unificada. NÃO faça 2 delegaçõe
 - Exponha dados sensíveis de outros clientes em caso específico
 - Responda "vou fazer X" e não fazer — se vai executar, execute agora
 
+# REGRAS ANTI-ALUCINAÇÃO (OBRIGATÓRIAS)
+1. **Antes de afirmar um número:** você tem que ter chamado uma tool que o produziu. Se não chamou, ou diga "não tenho o dado ainda" ou chame a tool agora.
+2. **Se uma tool retornou \`{ error: ... }\`:** trate como dado indisponível, informe o usuário do erro de forma objetiva e proponha alternativa. NÃO finja que a tool funcionou.
+3. **Se uma tool retornou timeout:** explique ao usuário que a fonte externa está lenta e ofereça tentar novamente ou seguir sem ela. Nunca invente o que ela teria retornado.
+4. **CNPJ, CPF, datas, valores:** só cite se vieram de tool. Se o usuário digitou, confirme antes de usar em decisão.
+5. **Precedentes e "casos similares":** só use se \`casos_similares\` retornou dados reais. Nunca mencione "caso X que resolvemos" sem base.
+6. **Legislação citada:** só cite artigo/lei quando tiver certeza. Em dúvida, diga "base legal: verificar com advogado" — é melhor que inventar MP que não existe.
+7. **Quando não sabe:** responda exatamente isso. "Não tenho essa informação agora" é SEMPRE melhor que texto genérico e impreciso.
+8. **Formatação markdown:** tabelas com pipe \`|\`, listas com \`-\`, negrito com \`**\`. Nada de HTML cru. Não use cercas triplas \`\`\` dentro de código inline — quebra o render.
+
+# Quando a tool falhar
+Resposta-padrão: "\`[tool_name]\` não retornou dado ([motivo curto]). Posso tentar [alternativa] ou seguir sem essa informação?"
+Nunca deixe a mensagem vazia. Nunca travesse.
+
 Data de hoje: ${hoje}`;
   }
 
@@ -148,6 +205,82 @@ Data de hoje: ${hoje}`;
         registry[t.name] = prospec.registry[t.name];
       }
     }
+
+    // Calculadoras agro-financeiras (Desenrola, Reforma, Funrural, Custeio, DRE interna)
+    const calc = buildCalculatorTools();
+    for (const t of calc.tools) {
+      tools.push(t);
+      registry[t.name] = calc.registry[t.name];
+    }
+
+    // CRM read-only (evitar duplicatas, ver portfólio antes de escrever)
+    const crmRead = buildCrmReadTools();
+    for (const t of crmRead.tools) {
+      tools.push(t);
+      registry[t.name] = crmRead.registry[t.name];
+    }
+
+    // Notícias agro com cache 30min (Fase A.4)
+    const news = buildNewsTools();
+    for (const t of news.tools) {
+      tools.push(t);
+      registry[t.name] = news.registry[t.name];
+    }
+
+    // Calendário safra (Fase B.3) — timing comercial correto
+    const safra = buildCalendarioSafraTools();
+    for (const t of safra.tools) {
+      tools.push(t);
+      registry[t.name] = safra.registry[t.name];
+    }
+
+    // Onboarding macro-receita (Fase B.2) — lead → blueprint de pipeline
+    const onb = buildOnboardingTools();
+    for (const t of onb.tools) {
+      tools.push(t);
+      registry[t.name] = onb.registry[t.name];
+    }
+
+    // Feedback loop (Fase C.1) — tool learnings_recentes
+    const fb = buildFeedbackTools();
+    for (const t of fb.tools) {
+      tools.push(t);
+      registry[t.name] = fb.registry[t.name];
+    }
+
+    // Playbooks por situação (Fase C.2) — receitas opinativas
+    const pb = buildPlaybooksTools();
+    for (const t of pb.tools) {
+      tools.push(t);
+      registry[t.name] = pb.registry[t.name];
+    }
+
+    // Similaridade entre casos (Fase C.3) — precedentes por feature-hash
+    const sim = buildSimilaridadeTools();
+    for (const t of sim.tools) {
+      tools.push(t);
+      registry[t.name] = sim.registry[t.name];
+    }
+
+    // Clima/ambiental INPE/CEMADEN/FIRMS/DETER (Fase D.1)
+    const clima = buildClimaTools();
+    for (const t of clima.tools) { tools.push(t); registry[t.name] = clima.registry[t.name]; }
+
+    // SICAR individual com captcha (Fase D.2)
+    const sicar = buildSicarLiveTools();
+    for (const t of sicar.tools) { tools.push(t); registry[t.name] = sicar.registry[t.name]; }
+
+    // Processos TJ (Fase D.3)
+    const tjs = buildTjProcessosTools();
+    for (const t of tjs.tools) { tools.push(t); registry[t.name] = tjs.registry[t.name]; }
+
+    // INCRA/SIGEF (Fase D.4)
+    const incra = buildIncraSigefTools();
+    for (const t of incra.tools) { tools.push(t); registry[t.name] = incra.registry[t.name]; }
+
+    // Inventário patrimonial + custo operacional por cultura
+    const inv = buildInventarioTools();
+    for (const t of inv.tools) { tools.push(t); registry[t.name] = inv.registry[t.name]; }
 
     // Delegações
     const ctxBase = (): SubAgentContext => ({
@@ -250,6 +383,110 @@ Data de hoje: ${hoje}`;
       handler: async (i) => runSubAgent(this.docGenerator, `Tipo: ${i.tipo}\n\nInput:\n${JSON.stringify(i.input, null, 2)}`),
     };
 
+    // ────────────────────────────────────────────────────────────
+    // Tools leves PROATIVAS — permitem resposta direta sem delegar.
+    // Essenciais para o perfil "consultor sênior sempre contextualizado".
+    // ────────────────────────────────────────────────────────────
+
+    const cotacoesTool: ClaudeTool = {
+      name: 'cotacoes_hoje',
+      description: 'Retorna panorama de mercado do dia: commodities (soja, milho, boi), câmbio (USD/EUR), macro (Selic, CDI, IPCA), incêndios agro e alertas. Use SEMPRE que o Christian pedir cotação, câmbio, preços, alerta de mercado.',
+      input_schema: { type: 'object', properties: {} },
+    };
+    tools.push(cotacoesTool);
+    registry['cotacoes_hoje'] = {
+      spec: cotacoesTool,
+      handler: async () => {
+        try {
+          const brief = await new MarketBriefService(this.dsm).generateBrief()
+          return {
+            data: brief.data,
+            macro: brief.macro,
+            cambio: brief.cambio,
+            topAltas: brief.topAltas.slice(0, 5),
+            topBaixas: brief.topBaixas.slice(0, 5),
+            alertas: brief.alertas?.slice(0, 5) ?? [],
+            narrativa: brief.narrativaExecutiva || brief.narrativaCurta,
+          }
+        } catch (err) {
+          return { error: `cotações falharam: ${(err as Error).message}` }
+        }
+      },
+    };
+
+    const briefingClienteTool: ClaudeTool = {
+      name: 'briefing_cliente',
+      description: 'Retorna briefing completo de um cliente ALETIS (memória + análise + BSC + próximas ações). Use sempre que o Christian mencionar um cliente específico — antes de analisar, leia a memória.',
+      input_schema: {
+        type: 'object',
+        properties: { clienteId: { type: 'string', description: 'ID do cliente no CRM' } },
+        required: ['clienteId'],
+      },
+    };
+    tools.push(briefingClienteTool);
+    registry['briefing_cliente'] = {
+      spec: briefingClienteTool,
+      handler: async (i) => {
+        try {
+          const { getBriefingService } = await import('./memory/BriefingService.js')
+          const svc = getBriefingService()
+          return await svc.gerar(String(i.clienteId))
+        } catch (err) {
+          return { error: `briefing falhou: ${(err as Error).message}` }
+        }
+      },
+    };
+
+    const agendaCasosTool: ClaudeTool = {
+      name: 'agenda_casos',
+      description: 'Lista os casos em andamento (clientes com propostas ativas) e últimos insights proativos. Use para o Christian saber "o que tá acontecendo agora".',
+      input_schema: { type: 'object', properties: {} },
+    };
+    tools.push(agendaCasosTool);
+    registry['agenda_casos'] = {
+      spec: agendaCasosTool,
+      handler: async () => {
+        try {
+          const proactive = getProactiveService(getProspeccaoService(), this.storageDir.includes('alix-sessions') ? this.storageDir.replace(/\/alix-sessions$/, '') : this.storageDir)
+          const insightsRecentes = await proactive.getRecentInsights(3)
+          // Pega pendings HITL abertos
+          const store = getAlixConfirmationStore()
+          const pendingsAll = (store as any).list ? (store as any).list() : []
+          return {
+            insightsTotal: insightsRecentes.length,
+            insightsCriticos: insightsRecentes.filter(i => i.urgencia === 'critico').slice(0, 5),
+            insightsImportantes: insightsRecentes.filter(i => i.urgencia === 'importante').slice(0, 5),
+            confirmacoesPendentes: pendingsAll.length,
+            hoje: new Date().toISOString().slice(0, 10),
+          }
+        } catch (err) {
+          return { error: `agenda falhou: ${(err as Error).message}` }
+        }
+      },
+    };
+
+    const memoriaClienteTool: ClaudeTool = {
+      name: 'memoria_cliente',
+      description: 'Lê a memória persistente de um cliente (perfil, dívidas, decisões, alertas, histórico de interações Alix×Christian). Use antes de recomendar ação para não repetir o que já foi decidido.',
+      input_schema: {
+        type: 'object',
+        properties: { clienteId: { type: 'string' } },
+        required: ['clienteId'],
+      },
+    };
+    tools.push(memoriaClienteTool);
+    registry['memoria_cliente'] = {
+      spec: memoriaClienteTool,
+      handler: async (i) => {
+        try {
+          const mem = getAlixMemoryService()
+          return { markdown: mem.render(String(i.clienteId)) }
+        } catch (err) {
+          return { error: `memória falhou: ${(err as Error).message}` }
+        }
+      },
+    };
+
     return { tools, registry };
   }
 
@@ -283,9 +520,28 @@ Data de hoje: ${hoje}`;
     }
   }
 
-  async chat(sessionId: string | undefined, message: string): Promise<{ reply: string; session: ChatSession }> {
+  async chat(
+    sessionId: string | undefined,
+    message: string,
+    opts?: {
+      onToolCall?: (name: string) => void;
+      attachments?: string[];
+      clienteId?: string;
+    },
+  ): Promise<{ reply: string; session: ChatSession }> {
     const session = await this.loadOrCreateSession(sessionId);
-    session.messages.push({ id: randomUUID(), role: 'user', content: message, timestamp: Date.now() });
+    const attachments = Array.isArray(opts?.attachments) ? opts!.attachments!.filter(Boolean) : [];
+    const clienteId = typeof opts?.clienteId === 'string' && opts.clienteId.trim() ? opts.clienteId.trim() : undefined;
+    const userMsg: ChatMessage = {
+      id: randomUUID(),
+      role: 'user',
+      content: message,
+      timestamp: Date.now(),
+    };
+    if (attachments.length > 0 || clienteId) {
+      (userMsg as ChatMessage).metadata = { attachments: attachments.length ? attachments : undefined, clienteId };
+    }
+    session.messages.push(userMsg);
 
     const { tools, registry } = this.buildTools(session.id, session.messages);
     let system = this.buildSystemPrompt();
@@ -296,20 +552,101 @@ Data de hoje: ${hoje}`;
       system += `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${insightsContext}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
     }
 
+    // Lições aprendidas recentes (Fase C.1) — evitar repetir erros
+    try {
+      const learnings = await getFeedbackService(this.storageDir).recentLearnings(8);
+      if (learnings.length > 0) {
+        const lines = ['**LIÇÕES RECENTES** (evite repetir esses padrões):'];
+        for (const l of learnings) {
+          const icon = l.rating === 'incorreto' ? '❌' : l.rating === 'off-tom' ? '🎭' : '⚠️';
+          lines.push(`${icon} [${l.quando} · ${l.rating}] ${l.resumo}`);
+        }
+        system += `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${lines.join('\n')}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+      }
+    } catch (err) {
+      console.warn('[Orchestrator] learnings falhou:', (err as Error).message);
+    }
+
     const messages: ClaudeMessage[] = session.messages
       .filter(m => m.role !== 'system')
       .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
+    // Anexa documentos como blocos multimodais no último user turn.
+    // Suporta: imagem (base64) e texto extraído (PDF, DOCX, XLSX, etc).
+    if (attachments.length > 0) {
+      try {
+        const intake = getDocumentIntakeService();
+        const blocks: Array<Record<string, unknown>> = [];
+        for (const docId of attachments) {
+          const doc = await intake.get(session.id, docId);
+          if (!doc) continue;
+          if (doc.kind === 'image' && doc.imageBase64 && doc.imageMediaType) {
+            blocks.push({
+              type: 'image',
+              source: { type: 'base64', media_type: doc.imageMediaType, data: doc.imageBase64 },
+            });
+            blocks.push({ type: 'text', text: `[Imagem anexada: ${doc.filename}]` });
+          } else if (doc.extractedText && doc.extractedText.trim()) {
+            const texto = doc.extractedText.length > 50000
+              ? doc.extractedText.slice(0, 50000) + '\n…(truncado)'
+              : doc.extractedText;
+            blocks.push({
+              type: 'text',
+              text: `<document id="${doc.id}" filename="${doc.filename}" kind="${doc.kind}"${doc.pageCount ? ` pages="${doc.pageCount}"` : ''}>\n${texto}\n</document>`,
+            });
+          } else {
+            blocks.push({
+              type: 'text',
+              text: `[Anexo "${doc.filename}" (${doc.kind}) sem texto extraído — ignore se irrelevante]`,
+            });
+          }
+        }
+        if (blocks.length > 0 && messages.length > 0) {
+          blocks.push({ type: 'text', text: message });
+          messages[messages.length - 1] = { role: 'user', content: blocks };
+        }
+      } catch (err) {
+        console.warn('[Orchestrator] anexos falharam:', (err as Error).message);
+      }
+    }
+
+    // Hint de cliente ativo via system text (sem mexer nas mensagens)
+    if (clienteId) {
+      system += `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n**CLIENTE ATIVO** (foco da sessão): ${clienteId}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+    }
+
     const toolsUsed: string[] = [];
     const startedAt = Date.now();
+    // Envelopa todos os handlers com safeHandler — nunca propaga throw para o loop.
+    // Tools externas (rede) ganham timeout maior; cálculos locais default.
+    const safeRegistry = safeWrapRegistry(registry, {
+      defaultTimeoutMs: 25_000,
+      overrides: {
+        consultar_car_individual: 60_000,   // 2captcha demora ~30s
+        delegate_deal_analyzer: 120_000,    // Opus com thinking
+        delegate_web_researcher: 90_000,
+        delegate_crm_writer: 45_000,
+        delegate_doc_generator: 60_000,
+        enriquecer_lead: 45_000,             // BrasilAPI + SICAR
+        onboarding_lead_blueprint: 60_000,  // compõe várias tools
+        noticias_agro_hoje: 45_000,
+        cotacoes_hoje: 20_000,
+        alertas_climaticos_agro: 25_000,
+        consultar_processos_tj: 45_000,
+        consultar_sigef_por_proprietario: 30_000,
+      },
+    });
     const result = await runClaude(messages, {
       model: this.model,
       maxTokens: 4000,
       maxIterations: 10,
       system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] as any,
       tools,
-      toolRegistry: registry,
-      onToolCall: (n) => toolsUsed.push(n),
+      toolRegistry: safeRegistry,
+      onToolCall: (n) => {
+        toolsUsed.push(n);
+        try { opts?.onToolCall?.(n); } catch { /* stream pode ter fechado */ }
+      },
     });
     const latencyMs = Date.now() - startedAt;
 
@@ -369,5 +706,13 @@ Data de hoje: ${hoje}`;
 
   private async saveSession(s: ChatSession): Promise<void> {
     await fs.writeFile(this.sessionPath(s.id), JSON.stringify(s, null, 2));
+    // Dual-write best-effort: espelha sessão+mensagens no PG. Mantém disco
+    // como source-of-truth runtime e PG como queryability/restart-safety.
+    try {
+      const { upsertSession } = await import('../../db/AlixSessionRepository.js');
+      await upsertSession(s as unknown as Parameters<typeof upsertSession>[0]);
+    } catch {
+      /* best-effort */
+    }
   }
 }

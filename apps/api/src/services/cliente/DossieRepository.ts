@@ -10,6 +10,11 @@ import {
 import { join } from 'path'
 import type { DossieAgro } from '@aletis/shared-types'
 import { getAnalisesBus } from './AnalisesBus.js'
+import {
+  upsertDossie as pgUpsertDossie,
+  deleteDossie as pgDeleteDossie,
+} from '../../db/DossieRepository.js'
+import { auditAsync } from '../../db/AuditLog.js'
 
 /**
  * Persistência do Dossiê Agro Canônico por cliente.
@@ -83,6 +88,20 @@ export class DossieRepository {
 
     this.writeAtomic(this.fileFor(dossie.clienteId), persistido)
 
+    // Dual-write best-effort no Postgres (não bloqueia, não falha o save).
+    // Cada versão vira uma linha (PK clienteId+versao); histórico ganha
+    // queryability SQL além do JSON em disco.
+    void pgUpsertDossie(persistido as unknown as Parameters<typeof pgUpsertDossie>[0])
+
+    // Trilha de auditoria LGPD: dossiê é dado sensível (PF/PJ, dívidas, imóveis).
+    auditAsync({
+      ator: persistido.atualizadoPor ?? 'system',
+      acao: anterior ? 'update' : 'create',
+      recurso: `dossie:${persistido.clienteId}:v${versao}`,
+      dadosAntes: anterior ? { versao: anterior.versao } : null,
+      dadosDepois: { versao, dataBase: persistido.dataBase },
+    })
+
     // dispara invalidação das análises — o dossiê mexeu
     try {
       getAnalisesBus().emitInvalidar({
@@ -102,6 +121,9 @@ export class DossieRepository {
     if (!existsSync(file)) return false
     try {
       unlinkSync(file)
+      // Dual-write best-effort: limpa todas as versões PG do cliente.
+      // Histórico em disco (`dossies-historico/`) permanece para auditoria.
+      void pgDeleteDossie(clienteId)
       return true
     } catch (err) {
       console.warn(`[DossieRepository] falha removendo ${file}`, err)

@@ -8,6 +8,13 @@ import {
   type ParametrosNegociacao,
   type PropostaInteligente,
 } from '../services/PropostaGeneratorInteligente.js'
+import {
+  upsertProposta as pgUpsertProposta,
+  listPropostas as pgListPropostas,
+  deleteProposta as pgDeleteProposta,
+} from '../db/PropostaRepository.js'
+import { isPgEnabled } from '../db/client.js'
+import { auditAsync } from '../db/AuditLog.js'
 
 /* ========================================================================
  *  Tipos
@@ -47,6 +54,72 @@ interface Proposta {
 
 export const propostas: Map<string, Proposta> = new Map()
 export const propostasInteligentes: Map<string, PropostaInteligente> = new Map()
+
+/** Helper unificado: grava no Map, espelha no PG e audita (best-effort). */
+function persistProposta(p: Proposta, ator = 'system'): void {
+  const anterior = propostas.get(p.id)
+  propostas.set(p.id, p)
+  void pgUpsertProposta(p as unknown as Parameters<typeof pgUpsertProposta>[0])
+  auditAsync({
+    ator,
+    acao: anterior ? 'update' : 'create',
+    recurso: `proposta:${p.id}`,
+    dadosAntes: anterior ? { status: anterior.status, valorProposta: anterior.valorProposta } : null,
+    dadosDepois: { status: p.status, valorProposta: p.valorProposta, clienteId: p.clienteId },
+  })
+}
+
+/** Mesmo padrão para PropostaInteligente (15 seções). */
+function persistPropostaInteligente(p: PropostaInteligente, ator = 'system'): void {
+  const anterior = propostasInteligentes.get(p.id)
+  propostasInteligentes.set(p.id, p)
+  void pgUpsertProposta(p as unknown as Parameters<typeof pgUpsertProposta>[0])
+  auditAsync({
+    ator,
+    acao: anterior ? 'update' : 'create',
+    recurso: `proposta_inteligente:${p.id}`,
+    dadosAntes: null,
+    dadosDepois: { clienteId: (p as unknown as { cliente?: { id?: string } }).cliente?.id },
+  })
+}
+
+/** Variante seed: só Map (deixa o boot orchestrator decidir PG vs Map). */
+function setPropostaLocal(p: Proposta): void {
+  propostas.set(p.id, p)
+}
+
+/**
+ * Boot orchestrator (server.ts chama após app.listen):
+ *   - PG tem propostas → sobrescreve Maps
+ *   - PG vazio → semeia PG com Maps atuais (one-shot)
+ */
+export async function hydrateOrSeedPropostasPg(): Promise<{ hydrated: number; seeded: number }> {
+  if (!isPgEnabled()) return { hydrated: 0, seeded: 0 }
+  const fromPg = await pgListPropostas()
+  if (fromPg.length > 0) {
+    propostas.clear()
+    propostasInteligentes.clear()
+    for (const p of fromPg) {
+      // Distinguir: PropostaInteligente tem `secoes`; Proposta legacy tem `itens`.
+      if (Array.isArray((p as { secoes?: unknown[] }).secoes)) {
+        propostasInteligentes.set(p.id as string, p as unknown as PropostaInteligente)
+      } else {
+        propostas.set(p.id as string, p as unknown as Proposta)
+      }
+    }
+    return { hydrated: fromPg.length, seeded: 0 }
+  }
+  let seeded = 0
+  for (const p of propostas.values()) {
+    await pgUpsertProposta(p as unknown as Parameters<typeof pgUpsertProposta>[0])
+    seeded++
+  }
+  for (const p of propostasInteligentes.values()) {
+    await pgUpsertProposta(p as unknown as Parameters<typeof pgUpsertProposta>[0])
+    seeded++
+  }
+  return { hydrated: 0, seeded }
+}
 
 function seed() {
   const data: Proposta[] = [
@@ -120,7 +193,7 @@ function seed() {
   ]
 
   for (const p of data) {
-    propostas.set(p.id, p)
+    setPropostaLocal(p)
   }
 }
 
@@ -227,7 +300,7 @@ export default async function (fastify: FastifyInstance) {
       observacoes: (body.observacoes as string) || '',
     }
 
-    propostas.set(id, nova)
+    persistProposta(nova)
 
     // Simulate calculation engine trigger
     nova.pdfUrl = `/api/propostas/${id}/pdf`
@@ -273,7 +346,7 @@ export default async function (fastify: FastifyInstance) {
     }
 
     proposta.ultimaAtualizacao = new Date().toISOString().slice(0, 10)
-    propostas.set(id, proposta)
+    persistProposta(proposta)
 
     return { success: true, data: proposta }
   })
@@ -346,7 +419,7 @@ export default async function (fastify: FastifyInstance) {
         body.negociacao as ParametrosNegociacao,
       )
 
-      propostasInteligentes.set(proposta.id, proposta)
+      persistPropostaInteligente(proposta)
 
       // Também registra versão compacta no Map padrão para aparecer na listagem
       propostaCounter++
@@ -371,7 +444,7 @@ export default async function (fastify: FastifyInstance) {
         pdfUrl: `/api/propostas/inteligente/${proposta.id}/pdf`,
         observacoes: `Proposta inteligente com 15 seções. ID detalhado: ${proposta.id}`,
       }
-      propostas.set(idCompacto, resumo)
+      persistProposta(resumo)
 
       reply.status(201)
       return {
