@@ -4,24 +4,24 @@ Plataforma completa para diagnóstico, renegociação e reestruturação de cré
 
 ## Arquitetura
 
-Monorepo pnpm + Turborepo.
+Monorepo pnpm (sem Turborepo — `pnpm -r run` faz dev/build/typecheck em ordem topológica).
 
 ```
 aletis-system/
 ├── apps/
-│   ├── api/          Fastify v5 + TypeScript (porta 3001)
-│   │   ├── routes/   clientes, credito, propostas, mercado, clima, fontes
+│   ├── api/          Fastify v5 + TypeScript (porta 3011, configurável via PORT)
+│   │   ├── routes/   clientes, credito, propostas, mercado, clima, fontes, ...
 │   │   ├── services/ DataSourceManager, PropostaGeneratorInteligente, PdfGenerator
-│   │   └── lib/      calculadoras-premium, financeiro
-│   └── web/          React 18 + Vite + Tailwind (porta 8080)
-│       └── pages/    Dashboard, CRM, Credito, CreditoPremium, Propostas, ALIX, ...
+│   │   └── lib/      calculadoras-premium, financeiro, upload-validation
+│   └── web/          React 18 + Vite + Tailwind (porta 5173)
+│       └── pages/    Dashboard, CRM, Credito, Propostas, ALIX, Prospecção, ...
 └── packages/
     ├── shared-types/     Tipos compartilhados
     ├── financial-calc/   Cálculos financeiros puros
     └── knowledge-base/   Súmulas STJ, MCR, Plano Safra 2025/26, Proagro, precedentes
 ```
 
-## Data Sources (LIVE — 32 fontes registradas)
+## Data Sources (LIVE — 36 fontes registradas)
 
 Arquitetura: **TRY REAL API → CACHE (node-cache) → FALLBACK** — nunca quebra.
 Cada resposta inclui `fonteOrigem` (`api | cache | fallback`); o badge `DataSourceBadge` no frontend exibe origem + timestamp + qualidade.
@@ -119,18 +119,29 @@ pnpm install
 # 3. Compilar o knowledge-base (obrigatório — API importa do dist/)
 pnpm -F @aletis/knowledge-base build
 
-# 4a. Subir API (terminal 1) — porta 3001
+# 4a. Subir API (terminal 1) — porta 3011 (default; muda via PORT)
 pnpm --filter ./apps/api dev
 
 # 4b. Subir Web (terminal 2) — porta 5173
 pnpm --filter ./apps/web dev
 ```
 
-Frontend em `http://localhost:5173`, API em `http://localhost:3001/api`.
-Vite faz proxy de `/api/*` pra 3001 automaticamente.
+Frontend em `http://localhost:5173`, API em `http://localhost:3011/api`.
+Vite faz proxy de `/api/*` pra 3011 automaticamente (`apps/web/vite.config.ts`).
 
-**Não precisa de `.env`.** Todos os serviços externos (BCB, CEPEA, INMET, etc.) são públicos.
-Variáveis opcionais da API: `PORT` (3001), `HOST` (0.0.0.0), `NODE_ENV`, `LOG_LEVEL`.
+**Variáveis da API:**
+- `PORT` (default `3011`)
+- `HOST` (default `0.0.0.0`)
+- `NODE_ENV` (`development` | `production`)
+- `LOG_LEVEL` (default `info`)
+- `JWT_SECRET` — **obrigatório em produção** (Portal do Cliente)
+- `CORS_ALLOWED_ORIGINS` — **obrigatório em produção** (lista CSV: `https://app.aletis.com.br,https://aletis.com.br`)
+- `RATE_LIMIT_MAX` (default `300` req)
+- `RATE_LIMIT_WINDOW` (default `1 minute`)
+
+**Em dev**: sem `.env` o servidor sobe abrindo CORS para tudo, JWT cai num
+secret default com warn, e fontes externas (BCB, CEPEA, INMET, etc.) são
+públicas — não precisa de chaves.
 
 **Integrações opcionais** (WhatsApp Business + Azure Speech): copie `.env.example` pra `.env` na raiz
 e preencha. Veja `apps/api/src/services/whatsapp/README.md` pra setup passo-a-passo.

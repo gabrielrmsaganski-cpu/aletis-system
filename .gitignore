@@ -108,6 +108,7 @@ apps/api/storage/alix-push/
 apps/api/storage/inventario/
 apps/api/storage/.surfaced.json
 apps/api/storage/prospeccao/contatos.json
+apps/api/storage/prospeccao/dou-leads.json
 
 # Auditoria interna (relatórios + screenshots gerados pelo sistema)
 aletis-audit/

@@ -8,12 +8,12 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "lint": "turbo run lint",
-    "test": "turbo run test",
+    "dev": "pnpm -r --parallel run dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test",
     "dev:web": "pnpm --filter @aletis/web dev",
     "dev:api": "pnpm --filter @aletis/api dev",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "pnpm -r run typecheck"
   }
 }
