@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react'
 import { useApi, apiFetch } from '../hooks/useApi'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
+import { KpiTile, Chip, type ChipTone } from '../components/ui'
 import {
   FileText,
   Plus,
@@ -47,71 +48,21 @@ type ProposalStatus =
 
 const statusConfig: Record<
   ProposalStatus,
-  { label: string; bgClass: string; textClass: string; dotClass: string; icon: React.ElementType }
+  { label: string; tone: ChipTone; icon: React.ElementType }
 > = {
-  rascunho: {
-    label: 'Rascunho',
-    bgClass: 'bg-gray-100',
-    textClass: 'text-gray-600',
-    dotClass: 'bg-gray-400',
-    icon: FileText,
-  },
-  gerando: {
-    label: 'Gerando',
-    bgClass: 'bg-blue-50',
-    textClass: 'text-blue-600',
-    dotClass: 'bg-blue-500 animate-pulse',
-    icon: Loader2,
-  },
-  revisao: {
-    label: 'Em Revisão',
-    bgClass: 'bg-amber-50',
-    textClass: 'text-amber-600',
-    dotClass: 'bg-amber-500',
-    icon: AlertCircle,
-  },
-  enviada: {
-    label: 'Enviada',
-    bgClass: 'bg-purple-50',
-    textClass: 'text-purple-600',
-    dotClass: 'bg-purple-500',
-    icon: Send,
-  },
-  visualizada: {
-    label: 'Visualizada',
-    bgClass: 'bg-indigo-50',
-    textClass: 'text-indigo-600',
-    dotClass: 'bg-indigo-500',
-    icon: Eye,
-  },
-  aceita: {
-    label: 'Aceita',
-    bgClass: 'bg-green-50',
-    textClass: 'text-green-600',
-    dotClass: 'bg-green-500',
-    icon: CheckCircle2,
-  },
-  rejeitada: {
-    label: 'Rejeitada',
-    bgClass: 'bg-red-50',
-    textClass: 'text-red-600',
-    dotClass: 'bg-red-500',
-    icon: XCircle,
-  },
-  em_analise: {
-    label: 'Em Análise',
-    bgClass: 'bg-amber-50',
-    textClass: 'text-amber-600',
-    dotClass: 'bg-amber-500',
-    icon: Clock,
-  },
+  rascunho: { label: 'Rascunho', tone: 'slate', icon: FileText },
+  gerando: { label: 'Gerando', tone: 'sky', icon: Loader2 },
+  revisao: { label: 'Em Revisão', tone: 'amber', icon: AlertCircle },
+  enviada: { label: 'Enviada', tone: 'violet', icon: Send },
+  visualizada: { label: 'Visualizada', tone: 'sky', icon: Eye },
+  aceita: { label: 'Aceita', tone: 'emerald', icon: CheckCircle2 },
+  rejeitada: { label: 'Rejeitada', tone: 'red', icon: XCircle },
+  em_analise: { label: 'Em Análise', tone: 'amber', icon: Clock },
 }
 
-const DEFAULT_STATUS_CONFIG = {
+const DEFAULT_STATUS_CONFIG: { label: string; tone: ChipTone; icon: React.ElementType } = {
   label: 'Outro',
-  bgClass: 'bg-gray-100',
-  textClass: 'text-gray-600',
-  dotClass: 'bg-gray-400',
+  tone: 'slate',
   icon: FileText,
 }
 
@@ -288,14 +239,7 @@ function mapApiToProposal(item: ApiProposta, index: number): Proposal {
 // ────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: ProposalStatus }) {
   const config = statusConfig[status] || DEFAULT_STATUS_CONFIG
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${config.bgClass} ${config.textClass}`}
-    >
-      <span className={`w-1.5 h-1.5 rounded-full ${config.dotClass}`} />
-      {config.label}
-    </span>
-  )
+  return <Chip tone={config.tone} icon={config.icon} label={config.label} size="md" />
 }
 
 // ────────────────────────────────────────────────────────────
@@ -370,10 +314,10 @@ export default function Propostas() {
     const enviadas = proposals.filter(p => ['enviada', 'visualizada'].includes(p.status)).length
     const aceitas = proposals.filter(p => p.status === 'aceita').length
     return [
-      { label: 'Total', value: total, icon: FileText, color: 'bg-aletis-verde/10', textColor: 'text-aletis-verde' },
-      { label: 'Em Elaboração', value: elaboracao, icon: Loader2, color: 'bg-blue-50', textColor: 'text-blue-600' },
-      { label: 'Enviadas', value: enviadas, icon: Send, color: 'bg-purple-50', textColor: 'text-purple-600' },
-      { label: 'Aceitas', value: aceitas, icon: CheckCircle2, color: 'bg-green-50', textColor: 'text-green-600' },
+      { label: 'Total', value: total, icon: FileText, accent: 'verde' as const, sub: 'propostas cadastradas' },
+      { label: 'Em Elaboração', value: elaboracao, icon: Loader2, accent: 'sky' as const, sub: 'rascunhos + revisão' },
+      { label: 'Enviadas', value: enviadas, icon: Send, accent: 'violet' as const, sub: 'aguardando retorno' },
+      { label: 'Aceitas', value: aceitas, icon: CheckCircle2, accent: 'verde' as const, sub: 'fechadas com sucesso' },
     ]
   }, [proposals])
 
@@ -600,29 +544,17 @@ export default function Propostas() {
 
       {/* ── Stats Strip ─────────────────────────────────────── */}
       <section className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        {stats.map((stat) => {
-          const Icon = stat.icon
-          return (
-            <div
-              key={stat.label}
-              className="card-premium p-4 flex items-center gap-4"
-            >
-              <div
-                className={`w-11 h-11 rounded-xl ${stat.color} flex items-center justify-center flex-shrink-0`}
-              >
-                <Icon className={`w-5 h-5 ${stat.textColor}`} />
-              </div>
-              <div>
-                <p className="text-2xl font-display font-bold text-aletis-grafite-escuro leading-none">
-                  {stat.value}
-                </p>
-                <p className="text-xs font-body text-aletis-grafite-claro mt-0.5">
-                  {stat.label}
-                </p>
-              </div>
-            </div>
-          )
-        })}
+        {stats.map((stat) => (
+          <KpiTile
+            key={stat.label}
+            variant="light"
+            icon={stat.icon}
+            label={stat.label}
+            value={stat.value}
+            sub={stat.sub}
+            accent={stat.accent}
+          />
+        ))}
       </section>
 
       {/* ── Filter Bar ──────────────────────────────────────── */}

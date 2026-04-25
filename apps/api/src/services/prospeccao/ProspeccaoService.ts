@@ -15,6 +15,7 @@ import { IbgeSidraSource, getIbgeSidraSource } from './IbgeSidraSource'
 import { LeadsRepository, BlacklistEntry } from './LeadsRepository'
 import { EnrichmentQueue, type EnrichmentJob, type JobPrioridade } from './EnrichmentQueue'
 import type {
+  AgroProfile,
   AreaEstimation,
   CarConsultaResult,
   ClimaAgro,
@@ -23,9 +24,12 @@ import type {
   ContactOutcomeTipo,
   GeoEnrichment,
   HotLeadAlert,
+  JudicialProfile,
+  JudicialTipo,
   LeadFull,
   LeadRaw,
   LeadStatus,
+  PfProfile,
   ProducaoMunicipal,
   ProspeccaoFilters,
   ProspeccaoStats,
@@ -111,32 +115,282 @@ export class ProspeccaoService {
     filters: ProspeccaoFilters,
     opts: { prioridade?: JobPrioridade; motivo?: string } = {},
   ): { batchId: string; enfileirados: number; jaNaFila: number; total: number } {
-    const targets = this.sources.all().filter((raw) => {
-      const decorated = this.buildBasic(raw)
-      if (decorated.status === 'excluido') return false
-      if (decorated.status === 'completa') return false
-      if (filters.uf) {
-        const ufs = Array.isArray(filters.uf) ? filters.uf : [filters.uf]
-        if (!ufs.map((u) => u.toUpperCase()).includes(decorated.uf)) return false
-      }
-      if (filters.minDivida != null && decorated.totalDivida < filters.minDivida) return false
-      if (filters.maxDivida != null && decorated.totalDivida > filters.maxDivida) return false
-      if (filters.minHectares != null && decorated.area.hectaresEstimados < filters.minHectares) return false
-      if (filters.tipoPessoa && decorated.tipoPessoa !== filters.tipoPessoa) return false
-      if (filters.apenasAjuizadas && !decorated.temAjuizada) return false
-      if (filters.termo) {
-        const hay = (decorated.nome + ' ' + decorated.cpfCnpj).toUpperCase()
-        if (!hay.includes(filters.termo.toUpperCase())) return false
-      }
-      return true
-    })
+    const targets = this.buildBatchTargets(filters)
 
     const res = this.queue.enqueueBatch({
-      cpfCnpjs: targets.map((t) => t.cpfCnpj),
+      cpfCnpjs: targets.map(({ raw }) => raw.cpfCnpj),
       prioridade: opts.prioridade ?? 'normal',
       motivo: opts.motivo ?? `lote filtros=${JSON.stringify(filters)}`,
     })
     return { ...res, total: targets.length }
+  }
+
+  private normalizeToken(value: string | undefined | null): string {
+    return (value ?? '')
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toUpperCase()
+  }
+
+  private deriveAgroProfile(lead: LeadFull): AgroProfile {
+    const evidencias: string[] = []
+    const nome = this.normalizeToken(lead.nome)
+    const sinais = lead.agroSignals.map((signal) => this.normalizeToken(signal))
+    let score = 0
+
+    if (lead.car) {
+      score += 50
+      evidencias.push(`CAR ${lead.car.codImovel} encontrado`)
+    } else if ((lead.area.hectaresSicar ?? 0) > 0 || lead.area.metodo === 'sicar') {
+      score += 45
+      evidencias.push('área oficial confirmada no SICAR')
+    }
+
+    if (lead.cnpj?.cnaeFiscal && isAgroCnae(lead.cnpj.cnaeFiscal)) {
+      score += 25
+      evidencias.push(`CNAE agro ${lead.cnpj.cnaeFiscal}`)
+    }
+
+    if (lead.area.hectaresEstimados >= 5000) {
+      score += 18
+      evidencias.push(`porte fundiário muito alto (${Math.round(lead.area.hectaresEstimados)} ha)`)
+    } else if (lead.area.hectaresEstimados >= 1000) {
+      score += 14
+      evidencias.push(`porte fundiário alto (${Math.round(lead.area.hectaresEstimados)} ha)`)
+    } else if (lead.area.hectaresEstimados >= 100) {
+      score += 8
+      evidencias.push(`área estimada relevante (${Math.round(lead.area.hectaresEstimados)} ha)`)
+    }
+
+    if (sinais.length >= 3) {
+      score += 18
+      evidencias.push(`${sinais.length} sinais agro convergentes`)
+    } else if (sinais.length >= 1) {
+      score += 8
+      evidencias.push('sinal agro público presente')
+    }
+
+    if (
+      ['AGROPECUARIA', 'AGRICOLA', 'AGROINDUSTRIAL', 'FAZENDA', 'SOJA', 'GRAOS', 'PECUARIA', 'RURAL']
+        .some((token) => nome.includes(token))
+    ) {
+      score += 15
+      evidencias.push('nome com vocabulário agro forte')
+    }
+
+    if ((lead.sources?.length ?? 1) >= 2) {
+      score += 8
+      evidencias.push(`cruzado em ${lead.sources?.length ?? 1} fontes`)
+    }
+
+    if (lead.tipoPessoa === 'PF' && sinais.some((signal) => signal.startsWith('PJ_ORIGEM:') || signal.startsWith('SOCIO:'))) {
+      score += 12
+      evidencias.push('PF ancorado em PJ agro relacionada')
+    }
+
+    score = Math.min(100, score)
+    const nivel = score >= 65 ? 'forte' : score >= 35 ? 'medio' : 'fraco'
+    return {
+      nivel,
+      provavel: score >= 35,
+      score,
+      explicacao: evidencias.length ? evidencias.slice(0, 3).join(' · ') : 'Sem evidência agro suficiente',
+      evidencias,
+    }
+  }
+
+  private deriveJudicialProfile(lead: LeadFull): JudicialProfile {
+    const evidencias: string[] = []
+    const tipos = new Set<JudicialTipo>()
+    const sinais = lead.agroSignals.map((signal) => this.normalizeToken(signal))
+    const situacaoEspecial = this.normalizeToken(lead.cnpj?.situacaoEspecial)
+    const motivoSituacao = this.normalizeToken(lead.cnpj?.motivoSituacaoCadastral)
+
+    if (sinais.some((signal) => signal.includes('DOU:RECUPERACAO-JUDICIAL'))) {
+      tipos.add('recuperacao_judicial')
+      evidencias.push('DOU com recuperação judicial')
+    }
+    if (sinais.some((signal) => signal.includes('DOU:FALENCIA') || signal.includes('DOU:DECRETADA-A-FALENCIA'))) {
+      tipos.add('falencia')
+      evidencias.push('DOU com falência')
+    }
+    if (sinais.some((signal) => signal.includes('DOU:INSOLVENCIA'))) {
+      tipos.add('insolvencia')
+      evidencias.push('DOU com insolvência')
+    }
+    if (sinais.some((signal) => signal.includes('DOU:LEILAO'))) {
+      tipos.add('leilao')
+      evidencias.push('DOU com leilão judicial')
+    }
+    if (sinais.some((signal) => signal.includes('DOU:PENHORA'))) {
+      tipos.add('penhora')
+      evidencias.push('DOU com penhora')
+    }
+    if (situacaoEspecial.includes('LIQUIDACAO JUDICIAL')) {
+      tipos.add('liquidacao_judicial')
+      evidencias.push(`situação especial: ${lead.cnpj?.situacaoEspecial}`)
+    }
+    if (situacaoEspecial.includes('RECUPERACAO JUDICIAL')) {
+      tipos.add('recuperacao_judicial')
+      evidencias.push(`situação especial: ${lead.cnpj?.situacaoEspecial}`)
+    }
+    if (situacaoEspecial.includes('FALEN')) {
+      tipos.add('falencia')
+      evidencias.push(`situação especial: ${lead.cnpj?.situacaoEspecial}`)
+    }
+    if (situacaoEspecial.includes('JUDICIAL') || motivoSituacao.includes('FALEN') || motivoSituacao.includes('INSOLVEN')) {
+      tipos.add('situacao_especial')
+      if (lead.cnpj?.motivoSituacaoCadastral) evidencias.push(`motivo cadastral: ${lead.cnpj.motivoSituacaoCadastral}`)
+    }
+
+    const orderedTipos = Array.from(tipos)
+    const severidade = orderedTipos.some((tipo) => ['falencia', 'liquidacao_judicial', 'recuperacao_judicial'].includes(tipo))
+      ? 'alta'
+      : orderedTipos.some((tipo) => ['insolvencia', 'leilao', 'penhora'].includes(tipo))
+        ? 'media'
+        : orderedTipos.length
+          ? 'baixa'
+          : 'nenhuma'
+
+    return {
+      ativo: orderedTipos.length > 0,
+      severidade,
+      tipos: orderedTipos,
+      explicacao: evidencias.length ? evidencias.slice(0, 3).join(' · ') : 'Sem sinal judicial estruturado',
+      evidencias,
+    }
+  }
+
+  private derivePfProfile(
+    lead: LeadFull,
+    agroProfile: AgroProfile,
+    judicialProfile: JudicialProfile,
+  ): PfProfile {
+    if (lead.tipoPessoa !== 'PF') {
+      return {
+        relevante: false,
+        nivel: 'nenhum',
+        score: 0,
+        explicacao: 'Lead PJ — perfil PF não se aplica',
+        evidencias: [],
+      }
+    }
+
+    const evidencias: string[] = []
+    const sinais = lead.agroSignals.map((signal) => this.normalizeToken(signal))
+    let score = 0
+
+    if (agroProfile.provavel) {
+      score += agroProfile.nivel === 'forte' ? 35 : 20
+      evidencias.push(`vínculo agro ${agroProfile.nivel}`)
+    }
+    if (lead.car) {
+      score += 35
+      evidencias.push('CAR em nome do lead')
+    }
+    if (sinais.some((signal) => signal.startsWith('SOCIO:'))) {
+      score += 25
+      evidencias.push('sócio/administrador de PJ agro')
+    }
+    if (sinais.some((signal) => signal.startsWith('PJ_ORIGEM:'))) {
+      score += 20
+      evidencias.push('âncora societária em PJ de origem')
+    }
+    if (lead.totalDivida > 0) {
+      score += 20
+      evidencias.push('passivo próprio na PGFN')
+    }
+    if ((lead.sources?.length ?? 1) >= 2) {
+      score += 15
+      evidencias.push(`presença em ${lead.sources?.length ?? 1} fontes`)
+    }
+    if (judicialProfile.ativo) {
+      score += 10
+      evidencias.push('sinal judicial público associado')
+    }
+
+    score = Math.min(100, score)
+    const nivel = score >= 70 ? 'forte' : score >= 40 ? 'medio' : score > 0 ? 'fraco' : 'nenhum'
+    return {
+      relevante: score >= 40,
+      nivel,
+      score,
+      explicacao: evidencias.length ? evidencias.slice(0, 3).join(' · ') : 'PF sem âncora rural suficiente',
+      evidencias,
+    }
+  }
+
+  private applyDerivedProfiles(lead: LeadFull): LeadFull {
+    const agroProfile = this.deriveAgroProfile(lead)
+    const judicialProfile = this.deriveJudicialProfile(lead)
+    const pfProfile = this.derivePfProfile(lead, agroProfile, judicialProfile)
+    return {
+      ...lead,
+      agroProfile,
+      judicialProfile,
+      pfProfile,
+    }
+  }
+
+  private matchesFilters(lead: LeadFull, filters: ProspeccaoFilters): boolean {
+    const uf = filters.uf
+      ? Array.isArray(filters.uf)
+        ? filters.uf.map((value) => value.toUpperCase())
+        : [filters.uf.toUpperCase()]
+      : null
+    const termo = filters.termo?.toUpperCase().trim() || null
+    const status = filters.status || 'todos'
+
+    if (status === 'todos') {
+      if (lead.status === 'excluido') return false
+    } else if (lead.status !== status) {
+      return false
+    }
+
+    if (uf && !uf.includes(lead.uf)) return false
+    if (filters.minDivida != null && lead.totalDivida < filters.minDivida) return false
+    if (filters.maxDivida != null && lead.totalDivida > filters.maxDivida) return false
+    if (filters.minHectares != null && lead.area.hectaresEstimados < filters.minHectares) return false
+    if (filters.tipoPessoa && lead.tipoPessoa !== filters.tipoPessoa) return false
+    if (filters.apenasAjuizadas && !lead.temAjuizada) return false
+    if (filters.cnaeAgro && (!lead.cnpj?.cnaeFiscal || !isAgroCnae(lead.cnpj.cnaeFiscal))) return false
+    if (filters.apenasAgroProvavel && !lead.agroProfile.provavel) return false
+    if (filters.apenasPfRural && !lead.pfProfile.relevante) return false
+    if (filters.apenasJudicialAgro && !lead.judicialProfile.ativo) return false
+    if (filters.judicialTipos?.length && !filters.judicialTipos.some((tipo) => lead.judicialProfile.tipos.includes(tipo))) return false
+    if (termo) {
+      const hay = (lead.nome + ' ' + lead.cpfCnpj).toUpperCase()
+      if (!hay.includes(termo)) return false
+    }
+    return true
+  }
+
+  private buildBatchTargets(filters: ProspeccaoFilters): Array<{ raw: LeadRaw; lead: LeadFull }> {
+    const sort = filters.sortBy || 'score'
+    const pageSize = filters.pageSize && filters.pageSize > 0 ? Math.floor(filters.pageSize) : undefined
+
+    const targets = this.sources.all()
+      .map((raw) => {
+        const lead = this.buildBasic(raw)
+        return { raw, lead }
+      })
+      .filter(({ lead }) => lead.status !== 'completa' && this.matchesFilters(lead, filters))
+
+    targets.sort((a, b) => {
+      switch (sort) {
+        case 'divida':
+          return b.lead.totalDivida - a.lead.totalDivida
+        case 'hectares':
+          return b.lead.area.hectaresEstimados - a.lead.area.hectaresEstimados
+        case 'recencia':
+          return (b.lead.ultimaInscricao || '').localeCompare(a.lead.ultimaInscricao || '')
+        case 'score':
+        default:
+          return b.lead.score.total - a.lead.score.total
+      }
+    })
+
+    return pageSize ? targets.slice(0, pageSize) : targets
   }
 
   /**
@@ -146,7 +400,28 @@ export class ProspeccaoService {
   private buildBasic(raw: LeadRaw): LeadFull {
     const saved = this.repo.getEnriched(raw.cpfCnpjClean)
     if (saved) {
-      return this.withStatus(saved, 'completa')
+      const area = saved.area ?? this.area.estimate(raw, saved.cnpj ?? null)
+      const score = this.scorer.score(raw, area)
+      const mergedSaved: LeadFull = {
+        ...saved,
+        cpfCnpj: raw.cpfCnpj,
+        cpfCnpjClean: raw.cpfCnpjClean,
+        tipoPessoa: raw.tipoPessoa,
+        nome: raw.nome,
+        uf: raw.uf || saved.uf,
+        agroSignals: raw.agroSignals,
+        totalDivida: raw.totalDivida,
+        qtdInscricoes: raw.qtdInscricoes,
+        temAjuizada: raw.temAjuizada,
+        primeiraInscricao: raw.primeiraInscricao,
+        ultimaInscricao: raw.ultimaInscricao,
+        debts: raw.debts,
+        judicialEvents: raw.judicialEvents,
+        sources: raw.sources,
+        area,
+        score,
+      }
+      return this.withStatus(mergedSaved, 'completa')
     }
     const area = this.area.estimate(raw, null)
     const score = this.scorer.score(raw, area)
@@ -163,23 +438,30 @@ export class ProspeccaoService {
       primeiraInscricao: raw.primeiraInscricao,
       ultimaInscricao: raw.ultimaInscricao,
       debts: raw.debts,
+      judicialEvents: raw.judicialEvents,
+      sources: raw.sources,
       area,
       score,
+      agroProfile: { nivel: 'fraco', provavel: false, score: 0, explicacao: '', evidencias: [] },
+      pfProfile: { relevante: false, nivel: 'nenhum', score: 0, explicacao: '', evidencias: [] },
+      judicialProfile: { ativo: false, severidade: 'nenhuma', tipos: [], explicacao: '', evidencias: [] },
     }
     return this.withStatus(full, 'pendente')
   }
 
   /** Decora lead com `status`/`excluidoMotivo` com base na blacklist e cache. */
   private withStatus(lead: LeadFull, baseStatus: LeadStatus): LeadFull {
-    const out: LeadFull = { ...lead, status: baseStatus, enriquecido: baseStatus === 'completa' }
+    const out: LeadFull = this.applyDerivedProfiles({
+      ...lead,
+      status: baseStatus,
+      enriquecido: baseStatus === 'completa',
+    })
     const black = this.repo.getBlacklistEntry(lead.cpfCnpjClean)
     if (black) {
       out.status = 'excluido'
       out.excluidoMotivo = black.motivo
       out.excluidoEm = black.excluidoEm
     }
-    // Aplica feedback loop ao score — ajuste vem do histórico de contatos,
-    // acumulado com decaimento temporal. Reflete também na classificação.
     const feedback = this.repo.getFeedback(lead.cpfCnpjClean)
     if (feedback) {
       out.feedback = feedback
@@ -316,15 +598,7 @@ export class ProspeccaoService {
     counts: { pendentes: number; completas: number; excluidos: number; todos: number }
   } {
     const all = this.sources.all().map((r) => this.buildBasic(r))
-    const uf = filters.uf
-      ? Array.isArray(filters.uf)
-        ? filters.uf.map((u) => u.toUpperCase())
-        : [filters.uf.toUpperCase()]
-      : null
-    const termo = filters.termo?.toUpperCase().trim() || null
-    const status = filters.status || 'todos'
 
-    // counts globais (antes da paginação, antes do corte por filtros específicos)
     const counts = {
       todos: all.filter((l) => l.status !== 'excluido').length,
       pendentes: all.filter((l) => l.status === 'pendente').length,
@@ -332,26 +606,7 @@ export class ProspeccaoService {
       excluidos: all.filter((l) => l.status === 'excluido').length,
     }
 
-    const filtered = all.filter((l) => {
-      // Filtro de status — default exclui blacklisted
-      if (status === 'todos') {
-        if (l.status === 'excluido') return false
-      } else if (l.status !== status) {
-        return false
-      }
-      if (uf && !uf.includes(l.uf)) return false
-      if (filters.minDivida != null && l.totalDivida < filters.minDivida) return false
-      if (filters.maxDivida != null && l.totalDivida > filters.maxDivida) return false
-      if (filters.minHectares != null && l.area.hectaresEstimados < filters.minHectares) return false
-      if (filters.tipoPessoa && l.tipoPessoa !== filters.tipoPessoa) return false
-      if (filters.apenasAjuizadas && !l.temAjuizada) return false
-      if (filters.cnaeAgro && l.cnpj && !isAgroCnae(l.cnpj.cnaeFiscal)) return false
-      if (termo) {
-        const hay = (l.nome + ' ' + l.cpfCnpj).toUpperCase()
-        if (!hay.includes(termo)) return false
-      }
-      return true
-    })
+    const filtered = all.filter((l) => this.matchesFilters(l, filters))
 
     const sort = filters.sortBy || 'score'
     filtered.sort((a, b) => {
@@ -454,6 +709,8 @@ export class ProspeccaoService {
       primeiraInscricao: raw.primeiraInscricao,
       ultimaInscricao: raw.ultimaInscricao,
       debts: raw.debts,
+      judicialEvents: raw.judicialEvents,
+      sources: raw.sources,
       cnpj: cnpjInfo || undefined,
       area,
       car: carInfo,
@@ -461,6 +718,9 @@ export class ProspeccaoService {
       carOutrosImoveis,
       enriquecidoEm: new Date().toISOString(),
       score,
+      agroProfile: { nivel: 'fraco', provavel: false, score: 0, explicacao: '', evidencias: [] },
+      pfProfile: { relevante: false, nivel: 'nenhum', score: 0, explicacao: '', evidencias: [] },
+      judicialProfile: { ativo: false, severidade: 'nenhuma', tipos: [], explicacao: '', evidencias: [] },
     }
 
     this.repo.saveEnriched(full)
@@ -718,25 +978,7 @@ export class ProspeccaoService {
     const { batchId, onProgress } = options
     const concurrency = Math.min(8, Math.max(1, options.concurrency || 3))
 
-    const targets = this.sources.all().filter((raw) => {
-      const decorated = this.buildBasic(raw)
-      if (decorated.status === 'excluido') return false
-      if (decorated.status === 'completa') return false // já enriquecido
-      if (filters.uf) {
-        const ufs = Array.isArray(filters.uf) ? filters.uf : [filters.uf]
-        if (!ufs.map((u) => u.toUpperCase()).includes(decorated.uf)) return false
-      }
-      if (filters.minDivida != null && decorated.totalDivida < filters.minDivida) return false
-      if (filters.maxDivida != null && decorated.totalDivida > filters.maxDivida) return false
-      if (filters.minHectares != null && decorated.area.hectaresEstimados < filters.minHectares) return false
-      if (filters.tipoPessoa && decorated.tipoPessoa !== filters.tipoPessoa) return false
-      if (filters.apenasAjuizadas && !decorated.temAjuizada) return false
-      if (filters.termo) {
-        const hay = (decorated.nome + ' ' + decorated.cpfCnpj).toUpperCase()
-        if (!hay.includes(filters.termo.toUpperCase())) return false
-      }
-      return true
-    })
+    const targets = this.buildBatchTargets(filters).map(({ raw }) => raw)
 
     const state = { cancelled: false }
     this.activeBatches.set(batchId, state)
@@ -828,30 +1070,15 @@ export class ProspeccaoService {
     semCarProvavel: number
     porUf: Array<{ uf: string; count: number }>
   } {
-    const targets: LeadRaw[] = []
     let jaCompletos = 0
     for (const raw of this.sources.all()) {
       const decorated = this.buildBasic(raw)
-      if (decorated.status === 'excluido') continue
-      if (decorated.status === 'completa') {
+      if (decorated.status === 'completa' && this.matchesFilters(decorated, filters)) {
         jaCompletos++
-        continue
       }
-      if (filters.uf) {
-        const ufs = Array.isArray(filters.uf) ? filters.uf : [filters.uf]
-        if (!ufs.map((u) => u.toUpperCase()).includes(decorated.uf)) continue
-      }
-      if (filters.minDivida != null && decorated.totalDivida < filters.minDivida) continue
-      if (filters.maxDivida != null && decorated.totalDivida > filters.maxDivida) continue
-      if (filters.minHectares != null && decorated.area.hectaresEstimados < filters.minHectares) continue
-      if (filters.tipoPessoa && decorated.tipoPessoa !== filters.tipoPessoa) continue
-      if (filters.apenasAjuizadas && !decorated.temAjuizada) continue
-      if (filters.termo) {
-        const hay = (decorated.nome + ' ' + decorated.cpfCnpj).toUpperCase()
-        if (!hay.includes(filters.termo.toUpperCase())) continue
-      }
-      targets.push(raw)
     }
+
+    const targets = this.buildBatchTargets(filters).map(({ raw }) => raw)
 
     // Estimativa de cobertura CAR — só vale se o índice estiver carregado
     let comCarProvavel = 0
@@ -922,6 +1149,9 @@ export class ProspeccaoService {
     const leadsComAjuizamento = ativos.filter((l) => l.temAjuizada).length
     const leadsCompletos = all.filter((l) => l.status === 'completa').length
     const leadsExcluidos = all.filter((l) => l.status === 'excluido').length
+    const leadsAgroProvavel = ativos.filter((l) => l.agroProfile.provavel).length
+    const leadsPfRural = ativos.filter((l) => l.pfProfile.relevante).length
+    const leadsJudicialAgro = ativos.filter((l) => l.judicialProfile.ativo).length
 
     const ufMap = new Map<string, { count: number; divida: number }>()
     for (const l of ativos) {
@@ -957,6 +1187,16 @@ export class ProspeccaoService {
       .sort((a, b) => b.count - a.count)
       .slice(0, 15)
 
+    const judicialMap = new Map<JudicialTipo, number>()
+    for (const lead of ativos) {
+      for (const tipo of lead.judicialProfile.tipos) {
+        judicialMap.set(tipo, (judicialMap.get(tipo) || 0) + 1)
+      }
+    }
+    const porJudicialTipo = Array.from(judicialMap.entries())
+      .map(([tipo, count]) => ({ tipo, count }))
+      .sort((a, b) => b.count - a.count)
+
     // Feedback loop: contagens derivadas dos contatos registrados. Usamos o
     // universo `ativos` (já excluída blacklist) para manter consistência com
     // os demais KPIs da tela.
@@ -983,10 +1223,14 @@ export class ProspeccaoService {
       leadsComAjuizamento,
       leadsCompletos,
       leadsExcluidos,
+      leadsAgroProvavel,
+      leadsPfRural,
+      leadsJudicialAgro,
       hotLeadsPendentes,
       leadsParaReengajar,
       porUf,
       porFaixaDivida,
+      porJudicialTipo,
       topSignals,
       manifest: {
         fonte: principal?.descricao || 'PGFN Dívida Ativa',

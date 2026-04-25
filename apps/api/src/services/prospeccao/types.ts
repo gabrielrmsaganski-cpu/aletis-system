@@ -35,12 +35,58 @@ export interface LeadRaw {
   primeiraInscricao: string
   ultimaInscricao: string
   temAjuizada: boolean
+  judicialEvents?: JudicialEvent[]
   /**
    * Procedência — preenchido pelo `LeadSourceRegistry` quando o lead é
    * consolidado a partir de múltiplas fontes. Pode estar ausente em dados
    * legados (gravados antes da multi-fonte). Ordem = ordem de entrada.
    */
   sources?: Array<{ fonte: string; ingestedAt: string }>
+}
+
+export type AgroProfileNivel = 'forte' | 'medio' | 'fraco'
+export type PfProfileNivel = 'forte' | 'medio' | 'fraco' | 'nenhum'
+export type JudicialSeverity = 'alta' | 'media' | 'baixa' | 'nenhuma'
+export type JudicialTipo =
+  | 'recuperacao_judicial'
+  | 'falencia'
+  | 'insolvencia'
+  | 'leilao'
+  | 'penhora'
+  | 'liquidacao_judicial'
+  | 'situacao_especial'
+
+export interface AgroProfile {
+  nivel: AgroProfileNivel
+  provavel: boolean
+  score: number
+  explicacao: string
+  evidencias: string[]
+}
+
+export interface PfProfile {
+  relevante: boolean
+  nivel: PfProfileNivel
+  score: number
+  explicacao: string
+  evidencias: string[]
+}
+
+export interface JudicialProfile {
+  ativo: boolean
+  severidade: JudicialSeverity
+  tipos: JudicialTipo[]
+  explicacao: string
+  evidencias: string[]
+}
+
+export interface JudicialEvent {
+  tipo: JudicialTipo
+  fonte: string
+  data: string
+  resumo: string
+  url?: string
+  severidade: Exclude<JudicialSeverity, 'nenhuma'>
 }
 
 /** Enriquecimento via BrasilAPI (CNPJ → sócios, CNAE, endereço). */
@@ -215,11 +261,15 @@ export interface LeadScore {
     hectares: number // 0-10 — área estimada
     velocity: number // 0-10 — aceleração do passivo (janela curta + muitas inscrições)
     fitRegional: number // 0-15 — proximidade operacional da mesa ALETIS (UFs core)
+    multiSource: number
+    douCrise: number
   }
   /** Contexto textual derivado do scoring — para UI e handoff ao consultor. */
   motivos?: {
     velocity?: string // ex: "5 inscrições em 8 meses — passivo acelerando"
     fitRegional?: string // ex: "PR — região sede, mesa local"
+    multiSource?: string
+    douCrise?: string
   }
   classificacao: 'quente' | 'morno' | 'frio' | 'reativo'
   honorariosEstimados: number // R$ — 1% da dívida, modelo ALETIS
@@ -296,12 +346,17 @@ export interface LeadFull {
   primeiraInscricao: string
   ultimaInscricao: string
   debts: DebtRecord[]
+  judicialEvents?: JudicialEvent[]
+  sources?: Array<{ fonte: string; ingestedAt: string }>
   cnpj?: CnpjEnrichment
   area: AreaEstimation
   car?: CarConsultaResult
   carSource?: 'offline' | 'live'
   carOutrosImoveis?: CarConsultaResult[]
   score: LeadScore
+  agroProfile: AgroProfile
+  pfProfile: PfProfile
+  judicialProfile: JudicialProfile
   /** Flags derivadas — calculadas a cada `buscar`, não persistidas. */
   status?: LeadStatus
   enriquecido?: boolean
@@ -329,6 +384,10 @@ export interface ProspeccaoFilters {
   tipoPessoa?: TipoPessoa
   apenasAjuizadas?: boolean
   cnaeAgro?: boolean
+  apenasAgroProvavel?: boolean
+  apenasPfRural?: boolean
+  apenasJudicialAgro?: boolean
+  judicialTipos?: JudicialTipo[]
   termo?: string // busca por nome
   status?: LeadStatus | 'todos' // default: todos não-excluídos
   sortBy?: 'score' | 'divida' | 'hectares' | 'recencia'
@@ -344,12 +403,16 @@ export interface ProspeccaoStats {
   leadsComAjuizamento: number
   leadsCompletos: number
   leadsExcluidos: number
+  leadsAgroProvavel: number
+  leadsPfRural: number
+  leadsJudicialAgro: number
   /** Hot-leads pendentes de ação — quente + sem contato nos últimos 14d. */
   hotLeadsPendentes: number
   /** Leads com outcome "retornar" prontos para re-engajamento (cooldown passou). */
   leadsParaReengajar: number
   porUf: Array<{ uf: string; count: number; divida: number }>
   porFaixaDivida: Array<{ faixa: string; count: number }>
+  porJudicialTipo: Array<{ tipo: JudicialTipo; count: number }>
   topSignals: Array<{ signal: string; count: number }>
   manifest: {
     fonte: string

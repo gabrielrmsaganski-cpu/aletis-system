@@ -51,8 +51,8 @@ export function useConfirmationStream() {
   const refreshFromApi = useCallback(async () => {
     try {
       const [bList, sList] = await Promise.all([
-        apiFetch<{ success: boolean; data: ConfirmationBatch[] }>('/api/alix/confirmations/batches'),
-        apiFetch<{ success: boolean; data: PendingConfirmation[] }>('/api/alix/confirmations'),
+        apiFetch<{ success: boolean; data: ConfirmationBatch[] }>('/alix/confirmations/batches'),
+        apiFetch<{ success: boolean; data: PendingConfirmation[] }>('/alix/confirmations'),
       ])
       if (bList.success) setBatches(bList.data ?? [])
       if (sList.success) {
@@ -180,7 +180,7 @@ export function AlixConfirmationBatchCard({ batch, onApplied, onCancelled }: Ali
     setError(null)
     try {
       const r = await apiFetch<{ success: boolean; data: { applied: unknown[]; failed: unknown[]; skipped: unknown[] }; error?: string }>(
-        `/api/alix/confirmations/batch/${batch.batchId}/apply`,
+        `/alix/confirmations/batch/${batch.batchId}/apply`,
         { method: 'POST', body: JSON.stringify({}), headers: { 'content-type': 'application/json' } },
       )
       if (!r.success) throw new Error(r.error || 'Falha')
@@ -197,7 +197,7 @@ export function AlixConfirmationBatchCard({ batch, onApplied, onCancelled }: Ali
     setError(null)
     try {
       const r = await apiFetch<{ success: boolean; error?: string }>(
-        `/api/alix/confirmations/batch/${batch.batchId}/cancel`,
+        `/alix/confirmations/batch/${batch.batchId}/cancel`,
         { method: 'POST' },
       )
       if (!r.success) throw new Error(r.error || 'Falha')
@@ -309,7 +309,7 @@ export function AlixConfirmationSingleCard({ pending, onApplied, onRejected }: A
     setError(null)
     try {
       const r = await apiFetch<{ success: boolean; error?: string }>(
-        `/api/alix/confirmations/${pending.id}/approve`,
+        `/alix/confirmations/${pending.id}/approve`,
         { method: 'POST' },
       )
       if (!r.success) throw new Error(r.error || 'Falha')
@@ -325,7 +325,7 @@ export function AlixConfirmationSingleCard({ pending, onApplied, onRejected }: A
     setBusy('reject')
     setError(null)
     try {
-      await apiFetch(`/api/alix/confirmations/${pending.id}/reject`, { method: 'POST' })
+      await apiFetch(`/alix/confirmations/${pending.id}/reject`, { method: 'POST' })
       onRejected?.(pending.id)
     } catch (err) {
       setError((err as Error).message)

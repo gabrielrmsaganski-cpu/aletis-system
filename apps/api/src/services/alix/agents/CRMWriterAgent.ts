@@ -6,6 +6,7 @@ import { BaseAgent } from './BaseAgent.js';
 import type { SubAgentContext } from './types.js';
 import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js';
 import { buildCrmWriterTools } from '../crm/writer-tools.js';
+import { buildCrmReadTools } from '../tools/crm-read.js';
 import type { AlixService } from '../../AlixService.js';
 
 export class CRMWriterAgent extends BaseAgent {
@@ -31,10 +32,12 @@ Você tem 4 tools HITL (todas alto impacto — criam pending confirmation):
 
 Regras:
 1. Valide payload antes de chamar: campos obrigatórios preenchidos?
-2. Se receber intent com 2+ ações (payload com array "acoes" ou descrição multi-ação), EXECUTE TODAS as tools HITL no mesmo turn — o sistema agrupa em batch automaticamente.
-3. Se receber 1 ação única, chame a tool apropriada e retorne.
-4. Se faltar dado, diga ao orquestrador o que falta.
-5. Nunca invente IDs.
+2. ANTES de criar cliente novo, chame **buscar_cliente** com CPF/CNPJ para evitar duplicata. Se já existir, use promover_lead_para_cliente ou atualize o existente.
+3. ANTES de criar proposta, chame **listar_propostas_cliente** para ver se já existe proposta aberta.
+4. Se receber intent com 2+ ações (payload com array "acoes" ou descrição multi-ação), EXECUTE TODAS as tools HITL no mesmo turn — o sistema agrupa em batch automaticamente.
+5. Se receber 1 ação única, chame a tool apropriada e retorne.
+6. Se faltar dado, diga ao orquestrador o que falta.
+7. Nunca invente IDs.
 
 Contexto:
 - sessionId: ${ctx.sessionId}
@@ -43,7 +46,7 @@ ${ctx.leadCpfCnpj ? `- leadCpfCnpj: ${ctx.leadCpfCnpj}` : ''}`;
   }
 
   buildTools(_ctx: SubAgentContext): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-    return buildCrmWriterTools({
+    const writer = buildCrmWriterTools({
       handle_criar_cliente: (i) => this.alix.handle_criar_cliente(i),
       handle_promover_lead_para_cliente: (i) => this.alix.handle_promover_lead_para_cliente(i),
       handle_criar_proposta_inteligente: (i) => this.alix.handle_criar_proposta_inteligente(i),
@@ -51,5 +54,11 @@ ${ctx.leadCpfCnpj ? `- leadCpfCnpj: ${ctx.leadCpfCnpj}` : ''}`;
       handle_atualizar_dossie_dividas: (i) => this.alix.handle_atualizar_dossie_dividas(i),
       handle_anexar_documento_cliente: (i) => this.alix.handle_anexar_documento_cliente(i),
     });
+    // + read-only do CRM (checar duplicidade antes de escrever)
+    const read = buildCrmReadTools();
+    return {
+      tools: [...writer.tools, ...read.tools],
+      registry: { ...writer.registry, ...read.registry },
+    };
   }
 }

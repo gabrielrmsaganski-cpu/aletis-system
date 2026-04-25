@@ -326,9 +326,36 @@ export async function runClaude(
           ...(tools && tools.length > 0 ? { tools: tools as any } : {}),
           messages: convo as any,
         });
+      } else if (/429|rate.?limit|quota|throttl|overloaded|503|504|ETIMEDOUT|ECONNRESET|ECONNREFUSED|upstream/i.test(msg)) {
+        // Retry com backoff exponencial: 2s, 4s, 8s (3 tentativas extras)
+        let ok = false;
+        for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
+          const waitMs = 1000 * Math.pow(2, attempt);
+          console.warn(`[ClaudeFoundry] retry ${attempt}/3 após ${waitMs}ms (${msg.slice(0, 120)})`);
+          await new Promise(r => setTimeout(r, waitMs));
+          try {
+            response = await client.messages.create({
+              model,
+              max_tokens: maxTokens,
+              ...(supportsTemperature ? { temperature } : {}),
+              ...(thinking ? { thinking: thinking as any } : {}),
+              ...(system ? { system: system as any } : {}),
+              ...(tools && tools.length > 0 ? { tools: tools as any } : {}),
+              messages: convo as any,
+            });
+            ok = true;
+          } catch (retryErr: any) {
+            const rmsg = String(retryErr?.message || retryErr || '');
+            if (attempt === 3) throw new Error(`LLM indisponível após 3 retries: ${rmsg.slice(0, 200)}`);
+          }
+        }
       } else {
         throw err;
       }
+    }
+
+    if (!response) {
+      throw new Error('LLM não retornou resposta após retries');
     }
 
     totalInput += response.usage?.input_tokens || 0;

@@ -16,6 +16,7 @@ import type {
 } from './types.js'
 import { MAX_FILE_BYTES } from './types.js'
 import { classifyAgroDoc } from './AgroDocClassifier.js'
+import { extractDocViaLlm } from './LlmDocExtractor.js'
 
 import { parsePdf } from './PdfParser.js'
 import { parseDocx } from './DocxParser.js'
@@ -104,8 +105,23 @@ export class DocumentIntakeService {
     const id = randomUUID()
     const now = new Date().toISOString()
 
-    // Alix Insano F9 — classificação agro automática
-    const agroClass = classifyAgroDoc(parsed.extractedText ?? '')
+    // Alix Insano F9 — classificação agro automática (regex-based, rápido)
+    let agroClass = classifyAgroDoc(parsed.extractedText ?? '')
+
+    // Fallback LLM-vision: quando regex falhou (tipo OUTRO ou baixa confiança)
+    // E temos imagem disponível (PDF escaneado / imagem pura), chamamos Haiku
+    // para extrair tipo + campos via visão. Silencioso se não enabled/failed.
+    const regexInsuficiente = agroClass.tipo === 'OUTRO' || agroClass.confianca < 0.5
+    if (regexInsuficiente && parsed.imageBase64 && parsed.imageMediaType) {
+      const llm = await extractDocViaLlm({
+        imageBase64: parsed.imageBase64,
+        imageMediaType: parsed.imageMediaType,
+        textContext: parsed.extractedText ?? '',
+      })
+      if (llm && llm.confianca >= agroClass.confianca) {
+        agroClass = llm
+      }
+    }
 
     const doc: IngestedDocument = {
       id,

@@ -461,8 +461,34 @@ export class AlixService {
     await fs.writeFile(path, JSON.stringify(session, null, 2), 'utf8');
   }
 
+  /**
+   * Re-scaneia o diretório e atualiza o Map com sessões que tenham sido
+   * escritas em disco por outros serviços (ex.: OrchestratorService que
+   * persiste via `saveSession` sem passar pelo AlixService).
+   */
+  private async rescanStorage(): Promise<void> {
+    try {
+      const files = await fs.readdir(this.storageDir);
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue;
+        try {
+          const raw = await fs.readFile(join(this.storageDir, file), 'utf8');
+          const session = JSON.parse(raw) as ChatSession;
+          if (!session?.id) continue;
+          const existing = this.sessions.get(session.id);
+          // Atualiza somente se disco for mais recente (evita sobrescrever
+          // in-flight writes em memória).
+          if (!existing || (session.updatedAt ?? 0) >= (existing.updatedAt ?? 0)) {
+            this.sessions.set(session.id, session);
+          }
+        } catch { /* skip corrupt */ }
+      }
+    } catch { /* dir inexistente */ }
+  }
+
   async listSessions(): Promise<SessionSummary[]> {
     await this.ensureLoaded();
+    await this.rescanStorage();
     return Array.from(this.sessions.values())
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .map(s => ({
@@ -477,7 +503,19 @@ export class AlixService {
 
   async getSession(id: string): Promise<ChatSession | null> {
     await this.ensureLoaded();
-    return this.sessions.get(id) || null;
+    const cached = this.sessions.get(id);
+    if (cached) return cached;
+    // Fallback: tenta ler direto do disco (sessões criadas pelo
+    // OrchestratorService não aparecem no Map até rescanStorage).
+    try {
+      const raw = await fs.readFile(join(this.storageDir, `${id}.json`), 'utf8');
+      const session = JSON.parse(raw) as ChatSession;
+      if (session?.id) {
+        this.sessions.set(session.id, session);
+        return session;
+      }
+    } catch { /* não existe */ }
+    return null;
   }
 
   async createSession(title?: string): Promise<ChatSession> {
@@ -510,7 +548,7 @@ export class AlixService {
   async chat(
     sessionId: string | undefined,
     userMessage: string,
-    opts?: { attachments?: string[]; clienteId?: string },
+    opts?: { attachments?: string[]; clienteId?: string; onToolCall?: (name: string) => void },
   ): Promise<{ session: ChatSession; reply: ChatMessage }> {
     await this.ensureLoaded();
     let session = sessionId ? this.sessions.get(sessionId) : undefined;
@@ -1611,7 +1649,7 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
   private async runLLMPath(
     userMessage: string,
     session: ChatSession,
-    opts?: { attachments?: string[]; clienteId?: string },
+    opts?: { attachments?: string[]; clienteId?: string; onToolCall?: (name: string) => void },
   ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
     const { tools, registry } = this.buildAlixTools({ sessionId: session.id, clienteId: opts?.clienteId });
     const systemPrompt = await this.buildAlixSystemPrompt(opts?.clienteId);
@@ -1682,6 +1720,8 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
       temperature: 0.2,
       onToolCall: (name, _input, result: any) => {
         toolsUsedAggregate.push(name);
+        // Propaga callback do chamador (SSE stream real)
+        try { opts?.onToolCall?.(name); } catch { /* ignora listener quebrado */ }
         if (result && typeof result === 'object') {
           if (Array.isArray((result as any).sources)) {
             for (const s of (result as any).sources) sourcesAggregate.add(String(s));
@@ -5108,6 +5148,15 @@ export function registerStores(accessors: {
 function getClientesStore(): any[] { return _getClientes(); }
 function getPropostasStore(): any[] { return _getPropostas(); }
 function getPropostasInteligentesList(): any[] { return _getPropostasInteligentes(); }
+
+/**
+ * Acessores públicos exportados para tools da ALIX — leitura read-only
+ * do CRM. Permitem que o Orchestrator/DealAnalyzer/CRMWriter verifiquem
+ * estado antes de escrever, sem passar pelo AlixService inteiro.
+ */
+export function alixGetClientes(): any[] { return _getClientes() }
+export function alixGetPropostas(): any[] { return _getPropostas() }
+export function alixGetPropostasInteligentes(): any[] { return _getPropostasInteligentes() }
 
 // ── Alix Insano F4 — backends de escrita no CRM ──────────────
 interface CrmWriteBackends {

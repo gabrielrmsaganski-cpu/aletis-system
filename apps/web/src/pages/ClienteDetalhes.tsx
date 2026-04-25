@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { apiFetch } from '../hooks/useApi'
+import PatrimonioTab from '../components/patrimonio/PatrimonioTab'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
 import { MapThumbnail } from '../components/MapThumbnail'
@@ -63,7 +64,7 @@ type Estagio =
   | 'prospeccao'
   | 'encerrado'
 
-type TabId = 'visao-geral' | 'dividas' | 'risco' | 'exposicao' | 'visitas' | 'propostas' | 'documentos' | 'fluxo-caixa' | 'timeline' | 'portal-chat'
+type TabId = 'visao-geral' | 'dividas' | 'risco' | 'exposicao' | 'patrimonio' | 'visitas' | 'propostas' | 'documentos' | 'fluxo-caixa' | 'timeline' | 'portal-chat'
 
 interface Divida {
   id: string
@@ -732,6 +733,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'dividas', label: 'Dívidas' },
   { id: 'risco', label: 'Risco & AB+S' },
   { id: 'exposicao', label: 'Exposição' },
+  { id: 'patrimonio', label: 'Patrimônio' },
   { id: 'visitas', label: 'Visitas' },
   { id: 'propostas', label: 'Propostas' },
   { id: 'documentos', label: 'Documentos' },
@@ -2555,6 +2557,15 @@ export default function ClienteDetalhes() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════
+           TAB: PATRIMÔNIO
+           ════════════════════════════════════════════════════════ */}
+      {activeTab === 'patrimonio' && apiIdResolved && (
+        <div className="animate-fade-in">
+          <PatrimonioTab clienteId={apiIdResolved} />
         </div>
       )}
 

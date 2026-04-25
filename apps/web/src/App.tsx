@@ -9,6 +9,7 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/layout/Layout'
+import ErrorBoundary from './components/ErrorBoundary'
 import Dashboard from './pages/Dashboard'
 import CRM from './pages/CRM'
 
@@ -57,7 +58,8 @@ export default function App() {
         path="/*"
         element={
           <Layout>
-            <Suspense fallback={<RouteFallback />}>
+            <ErrorBoundary>
+              <Suspense fallback={<RouteFallback />}>
               <Routes>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/crm" element={<CRM />} />
@@ -81,6 +83,7 @@ export default function App() {
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </Suspense>
+            </ErrorBoundary>
           </Layout>
         }
       />

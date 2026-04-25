@@ -19,6 +19,7 @@
 // ============================================================
 
 import { randomBytes } from 'crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 
 export interface PendingConfirmation {
   id: string;
@@ -89,6 +90,18 @@ export class AlixConfirmationStore {
     for (const l of this.listeners) {
       try { l(ev); } catch (err) { console.warn('[AlixConfirmationStore] listener erro:', (err as Error).message); }
     }
+    // Snapshot em eventos que alteram o estado persistível.
+    // Usa setImmediate para não bloquear o caminho crítico.
+    if (
+      ev.type === 'pending:created' ||
+      ev.type === 'batch:created' ||
+      ev.type === 'batch:progress' ||
+      ev.type === 'batch:done'
+    ) {
+      setImmediate(() => {
+        try { this.persistSnapshot() } catch { /* best-effort */ }
+      })
+    }
   }
 
   constructor(ttlMs: number = DEFAULT_TTL_MS) {
@@ -97,6 +110,7 @@ export class AlixConfirmationStore {
     this.cleanupTimer = setInterval(() => {
       try {
         this.cleanupExpired();
+        this.persistSnapshot();
       } catch (err) {
         console.warn('[AlixConfirmationStore] cleanup failed:', (err as Error).message);
       }
@@ -104,6 +118,58 @@ export class AlixConfirmationStore {
     // Permitir que o Node encerre mesmo com o timer ativo (dev + tests).
     if (typeof this.cleanupTimer.unref === 'function') {
       this.cleanupTimer.unref();
+    }
+    // Recovery: tenta recarregar snapshot prévio (sobrevive restart)
+    try { this.loadSnapshot(); } catch (err) {
+      console.warn('[AlixConfirmationStore] load snapshot falhou:', (err as Error).message);
+    }
+  }
+
+  // ── Persistência (B.4) ────────────────────────────────────────
+  // Snapshot completo do store em disco. Simples e seguro — não
+  // persistimos o listener (ephemeral) nem o cleanupTimer.
+
+  private snapshotFile(): string {
+    const dir = process.env.ALIX_STORAGE_DIR || `${process.cwd()}/storage`
+    const target = `${dir}/alix-confirmations`
+    try { mkdirSync(target, { recursive: true }) } catch {}
+    return `${target}/snapshot.json`
+  }
+
+  /** Persiste pendings + batches + results em JSON. Idempotente. */
+  private persistSnapshot(): void {
+    try {
+      const pendings = Array.from(this.store.values())
+      const batches = Array.from(this.batches.values())
+      const data = { v: 1, savedAt: Date.now(), pendings, batches }
+      writeFileSync(this.snapshotFile(), JSON.stringify(data))
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  /** Carrega snapshot no boot — descarta entradas já expiradas. */
+  private loadSnapshot(): void {
+    const file = this.snapshotFile()
+    if (!existsSync(file)) return
+    const raw = readFileSync(file, 'utf-8')
+    if (!raw.trim()) return
+    const data = JSON.parse(raw) as { pendings?: PendingConfirmation[]; batches?: ConfirmationBatch[] }
+    const now = Date.now()
+    let restoredP = 0, restoredB = 0
+    for (const p of data.pendings || []) {
+      if (!p?.id || !p.expiresAt) continue
+      if (p.expiresAt <= now) continue
+      this.store.set(p.id, p)
+      restoredP++
+    }
+    for (const b of data.batches || []) {
+      if (!b?.batchId) continue
+      this.batches.set(b.batchId, b)
+      restoredB++
+    }
+    if (restoredP > 0 || restoredB > 0) {
+      console.log(`[AlixConfirmationStore] Recovered ${restoredP} pendings + ${restoredB} batches do snapshot`)
     }
   }
 

@@ -57,6 +57,11 @@ export class LeadSourceRegistry {
   /** Força recarregamento — útil quando um script de ingest atualiza disco. */
   reload(): void {
     this.loaded = false
+    for (const s of this.sources) {
+      try { s.reload?.() } catch (err) {
+        console.warn(`[LeadSourceRegistry] reload() falhou em ${s.fonte}:`, err)
+      }
+    }
     this.load()
   }
 
@@ -107,6 +112,7 @@ export class LeadSourceRegistry {
             ...lead,
             debts: [...lead.debts],
             agroSignals: [...lead.agroSignals],
+            judicialEvents: lead.judicialEvents ? [...lead.judicialEvents] : undefined,
             sources: [{ fonte: s.fonte, ingestedAt: nowIso }],
           }
           this.byCpfCnpj.set(lead.cpfCnpjClean, cloned)
@@ -128,6 +134,19 @@ export class LeadSourceRegistry {
     // Sinais — união.
     const sinais = new Set([...target.agroSignals, ...incoming.agroSignals])
     target.agroSignals = Array.from(sinais)
+
+    if (incoming.judicialEvents?.length) {
+      const existingEvents = new Set((target.judicialEvents ?? []).map((event) => `${event.fonte}:${event.tipo}:${event.data}:${event.resumo}`))
+      const mergedEvents = [...(target.judicialEvents ?? [])]
+      for (const event of incoming.judicialEvents) {
+        const key = `${event.fonte}:${event.tipo}:${event.data}:${event.resumo}`
+        if (!existingEvents.has(key)) {
+          mergedEvents.push(event)
+          existingEvents.add(key)
+        }
+      }
+      target.judicialEvents = mergedEvents
+    }
 
     // Dívidas — união por `inscricao` (chave natural no PGFN).
     const inscricoes = new Set(target.debts.map((d) => `${d.fonte}:${d.inscricao}`))

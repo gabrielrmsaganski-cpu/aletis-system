@@ -26,6 +26,9 @@ export interface LeadSource {
   find(cpfCnpj: string): LeadRaw | null
 
   manifest(): LeadSourceManifest
+
+  /** Força a fonte a reler seus arquivos/caches na próxima `load()`. */
+  reload?(): void
 }
 
 export interface LeadSourceManifest {
