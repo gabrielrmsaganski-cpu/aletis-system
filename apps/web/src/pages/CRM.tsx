@@ -9,6 +9,7 @@
  */
 import React, { useState, useMemo } from 'react'
 import { useApi, apiFetch } from '../hooks/useApi'
+import { KpiTile, fmtNum } from '../components/ui'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
 import { exportCSV } from '../utils/exportReports'
@@ -392,13 +393,24 @@ export default function CRM() {
     )
   }
 
-  // ── Stats ──
-  const stats = {
-    total: 47,
-    ativos: 23,
-    emNegociacao: 12,
-    acordosMes: 4,
-  }
+  // ── Stats (derivados dos clientes reais — não inventar números) ──
+  const stats = useMemo(() => {
+    const total = clientes.length
+    // "Ativos" = não arquivados/concluídos.
+    const ativos = clientes.filter((c) => c.estagio !== 'concluido').length
+    const emNegociacao = clientes.filter((c) => c.estagio === 'negociacao').length
+    // "Acordos este mês" = clientes que fecharam acordo cuja últimaAtualizacao
+    // cai no mês corrente. Sem campo `acordoEm` ainda no domínio.
+    const inicioMes = new Date()
+    inicioMes.setDate(1)
+    inicioMes.setHours(0, 0, 0, 0)
+    const acordosMes = clientes.filter((c) => {
+      if (c.estagio !== 'acordo' && c.estagio !== 'concluido') return false
+      const ts = c.ultimaAtualizacao ? new Date(c.ultimaAtualizacao).getTime() : 0
+      return ts >= inicioMes.getTime()
+    }).length
+    return { total, ativos, emNegociacao, acordosMes }
+  }, [clientes])
 
   return (
     <div className="min-h-screen bg-aletis-bege">
@@ -446,56 +458,12 @@ export default function CRM() {
         </div>
       </header>
 
-      {/* ── Stats Bar ── */}
+      {/* ── Stats Bar — DS KpiTile para alinhamento premium ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <div className="card-premium px-4 py-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-aletis-verde/10 flex items-center justify-center">
-            <Users className="w-4 h-4 text-aletis-verde" />
-          </div>
-          <div>
-            <p className="text-xl font-display font-bold text-aletis-grafite-escuro leading-none">
-              {stats.total}
-            </p>
-            <p className="text-[11px] font-body text-aletis-grafite-claro mt-0.5">Total</p>
-          </div>
-        </div>
-        <div className="card-premium px-4 py-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-positivo/10 flex items-center justify-center">
-            <Users className="w-4 h-4 text-positivo" />
-          </div>
-          <div>
-            <p className="text-xl font-display font-bold text-aletis-grafite-escuro leading-none">
-              {stats.ativos}
-            </p>
-            <p className="text-[11px] font-body text-aletis-grafite-claro mt-0.5">Ativos</p>
-          </div>
-        </div>
-        <div className="card-premium px-4 py-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-ambar/10 flex items-center justify-center">
-            <Users className="w-4 h-4 text-ambar" />
-          </div>
-          <div>
-            <p className="text-xl font-display font-bold text-aletis-grafite-escuro leading-none">
-              {stats.emNegociacao}
-            </p>
-            <p className="text-[11px] font-body text-aletis-grafite-claro mt-0.5">
-              Em negociação
-            </p>
-          </div>
-        </div>
-        <div className="card-premium px-4 py-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-aletis-dourado/10 flex items-center justify-center">
-            <Users className="w-4 h-4 text-aletis-dourado" />
-          </div>
-          <div>
-            <p className="text-xl font-display font-bold text-aletis-grafite-escuro leading-none">
-              {stats.acordosMes}
-            </p>
-            <p className="text-[11px] font-body text-aletis-grafite-claro mt-0.5">
-              Acordos este mês
-            </p>
-          </div>
-        </div>
+        <KpiTile icon={Users} label="Total" value={fmtNum(stats.total)} accent="verde" variant="light" tooltip="Total de clientes cadastrados (qualquer estágio)." />
+        <KpiTile icon={Users} label="Ativos" value={fmtNum(stats.ativos)} accent="verde" variant="light" sub="clientes com relacionamento" tooltip="Clientes não-concluídos — ainda em alguma etapa do funil." />
+        <KpiTile icon={Users} label="Em negociação" value={fmtNum(stats.emNegociacao)} accent="ambar" variant="light" sub="pipeline ativo" tooltip="Clientes no estágio 'negociação' especificamente — cobrança/acordo em andamento." />
+        <KpiTile icon={Users} label="Acordos este mês" value={fmtNum(stats.acordosMes)} accent="dourado" variant="light" tooltip="Clientes que entraram em estágio 'acordo' ou 'concluído' com última atualização no mês corrente." />
       </div>
 
       {/* ── Toolbar: Search + Filter + View Toggle ── */}

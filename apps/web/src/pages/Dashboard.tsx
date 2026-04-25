@@ -12,6 +12,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useApi, useApiFull } from '../hooks/useApi'
 import { DataSourceBadge } from '../components/DataSourceBadge'
+import { KpiTile } from '../components/ui'
 import { CATEGORIES, TOOL_CATALOG } from '../navigation/toolCatalog'
 import { Command, ArrowRight, Sparkles as SparklesIcon } from 'lucide-react'
 import {
@@ -174,142 +175,35 @@ function CircularProgress({
 }
 
 // ────────────────────────────────────────────────────────────
-// Static Data
+// Pipeline / Stage helpers — derivados dos clientes reais
 // ────────────────────────────────────────────────────────────
-const portfolioData = [
-  { mes: 'Jan', valor: 850000 },
-  { mes: 'Fev', valor: 1200000 },
-  { mes: 'Mar', valor: 980000 },
-  { mes: 'Abr', valor: 1450000 },
-  { mes: 'Mai', valor: 1680000 },
-  { mes: 'Jun', valor: 1320000 },
-  { mes: 'Jul', valor: 1550000 },
-  { mes: 'Ago', valor: 1890000 },
-  { mes: 'Set', valor: 2100000 },
-  { mes: 'Out', valor: 1750000 },
-  { mes: 'Nov', valor: 2350000 },
-  { mes: 'Dez', valor: 2380000 },
-]
-
-const stageData = [
-  { name: 'Lead', value: 8, color: '#0A3526' },
-  { name: 'Qualificação', value: 5, color: '#0F4C35' },
-  { name: 'Análise', value: 4, color: '#1B6B4A' },
-  { name: 'Proposta', value: 6, color: '#2A8F64' },
-  { name: 'Negociação', value: 3, color: '#27AE60' },
-  { name: 'Acordo', value: 4, color: '#C9A84C' },
-  { name: 'Concluído', value: 12, color: '#A68A3A' },
-]
-
-const recentActivity = [
-  {
-    id: 1,
-    type: 'proposta' as const,
-    icon: Send,
-    description: 'Proposta enviada para Ailton Caeiro',
-    detail: 'R$ 1,2M em dívidas analisadas',
-    time: '2h atrás',
-    color: 'bg-aletis-dourado',
-  },
-  {
-    id: 2,
-    type: 'acordo' as const,
-    icon: Handshake,
-    description: 'Acordo fechado: Maria Santos',
-    detail: 'Economia de R$ 450K para o cliente',
-    time: '5h atrás',
-    color: 'bg-positivo',
-  },
-  {
-    id: 3,
-    type: 'lead' as const,
-    icon: UserPlus,
-    description: 'Novo lead: João Silva — Uberaba/MG',
-    detail: 'Indicação via parceiro Sicoob',
-    time: 'ontem',
-    color: 'bg-blue-500',
-  },
-  {
-    id: 4,
-    type: 'documento' as const,
-    icon: FileText,
-    description: 'Documentos recebidos: Fazenda Boa Vista',
-    detail: '12 contratos para análise',
-    time: 'ontem',
-    color: 'bg-blue-500',
-  },
-  {
-    id: 5,
-    type: 'acordo' as const,
-    icon: CheckCircle2,
-    description: 'Pagamento confirmado: Roberto Almeida',
-    detail: 'Parcela 3/12 — R$ 85K',
-    time: '2 dias',
-    color: 'bg-positivo',
-  },
-  {
-    id: 6,
-    type: 'proposta' as const,
-    icon: Send,
-    description: 'Proposta gerada: Carlos Mendes',
-    detail: 'Revisão pendente — R$ 780K',
-    time: '3 dias',
-    color: 'bg-aletis-dourado',
-  },
-]
-
-const pipelineData = {
-  analise: {
-    label: 'Análise',
-    count: 4,
-    items: [
-      { nome: 'Pedro Henrique', valor: 320000 },
-      { nome: 'Fazenda Sol Nascente', valor: 890000 },
-      { nome: 'Coop. Agrícola MT', valor: 1200000 },
-    ],
-  },
-  proposta: {
-    label: 'Proposta',
-    count: 6,
-    items: [
-      { nome: 'Ailton Caeiro', valor: 1200000 },
-      { nome: 'Carlos Mendes', valor: 780000 },
-      { nome: 'Agro Triângulo Ltda.', valor: 560000 },
-    ],
-  },
-  negociacao: {
-    label: 'Negociação',
-    count: 3,
-    items: [
-      { nome: 'Maria Santos', valor: 450000 },
-      { nome: 'Granja Esperança', valor: 670000 },
-    ],
-  },
-  acordo: {
-    label: 'Acordo',
-    count: 4,
-    items: [
-      { nome: 'Roberto Almeida', valor: 1020000 },
-      { nome: 'Faz. Três Irmãos', valor: 340000 },
-      { nome: 'José Moreira', valor: 510000 },
-    ],
-  },
+const STAGE_PALETTE: Record<string, string> = {
+  lead: '#0A3526',
+  qualificacao: '#0F4C35',
+  analise: '#1B6B4A',
+  proposta: '#2A8F64',
+  negociacao: '#27AE60',
+  acordo: '#C9A84C',
+  acompanhamento: '#A68A3A',
+  concluido: '#A68A3A',
 }
+const STAGE_LABEL: Record<string, string> = {
+  lead: 'Lead',
+  qualificacao: 'Qualificação',
+  analise: 'Análise',
+  proposta: 'Proposta',
+  negociacao: 'Negociação',
+  acordo: 'Acordo',
+  acompanhamento: 'Acompanhamento',
+  concluido: 'Concluído',
+}
+const STAGE_ORDER = [
+  'lead', 'qualificacao', 'analise', 'proposta', 'negociacao', 'acordo', 'acompanhamento', 'concluido',
+] as const
 
-const proximosVencimentos = [
-  { cliente: 'Roberto Almeida', valor: 85000, dias: 3, data: '19/04/2026' },
-  { cliente: 'Maria Santos', valor: 62000, dias: 12, data: '28/04/2026' },
-  { cliente: 'Faz. Três Irmãos', valor: 45000, dias: 25, data: '11/05/2026' },
-  { cliente: 'José Moreira', valor: 120000, dias: 38, data: '24/05/2026' },
-]
-
-// alertasMercado will be dynamically computed inside the component using real indicator values
-
-const metasMes = [
-  { label: 'Propostas Enviadas', atual: 8, meta: 10 },
-  { label: 'Acordos Fechados', atual: 4, meta: 6 },
-  { label: 'Volume Negociado', atual: 2100000, meta: 3000000, isCurrency: true },
-]
+// Atividades antigas hard-coded foram removidas — Dashboard agora deriva
+// `recentActivity`, `pipelineData`, `proximosVencimentos`, `portfolioData`,
+// `stageData`, `metasMes` de `/api/clientes` + `/api/propostas/inteligentes/list`.
 
 // ────────────────────────────────────────────────────────────
 // Custom Tooltip for Area Chart
@@ -350,6 +244,7 @@ export default function Dashboard() {
   // API connection status
   const { data: healthData, error: healthError } = useApi<{ status: string }>('/health', { status: 'unknown' })
   const { data: clientesData } = useApi<any[]>('/clientes', [])
+  const { data: propostasData } = useApi<any[]>('/propostas/inteligentes/list', [])
 
   // Real market indicators from BCB
   interface IndicadorApi { nome: string; sigla: string; valor: number; unidade: string; fonteOrigem?: string; historico?: { data: string; valor: number }[] }
@@ -391,8 +286,130 @@ export default function Dashboard() {
         conversao: totalClientes > 0 ? (emProgresso / totalClientes) * 100 : 76.3,
       }
     }
-    return { clientes: 23, volume: 18500000, economia: 4200000, conversao: 76.3 }
+    return { clientes: 0, volume: 0, economia: 0, conversao: 0 }
   }, [clientesData])
+
+  // ── Pipeline real (4 colunas — análise/proposta/negociação/acordo) ──
+  const pipelineData = useMemo(() => {
+    const buckets = ['analise', 'proposta', 'negociacao', 'acordo'] as const
+    const out: Record<string, { label: string; count: number; items: { nome: string; valor: number }[] }> = {}
+    for (const stage of buckets) {
+      const subset = clientesData.filter((c: any) => c.estagio === stage)
+      out[stage] = {
+        label: STAGE_LABEL[stage],
+        count: subset.length,
+        items: subset.slice(0, 3).map((c: any) => ({
+          nome: c.nome ?? '—',
+          valor: c.valorTotalDivida ?? 0,
+        })),
+      }
+    }
+    return out
+  }, [clientesData])
+
+  // ── Stage distribution real (PieChart) ──
+  const stageData = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const c of clientesData) {
+      const e = c.estagio || 'lead'
+      counts[e] = (counts[e] || 0) + 1
+    }
+    return STAGE_ORDER
+      .filter((stage) => (counts[stage] || 0) > 0)
+      .map((stage) => ({
+        name: STAGE_LABEL[stage],
+        value: counts[stage] || 0,
+        color: STAGE_PALETTE[stage] || '#0F4C35',
+      }))
+  }, [clientesData])
+
+  // ── Portfolio mensal — soma de valorTotalDivida por mês de últimaAtualizacao ──
+  const portfolioData = useMemo(() => {
+    const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+    const ano = new Date().getFullYear()
+    const buckets = meses.map((mes) => ({ mes, valor: 0 }))
+    for (const c of clientesData) {
+      const dt = c.ultimaAtualizacao ? new Date(c.ultimaAtualizacao) : null
+      if (!dt || dt.getFullYear() !== ano) continue
+      const idx = dt.getMonth()
+      buckets[idx].valor += c.valorTotalDivida ?? 0
+    }
+    return buckets
+  }, [clientesData])
+
+  // ── Atividade Recente — últimas propostas ordenadas por criadoEm ──
+  const recentActivity = useMemo(() => {
+    if (!Array.isArray(propostasData) || propostasData.length === 0) return []
+    const sorted = [...propostasData].sort((a, b) => {
+      const ta = a.criadoEm ? new Date(a.criadoEm).getTime() : 0
+      const tb = b.criadoEm ? new Date(b.criadoEm).getTime() : 0
+      return tb - ta
+    })
+    const now = Date.now()
+    const fmtRel = (ts: number) => {
+      const diffMs = now - ts
+      const h = Math.floor(diffMs / 3600_000)
+      if (h < 1) return 'agora'
+      if (h < 24) return `${h}h atrás`
+      const d = Math.floor(h / 24)
+      if (d === 1) return 'ontem'
+      if (d < 7) return `${d} dias`
+      const w = Math.floor(d / 7)
+      return `${w} sem.`
+    }
+    return sorted.slice(0, 6).map((p: any, i: number) => {
+      const ts = p.criadoEm ? new Date(p.criadoEm).getTime() : now
+      const cliente = p.clienteNome || p.cliente || 'cliente'
+      const valor = p.valorPropoosto ?? p.valorProposto ?? p.valor ?? 0
+      const isAceita = (p.status || '').toLowerCase() === 'aceita'
+      return {
+        id: p.id ?? i,
+        type: isAceita ? 'acordo' : 'proposta',
+        icon: isAceita ? Handshake : Send,
+        description: isAceita
+          ? `Acordo fechado: ${cliente}`
+          : `Proposta ${p.status || 'gerada'}: ${cliente}`,
+        detail: valor > 0 ? formatBRLCompact(valor) : (p.titulo || ''),
+        time: fmtRel(ts),
+        color: isAceita ? 'bg-positivo' : 'bg-aletis-dourado',
+      }
+    })
+  }, [propostasData])
+
+  // ── Próximos Vencimentos — clientes com pendente > 0 ──
+  // Sem campo `vencimento` no resumo: usamos `proxVencimento` se vier ou
+  // marcamos como "saldo pendente" (sem dias) — não invenamos data.
+  const proximosVencimentos = useMemo(() => {
+    const hojeMs = Date.now()
+    return clientesData
+      .map((c: any) => {
+        const pendente = (c.valorTotalDivida ?? 0) - (c.valorTotalPago ?? 0)
+        const vencRaw: string | undefined = c.proxVencimento || c.proximoVencimento
+        const venc = vencRaw ? new Date(vencRaw) : null
+        const dias = venc && !isNaN(venc.getTime())
+          ? Math.round((venc.getTime() - hojeMs) / 86400000)
+          : null
+        const data = venc && !isNaN(venc.getTime())
+          ? venc.toLocaleDateString('pt-BR')
+          : 'sem vencimento previsto'
+        return { cliente: c.nome, valor: pendente, dias, data }
+      })
+      .filter((v: { valor: number }) => v.valor > 0)
+      .slice(0, 4)
+  }, [clientesData])
+
+  // ── Metas do mês — derivadas de propostas/aceitas + volume ──
+  const metasMes = useMemo(() => {
+    const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0)
+    const propostasMes = (propostasData || []).filter((p: any) => p.criadoEm && new Date(p.criadoEm).getTime() >= inicioMes.getTime())
+    const acordosMes = (propostasData || []).filter((p: any) => (p.status || '').toLowerCase() === 'aceita' && p.criadoEm && new Date(p.criadoEm).getTime() >= inicioMes.getTime())
+    const volumeMes = propostasMes.reduce((s: number, p: any) => s + (p.valorProposto || p.valor || 0), 0)
+    return [
+      { label: 'Propostas Enviadas', atual: propostasMes.length, meta: 10 },
+      { label: 'Acordos Fechados', atual: acordosMes.length, meta: 6 },
+      { label: 'Volume Negociado', atual: volumeMes, meta: 3000000, isCurrency: true },
+    ]
+  }, [propostasData])
 
   // Dynamic market alerts using real indicator values
   const alertasMercado = useMemo(() => {
@@ -567,95 +584,70 @@ export default function Dashboard() {
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
         {/* Clientes Ativos */}
         <div
-          className={`card-premium p-6 group cursor-default transition-all duration-500 ${
+          className={`transition-all duration-500 ${
             kpiVisible[0] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
           }`}
         >
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 rounded-xl bg-positivo/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <Users className="w-6 h-6 text-positivo" />
-            </div>
-            <span className="badge-verde text-[11px]">
-              <ArrowUpRight className="w-3 h-3 mr-1" />
-              +3 este mês
-            </span>
-          </div>
-          <p className="text-4xl font-display font-bold text-aletis-grafite-escuro leading-none">
-            {clientesAtivos}
-          </p>
-          <p className="text-sm font-body text-aletis-grafite-claro mt-2">
-            Clientes Ativos
-          </p>
+          <KpiTile
+            variant="light"
+            icon={Users}
+            label="Clientes Ativos"
+            value={clientesAtivos}
+            sub={`${clientesData.filter((c: any) => c.estagio === 'negociacao').length} em negociação`}
+            accent="verde"
+            tooltip="Total de clientes na carteira (todos os estágios). Em destaque, os que estão em negociação ativa."
+          />
         </div>
 
         {/* Volume Negociado */}
         <div
-          className={`card-premium p-6 group cursor-default transition-all duration-500 ${
+          className={`transition-all duration-500 ${
             kpiVisible[1] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
           }`}
         >
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 rounded-xl bg-aletis-dourado/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <TrendingUp className="w-6 h-6 text-aletis-dourado" />
-            </div>
-            <span className="badge-dourado text-[11px]">
-              <ArrowUpRight className="w-3 h-3 mr-1" />
-              +12% vs mês anterior
-            </span>
-          </div>
-          <p className="text-4xl font-display font-bold text-aletis-grafite-escuro leading-none">
-            {formatBRLCompact(volumeNegociado)}
-          </p>
-          <p className="text-sm font-body text-aletis-grafite-claro mt-2">
-            Volume Negociado
-          </p>
+          <KpiTile
+            variant="light"
+            icon={TrendingUp}
+            label="Volume Negociado"
+            value={formatBRLCompact(volumeNegociado)}
+            sub={`${kpiValues.clientes} cliente(s) na carteira`}
+            accent="dourado"
+            tooltip="Soma de `valorTotalDivida` de todos os clientes da carteira — exposição agregada da operação."
+          />
         </div>
 
         {/* Economia Gerada */}
         <div
-          className={`card-premium p-6 group cursor-default transition-all duration-500 ${
+          className={`transition-all duration-500 ${
             kpiVisible[2] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
           }`}
         >
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 rounded-xl bg-positivo/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <DollarSign className="w-6 h-6 text-positivo" />
-            </div>
-            <span className="badge-verde text-[11px]">
-              <ArrowUpRight className="w-3 h-3 mr-1" />
-              +8% vs mês anterior
-            </span>
-          </div>
-          <p className="text-4xl font-display font-bold text-aletis-grafite-escuro leading-none">
-            {formatBRLCompact(economiaGerada)}
-          </p>
-          <p className="text-sm font-body text-aletis-grafite-claro mt-2">
-            Economia Gerada
-          </p>
+          <KpiTile
+            variant="light"
+            icon={DollarSign}
+            label="Economia Gerada"
+            value={formatBRLCompact(economiaGerada)}
+            sub={kpiValues.volume > 0 ? `${((kpiValues.economia / kpiValues.volume) * 100).toFixed(0)}% do volume` : 'projetada'}
+            accent="verde"
+            tooltip="Diferença entre dívida original e total já pago/acordado. Quando ainda não há pago > dívida, projeta-se 22% do volume como economia esperada."
+          />
         </div>
 
         {/* Taxa de Conversão */}
         <div
-          className={`card-premium p-6 group cursor-default transition-all duration-500 ${
+          className={`transition-all duration-500 ${
             kpiVisible[3] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
           }`}
         >
-          <div className="flex items-start justify-between mb-4">
-            <div className="relative w-14 h-14 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <CircularProgress percentage={taxaConversao} size={56} color="#0F4C35" />
-              <Target className="w-5 h-5 text-aletis-verde absolute" />
-            </div>
-            <span className="badge-verde text-[11px]">
-              <ArrowUpRight className="w-3 h-3 mr-1" />
-              +2,1 p.p.
-            </span>
-          </div>
-          <p className="text-4xl font-display font-bold text-aletis-grafite-escuro leading-none">
-            {taxaConversao.toFixed(1).replace('.', ',')}%
-          </p>
-          <p className="text-sm font-body text-aletis-grafite-claro mt-2">
-            Taxa de Conversão
-          </p>
+          <KpiTile
+            variant="light"
+            icon={Target}
+            label="Taxa de Conversão"
+            value={`${taxaConversao.toFixed(1).replace('.', ',')}%`}
+            sub={`${clientesData.filter((c: any) => ['acordo', 'concluido', 'acompanhamento', 'proposta', 'negociacao'].includes(c.estagio)).length} em progresso`}
+            accent="sky"
+            tooltip="Clientes em estágios produtivos (proposta/negociação/acordo/concluído/acompanhamento) ÷ total da carteira."
+          />
         </div>
       </section>
 
@@ -708,7 +700,11 @@ export default function Dashboard() {
                   tickFormatter={(v) => formatBRLCompact(v)}
                   width={70}
                 />
-                <Tooltip content={<PortfolioTooltip />} />
+                <Tooltip
+                  content={<PortfolioTooltip />}
+                  wrapperStyle={{ outline: 'none' }}
+                  cursor={{ stroke: '#C9A84C', strokeWidth: 1, strokeDasharray: '3 3' }}
+                />
                 <Area
                   type="monotone"
                   dataKey="valor"
@@ -752,7 +748,7 @@ export default function Dashboard() {
                     <Cell key={`cell-${i}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip content={<StageTooltip />} />
+                <Tooltip content={<StageTooltip />} wrapperStyle={{ outline: 'none' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -799,41 +795,56 @@ export default function Dashboard() {
           </div>
 
           <div className="space-y-0">
-            {recentActivity.map((event, i) => {
-              const Icon = event.icon
-              return (
-                <div
-                  key={event.id}
-                  className="flex items-start gap-4 py-3.5 group hover:bg-aletis-bege/50 -mx-3 px-3 rounded-xl transition-colors duration-200"
+            {recentActivity.length === 0 ? (
+              <div className="py-10 text-center">
+                <FileText className="w-8 h-8 text-aletis-grafite-claro mx-auto mb-2 opacity-50" />
+                <p className="text-sm font-body text-aletis-grafite-medio">
+                  Sem propostas geradas ainda.
+                </p>
+                <Link
+                  to="/propostas"
+                  className="inline-block mt-2 text-xs font-body text-aletis-verde hover:underline"
                 >
-                  {/* Timeline dot + line */}
-                  <div className="relative flex flex-col items-center">
-                    <div
-                      className={`w-9 h-9 rounded-lg ${event.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}
-                    >
-                      <Icon className="w-4 h-4 text-white" />
+                  Gerar a primeira proposta →
+                </Link>
+              </div>
+            ) : (
+              recentActivity.map((event, i) => {
+                const Icon = event.icon
+                return (
+                  <div
+                    key={event.id}
+                    className="flex items-start gap-4 py-3.5 group hover:bg-aletis-bege/50 -mx-3 px-3 rounded-xl transition-colors duration-200"
+                  >
+                    {/* Timeline dot + line */}
+                    <div className="relative flex flex-col items-center">
+                      <div
+                        className={`w-9 h-9 rounded-lg ${event.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}
+                      >
+                        <Icon className="w-4 h-4 text-white" />
+                      </div>
+                      {i < recentActivity.length - 1 && (
+                        <div className="w-px h-full bg-aletis-borda absolute top-10 left-1/2 -translate-x-1/2" />
+                      )}
                     </div>
-                    {i < recentActivity.length - 1 && (
-                      <div className="w-px h-full bg-aletis-borda absolute top-10 left-1/2 -translate-x-1/2" />
-                    )}
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-body font-medium text-aletis-grafite-escuro leading-tight">
+                        {event.description}
+                      </p>
+                      <p className="text-xs font-body text-aletis-grafite-claro mt-0.5 truncate">
+                        {event.detail}
+                      </p>
+                    </div>
+                    {/* Time */}
+                    <span className="text-[11px] font-body text-aletis-grafite-claro whitespace-nowrap flex-shrink-0 mt-0.5">
+                      <Clock className="w-3 h-3 inline mr-1 -mt-px" />
+                      {event.time}
+                    </span>
                   </div>
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-body font-medium text-aletis-grafite-escuro leading-tight">
-                      {event.description}
-                    </p>
-                    <p className="text-xs font-body text-aletis-grafite-claro mt-0.5 truncate">
-                      {event.detail}
-                    </p>
-                  </div>
-                  {/* Time */}
-                  <span className="text-[11px] font-body text-aletis-grafite-claro whitespace-nowrap flex-shrink-0 mt-0.5">
-                    <Clock className="w-3 h-3 inline mr-1 -mt-px" />
-                    {event.time}
-                  </span>
-                </div>
-              )
-            })}
+                )
+              })
+            )}
           </div>
         </div>
 
@@ -909,9 +920,22 @@ export default function Dashboard() {
           </div>
 
           <div className="space-y-3">
+            {proximosVencimentos.length === 0 && (
+              <p className="text-xs font-body text-aletis-grafite-claro py-4 text-center">
+                Nenhum saldo pendente nos clientes ativos.
+              </p>
+            )}
             {proximosVencimentos.map((v, i) => {
               const urgency =
-                v.dias <= 7 ? 'alerta' : v.dias <= 30 ? 'ambar' : 'normal'
+                v.dias === null ? 'normal'
+                : v.dias < 0 ? 'alerta'
+                : v.dias <= 7 ? 'alerta'
+                : v.dias <= 30 ? 'ambar'
+                : 'normal'
+              const badgeText =
+                v.dias === null ? 'pendente'
+                : v.dias < 0 ? `vencido ${Math.abs(v.dias)}d`
+                : `${v.dias}d`
               return (
                 <div
                   key={i}
@@ -934,7 +958,7 @@ export default function Dashboard() {
                         : 'bg-aletis-verde/10 text-aletis-verde'
                     }`}
                   >
-                    {v.dias}d
+                    {badgeText}
                   </span>
                 </div>
               )

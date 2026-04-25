@@ -612,26 +612,39 @@ export class DataSourceManager {
     const probeOne = async (entry: DataSourceEntry) => {
       const start = Date.now();
       try {
+        // Stream + Range bytes=0-2047 — só pedimos os 2 primeiros KB.
+        // Servidores que respeitam Range enviam 206 (Partial Content).
+        // Servidores que ignoram enviam 200 com o body completo, mas
+        // descartamos o stream sem ler — sem cap de maxContentLength
+        // (cap = bug histórico que marcava ~19/36 fontes saudáveis como offline).
         const resp = await axiosProbe.request({
           method: 'GET',
           url: entry.url,
           timeout: timeoutMs,
-          maxContentLength: 2048,
-          maxBodyLength: 2048,
           validateStatus: () => true,
-          responseType: 'text',
+          responseType: 'stream',
           headers: {
             'User-Agent':
               'Mozilla/5.0 (compatible; ALETIS-HealthCheck/1.0; +https://aletis.com.br)',
             Accept: '*/*',
+            Range: 'bytes=0-2047',
           },
         });
+        // Descartar o body sem consumir — economiza banda e evita backpressure.
+        // Axios em Node retorna IncomingMessage (que tem .destroy()); cast pra
+        // qualquer pra evitar mismatch com o tipo Web ReadableStream.
+        try {
+          const stream = resp.data as { destroy?: () => void } | undefined;
+          stream?.destroy?.();
+        } catch {
+          /* ignore */
+        }
         const latencia = Date.now() - start;
         if (resp.status >= 500) {
           this.updateSourceStatus(entry.nome, 'degraded', latencia, `HTTP ${resp.status}`);
           summary.degraded++;
         } else {
-          // 2xx, 3xx, 4xx — endpoint responde. 4xx geralmente é falta de parâmetro.
+          // 2xx, 3xx, 4xx, 206 — endpoint responde. 4xx geralmente é falta de parâmetro.
           this.updateSourceStatus(entry.nome, 'online', latencia);
           summary.online++;
         }

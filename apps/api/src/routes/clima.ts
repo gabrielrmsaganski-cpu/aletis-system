@@ -769,6 +769,24 @@ export default async function climaRoutes(app: FastifyInstance) {
       return reply.status(400).send({ erro: 'UF inválida', mensagem: `"${request.params.estado}" não é UF válida.` })
     }
 
+    // Saneamento: descarta alerta com vigência expirada e troca início/fim
+    // se vierem invertidos da fonte.
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
+    const sanitize = (a: AlertaClimatico): AlertaClimatico | null => {
+      const ini = new Date(a.vigenciaInicio); ini.setHours(0, 0, 0, 0)
+      const fim = new Date(a.vigenciaFim); fim.setHours(0, 0, 0, 0)
+      if (isNaN(ini.getTime()) || isNaN(fim.getTime())) return null
+      const [start, end] = ini.getTime() <= fim.getTime() ? [ini, fim] : [fim, ini]
+      if (end.getTime() < hoje.getTime()) return null  // expirado
+      return {
+        ...a,
+        vigenciaInicio: start.toISOString().slice(0, 10),
+        vigenciaFim: end.toISOString().slice(0, 10),
+      }
+    }
+    const drop = (xs: (AlertaClimatico | null)[]): AlertaClimatico[] =>
+      xs.filter((a): a is AlertaClimatico => !!a)
+
     let fonteOrigem: 'api' | 'cache' | 'fallback' = 'fallback'
 
     try {
@@ -784,17 +802,18 @@ export default async function climaRoutes(app: FastifyInstance) {
           fonte: `CPTEC/INPE (${a.fonte})`, emitidoEm: a.dataInicio,
         }))
         const agroAlertas = ALERTAS_FALLBACK.filter(a => a.estado === uf)
+        const allSanitized = drop([...combined, ...agroAlertas].map(sanitize))
         return {
           estado: uf,
-          totalAlertas: combined.length + agroAlertas.length,
-          alertas: [...combined, ...agroAlertas],
+          totalAlertas: allSanitized.length,
+          alertas: allSanitized,
           fonteOrigem, consultadoEm: new Date().toISOString(),
           fonte: 'CPTEC/INPE + Alertas agroclimáticos ALETIS',
         }
       }
     } catch { /* fall through */ }
 
-    const alertas = ALERTAS_FALLBACK.filter(a => a.estado === uf)
+    const alertas = drop(ALERTAS_FALLBACK.filter(a => a.estado === uf).map(sanitize))
     return {
       estado: uf, totalAlertas: alertas.length, alertas,
       fonteOrigem: 'fallback' as const,

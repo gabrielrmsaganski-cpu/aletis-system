@@ -135,14 +135,20 @@ const NOME_MAP: Record<string, string> = {
 
 function gerarHistoricoFallback(base: number, dias: number, volatilidade: number): PrecoHistorico[] {
   const hist: PrecoHistorico[] = []
-  let valor = base * (1 - volatilidade * 0.3)
+  // Caminha numa janela ±volatilidade % em torno de `base` — mantém o
+  // histórico realista perto do preço atual (sem decair pra ~75% como antes).
+  let valor = base * (1 + ((Math.random() - 0.5) * volatilidade) / 100)
   const agora = new Date()
   for (let i = dias; i >= 0; i--) {
     const data = new Date(agora)
     data.setUTCDate(data.getUTCDate() - i)
-    const variacao = (Math.random() - 0.48) * volatilidade * 2
+    const variacao = (Math.random() - 0.5) * volatilidade * 2
     valor = valor * (1 + variacao / 100)
-    valor = Math.max(valor, base * 0.7)
+    // Limites elásticos: ±15% em torno de base.
+    valor = Math.max(Math.min(valor, base * 1.15), base * 0.85)
+    // Ancoragem do último ponto = base, para que variacao24h calculada
+    // reflita o passo de ontem→hoje no histórico (consistente com precoAtual).
+    if (i === 0) valor = base
     hist.push({ data: data.toISOString().slice(0, 10), valor: Number(valor.toFixed(2)), variacao: Number(variacao.toFixed(2)) })
   }
   return hist
@@ -193,14 +199,23 @@ export default async function (fastify: FastifyInstance) {
             else if (conabData.fonte === 'cache' && fonteGlobal !== 'api') fonteGlobal = 'cache'
 
             const historico = gerarHistoricoFallback(commodity.precoMedio, Math.min(dias, 365), 1.5)
+            // Variação derivada do histórico (CONAB não fornece deltas explícitos);
+            // calcula 24h, 7d, 30d como (preçoAtual − referência) / referência × 100.
+            const calcVar = (offset: number): number => {
+              const n = historico.length
+              if (n < offset + 1) return 0
+              const ref = historico[n - 1 - offset]?.valor
+              if (!ref || ref <= 0) return 0
+              return Number((((commodity.precoMedio - ref) / ref) * 100).toFixed(2))
+            }
             resultado.push({
               cultura: NOME_MAP[chave] || commodity.produto,
               unidade: commodity.unidade,
               praca: PRACA_MAP[chave] || 'Brasil (média estadual)',
               precoAtual: commodity.precoMedio,
-              variacao24h: 0,
-              variacao7d: 0,
-              variacao30d: 0,
+              variacao24h: calcVar(1),
+              variacao7d: calcVar(7),
+              variacao30d: calcVar(30),
               minimo30d: commodity.precoMinimo,
               maximo30d: commodity.precoMaximo,
               historico,

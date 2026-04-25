@@ -70,6 +70,8 @@ interface CnpjEnrichment {
   cnaeFiscalDescricao: string
   cnaesSecundarios: Array<{ codigo: string; descricao: string }>
   situacaoCadastral: string
+  motivoSituacaoCadastral?: string
+  situacaoEspecial?: string
   dataAbertura: string
   capitalSocial: number
   porte?: string
@@ -96,6 +98,46 @@ interface AreaEstimation {
   explicacao: string
   hectaresSicar?: number
 }
+type AgroProfileNivel = 'forte' | 'medio' | 'fraco'
+type PfProfileNivel = 'forte' | 'medio' | 'fraco' | 'nenhum'
+type JudicialSeverity = 'alta' | 'media' | 'baixa' | 'nenhuma'
+type JudicialTipo =
+  | 'recuperacao_judicial'
+  | 'falencia'
+  | 'insolvencia'
+  | 'leilao'
+  | 'penhora'
+  | 'liquidacao_judicial'
+  | 'situacao_especial'
+interface AgroProfile {
+  nivel: AgroProfileNivel
+  provavel: boolean
+  score: number
+  explicacao: string
+  evidencias: string[]
+}
+interface PfProfile {
+  relevante: boolean
+  nivel: PfProfileNivel
+  score: number
+  explicacao: string
+  evidencias: string[]
+}
+interface JudicialProfile {
+  ativo: boolean
+  severidade: JudicialSeverity
+  tipos: JudicialTipo[]
+  explicacao: string
+  evidencias: string[]
+}
+interface JudicialEvent {
+  tipo: JudicialTipo
+  fonte: string
+  data: string
+  resumo: string
+  url?: string
+  severidade: Exclude<JudicialSeverity, 'nenhuma'>
+}
 interface LeadScore {
   total: number
   breakdown: {
@@ -106,10 +148,14 @@ interface LeadScore {
     hectares: number
     velocity: number
     fitRegional: number
+    multiSource: number
+    douCrise: number
   }
   motivos?: {
     velocity?: string
     fitRegional?: string
+    multiSource?: string
+    douCrise?: string
   }
   classificacao: 'quente' | 'morno' | 'frio' | 'reativo'
   honorariosEstimados: number
@@ -183,12 +229,17 @@ interface LeadFull {
   primeiraInscricao: string
   ultimaInscricao: string
   debts: DebtRecord[]
+  judicialEvents?: JudicialEvent[]
+  sources?: Array<{ fonte: string; ingestedAt: string }>
   cnpj?: CnpjEnrichment
   area: AreaEstimation
   car?: CarConsultaResult
   carSource?: 'offline' | 'live'
   carOutrosImoveis?: CarConsultaResult[]
   score: LeadScore
+  agroProfile: AgroProfile
+  pfProfile: PfProfile
+  judicialProfile: JudicialProfile
   status?: LeadStatus
   enriquecido?: boolean
   enriquecidoEm?: string
@@ -249,10 +300,14 @@ interface Stats {
   leadsComAjuizamento: number
   leadsCompletos: number
   leadsExcluidos: number
+  leadsAgroProvavel: number
+  leadsPfRural: number
+  leadsJudicialAgro: number
   hotLeadsPendentes: number
   leadsParaReengajar: number
   porUf: Array<{ uf: string; count: number; divida: number }>
   porFaixaDivida: Array<{ faixa: string; count: number }>
+  porJudicialTipo: Array<{ tipo: JudicialTipo; count: number }>
   topSignals: Array<{ signal: string; count: number }>
   manifest: { fonte: string; atualizadoEm: string }
   fontes?: Array<{
@@ -312,9 +367,13 @@ interface BatchState {
 const fmtBRL = (v: number): string =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
 const fmtBRLShort = (v: number): string => {
-  if (v >= 1e9) return `R$ ${(v / 1e9).toFixed(2)} bi`
-  if (v >= 1e6) return `R$ ${(v / 1e6).toFixed(2)} mi`
-  if (v >= 1e3) return `R$ ${(v / 1e3).toFixed(1)} mil`
+  // Formato compacto pt-BR — um único dígito após a vírgula para legibilidade,
+  // sem arrastar centavos irrelevantes em valores grandes.
+  const f = (x: number) => x.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+  if (v >= 1e12) return `R$ ${f(v / 1e12)} tri`
+  if (v >= 1e9) return `R$ ${f(v / 1e9)} bi`
+  if (v >= 1e6) return `R$ ${f(v / 1e6)} mi`
+  if (v >= 1e3) return `R$ ${f(v / 1e3)} mil`
   return `R$ ${v.toFixed(0)}`
 }
 const fmtHa = (ha: number): string =>
@@ -336,6 +395,77 @@ const CONFIDENCE_COLOR: Record<string, string> = {
   baixa: 'text-slate-500 dark:text-slate-500',
 }
 
+const JUDICIAL_LABEL: Record<JudicialTipo, string> = {
+  recuperacao_judicial: 'RJ',
+  falencia: 'Falência',
+  insolvencia: 'Insolvência',
+  leilao: 'Leilão',
+  penhora: 'Penhora',
+  liquidacao_judicial: 'Liquidação',
+  situacao_especial: 'Sit. especial',
+}
+
+const JUDICIAL_STYLE: Record<JudicialSeverity, { badge: string; text: string; border: string }> = {
+  alta: {
+    badge: 'bg-red-100 dark:bg-red-950/30',
+    text: 'text-red-700 dark:text-red-300',
+    border: 'border-red-300 dark:border-red-800',
+  },
+  media: {
+    badge: 'bg-amber-100 dark:bg-amber-950/30',
+    text: 'text-amber-700 dark:text-amber-300',
+    border: 'border-amber-300 dark:border-amber-800',
+  },
+  baixa: {
+    badge: 'bg-sky-100 dark:bg-sky-950/30',
+    text: 'text-sky-700 dark:text-sky-300',
+    border: 'border-sky-300 dark:border-sky-800',
+  },
+  nenhuma: {
+    badge: 'bg-slate-100 dark:bg-slate-800',
+    text: 'text-slate-600 dark:text-slate-400',
+    border: 'border-slate-300 dark:border-slate-700',
+  },
+}
+
+// Labels amigáveis das fontes PGFN (valores reais observados no dataset).
+const FONTE_LABEL: Record<string, { label: string; desc: string }> = {
+  PREV: { label: 'Previdenciário', desc: 'Contribuições ao INSS (empregador, segurado, terceiros)' },
+  NAOPREV: { label: 'Não-previdenciário', desc: 'Tributos federais (IRPJ, CSLL, PIS, COFINS, IRRF, multas)' },
+  FGTS: { label: 'FGTS', desc: 'Débitos ao Fundo de Garantia do Tempo de Serviço' },
+}
+
+// Normaliza nomes longos de `tipoCredito` (ex.: "Receita da dívida ativa - COFINS" → "COFINS").
+function shortTipoCredito(raw: string): string {
+  if (!raw || raw === 'OUTROS') return raw || '—'
+  return raw
+    .replace(/^Receita\s+da\s+d[ií]vida\s+ativa\s*-\s*/i, '')
+    .replace(/^R\s+D\s+Ativa\s*-\s*/i, '')
+    .replace(/^Rec\.\s+d[ií]v\.\s+ativa\s*-\s*/i, '')
+    .trim()
+}
+
+// Classifica uma situação PGFN em um bucket visual auditável.
+type SituacaoBucket = 'ajuizada' | 'rescindido' | 'cobranca' | 'negociado' | 'suspenso' | 'outro'
+function situacaoBucket(s: string): SituacaoBucket {
+  const up = (s || '').toUpperCase()
+  if (up.includes('RESCINDIDO')) return 'rescindido'
+  if (up.includes('SUSPEN')) return 'suspenso'
+  if (up.includes('SISPAR') || up.includes('NEGOCIAD')) return 'negociado'
+  if (up.includes('AJUIZ')) return 'ajuizada'
+  if (up.includes('COBRANC')) return 'cobranca'
+  return 'outro'
+}
+
+const SITUACAO_STYLE: Record<SituacaoBucket, { label: string; chip: string }> = {
+  ajuizada: { label: 'Ajuizada', chip: 'bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800' },
+  rescindido: { label: 'Parcelam. rescindido', chip: 'bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800' },
+  cobranca: { label: 'Em cobrança', chip: 'bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800' },
+  negociado: { label: 'Negociado (Sispar)', chip: 'bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800' },
+  suspenso: { label: 'Suspenso (judicial)', chip: 'bg-sky-100 dark:bg-sky-950/30 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-800' },
+  outro: { label: 'Outro', chip: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700' },
+}
+
 // ────────────────────────────────────────────────────────────
 // Página principal
 // ────────────────────────────────────────────────────────────
@@ -355,6 +485,10 @@ export default function Prospeccao() {
   const [maxDivida, setMaxDivida] = useState<number | undefined>(undefined)
   const [tipoPessoa, setTipoPessoa] = useState<'PF' | 'PJ' | ''>('')
   const [apenasAjuizadas, setApenasAjuizadas] = useState<boolean>(false)
+  const [apenasAgroProvavel, setApenasAgroProvavel] = useState<boolean>(false)
+  const [apenasPfRural, setApenasPfRural] = useState<boolean>(false)
+  const [apenasJudicialAgro, setApenasJudicialAgro] = useState<boolean>(false)
+  const [judicialTipos, setJudicialTipos] = useState<JudicialTipo[]>([])
   const [termo, setTermo] = useState<string>('')
   const [sortBy, setSortBy] = useState<'score' | 'divida' | 'hectares' | 'recencia'>('score')
   const [statusTab, setStatusTab] = useState<'todos' | 'pendente' | 'completa' | 'excluido'>('todos')
@@ -369,6 +503,13 @@ export default function Prospeccao() {
   const [carError, setCarError] = useState<string | null>(null)
   const [iniciando, setIniciando] = useState<string | null>(null)
   const [iniciarMsg, setIniciarMsg] = useState<{ tipo: 'sucesso' | 'erro' | 'info'; texto: string } | null>(null)
+  const [enrichFlash, setEnrichFlash] = useState<{ at: number; lines: string[]; isError?: boolean } | null>(null)
+  // Auto-dismiss global (4.5s) — funciona mesmo se o drawer estiver fechado.
+  useEffect(() => {
+    if (!enrichFlash) return
+    const t = setTimeout(() => setEnrichFlash(null), 4500)
+    return () => clearTimeout(t)
+  }, [enrichFlash])
   const navigate = useNavigate()
 
   // Bulk enrich
@@ -406,10 +547,14 @@ export default function Prospeccao() {
     maxDivida,
     tipoPessoa: tipoPessoa || undefined,
     apenasAjuizadas,
+    apenasAgroProvavel,
+    apenasPfRural,
+    apenasJudicialAgro,
+    judicialTipos: judicialTipos.length ? judicialTipos : undefined,
     termo: termo || undefined,
     status: statusTab,
     sortBy,
-  }), [uf, minHectares, minDivida, maxDivida, tipoPessoa, apenasAjuizadas, termo, sortBy, statusTab])
+  }), [uf, minHectares, minDivida, maxDivida, tipoPessoa, apenasAjuizadas, apenasAgroProvavel, apenasPfRural, apenasJudicialAgro, judicialTipos, termo, sortBy, statusTab])
 
   const search = useCallback(async () => {
     setLoading(true)
@@ -483,6 +628,7 @@ export default function Prospeccao() {
     setEnriching(cpfCnpj)
     const clean = cpfCnpj.replace(/\D/g, '')
     try {
+      const before = leads.find((l) => l.cpfCnpjClean === clean)
       const r = await fetch(`/api/prospeccao/enriquecer/${encodeURIComponent(clean)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -491,15 +637,46 @@ export default function Prospeccao() {
       const j = await r.json()
       if (j.success) {
         setSelectedLead(j.data)
-        // Atualiza lista também (score pode ter mudado)
         setLeads((prev) => prev.map((l) => (l.cpfCnpjClean === j.data.cpfCnpjClean ? j.data : l)))
+        const next: LeadFull = j.data
+
+        // Caso especial: PF com CPF mascarado no PGFN (só 6 dígitos) — BrasilAPI
+        // não aceita CPF (só CNPJ) e SICAR individual exige CPF completo.
+        // Explicamos ao usuário para evitar "não funcionou" silencioso.
+        const isPseudoDoc = next.tipoPessoa === 'PF' && next.cpfCnpjClean.length < 11
+        if (isPseudoDoc) {
+          setEnrichFlash({
+            at: Date.now(),
+            lines: [
+              'CPF mascarado pelo PGFN (sigilo fiscal) — sem CPF completo não é possível chamar BrasilAPI/RFB nem CAR individual.',
+              next.car
+                ? `índice SICAR casou: CAR ${next.car.codImovel} · ${fmtNum(next.car.areaImovel)} ha`
+                : 'índice SICAR offline (portal em manutenção) → área continua estimada pela razão social + contexto UF',
+            ],
+          })
+          return
+        }
+
+        // Resumo curto do que foi trazido — mostrado como flash verde no drawer por 4s.
+        const delta: string[] = []
+        if (!before?.cnpj && next.cnpj) delta.push(`CNPJ: ${next.cnpj.razaoSocial}${next.cnpj.cnaeFiscal ? ` · CNAE ${next.cnpj.cnaeFiscal}` : ''}`)
+        if ((next.cnpj?.socios?.length ?? 0) > 0) delta.push(`${next.cnpj!.socios.length} sócios no QSA`)
+        if (next.area?.hectaresEstimados && (before?.area?.hectaresEstimados ?? 0) !== next.area.hectaresEstimados)
+          delta.push(`${fmtNum(next.area.hectaresEstimados)} ha (${next.area.metodo})`)
+        if (next.car && !before?.car) delta.push(`CAR ${next.car.codImovel}`)
+        if ((before?.score.total ?? 0) !== next.score.total)
+          delta.push(`score ${next.score.total} · ${next.score.classificacao}`)
+        setEnrichFlash({ at: Date.now(), lines: delta.length ? delta : ['dados já consolidados — nada novo materializado agora'] })
+      } else {
+        setEnrichFlash({ at: Date.now(), lines: [j.error || 'backend retornou erro'], isError: true })
       }
     } catch (e) {
       console.warn('[enrich] erro', e)
+      setEnrichFlash({ at: Date.now(), lines: ['falha de rede ao enriquecer — tente novamente'], isError: true })
     } finally {
       setEnriching(null)
     }
-  }, [])
+  }, [leads])
 
   const handleConsultarCar = useCallback(async (cpfCnpj: string, codImovel: string) => {
     setCarLoading(cpfCnpj)
@@ -727,6 +904,10 @@ export default function Prospeccao() {
       maxDivida,
       tipoPessoa: tipoPessoa || undefined,
       apenasAjuizadas,
+      apenasAgroProvavel,
+      apenasPfRural,
+      apenasJudicialAgro,
+      judicialTipos: judicialTipos.length ? judicialTipos : undefined,
       termo: termo || undefined,
       sortBy,
     }
@@ -744,7 +925,7 @@ export default function Prospeccao() {
     a.click()
     a.remove()
     URL.revokeObjectURL(url)
-  }, [uf, minHectares, minDivida, maxDivida, tipoPessoa, apenasAjuizadas, termo, sortBy])
+  }, [uf, minHectares, minDivida, maxDivida, tipoPessoa, apenasAjuizadas, apenasAgroProvavel, apenasPfRural, apenasJudicialAgro, judicialTipos, termo, sortBy])
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
@@ -776,6 +957,10 @@ export default function Prospeccao() {
         minDivida={minDivida} setMinDivida={setMinDivida}
         tipoPessoa={tipoPessoa} setTipoPessoa={setTipoPessoa}
         apenasAjuizadas={apenasAjuizadas} setApenasAjuizadas={setApenasAjuizadas}
+        apenasAgroProvavel={apenasAgroProvavel} setApenasAgroProvavel={setApenasAgroProvavel}
+        apenasPfRural={apenasPfRural} setApenasPfRural={setApenasPfRural}
+        apenasJudicialAgro={apenasJudicialAgro} setApenasJudicialAgro={setApenasJudicialAgro}
+        judicialTipos={judicialTipos} setJudicialTipos={setJudicialTipos}
         termo={termo} setTermo={setTermo}
         sortBy={sortBy} setSortBy={setSortBy}
         onApply={() => { setPage(1); search() }}
@@ -882,9 +1067,11 @@ export default function Prospeccao() {
           deleting={deleting === selectedLead.cpfCnpjClean}
           iniciando={iniciando === selectedLead.cpfCnpjClean}
           iniciarMsg={iniciarMsg}
+          enrichFlash={enrichFlash}
+          dismissEnrichFlash={() => setEnrichFlash(null)}
           carError={carError}
           sicarStatus={sicarStatus}
-          onClose={() => { setSelectedLead(null); setCarError(null); setIniciarMsg(null); setContatoModalOpen(false) }}
+          onClose={() => { setSelectedLead(null); setCarError(null); setIniciarMsg(null); setEnrichFlash(null); setContatoModalOpen(false) }}
           onEnrich={() => handleEnrich(selectedLead.cpfCnpjClean)}
           onExcluir={(motivo) => handleExcluir(selectedLead.cpfCnpjClean, motivo)}
           onRestaurar={() => handleRestaurar(selectedLead.cpfCnpjClean)}
@@ -892,6 +1079,29 @@ export default function Prospeccao() {
           onIniciarProspeccao={() => handleIniciarProspeccao(selectedLead.cpfCnpjClean)}
           onAbrirContato={() => setContatoModalOpen(true)}
         />
+      )}
+
+      {/* Toast global de enriquecimento — visível mesmo sem drawer aberto */}
+      {enrichFlash && !selectedLead && (
+        <div
+          role="status"
+          className={`fixed bottom-6 right-6 z-50 max-w-md rounded-xl shadow-2xl border p-4 flex items-start gap-3 text-sm animate-slide-in-right ${
+            enrichFlash.isError
+              ? 'bg-red-50 dark:bg-red-950/90 border-red-300 dark:border-red-800 text-red-900 dark:text-red-100'
+              : 'bg-emerald-50 dark:bg-emerald-950/90 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100'
+          }`}
+        >
+          <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold">
+              {enrichFlash.isError ? 'Falha no enriquecimento' : 'Lead enriquecido com sucesso'}
+            </p>
+            <p className="text-xs opacity-80 mt-0.5">{enrichFlash.lines.join(' · ')}</p>
+          </div>
+          <button onClick={() => setEnrichFlash(null)} className="opacity-60 hover:opacity-100" aria-label="Fechar">
+            <X size={14} />
+          </button>
+        </div>
       )}
 
       {/* Modal de registrar contato (feedback loop) */}
@@ -907,7 +1117,18 @@ export default function Prospeccao() {
       {/* Modal de enriquecimento em lote */}
       {bulkOpen && (
         <BulkEnrichModal
-          initialFilters={{ uf, minHectares, minDivida, tipoPessoa, apenasAjuizadas, termo }}
+          initialFilters={{
+            uf,
+            minHectares,
+            minDivida,
+            tipoPessoa,
+            apenasAjuizadas,
+            apenasAgroProvavel,
+            apenasPfRural,
+            apenasJudicialAgro,
+            judicialTipos,
+            termo,
+          }}
           batch={batch}
           sicarStatus={sicarStatus}
           onStart={handleEnrichLote}
@@ -936,71 +1157,97 @@ function HeroOODA({
   sicarStatus: SicarStatus | null
 }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-aletis-verde via-aletis-verde-escuro to-[#06281c] text-white shadow-xl">
-      {/* Pattern */}
-      <div className="absolute inset-0 opacity-10" style={{
-        backgroundImage: 'radial-gradient(circle at 20% 50%, #C9A84C 0%, transparent 50%), radial-gradient(circle at 80% 80%, #2A8F64 0%, transparent 50%)',
-      }} />
+    <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-aletis-verde via-aletis-verde-escuro to-[#06281c] text-white shadow-[0_30px_60px_-20px_rgba(6,40,28,0.55)]">
+      <div
+        className="absolute inset-0 opacity-[0.12] pointer-events-none"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 12% 20%, #C9A84C 0%, transparent 45%), radial-gradient(circle at 92% 85%, #2A8F64 0%, transparent 45%)',
+        }}
+      />
 
-      <div className="relative p-6 lg:p-8">
-        <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-aletis-dourado/15 border border-aletis-dourado/30 text-aletis-dourado text-[11px] font-semibold uppercase tracking-widest mb-3">
+      <div className="relative px-6 py-7 lg:px-10 lg:py-9 space-y-7">
+        {/* LINHA 1 — título + status */}
+        <header className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-6 items-start">
+          <div className="min-w-0">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-aletis-dourado/15 border border-aletis-dourado/30 text-aletis-dourado text-[10.5px] font-semibold uppercase tracking-[0.16em]">
               <Cpu size={12} /> OODA · Prospecção cirúrgica
-            </div>
-            <h1 className="font-display text-3xl lg:text-4xl font-bold leading-tight mb-2">
+            </span>
+            <h1 className="mt-3 font-display text-[28px] lg:text-[36px] font-bold leading-[1.1] tracking-tight">
               Leads agro com dívida ativa
             </h1>
-            <p className="text-white/70 text-sm max-w-2xl">
-              Busca profunda no <b>PGFN</b> + enriquecimento <b>BrasilAPI</b> + área oficial via <b>SICAR</b>{' '}
-              (reCAPTCHA resolvido por 2captcha) + <b>scoring</b> multi-dimensional.
+            <p className="mt-2 text-white/70 text-sm lg:text-[13.5px] max-w-2xl leading-relaxed">
+              Busca profunda no <b className="text-white/90">PGFN</b> + enriquecimento{' '}
+              <b className="text-white/90">BrasilAPI</b> + área oficial via{' '}
+              <b className="text-white/90">SICAR</b> · scoring multi-dimensional.
             </p>
           </div>
 
-          <div className="flex flex-col items-end gap-2">
-            <div className="flex items-center gap-2 text-xs text-white/50">
-              <Sparkles size={14} className="text-aletis-dourado" />
+          <div className="flex flex-col items-start lg:items-end gap-2 min-w-0">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] text-white/60">
+              <Sparkles size={12} className="text-aletis-dourado" />
               {loading ? 'carregando…' : stats ? `${fmtNum(stats.totalLeads)} leads indexados` : '—'}
             </div>
             {stats?.fontes && stats.fontes.length > 0 && (
-              <div className="flex flex-wrap justify-end gap-1 max-w-[320px]">
+              <div className="flex flex-wrap lg:justify-end gap-1">
                 {stats.fontes.map((f) => (
                   <span
                     key={f.fonte}
                     title={`${f.descricao}${f.lastIngestAt ? ' · ' + new Date(f.lastIngestAt).toLocaleDateString('pt-BR') : ''}`}
-                    className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-white/60"
+                    className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-white/10 bg-white/[0.04] text-white/55"
                   >
                     {f.fonte} · {fmtNum(f.contagem)}
                   </span>
                 ))}
               </div>
             )}
-            <SicarStatusBadge status={sicarStatus} />
           </div>
-        </div>
+        </header>
 
-        {/* KPIs */}
-        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 lg:gap-4">
+        {/* LINHA 2 — status SICAR consolidado */}
+        <SicarStatusBadge status={sicarStatus} />
+
+        {/* LINHA 3 — KPIs em grid 12 colunas, sempre 4 por linha no desktop */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-3 lg:gap-4">
           <KpiTile
             icon={Target}
             label="Leads agro"
             value={stats ? fmtNum(stats.totalLeads) : '…'}
-            sub="PGFN 2025-Q4"
+            sub="PGFN + fontes públicas"
             accent="dourado"
+            loading={loading}
           />
           <KpiTile
-            icon={Flame}
-            label="Quentes (score ≥ 75)"
-            value={stats ? fmtNum(stats.leadsQuentes) : '…'}
-            sub={stats ? `${((stats.leadsQuentes / stats.totalLeads) * 100).toFixed(1)}% do total` : ''}
-            accent="vermelho"
+            icon={Wheat}
+            label="Agro provável"
+            value={stats ? fmtNum(stats.leadsAgroProvavel) : '…'}
+            sub="heurística reforçada"
+            accent="verde"
+            loading={loading}
+          />
+          <KpiTile
+            icon={Users}
+            label="PF rural"
+            value={stats ? fmtNum(stats.leadsPfRural) : '…'}
+            sub="PF com âncora agro"
+            accent="ambar"
+            loading={loading}
           />
           <KpiTile
             icon={Gavel}
-            label="Com ajuizamento"
-            value={stats ? fmtNum(stats.leadsComAjuizamento) : '…'}
-            sub="urgência alta"
-            accent="ambar"
+            label="Judicial agro"
+            value={stats ? fmtNum(stats.leadsJudicialAgro) : '…'}
+            sub={stats?.porJudicialTipo?.[0] ? `${JUDICIAL_LABEL[stats.porJudicialTipo[0].tipo]} em destaque` : 'RJ · falência · leilão'}
+            accent="vermelho"
+            loading={loading}
+          />
+          <KpiTile
+            icon={Flame}
+            label="Quentes · score ≥ 75"
+            value={stats ? fmtNum(stats.leadsQuentes) : '…'}
+            sub={stats ? `${((stats.leadsQuentes / Math.max(stats.totalLeads, 1)) * 100).toFixed(1)}% do total` : ''}
+            accent="vermelho"
+            loading={loading}
           />
           <KpiTile
             icon={CheckCircle2}
@@ -1008,63 +1255,98 @@ function HeroOODA({
             value={stats ? fmtNum(stats.leadsCompletos) : '…'}
             sub={stats?.leadsExcluidos ? `${fmtNum(stats.leadsExcluidos)} excluídos` : 'enriquecidos + persistidos'}
             accent="verde"
+            loading={loading}
           />
           <KpiTile
             icon={DollarSign}
-            label="Dívida total indexada"
+            label="Universo PGFN"
             value={stats ? fmtBRLShort(stats.totalDivida) : '…'}
-            sub="soma consolidada"
+            sub="soma bruta antes do filtro"
             accent="verde"
+            loading={loading}
           />
           <KpiTile
             icon={TrendingUp}
             label="Honorários potenciais"
             value={stats ? fmtBRLShort(stats.honorariosPotenciaisTotal) : '…'}
-            sub="modelo 1% ALETIS"
+            sub={stats ? `1% × ${fmtBRLShort(stats.honorariosPotenciaisTotal * 100)} (leads ativos)` : 'modelo 1% ALETIS'}
             accent="dourado"
+            loading={loading}
           />
         </div>
 
-        {/* Feedback loop — hot-leads + reengajamento */}
-        {stats && (stats.hotLeadsPendentes > 0 || stats.leadsParaReengajar > 0) && (
-          <div className="mt-5 flex flex-wrap gap-3">
+        {/* LINHA 4 — avisos de feedback-loop (hot-leads, reengajar, judicial) */}
+        {stats && (stats.hotLeadsPendentes > 0 || stats.leadsParaReengajar > 0 || stats.porJudicialTipo.length > 0) && (
+          <div className="flex flex-wrap gap-2">
             {stats.hotLeadsPendentes > 0 && (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/15 border border-red-400/30 text-red-200 text-xs">
-                <Siren size={13} />
-                <b>{fmtNum(stats.hotLeadsPendentes)}</b> hot-lead{stats.hotLeadsPendentes === 1 ? '' : 's'} aguardando contato
-              </div>
+              <AlertChip icon={Siren} tone="red" value={stats.hotLeadsPendentes} suffix={`hot-lead${stats.hotLeadsPendentes === 1 ? '' : 's'} aguardando contato`} />
             )}
             {stats.leadsParaReengajar > 0 && (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-aletis-dourado/15 border border-aletis-dourado/40 text-aletis-dourado text-xs">
-                <RotateCw size={13} />
-                <b>{fmtNum(stats.leadsParaReengajar)}</b> lead{stats.leadsParaReengajar === 1 ? '' : 's'} para reengajar
-              </div>
+              <AlertChip icon={RotateCw} tone="gold" value={stats.leadsParaReengajar} suffix={`lead${stats.leadsParaReengajar === 1 ? '' : 's'} para reengajar`} />
             )}
+            {stats.porJudicialTipo.slice(0, 3).map((item) => (
+              <AlertChip
+                key={item.tipo}
+                icon={Gavel}
+                tone={item.tipo === 'falencia' || item.tipo === 'recuperacao_judicial' ? 'red' : 'amber'}
+                value={item.count}
+                suffix={JUDICIAL_LABEL[item.tipo]}
+              />
+            ))}
           </div>
         )}
 
-        {/* Strip de topSignals */}
+        {/* LINHA 5 — Sinais agro identificados */}
         {stats && stats.topSignals.length > 0 && (
-          <div className="mt-6 pt-6 border-t border-white/10">
-            <p className="text-[11px] uppercase tracking-widest text-white/50 mb-2">
-              Sinais agro identificados
-            </p>
-            <div className="flex flex-wrap gap-2">
+          <div className="pt-6 border-t border-white/10">
+            <div className="flex items-center justify-between gap-4 mb-3">
+              <p className="text-[10.5px] uppercase tracking-[0.18em] text-white/45 font-medium">
+                Sinais agro identificados
+              </p>
+              <span className="text-[10px] text-white/40">top {Math.min(12, stats.topSignals.length)} de {fmtNum(stats.topSignals.length)}</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
               {stats.topSignals.slice(0, 12).map((s) => (
                 <span
                   key={s.signal}
-                  className="px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs text-white/80 flex items-center gap-1.5"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.06] border border-white/10 text-[11px] text-white/80 hover:bg-white/10 transition"
                 >
-                  <Wheat size={11} className="text-aletis-dourado" />
-                  {s.signal}
-                  <span className="text-white/50 font-mono text-[10px]">{fmtNum(s.count)}</span>
+                  <Wheat size={10} className="text-aletis-dourado shrink-0" />
+                  <span className="truncate max-w-[180px]">{s.signal}</span>
+                  <span className="text-white/45 font-mono text-[10px]">{fmtNum(s.count)}</span>
                 </span>
               ))}
             </div>
           </div>
         )}
       </div>
-    </div>
+    </section>
+  )
+}
+
+// Compact chip used by HeroOODA for feedback-loop alerts.
+function AlertChip({
+  icon: Icon,
+  tone,
+  value,
+  suffix,
+}: {
+  icon: React.ElementType
+  tone: 'red' | 'amber' | 'gold'
+  value: number
+  suffix: string
+}) {
+  const toneCls = {
+    red: 'bg-red-500/15 border-red-400/30 text-red-200',
+    amber: 'bg-amber-500/15 border-amber-400/30 text-amber-200',
+    gold: 'bg-aletis-dourado/15 border-aletis-dourado/40 text-aletis-dourado',
+  }[tone]
+  return (
+    <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-[11.5px] ${toneCls}`}>
+      <Icon size={12} />
+      <b className="font-semibold tabular-nums">{fmtNum(value)}</b>
+      <span className="opacity-90">{suffix}</span>
+    </span>
   )
 }
 
@@ -1079,50 +1361,59 @@ function SicarStatusBadge({ status }: { status: SicarStatus | null }) {
   const { sicar, captcha, index } = status
   const online = sicar.online
   const StatusIcon = online ? ShieldCheck : ShieldAlert
-  const color = online
-    ? 'text-emerald-300 bg-emerald-500/10 border-emerald-400/30'
-    : 'text-amber-300 bg-amber-500/10 border-amber-400/30'
   const balance = captcha.balanceUsd != null ? `$${captcha.balanceUsd.toFixed(2)}` : '—'
   const balanceTone = (captcha.balanceUsd ?? 0) < 0.5 ? 'text-red-300' : 'text-white/70'
-  const indexLoaded = index?.loaded
-  const indexColor = indexLoaded
-    ? 'text-emerald-300 bg-emerald-500/10 border-emerald-400/30'
-    : 'text-white/50 bg-white/5 border-white/10'
+  const indexLoaded = !!index?.loaded
+  const individualDisponivel = online && captcha.enabled && (captcha.balanceUsd ?? 0) > 0
+
+  const sicarTone = online ? 'text-emerald-300' : 'text-amber-300'
+  const bulkTone = indexLoaded ? 'text-emerald-300' : 'text-white/55'
+  const indivTone = individualDisponivel ? 'text-emerald-300' : 'text-white/55'
+
   return (
-    <div className="flex flex-col items-end gap-1.5">
-      <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-[11px] ${color}`}>
-        <StatusIcon size={12} />
-        <span className="font-semibold">SICAR · {online ? 'online' : 'indisponível'}</span>
-        {!online && sicar.reason && (
-          <span className="text-white/50 truncate max-w-[220px]" title={sicar.reason}>
-            · {sicar.reason}
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-0 sm:divide-x sm:divide-white/10">
+      {/* Portal oficial */}
+      <div className="sm:pr-4 min-w-0">
+        <p className="text-[10px] uppercase tracking-[0.16em] text-white/40 mb-1">Portal SICAR</p>
+        <div className="flex items-center gap-1.5">
+          <StatusIcon size={13} className={sicarTone} />
+          <span className={`text-xs font-semibold ${sicarTone}`}>
+            {online ? 'Online' : 'Em manutenção'}
           </span>
-        )}
-        <span className="text-white/30">|</span>
-        <span className={`flex items-center gap-1 ${balanceTone}`}>
-          <Satellite size={11} /> 2captcha {captcha.enabled ? balance : 'off'}
-        </span>
+        </div>
+        <p className="text-[10.5px] text-white/50 truncate mt-0.5" title={sicar.reason || ''}>
+          {sicar.reason || 'Consulta de CAR individual habilitada'}
+        </p>
       </div>
-      <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-[10px] ${indexColor}`}>
-        <Trees size={10} />
-        {indexLoaded ? (
-          <>
-            <span className="font-semibold">
-              Índice offline · {fmtNum(index.totalImoveis)} imóveis
-            </span>
-            {Object.keys(index.byUf).length > 0 && (
-              <span className="text-white/50">
-                {Object.entries(index.byUf)
-                  .sort((a, b) => b[1] - a[1])
-                  .slice(0, 6)
-                  .map(([uf, n]) => `${uf}:${n >= 1000 ? (n / 1000).toFixed(0) + 'k' : n}`)
-                  .join(' · ')}
-              </span>
-            )}
-          </>
-        ) : (
-          <span>Índice offline vazio — rode <code className="font-mono">pnpm ingest:sicar</code></span>
-        )}
+
+      {/* Bulk offline */}
+      <div className="sm:px-4 min-w-0">
+        <p className="text-[10px] uppercase tracking-[0.16em] text-white/40 mb-1">Bulk offline</p>
+        <div className="flex items-center gap-1.5">
+          <Trees size={13} className={bulkTone} />
+          <span className={`text-xs font-semibold ${bulkTone}`}>
+            {indexLoaded ? `${fmtNum(index.totalImoveis)} imóveis` : 'Aguardando portal'}
+          </span>
+        </div>
+        <p className="text-[10.5px] text-white/50 truncate mt-0.5">
+          {indexLoaded && Object.keys(index.byUf).length > 0
+            ? Object.entries(index.byUf).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([uf, n]) => `${uf}:${n >= 1000 ? (n / 1000).toFixed(0) + 'k' : n}`).join(' · ')
+            : 'Retry automático 2×/dia'}
+        </p>
+      </div>
+
+      {/* Consulta individual + saldo captcha */}
+      <div className="sm:pl-4 min-w-0">
+        <p className="text-[10px] uppercase tracking-[0.16em] text-white/40 mb-1">Consulta individual</p>
+        <div className="flex items-center gap-1.5">
+          <ShieldCheck size={13} className={indivTone} />
+          <span className={`text-xs font-semibold ${indivTone}`}>
+            {individualDisponivel ? 'Disponível' : online ? 'Sem saldo' : 'Indisponível'}
+          </span>
+        </div>
+        <p className={`text-[10.5px] mt-0.5 flex items-center gap-1 ${balanceTone}`}>
+          <Satellite size={10} /> 2captcha {captcha.enabled ? balance : 'off'}
+        </p>
       </div>
     </div>
   )
@@ -1134,12 +1425,14 @@ function KpiTile({
   value,
   sub,
   accent,
+  loading,
 }: {
   icon: React.ElementType
   label: string
   value: string
   sub?: string
   accent: 'dourado' | 'vermelho' | 'ambar' | 'verde'
+  loading?: boolean
 }) {
   const accentColor = {
     dourado: 'text-aletis-dourado bg-aletis-dourado/10',
@@ -1149,13 +1442,29 @@ function KpiTile({
   }[accent]
 
   return (
-    <div className="bg-white/5 backdrop-blur rounded-xl border border-white/10 p-4 hover:bg-white/10 transition">
-      <div className={`w-9 h-9 rounded-lg ${accentColor} flex items-center justify-center mb-2`}>
-        <Icon size={18} />
+    <div className="group h-[128px] bg-white/[0.04] backdrop-blur rounded-2xl border border-white/10 p-3.5 flex flex-col gap-2 hover:bg-white/[0.08] hover:border-white/15 transition">
+      <div className="flex items-center gap-2">
+        <div className={`w-8 h-8 rounded-lg ${accentColor} flex items-center justify-center shrink-0`}>
+          <Icon size={16} />
+        </div>
+        <p className="text-[10.5px] uppercase tracking-[0.12em] text-white/55 font-medium leading-tight line-clamp-2">
+          {label}
+        </p>
       </div>
-      <p className="text-xs uppercase tracking-wider text-white/50 mb-0.5">{label}</p>
-      <p className="font-display text-xl lg:text-2xl font-bold">{value}</p>
-      {sub && <p className="text-[10px] text-white/40 mt-0.5">{sub}</p>}
+      <div className="flex-1 flex flex-col justify-end min-h-0">
+        {loading ? (
+          <div className="h-7 w-20 rounded bg-white/10 animate-pulse" />
+        ) : (
+          <p className="font-display text-[26px] leading-none font-bold tabular-nums tracking-tight truncate" title={value}>
+            {value}
+          </p>
+        )}
+        {sub && (
+          <p className="text-[10.5px] text-white/45 mt-1 truncate" title={sub}>
+            {sub}
+          </p>
+        )}
+      </div>
     </div>
   )
 }
@@ -1174,6 +1483,14 @@ function FilterPanel(props: {
   setTipoPessoa: (v: '' | 'PF' | 'PJ') => void
   apenasAjuizadas: boolean
   setApenasAjuizadas: (v: boolean) => void
+  apenasAgroProvavel: boolean
+  setApenasAgroProvavel: (v: boolean) => void
+  apenasPfRural: boolean
+  setApenasPfRural: (v: boolean) => void
+  apenasJudicialAgro: boolean
+  setApenasJudicialAgro: (v: boolean) => void
+  judicialTipos: JudicialTipo[]
+  setJudicialTipos: (v: JudicialTipo[]) => void
   termo: string
   setTermo: (v: string) => void
   sortBy: 'score' | 'divida' | 'hectares' | 'recencia'
@@ -1186,14 +1503,19 @@ function FilterPanel(props: {
   const {
     uf, setUf, minHectares, setMinHectares, minDivida, setMinDivida,
     tipoPessoa, setTipoPessoa, apenasAjuizadas, setApenasAjuizadas,
+    apenasAgroProvavel, setApenasAgroProvavel, apenasPfRural, setApenasPfRural,
+    apenasJudicialAgro, setApenasJudicialAgro, judicialTipos, setJudicialTipos,
     termo, setTermo, sortBy, setSortBy, onApply, onExport, total, loading,
   } = props
 
   return (
-    <div className="bg-white dark:bg-aletis-grafite-escuro rounded-2xl border border-aletis-borda dark:border-white/5 shadow-sm p-4 lg:p-5">
-      <div className="flex items-center gap-2 mb-4">
+    <div className="bg-white dark:bg-aletis-grafite-escuro rounded-2xl border border-aletis-borda dark:border-white/5 shadow-sm">
+      <div className="px-5 lg:px-6 py-4 border-b border-aletis-borda/70 dark:border-white/5 flex items-center gap-3 flex-wrap">
         <Filter size={16} className="text-aletis-verde" />
         <h3 className="font-semibold text-sm text-aletis-grafite-escuro dark:text-white">Filtros cirúrgicos</h3>
+        <span className="text-[11px] text-aletis-grafite-medio dark:text-white/45">
+          refine o universo antes da ação
+        </span>
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={onExport}
@@ -1207,12 +1529,12 @@ function FilterPanel(props: {
             className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold bg-aletis-verde text-white hover:bg-aletis-verde-escuro disabled:opacity-50 transition"
           >
             {loading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
-            Buscar ({fmtNum(total)})
+            Aplicar · {fmtNum(total)}
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+      <div className="px-5 lg:px-6 py-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {/* Termo */}
         <label className="block">
           <span className="text-[11px] font-medium text-aletis-grafite-medio dark:text-white/50 mb-1 flex items-center gap-1">
@@ -1309,17 +1631,111 @@ function FilterPanel(props: {
         </label>
       </div>
 
-      <div className="mt-3 flex items-center gap-4">
-        <label className="inline-flex items-center gap-2 text-xs text-aletis-grafite-medio dark:text-white/60 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={apenasAjuizadas}
-            onChange={(e) => setApenasAjuizadas(e.target.checked)}
-            className="accent-aletis-verde"
-          />
-          <Gavel size={12} /> Apenas com ajuizamento (urgência)
-        </label>
+      <div className="px-5 lg:px-6 py-4 border-t border-aletis-borda/70 dark:border-white/5 grid gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.16em] text-aletis-grafite-medio dark:text-white/40 font-medium mb-2">
+            Toggles cirúrgicos
+          </p>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <FilterToggle icon={Gavel} label="Apenas com ajuizamento" checked={apenasAjuizadas} onChange={setApenasAjuizadas} />
+            <FilterToggle icon={Wheat} label="Apenas agro provável" checked={apenasAgroProvavel} onChange={setApenasAgroProvavel} />
+            <FilterToggle icon={Users} label="Apenas PF rural" checked={apenasPfRural} onChange={setApenasPfRural} />
+            <FilterToggle icon={AlertTriangle} label="Apenas judicial agro" checked={apenasJudicialAgro} onChange={setApenasJudicialAgro} />
+          </div>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.16em] text-aletis-grafite-medio dark:text-white/40 font-medium mb-2">
+            Tipos de evento judicial · clique para combinar
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {(Object.keys(JUDICIAL_LABEL) as JudicialTipo[]).map((tipo) => {
+              const active = judicialTipos.includes(tipo)
+              return (
+                <button
+                  key={tipo}
+                  type="button"
+                  onClick={() => setJudicialTipos(active ? judicialTipos.filter((t) => t !== tipo) : [...judicialTipos, tipo])}
+                  className={`px-2.5 py-1 rounded-full text-[11px] border transition ${
+                    active
+                      ? 'bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800'
+                      : 'bg-white dark:bg-white/[0.04] text-aletis-grafite-medio dark:text-white/55 border-aletis-borda dark:border-white/10 hover:border-red-300 dark:hover:border-red-800 hover:text-red-700 dark:hover:text-red-300'
+                  }`}
+                >
+                  {JUDICIAL_LABEL[tipo]}
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </div>
+    </div>
+  )
+}
+
+// Checkbox semântico com label + ícone — usado em FilterPanel e BulkEnrichModal.
+function FilterToggle({
+  icon: Icon,
+  label,
+  checked,
+  onChange,
+}: {
+  icon: React.ElementType
+  label: string
+  checked: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <label className="inline-flex items-center gap-2 text-xs text-aletis-grafite-escuro dark:text-white/75 cursor-pointer select-none">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="accent-aletis-verde w-3.5 h-3.5"
+      />
+      <Icon size={12} className="text-aletis-grafite-medio dark:text-white/45" />
+      <span>{label}</span>
+    </label>
+  )
+}
+
+// ────────────────────────────────────────────────────────────
+// Primitivos visuais usados por LeadRow e tabs — declaradas ANTES
+// de LeadRow para não depender de hoisting durante Vite Fast Refresh.
+// ────────────────────────────────────────────────────────────
+
+// Pílula padrão para badges de linha — paleta consistente.
+function Chip({
+  tone,
+  icon: Icon,
+  label,
+}: {
+  tone: 'emerald' | 'red' | 'sky' | 'amber' | 'slate' | 'gold'
+  icon: React.ElementType
+  label: string
+}) {
+  const cls = {
+    emerald: 'bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
+    red: 'bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900',
+    sky: 'bg-sky-100 dark:bg-sky-950/30 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-900',
+    amber: 'bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
+    slate: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+    gold: 'bg-aletis-dourado/10 text-aletis-dourado border-aletis-dourado/30',
+  }[tone]
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border ${cls}`}>
+      <Icon size={10} /> {label}
+    </span>
+  )
+}
+
+// Métrica alinhada à direita para tabela de leads.
+function Metric({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
+  return (
+    <div>
+      <p className="text-[9.5px] uppercase tracking-[0.14em] text-aletis-grafite-medio dark:text-white/40 font-medium">{label}</p>
+      <p className={`font-mono text-sm font-semibold mt-0.5 ${valueClass ?? 'text-aletis-grafite-escuro dark:text-white'}`}>
+        {value}
+      </p>
     </div>
   )
 }
@@ -1363,95 +1779,89 @@ function LeadRow({
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onOpen()}
-      className={`group px-6 py-4 transition cursor-pointer ${
+      className={`group px-5 lg:px-6 py-4 transition cursor-pointer ${
         isExcluido
           ? 'opacity-60 hover:opacity-80 bg-slate-50 dark:bg-white/[0.02]'
-          : 'hover:bg-aletis-bege/60 dark:hover:bg-white/5'
+          : 'hover:bg-aletis-bege/60 dark:hover:bg-white/[0.03]'
       }`}
     >
-      <div className="flex items-center gap-4 flex-wrap">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 lg:gap-5">
         {/* Score bubble */}
         <div
-          className={`flex-shrink-0 w-14 h-14 rounded-xl border-2 ${cls.border} ${cls.bg} flex flex-col items-center justify-center`}
+          className={`flex-shrink-0 w-16 h-16 rounded-2xl border ${cls.border} ${cls.bg} flex flex-col items-center justify-center`}
           title={`${cls.label} · ${lead.score.total} pts`}
         >
-          <span className={`font-display text-xl font-bold ${cls.text}`}>{lead.score.total}</span>
-          <span className={`text-[9px] uppercase tracking-wider ${cls.text}`}>{cls.label}</span>
+          <span className={`font-display text-2xl font-bold leading-none tabular-nums ${cls.text}`}>{lead.score.total}</span>
+          <span className={`text-[9px] uppercase tracking-[0.14em] mt-1 font-semibold ${cls.text}`}>{cls.label}</span>
         </div>
 
         {/* Ficha */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-            <h3 className="font-semibold text-sm text-aletis-grafite-escuro dark:text-white truncate">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <h3 className="font-semibold text-[14px] text-aletis-grafite-escuro dark:text-white truncate max-w-full">
               {lead.nome}
             </h3>
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono text-aletis-grafite-medio dark:text-white/40 bg-aletis-bege dark:bg-white/5">
+            <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono text-aletis-grafite-medio dark:text-white/50 bg-aletis-bege dark:bg-white/5">
               {lead.tipoPessoa}
             </span>
-            {isCompleta && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/30 flex items-center gap-1">
-                <CheckCircle2 size={10} /> completa
-              </span>
-            )}
-            {isExcluido && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold text-slate-600 dark:text-slate-400 bg-slate-200 dark:bg-slate-800 flex items-center gap-1">
-                <Archive size={10} /> excluído
-              </span>
-            )}
-            {lead.temAjuizada && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-950/30 flex items-center gap-1">
-                <Gavel size={10} /> ajuizada
-              </span>
-            )}
           </div>
-          <div className="flex items-center gap-3 flex-wrap text-xs text-aletis-grafite-medio dark:text-white/50">
-            <span className="flex items-center gap-1"><MapPin size={11} /> {lead.uf}</span>
-            <span className="flex items-center gap-1"><Hash size={11} /> {lead.cpfCnpj}</span>
-            <span className="flex items-center gap-1"><FileText size={11} /> {lead.qtdInscricoes} inscrições</span>
-            {isExcluido && lead.excluidoMotivo && (
-              <span className="italic text-slate-500">motivo: {lead.excluidoMotivo}</span>
-            )}
-            {Array.from(new Set(lead.agroSignals)).slice(0, 3).map((s) => (
-              <span key={s} className="flex items-center gap-1 text-aletis-verde">
-                <Wheat size={11} /> {s}
-              </span>
+          <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+            {isCompleta && <Chip tone="emerald" icon={CheckCircle2} label="completa" />}
+            {isExcluido && <Chip tone="slate" icon={Archive} label="excluído" />}
+            {lead.temAjuizada && <Chip tone="red" icon={Gavel} label="ajuizada" />}
+            {lead.agroProfile?.provavel && <Chip tone="emerald" icon={Wheat} label={`agro ${lead.agroProfile.nivel}`} />}
+            {lead.pfProfile?.relevante && <Chip tone="sky" icon={Users} label="PF rural" />}
+            {lead.judicialProfile?.ativo && lead.judicialProfile.tipos.slice(0, 2).map((tipo) => (
+              <Chip key={tipo} tone="red" icon={AlertTriangle} label={JUDICIAL_LABEL[tipo]} />
             ))}
+          </div>
+          <div className="flex items-center gap-3 flex-wrap text-[11.5px] text-aletis-grafite-medio dark:text-white/50">
+            <span className="inline-flex items-center gap-1 shrink-0"><MapPin size={11} /> {lead.uf}</span>
+            <span className="inline-flex items-center gap-1 shrink-0 font-mono"><Hash size={11} /> {lead.cpfCnpj}</span>
+            <span className="inline-flex items-center gap-1 shrink-0"><FileText size={11} /> {lead.qtdInscricoes} inscrições</span>
+            {isExcluido && lead.excluidoMotivo && (
+              <span className="italic text-slate-500 truncate">motivo: {lead.excluidoMotivo}</span>
+            )}
+            {lead.judicialEvents?.[0] && (
+              <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 truncate max-w-[240px]">
+                <AlertTriangle size={11} /> {lead.judicialEvents[0].resumo}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Métricas */}
-        <div className="grid grid-cols-3 gap-4 text-right">
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/40">Dívida</p>
-            <p className="font-mono text-sm font-semibold text-aletis-grafite-escuro dark:text-white">
-              {fmtBRLShort(lead.totalDivida)}
-            </p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/40">Área</p>
-            <p className={`font-mono text-sm font-semibold ${CONFIDENCE_COLOR[lead.area.confidence]}`}>
-              {lead.area.hectaresEstimados > 0 ? fmtHa(lead.area.hectaresEstimados) : '—'}
-            </p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/40">Honor.</p>
-            <p className="font-mono text-sm font-semibold text-aletis-dourado">
-              {fmtBRLShort(lead.score.honorariosEstimados)}
-            </p>
-          </div>
+        {/* Métricas · alinhadas à direita, grid consistente */}
+        <div className="hidden md:grid grid-cols-3 gap-5 text-right tabular-nums">
+          <Metric label="Dívida" value={fmtBRLShort(lead.totalDivida)} />
+          <Metric
+            label="Área"
+            value={lead.area.hectaresEstimados > 0 ? fmtHa(lead.area.hectaresEstimados) : '—'}
+            valueClass={CONFIDENCE_COLOR[lead.area.confidence]}
+          />
+          <Metric label="Honorários" value={fmtBRLShort(lead.score.honorariosEstimados)} valueClass="text-aletis-dourado" />
         </div>
 
         {/* Actions */}
         <div className="flex items-center gap-1.5">
-          {!isCompleta && !isExcluido && (
+          {!isExcluido && (
             <button
               onClick={(e) => { e.stopPropagation(); onEnrich() }}
               disabled={enriching}
-              title={lead.tipoPessoa === 'PJ' ? 'BrasilAPI + índice SICAR' : 'Lookup índice SICAR offline'}
-              className="px-2.5 py-1.5 rounded-lg border border-aletis-verde/30 text-aletis-verde hover:bg-aletis-verde/10 transition text-xs font-medium flex items-center gap-1 disabled:opacity-50"
+              title={
+                isCompleta
+                  ? 'Reenriquecer — re-busca BrasilAPI/SICAR e recalcula score'
+                  : lead.tipoPessoa === 'PJ'
+                    ? 'BrasilAPI + índice SICAR'
+                    : 'Lookup índice SICAR offline'
+              }
+              className={`px-2.5 py-1.5 rounded-lg border transition text-xs font-medium flex items-center gap-1 disabled:opacity-50 ${
+                isCompleta
+                  ? 'border-aletis-borda dark:border-white/10 text-aletis-grafite-medio dark:text-white/60 hover:border-aletis-verde/30 hover:text-aletis-verde'
+                  : 'border-aletis-verde/30 text-aletis-verde hover:bg-aletis-verde/10'
+              }`}
             >
               {enriching ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-              Enriquecer
+              {enriching ? 'Enriquecendo…' : isCompleta ? 'Reenriquecer' : 'Enriquecer'}
             </button>
           )}
           {!isExcluido ? (
@@ -1548,7 +1958,18 @@ function BulkEnrichModal({
   onCancel,
   onClose,
 }: {
-  initialFilters: { uf: string; minHectares: number; minDivida: number; tipoPessoa: '' | 'PF' | 'PJ'; apenasAjuizadas: boolean; termo: string }
+  initialFilters: {
+    uf: string
+    minHectares: number
+    minDivida: number
+    tipoPessoa: '' | 'PF' | 'PJ'
+    apenasAjuizadas: boolean
+    apenasAgroProvavel: boolean
+    apenasPfRural: boolean
+    apenasJudicialAgro: boolean
+    judicialTipos: JudicialTipo[]
+    termo: string
+  }
   batch: BatchState
   sicarStatus: SicarStatus | null
   onStart: (concurrency: number, customFilters?: Record<string, any>) => void
@@ -1562,6 +1983,10 @@ function BulkEnrichModal({
   const [bulkMaxDivida, setBulkMaxDivida] = useState<number | undefined>(undefined)
   const [bulkMinHectares, setBulkMinHectares] = useState<number>(initialFilters.minHectares)
   const [bulkApenasAjuizadas, setBulkApenasAjuizadas] = useState<boolean>(initialFilters.apenasAjuizadas)
+  const [bulkApenasAgroProvavel, setBulkApenasAgroProvavel] = useState<boolean>(initialFilters.apenasAgroProvavel)
+  const [bulkApenasPfRural, setBulkApenasPfRural] = useState<boolean>(initialFilters.apenasPfRural)
+  const [bulkApenasJudicialAgro, setBulkApenasJudicialAgro] = useState<boolean>(initialFilters.apenasJudicialAgro)
+  const [bulkJudicialTipos, setBulkJudicialTipos] = useState<JudicialTipo[]>(initialFilters.judicialTipos)
   const [bulkTermo, setBulkTermo] = useState<string>(initialFilters.termo)
   const [concurrency, setConcurrency] = useState(3)
   const [limite, setLimite] = useState<'' | '100' | '500' | '1000'>('')
@@ -1579,8 +2004,13 @@ function BulkEnrichModal({
     maxDivida: bulkMaxDivida,
     minHectares: bulkMinHectares || undefined,
     apenasAjuizadas: bulkApenasAjuizadas,
+    apenasAgroProvavel: bulkApenasAgroProvavel,
+    apenasPfRural: bulkApenasPfRural,
+    apenasJudicialAgro: bulkApenasJudicialAgro,
+    judicialTipos: bulkJudicialTipos.length ? bulkJudicialTipos : undefined,
     termo: bulkTermo || undefined,
-  }), [bulkUf, bulkTipoPessoa, bulkMinDivida, bulkMaxDivida, bulkMinHectares, bulkApenasAjuizadas, bulkTermo])
+    pageSize: limite ? Number(limite) : undefined,
+  }), [bulkUf, bulkTipoPessoa, bulkMinDivida, bulkMaxDivida, bulkMinHectares, bulkApenasAjuizadas, bulkApenasAgroProvavel, bulkApenasPfRural, bulkApenasJudicialAgro, bulkJudicialTipos, bulkTermo, limite])
 
   // Preview com debounce quando filtros mudam (só na fase idle)
   useEffect(() => {
@@ -1741,15 +2171,64 @@ function BulkEnrichModal({
                     />
                   </label>
 
-                  <label className="inline-flex items-center gap-2 text-xs text-aletis-grafite-medio dark:text-white/60 cursor-pointer md:mt-6">
-                    <input
-                      type="checkbox"
-                      checked={bulkApenasAjuizadas}
-                      onChange={(e) => setBulkApenasAjuizadas(e.target.checked)}
-                      className="accent-aletis-verde"
-                    />
-                    <Gavel size={12} /> Apenas com ajuizamento
-                  </label>
+                  <div className="flex flex-wrap gap-3 md:mt-6">
+                    <label className="inline-flex items-center gap-2 text-xs text-aletis-grafite-medio dark:text-white/60 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={bulkApenasAjuizadas}
+                        onChange={(e) => setBulkApenasAjuizadas(e.target.checked)}
+                        className="accent-aletis-verde"
+                      />
+                      <Gavel size={12} /> Apenas com ajuizamento
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-xs text-aletis-grafite-medio dark:text-white/60 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={bulkApenasAgroProvavel}
+                        onChange={(e) => setBulkApenasAgroProvavel(e.target.checked)}
+                        className="accent-aletis-verde"
+                      />
+                      <Wheat size={12} /> Agro provável
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-xs text-aletis-grafite-medio dark:text-white/60 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={bulkApenasPfRural}
+                        onChange={(e) => setBulkApenasPfRural(e.target.checked)}
+                        className="accent-aletis-verde"
+                      />
+                      <Users size={12} /> PF rural
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-xs text-aletis-grafite-medio dark:text-white/60 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={bulkApenasJudicialAgro}
+                        onChange={(e) => setBulkApenasJudicialAgro(e.target.checked)}
+                        className="accent-aletis-verde"
+                      />
+                      <AlertTriangle size={12} /> Judicial agro
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {(Object.keys(JUDICIAL_LABEL) as JudicialTipo[]).map((tipo) => {
+                    const active = bulkJudicialTipos.includes(tipo)
+                    return (
+                      <button
+                        key={tipo}
+                        type="button"
+                        onClick={() => setBulkJudicialTipos(active ? bulkJudicialTipos.filter((t) => t !== tipo) : [...bulkJudicialTipos, tipo])}
+                        className={`px-2.5 py-1 rounded-full text-xs border transition ${
+                          active
+                            ? 'bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800'
+                            : 'bg-white dark:bg-white/5 text-aletis-grafite-medio dark:text-white/50 border-aletis-borda dark:border-white/10 hover:border-red-300 dark:hover:border-red-800'
+                        }`}
+                      >
+                        {JUDICIAL_LABEL[tipo]}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -1963,6 +2442,8 @@ function LeadDrawer({
   deleting,
   iniciando,
   iniciarMsg,
+  enrichFlash,
+  dismissEnrichFlash,
   carError,
   sicarStatus,
   onClose,
@@ -1979,6 +2460,8 @@ function LeadDrawer({
   deleting: boolean
   iniciando: boolean
   iniciarMsg: { tipo: 'sucesso' | 'erro' | 'info'; texto: string } | null
+  enrichFlash: { at: number; lines: string[]; isError?: boolean } | null
+  dismissEnrichFlash: () => void
   carError: string | null
   sicarStatus: SicarStatus | null
   onClose: () => void
@@ -1998,7 +2481,14 @@ function LeadDrawer({
     if (motivo && motivo.trim()) onExcluir(motivo.trim())
   }
   const cls = CLASSIF_STYLE[lead.score.classificacao]
-  const [tab, setTab] = useState<'identidade' | 'divida' | 'agro' | 'car' | 'socios' | 'score' | 'contatos'>('identidade')
+  const [tab, setTab] = useState<'identidade' | 'divida' | 'agro' | 'judicial' | 'car' | 'socios' | 'score' | 'contatos'>('identidade')
+
+  // Auto-dismiss do flash de enriquecimento após 4.5s.
+  useEffect(() => {
+    if (!enrichFlash) return
+    const t = setTimeout(dismissEnrichFlash, 4500)
+    return () => clearTimeout(t)
+  }, [enrichFlash, dismissEnrichFlash])
 
   return (
     <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true">
@@ -2019,6 +2509,9 @@ function LeadDrawer({
                 <span><MapPin size={11} className="inline mr-1" /> {lead.uf}</span>
                 <span>{lead.tipoPessoa === 'PJ' ? 'Pessoa jurídica' : 'Pessoa física'}</span>
                 <span>{lead.qtdInscricoes} inscrições PGFN</span>
+                {lead.agroProfile?.provavel && <span>agro {lead.agroProfile.nivel}</span>}
+                {lead.pfProfile?.relevante && <span>PF rural</span>}
+                {lead.judicialProfile?.ativo && <span>crise judicial {lead.judicialProfile.severidade}</span>}
                 {lead.status === 'completa' && (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200 text-[10px] font-semibold">
                     <CheckCircle2 size={10} /> enriquecido
@@ -2135,33 +2628,61 @@ function LeadDrawer({
           )}
         </div>
 
-        {/* Tabs */}
-        <div className="px-6 pt-3 border-b border-aletis-borda dark:border-white/5 flex gap-1 flex-wrap">
-          {([
-            { id: 'identidade', label: 'Identidade', icon: Building2 },
-            { id: 'divida', label: 'Dívida ativa', icon: Gavel },
-            { id: 'agro', label: 'Sinais agro', icon: Wheat },
-            { id: 'car', label: 'CAR real', icon: Trees },
-            { id: 'socios', label: 'Sócios/QSA', icon: Users },
-            { id: 'score', label: 'Score', icon: Gauge },
-            { id: 'contatos', label: 'Contatos', icon: PhoneCall },
-          ] as const).map((t) => {
-            const Icon = t.icon
-            const active = tab === t.id
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-t-lg transition ${
-                  active
-                    ? 'bg-aletis-bege dark:bg-white/5 text-aletis-verde border-b-2 border-aletis-verde -mb-px'
-                    : 'text-aletis-grafite-medio dark:text-white/50 hover:text-aletis-verde'
-                }`}
-              >
-                <Icon size={13} /> {t.label}
-              </button>
-            )
-          })}
+        {enrichFlash && (
+          <div
+            className={`px-6 py-3 border-b text-xs flex items-start gap-3 ${
+              enrichFlash.isError
+                ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+                : 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+            }`}
+          >
+            <CheckCircle2 size={14} className="mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold mb-0.5">
+                {enrichFlash.isError ? 'Falha no enriquecimento' : 'Lead enriquecido com sucesso'}
+              </p>
+              <p className="text-[11px] opacity-80 truncate">
+                {enrichFlash.lines.join(' · ')}
+              </p>
+            </div>
+            <button onClick={dismissEnrichFlash} className="opacity-60 hover:opacity-100" aria-label="Fechar">
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
+        {/* Tabs — scroll horizontal suave em viewports estreitos */}
+        <div className="sticky top-[112px] z-[5] bg-white dark:bg-aletis-grafite-escuro border-b border-aletis-borda dark:border-white/5">
+          <div className="px-6 pt-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex gap-1 w-max">
+              {([
+                { id: 'identidade', label: 'Identidade', icon: Building2 },
+                { id: 'divida', label: 'Dívida ativa', icon: Gavel },
+                { id: 'agro', label: 'Sinais agro', icon: Wheat },
+                { id: 'judicial', label: 'Crise judicial', icon: AlertTriangle },
+                { id: 'car', label: 'CAR real', icon: Trees },
+                { id: 'socios', label: 'Sócios/QSA', icon: Users },
+                { id: 'score', label: 'Score', icon: Gauge },
+                { id: 'contatos', label: 'Contatos', icon: PhoneCall },
+              ] as const).map((t) => {
+                const Icon = t.icon
+                const active = tab === t.id
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setTab(t.id)}
+                    className={`flex items-center gap-1.5 px-3 py-2.5 text-[12.5px] font-medium rounded-t-lg transition whitespace-nowrap ${
+                      active
+                        ? 'bg-aletis-bege dark:bg-white/5 text-aletis-verde border-b-2 border-aletis-verde -mb-px'
+                        : 'text-aletis-grafite-medio dark:text-white/50 border-b-2 border-transparent -mb-px hover:text-aletis-verde hover:border-aletis-verde/30'
+                    }`}
+                  >
+                    <Icon size={13} /> {t.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Content */}
@@ -2169,6 +2690,7 @@ function LeadDrawer({
           {tab === 'identidade' && <TabIdentidade lead={lead} onEnrich={onEnrich} enriching={enriching} />}
           {tab === 'divida' && <TabDivida lead={lead} />}
           {tab === 'agro' && <TabAgro lead={lead} />}
+          {tab === 'judicial' && <TabJudicial lead={lead} />}
           {tab === 'car' && (
             <TabCar
               lead={lead}
@@ -2293,15 +2815,19 @@ function KpiLine({
 
 function DrawerKpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="bg-white/10 backdrop-blur rounded-lg border border-white/15 px-3 py-2">
-      <p className="text-[10px] uppercase tracking-wider text-white/60 mb-0.5">{label}</p>
-      <p className="font-display text-lg font-bold leading-tight">{value}</p>
-      {sub && <p className="text-[10px] text-white/50">{sub}</p>}
+    <div className="bg-white/[0.08] backdrop-blur rounded-xl border border-white/10 px-3 py-2.5 min-w-0">
+      <p className="text-[10px] uppercase tracking-[0.14em] text-white/55 mb-0.5 truncate">{label}</p>
+      <p className="font-display text-lg font-bold leading-tight tabular-nums truncate" title={value}>{value}</p>
+      {sub && <p className="text-[10px] text-white/50 truncate mt-0.5" title={sub}>{sub}</p>}
     </div>
   )
 }
 
 function TabIdentidade({ lead, onEnrich, enriching }: { lead: LeadFull; onEnrich: () => void; enriching: boolean }) {
+  const jaEnriquecido = !!lead.cnpj || !!lead.car || lead.status === 'completa'
+  // PGFN entrega CPF mascarado para PF (sigilo fiscal) — só os 6 dígitos do meio.
+  // Nessa condição BrasilAPI/SICAR individual não podem ser chamados.
+  const isPseudoPfDoc = lead.tipoPessoa === 'PF' && lead.cpfCnpjClean.length < 11
   return (
     <>
       <InfoRow icon={Hash} label="CPF/CNPJ" value={lead.cpfCnpj} mono />
@@ -2309,28 +2835,62 @@ function TabIdentidade({ lead, onEnrich, enriching }: { lead: LeadFull; onEnrich
       <InfoRow icon={MapPin} label="UF (PGFN)" value={lead.uf} />
       <InfoRow icon={Calendar} label="Primeira inscrição" value={lead.primeiraInscricao || '—'} />
       <InfoRow icon={Calendar} label="Última inscrição" value={lead.ultimaInscricao || '—'} />
+      {lead.enriquecidoEm && (
+        <InfoRow icon={Sparkles} label="Enriquecido em" value={new Date(lead.enriquecidoEm).toLocaleString('pt-BR')} />
+      )}
 
-      {!lead.cnpj && !lead.car && (
-        <div className="mt-4 p-4 rounded-xl border border-dashed border-aletis-verde/40 bg-aletis-verde/5">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles size={14} className="text-aletis-verde" />
-            <p className="font-semibold text-sm text-aletis-verde">Enriquecimento completo disponível</p>
+      {isPseudoPfDoc && (
+        <div className="mt-4 p-3 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 flex items-start gap-2">
+          <Info size={14} className="text-amber-700 dark:text-amber-400 mt-0.5 shrink-0" />
+          <div className="text-xs text-amber-900 dark:text-amber-200">
+            <p className="font-semibold mb-0.5">CPF mascarado pelo PGFN (sigilo fiscal)</p>
+            <p className="opacity-90">
+              O PGFN publica PF com apenas os 6 dígitos do meio do CPF (ex.: <code className="font-mono">***.{lead.cpfCnpj}-**</code>).
+              Sem o CPF completo, não há como chamar a BrasilAPI (só aceita CNPJ) nem consultar o CAR individual.
+              O enriquecimento para PF vai se limitar ao índice SICAR offline por razão social — quando disponível.
+            </p>
           </div>
-          <p className="text-xs text-aletis-grafite-medio dark:text-white/60 mb-3">
-            {lead.tipoPessoa === 'PJ'
-              ? 'BrasilAPI (sócios, CNAE, capital social) + busca automática no índice SICAR offline pela área real do imóvel.'
-              : 'Busca automática no índice SICAR offline pela área real do imóvel (CPF/CNPJ ou razão social).'}
-          </p>
-          <button
-            onClick={onEnrich}
-            disabled={enriching}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-aletis-verde text-white text-xs font-semibold hover:bg-aletis-verde-escuro transition disabled:opacity-50"
-          >
-            {enriching ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-            Enriquecer agora
-          </button>
         </div>
       )}
+
+      {/* Card de enriquecimento — SEMPRE visível, texto adapta ao estado */}
+      <div className={`mt-4 p-4 rounded-xl border ${jaEnriquecido
+        ? 'border-aletis-borda dark:border-white/10 bg-aletis-bege/40 dark:bg-white/5'
+        : 'border-dashed border-aletis-verde/40 bg-aletis-verde/5'}`}>
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <Sparkles size={14} className={jaEnriquecido ? 'text-aletis-grafite-medio' : 'text-aletis-verde'} />
+          <p className={`font-semibold text-sm ${jaEnriquecido ? 'text-aletis-grafite-escuro dark:text-white' : 'text-aletis-verde'}`}>
+            {jaEnriquecido ? 'Reenriquecer dados' : 'Enriquecimento completo disponível'}
+          </p>
+          {enriching && (
+            <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-aletis-verde/15 text-aletis-verde text-[10px] font-semibold">
+              <Loader2 size={10} className="animate-spin" /> em andamento…
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-aletis-grafite-medio dark:text-white/60 mb-3">
+          {isPseudoPfDoc
+            ? 'Tenta match no índice SICAR offline por razão social + UF. Não há BrasilAPI/QSA para PF.'
+            : jaEnriquecido
+              ? 'Rebusca BrasilAPI/SICAR, atualiza dados cadastrais, área real e recalcula score.'
+              : lead.tipoPessoa === 'PJ'
+                ? 'BrasilAPI (sócios, CNAE, capital social) + busca automática no índice SICAR offline pela área real do imóvel.'
+                : 'Busca automática no índice SICAR offline pela área real do imóvel (CPF/CNPJ ou razão social).'}
+        </p>
+        <button
+          onClick={onEnrich}
+          disabled={enriching}
+          aria-busy={enriching}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-50 ${
+            jaEnriquecido
+              ? 'border border-aletis-verde/30 text-aletis-verde hover:bg-aletis-verde/10'
+              : 'bg-aletis-verde text-white hover:bg-aletis-verde-escuro'
+          }`}
+        >
+          {enriching ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+          {enriching ? 'Enriquecendo…' : jaEnriquecido ? 'Reenriquecer agora' : 'Enriquecer agora'}
+        </button>
+      </div>
 
       {lead.cnpj && (
         <div className="mt-4 p-4 rounded-xl bg-aletis-bege/50 dark:bg-white/5 border border-aletis-borda dark:border-white/10">
@@ -2363,72 +2923,187 @@ function TabIdentidade({ lead, onEnrich, enriching }: { lead: LeadFull; onEnrich
 }
 
 function TabDivida({ lead }: { lead: LeadFull }) {
+  const [showAll, setShowAll] = useState(false)
   const groupedByFonte = useMemo(() => {
-    const m = new Map<string, { count: number; total: number }>()
+    const m = new Map<string, { count: number; total: number; ajuizadas: number }>()
     for (const d of lead.debts) {
-      const e = m.get(d.fonte) || { count: 0, total: 0 }
+      const e = m.get(d.fonte) || { count: 0, total: 0, ajuizadas: 0 }
       e.count++
       e.total += d.valor
+      if (d.ajuizado) e.ajuizadas++
       m.set(d.fonte, e)
     }
-    return Array.from(m.entries()).map(([fonte, v]) => ({ fonte, ...v }))
+    return Array.from(m.entries())
+      .map(([fonte, v]) => ({ fonte, ...v }))
+      .sort((a, b) => b.total - a.total)
   }, [lead.debts])
 
+  const situacaoAgg = useMemo(() => {
+    const m = new Map<SituacaoBucket, { count: number; total: number }>()
+    for (const d of lead.debts) {
+      const key = situacaoBucket(d.situacao)
+      const e = m.get(key) || { count: 0, total: 0 }
+      e.count++
+      e.total += d.valor
+      m.set(key, e)
+    }
+    return Array.from(m.entries())
+      .map(([bucket, v]) => ({ bucket, ...v }))
+      .sort((a, b) => b.total - a.total)
+  }, [lead.debts])
+
+  const tipoAgg = useMemo(() => {
+    const m = new Map<string, { count: number; total: number }>()
+    for (const d of lead.debts) {
+      const key = shortTipoCredito(d.tipoCredito || 'OUTROS') || 'OUTROS'
+      const e = m.get(key) || { count: 0, total: 0 }
+      e.count++
+      e.total += d.valor
+      m.set(key, e)
+    }
+    return Array.from(m.entries())
+      .map(([tipo, v]) => ({ tipo, ...v }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8)
+  }, [lead.debts])
+
+  const sortedDebts = useMemo(
+    () => [...lead.debts].sort((a, b) => b.valor - a.valor),
+    [lead.debts],
+  )
+  const visibleDebts = showAll ? sortedDebts : sortedDebts.slice(0, 50)
+  const ajuizadasTotal = lead.debts.filter((d) => d.ajuizado).length
+
   return (
-    <>
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        {groupedByFonte.map((g) => (
-          <div key={g.fonte} className="bg-aletis-bege/50 dark:bg-white/5 rounded-lg p-3 border border-aletis-borda dark:border-white/10">
-            <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50">{g.fonte}</p>
-            <p className="font-display text-lg font-bold text-aletis-grafite-escuro dark:text-white">{fmtBRLShort(g.total)}</p>
-            <p className="text-[10px] text-aletis-grafite-medio dark:text-white/40">{g.count} inscrições</p>
-          </div>
-        ))}
+    <div className="space-y-4">
+      {/* Sub-totais por FONTE (FGTS / PREV / NÃO-PREV) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {groupedByFonte.map((g) => {
+          const meta = FONTE_LABEL[g.fonte] || { label: g.fonte, desc: '' }
+          return (
+            <div key={g.fonte} className="bg-aletis-bege/50 dark:bg-white/5 rounded-lg p-3 border border-aletis-borda dark:border-white/10">
+              <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50">{meta.label}</p>
+              <p className="font-display text-lg font-bold text-aletis-grafite-escuro dark:text-white">{fmtBRLShort(g.total)}</p>
+              <p className="text-[10px] text-aletis-grafite-medio dark:text-white/50">
+                {g.count} inscrições{g.ajuizadas > 0 ? ` · ${g.ajuizadas} ajuizadas` : ''}
+              </p>
+              {meta.desc && (
+                <p className="text-[10px] text-aletis-grafite-medio dark:text-white/40 mt-1 leading-tight">{meta.desc}</p>
+              )}
+            </div>
+          )
+        })}
       </div>
+
+      {/* Distribuição por SITUAÇÃO — leitura jurídica */}
+      <div className="rounded-xl border border-aletis-borda dark:border-white/10 p-3 bg-white/60 dark:bg-black/10">
+        <p className="text-[11px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-2">
+          Situação das inscrições
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {situacaoAgg.map((s) => {
+            const st = SITUACAO_STYLE[s.bucket]
+            return (
+              <span key={s.bucket} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border ${st.chip}`}>
+                {st.label}
+                <span className="opacity-70">· {s.count}</span>
+                <span className="font-mono">· {fmtBRLShort(s.total)}</span>
+              </span>
+            )
+          })}
+          {ajuizadasTotal > 0 && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800">
+              <Gavel size={10} /> Ajuizadas total · {ajuizadasTotal}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Distribuição por tipo de crédito */}
+      {tipoAgg.length > 0 && (
+        <div className="rounded-xl border border-aletis-borda dark:border-white/10 p-3">
+          <p className="text-[11px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-2">
+            Principais tipos de crédito (top {tipoAgg.length})
+          </p>
+          <div className="space-y-1">
+            {tipoAgg.map((t) => {
+              const pct = Math.min(100, Math.round((t.total / Math.max(1, lead.totalDivida)) * 100))
+              return (
+                <div key={t.tipo} className="flex items-center gap-3 text-xs">
+                  <span className="flex-1 min-w-0 truncate text-aletis-grafite-escuro dark:text-white" title={t.tipo}>{t.tipo}</span>
+                  <span className="text-aletis-grafite-medio dark:text-white/50 text-[11px]">{t.count}×</span>
+                  <span className="font-mono font-semibold text-aletis-grafite-escuro dark:text-white w-24 text-right">{fmtBRLShort(t.total)}</span>
+                  <div className="w-16 h-1.5 rounded-full bg-aletis-borda/40 dark:bg-white/10 overflow-hidden">
+                    <div className="h-full bg-aletis-verde" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Tabela detalhada — cada inscrição com tipo de crédito legível */}
       <div className="overflow-x-auto rounded-lg border border-aletis-borda dark:border-white/10">
         <table className="w-full text-xs">
           <thead className="bg-aletis-bege/50 dark:bg-white/5 text-aletis-grafite-medio dark:text-white/50">
             <tr>
               <th className="text-left px-3 py-2 font-medium">Fonte</th>
               <th className="text-left px-3 py-2 font-medium">Inscrição</th>
-              <th className="text-left px-3 py-2 font-medium">Data</th>
+              <th className="text-left px-3 py-2 font-medium">Tipo de crédito</th>
               <th className="text-left px-3 py-2 font-medium">Situação</th>
+              <th className="text-left px-3 py-2 font-medium">Data</th>
               <th className="text-center px-3 py-2 font-medium">Ajuiz.</th>
               <th className="text-right px-3 py-2 font-medium">Valor</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-aletis-borda dark:divide-white/5">
-            {lead.debts.slice(0, 50).map((d, i) => (
-              <tr key={i} className="hover:bg-aletis-bege/30 dark:hover:bg-white/5">
-                <td className="px-3 py-2 font-mono">{d.fonte}</td>
-                <td className="px-3 py-2 font-mono text-[11px]">{d.inscricao}</td>
-                <td className="px-3 py-2">{d.dataInscricao}</td>
-                <td className="px-3 py-2 truncate max-w-[180px]">{d.situacao}</td>
-                <td className="px-3 py-2 text-center">
-                  {d.ajuizado ? (
-                    <span className="text-red-600 dark:text-red-400">●</span>
-                  ) : (
-                    <span className="text-aletis-grafite-medio dark:text-white/30">—</span>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-right font-mono font-semibold">{fmtBRL(d.valor)}</td>
-              </tr>
-            ))}
+            {visibleDebts.map((d, i) => {
+              const st = SITUACAO_STYLE[situacaoBucket(d.situacao)]
+              const fonteLabel = FONTE_LABEL[d.fonte]?.label ?? d.fonte
+              return (
+                <tr key={`${d.fonte}-${d.inscricao}-${i}`} className="hover:bg-aletis-bege/30 dark:hover:bg-white/5">
+                  <td className="px-3 py-2 whitespace-nowrap text-[11px] font-semibold text-aletis-grafite-escuro dark:text-white">{fonteLabel}</td>
+                  <td className="px-3 py-2 font-mono text-[11px] text-aletis-grafite-medio dark:text-white/60">{d.inscricao}</td>
+                  <td className="px-3 py-2 truncate max-w-[220px]" title={d.tipoCredito}>{shortTipoCredito(d.tipoCredito)}</td>
+                  <td className="px-3 py-2">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium border ${st.chip}`} title={d.situacao}>
+                      {st.label}
+                    </span>
+                    {d.tipoSituacao && (
+                      <span className="ml-1 text-[10px] text-aletis-grafite-medio dark:text-white/40">· {d.tipoSituacao}</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap text-[11px]">{d.dataInscricao}</td>
+                  <td className="px-3 py-2 text-center">
+                    {d.ajuizado ? (
+                      <span className="text-red-600 dark:text-red-400" title="Ajuizada">●</span>
+                    ) : (
+                      <span className="text-aletis-grafite-medio dark:text-white/30">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono font-semibold whitespace-nowrap">{fmtBRL(d.valor)}</td>
+                </tr>
+              )
+            })}
           </tbody>
           <tfoot className="bg-aletis-verde/5 border-t-2 border-aletis-verde">
             <tr>
-              <td colSpan={5} className="px-3 py-2 text-right font-semibold text-aletis-grafite-escuro dark:text-white">Total</td>
+              <td colSpan={6} className="px-3 py-2 text-right font-semibold text-aletis-grafite-escuro dark:text-white">Total</td>
               <td className="px-3 py-2 text-right font-mono font-bold text-aletis-verde">{fmtBRL(lead.totalDivida)}</td>
             </tr>
           </tfoot>
         </table>
       </div>
       {lead.debts.length > 50 && (
-        <p className="text-[11px] text-aletis-grafite-medio dark:text-white/40 mt-2 text-center">
-          Exibindo as 50 primeiras de {lead.debts.length} inscrições.
-        </p>
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="w-full text-[11px] text-aletis-verde hover:underline py-1"
+        >
+          {showAll ? `Mostrar apenas as 50 maiores` : `Ver todas as ${lead.debts.length} inscrições`}
+        </button>
       )}
-    </>
+    </div>
   )
 }
 
@@ -2436,35 +3111,74 @@ function TabAgro({ lead }: { lead: LeadFull }) {
   return (
     <>
       <div className="rounded-xl border border-aletis-borda dark:border-white/10 p-4 bg-gradient-to-br from-aletis-verde/5 to-transparent">
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
           <Tractor size={16} className="text-aletis-verde" />
-          <p className="font-semibold text-sm text-aletis-grafite-escuro dark:text-white">Estimativa de área rural</p>
-          <span className={`ml-auto text-xs font-semibold ${CONFIDENCE_COLOR[lead.area.confidence]}`}>
-            Confiança: {lead.area.confidence}
+          <p className="font-semibold text-sm text-aletis-grafite-escuro dark:text-white">Perfil agro</p>
+          <span className="ml-auto text-xs font-semibold text-aletis-verde">
+            {lead.agroProfile.provavel ? `agro ${lead.agroProfile.nivel}` : 'baixo sinal agro'}
           </span>
         </div>
-        <div className="flex items-baseline gap-3 mb-3">
-          <span className="font-display text-4xl font-bold text-aletis-verde">
-            {lead.area.hectaresEstimados > 0 ? fmtNum(lead.area.hectaresEstimados) : '—'}
-          </span>
-          <span className="text-aletis-grafite-medio dark:text-white/50 text-sm">hectares (est.)</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <div className="flex items-baseline gap-3 mb-3">
+              <span className="font-display text-4xl font-bold text-aletis-verde">
+                {lead.area.hectaresEstimados > 0 ? fmtNum(lead.area.hectaresEstimados) : '—'}
+              </span>
+              <span className="text-aletis-grafite-medio dark:text-white/50 text-sm">hectares (est.)</span>
+            </div>
+            <p className="text-[11px] text-aletis-grafite-medio dark:text-white/50 mb-2">
+              Método: <b className="text-aletis-grafite-escuro dark:text-white">{lead.area.metodo}</b>
+            </p>
+            <p className={`text-[11px] font-semibold ${CONFIDENCE_COLOR[lead.area.confidence]}`}>
+              Confiança: {lead.area.confidence}
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-2">
+              Evidências agro
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {lead.agroProfile.evidencias.length > 0 ? lead.agroProfile.evidencias.map((item) => (
+                <span key={item} className="px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                  {item}
+                </span>
+              )) : (
+                <span className="text-xs text-aletis-grafite-medio dark:text-white/50">sem evidência forte</span>
+              )}
+            </div>
+          </div>
         </div>
-        <p className="text-[11px] text-aletis-grafite-medio dark:text-white/50 mb-2">
-          Método: <b className="text-aletis-grafite-escuro dark:text-white">{lead.area.metodo}</b>
-        </p>
         {lead.area.explicacao && (
-          <pre className="whitespace-pre-wrap text-[11px] text-aletis-grafite-medio dark:text-white/60 bg-aletis-bege/50 dark:bg-black/20 p-3 rounded-lg font-mono leading-relaxed">
+          <pre className="mt-3 whitespace-pre-wrap text-[11px] text-aletis-grafite-medio dark:text-white/60 bg-aletis-bege/50 dark:bg-black/20 p-3 rounded-lg font-mono leading-relaxed">
             {lead.area.explicacao}
           </pre>
         )}
-        <p className="text-[10px] text-aletis-grafite-medio dark:text-white/40 mt-3 italic">
-          ⚠️ Estimativa via proxies (razão social, capital, CNAE, folha). Para área real, consulte CAR/SICAR.
-        </p>
       </div>
+
+      {lead.tipoPessoa === 'PF' && (
+        <div className="rounded-xl border border-sky-200 dark:border-sky-900/50 p-4 bg-sky-50/50 dark:bg-sky-950/10">
+          <div className="flex items-center gap-2 mb-2">
+            <Users size={14} className="text-sky-600 dark:text-sky-400" />
+            <p className="font-semibold text-sm text-aletis-grafite-escuro dark:text-white">Perfil PF rural</p>
+          </div>
+          <p className="text-sm font-semibold text-sky-700 dark:text-sky-300 mb-2">
+            {lead.pfProfile.relevante ? `PF rural ${lead.pfProfile.nivel}` : 'PF sem âncora rural forte'}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {lead.pfProfile.evidencias.length > 0 ? lead.pfProfile.evidencias.map((item) => (
+              <span key={item} className="px-2.5 py-1 rounded-full bg-sky-100 dark:bg-sky-950/30 border border-sky-300 dark:border-sky-800 text-xs font-medium text-sky-700 dark:text-sky-300">
+                {item}
+              </span>
+            )) : (
+              <span className="text-xs text-aletis-grafite-medio dark:text-white/50">sem vínculo PF rural derivado</span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border border-aletis-borda dark:border-white/10 p-4">
         <p className="font-semibold text-sm mb-2 flex items-center gap-2">
-          <Wheat size={14} className="text-aletis-dourado" /> Sinais agro detectados no nome
+          <Wheat size={14} className="text-aletis-dourado" /> Sinais agro cruzados
         </p>
         <div className="flex flex-wrap gap-2">
           {lead.agroSignals.length > 0 ? (
@@ -2645,6 +3359,242 @@ function TabCar({
   )
 }
 
+function TabJudicial({ lead }: { lead: LeadFull }) {
+  const events = lead.judicialEvents ?? []
+  const severityStyle = JUDICIAL_STYLE[lead.judicialProfile.severidade]
+  const [showRaw, setShowRaw] = useState(false)
+
+  const ajuizadasDebts = useMemo(() => lead.debts.filter((d) => d.ajuizado), [lead.debts])
+  const ajuizadasValor = ajuizadasDebts.reduce((acc, d) => acc + d.valor, 0)
+  const rescindidasCount = lead.debts.filter((d) => situacaoBucket(d.situacao) === 'rescindido').length
+  const suspensasCount = lead.debts.filter((d) => situacaoBucket(d.situacao) === 'suspenso').length
+  const suspensasValor = lead.debts
+    .filter((d) => situacaoBucket(d.situacao) === 'suspenso')
+    .reduce((acc, d) => acc + d.valor, 0)
+
+  const sitEspecial = lead.cnpj?.situacaoEspecial
+  const motivoCad = lead.cnpj?.motivoSituacaoCadastral
+  const rawJudicialSignals = (lead.agroSignals || []).filter((s) => s.startsWith('DOU:') && !s.startsWith('DOU:agro:'))
+
+  return (
+    <div className="space-y-4">
+      {/* Hero: perfil judicial consolidado */}
+      <div className={`rounded-xl border p-4 ${severityStyle.badge} ${severityStyle.border}`}>
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <AlertTriangle size={16} className={severityStyle.text} />
+          <p className={`font-semibold text-sm ${severityStyle.text}`}>Perfil judicial consolidado</p>
+          <span className={`ml-auto text-xs font-semibold ${severityStyle.text}`}>
+            {lead.judicialProfile.ativo ? `severidade ${lead.judicialProfile.severidade}` : 'sem crise judicial materializada'}
+          </span>
+        </div>
+        <p className="text-sm text-aletis-grafite-escuro dark:text-white mb-3">
+          {lead.judicialProfile.explicacao}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {lead.judicialProfile.tipos.length > 0 ? lead.judicialProfile.tipos.map((tipo) => (
+            <span key={tipo} className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${severityStyle.badge} ${severityStyle.text} ${severityStyle.border}`}>
+              {JUDICIAL_LABEL[tipo]}
+            </span>
+          )) : (
+            <span className="text-xs text-aletis-grafite-medio dark:text-white/50">nenhum tipo judicial estruturado</span>
+          )}
+        </div>
+        {lead.judicialProfile.evidencias.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {lead.judicialProfile.evidencias.map((item) => (
+              <span key={item} className="px-2.5 py-1 rounded-full bg-white/60 dark:bg-black/20 border border-aletis-borda dark:border-white/10 text-xs text-aletis-grafite-escuro dark:text-white/80">
+                {item}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Sinais cruzados: PGFN x DOU x BrasilAPI x SICAR */}
+      <div className="rounded-xl border border-aletis-borda dark:border-white/10 p-4">
+        <p className="font-semibold text-sm mb-3 flex items-center gap-2">
+          <Archive size={14} className="text-aletis-verde" /> Sinais cruzados · mapa das fontes
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          {/* PGFN */}
+          <div className={`p-3 rounded-lg border ${ajuizadasDebts.length > 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900' : 'bg-aletis-bege/40 dark:bg-white/5 border-aletis-borda dark:border-white/10'}`}>
+            <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-1">PGFN · execução fiscal</p>
+            {ajuizadasDebts.length > 0 ? (
+              <>
+                <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+                  {ajuizadasDebts.length} inscrições ajuizadas · {fmtBRL(ajuizadasValor)}
+                </p>
+                {rescindidasCount > 0 && (
+                  <p className="text-[11px] text-red-600 dark:text-red-400 mt-1">
+                    {rescindidasCount} parcelamento(s) rescindido(s) — risco de novo ajuizamento
+                  </p>
+                )}
+                {suspensasCount > 0 && (
+                  <p className="text-[11px] text-sky-700 dark:text-sky-300 mt-1">
+                    {suspensasCount} suspensa(s) por decisão judicial · {fmtBRL(suspensasValor)}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-aletis-grafite-medio dark:text-white/50">Nenhuma inscrição PGFN ajuizada</p>
+            )}
+          </div>
+
+          {/* BrasilAPI · CNPJ */}
+          <div className={`p-3 rounded-lg border ${sitEspecial || motivoCad ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900' : 'bg-aletis-bege/40 dark:bg-white/5 border-aletis-borda dark:border-white/10'}`}>
+            <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-1">BrasilAPI · situação cadastral</p>
+            {lead.cnpj ? (
+              <>
+                <p className="text-sm text-aletis-grafite-escuro dark:text-white">
+                  {lead.cnpj.situacaoCadastral || '—'}
+                </p>
+                {sitEspecial && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1">
+                    Situação especial: <b>{sitEspecial}</b>
+                  </p>
+                )}
+                {motivoCad && (
+                  <p className="text-[11px] text-aletis-grafite-medio dark:text-white/60 mt-1">
+                    Motivo: {motivoCad}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-aletis-grafite-medio dark:text-white/50">
+                CNPJ ainda não enriquecido · clique em "Enriquecer agora" para materializar
+              </p>
+            )}
+          </div>
+
+          {/* DOU */}
+          <div className={`p-3 rounded-lg border ${rawJudicialSignals.length > 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900' : 'bg-aletis-bege/40 dark:bg-white/5 border-aletis-borda dark:border-white/10'}`}>
+            <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-1">DOU · publicações oficiais</p>
+            {events.length > 0 ? (
+              <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+                {events.length} evento(s) estruturado(s) · ver abaixo
+              </p>
+            ) : rawJudicialSignals.length > 0 ? (
+              <p className="text-sm text-red-700 dark:text-red-300">
+                Sinais brutos DOU presentes mas sem evento estruturado
+              </p>
+            ) : (
+              <p className="text-xs text-aletis-grafite-medio dark:text-white/50">
+                Sem publicação DOU recente associada
+              </p>
+            )}
+          </div>
+
+          {/* SICAR/CAR */}
+          <div className={`p-3 rounded-lg border ${lead.car ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900' : 'bg-aletis-bege/40 dark:bg-white/5 border-aletis-borda dark:border-white/10'}`}>
+            <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-1">SICAR · patrimônio rural</p>
+            {lead.car ? (
+              <>
+                <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                  CAR {lead.car.codImovel} · {fmtNum(lead.car.areaImovel)} ha
+                </p>
+                {lead.car.municipio && (
+                  <p className="text-[11px] text-aletis-grafite-medio dark:text-white/60 mt-1">
+                    {lead.car.municipio}/{lead.car.uf} · {lead.car.condicaoCadastro || lead.car.statusAnalise || '—'}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-aletis-grafite-medio dark:text-white/50">
+                CAR não materializado · pode ancorar penhora/alienação judicial
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Eventos estruturados do DOU */}
+      <div className="rounded-xl border border-aletis-borda dark:border-white/10 p-4">
+        <p className="font-semibold text-sm mb-3 flex items-center gap-2">
+          <Gavel size={14} className="text-red-600 dark:text-red-400" /> Eventos estruturados do DOU
+        </p>
+        {events.length === 0 ? (
+          <p className="text-xs text-aletis-grafite-medio dark:text-white/50">
+            Nenhum evento judicial estruturado ainda. Quando DOU/BrasilAPI materializam sinais (recuperação judicial, falência, leilão, penhora), eles aparecem aqui com tipo, severidade, data e resumo auditável.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {events.map((event, index) => {
+              const style = JUDICIAL_STYLE[event.severidade]
+              return (
+                <div key={`${event.tipo}-${event.data}-${index}`} className={`rounded-lg border p-3 ${style.badge} ${style.border}`}>
+                  <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${style.badge} ${style.text} ${style.border}`}>
+                        {JUDICIAL_LABEL[event.tipo]}
+                      </span>
+                      <span className="text-[11px] text-aletis-grafite-medio dark:text-white/50">
+                        {event.fonte} · {fmtDate(event.data)}
+                      </span>
+                    </div>
+                    <span className={`text-[10px] font-semibold uppercase tracking-wider ${style.text}`}>
+                      {event.severidade}
+                    </span>
+                  </div>
+                  <p className="text-sm text-aletis-grafite-escuro dark:text-white/90">{event.resumo}</p>
+                  {event.url && (
+                    <a
+                      href={event.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 mt-2 text-xs text-aletis-verde hover:underline"
+                    >
+                      <Eye size={12} /> abrir publicação no DOU
+                    </a>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Leitura comercial */}
+      <div className="rounded-xl border border-aletis-borda dark:border-white/10 p-4 bg-aletis-bege/40 dark:bg-white/5">
+        <p className="font-semibold text-sm mb-2 flex items-center gap-2">
+          <Info size={14} className="text-aletis-verde" /> Leitura comercial
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          <KpiLine label="Dívida total" value={fmtBRL(lead.totalDivida)} />
+          <KpiLine label="Inscrições" value={`${lead.qtdInscricoes}${ajuizadasDebts.length ? ` · ${ajuizadasDebts.length} ajuizadas` : ''}`} accent={ajuizadasDebts.length ? 'red' : undefined} />
+          <KpiLine label="Multi-source" value={lead.sources?.length ? `${lead.sources.length} fontes · ${lead.sources.map((s) => s.fonte).join(', ')}` : 'fonte única'} />
+          <KpiLine label="Agro provável" value={lead.agroProfile.provavel ? `sim · ${lead.agroProfile.nivel}` : 'não'} accent={lead.agroProfile.provavel ? 'green' : undefined} />
+          <KpiLine label="PF rural" value={lead.pfProfile.relevante ? `sim · ${lead.pfProfile.nivel}` : 'não'} accent={lead.pfProfile.relevante ? 'green' : undefined} />
+          <KpiLine label="Score total" value={`${lead.score.total} · ${lead.score.classificacao}`} />
+        </div>
+      </div>
+
+      {/* Sinais brutos — auditoria expandível */}
+      {rawJudicialSignals.length > 0 && (
+        <div className="rounded-xl border border-aletis-borda dark:border-white/10 p-4">
+          <button
+            onClick={() => setShowRaw((v) => !v)}
+            className="w-full flex items-center justify-between text-sm font-semibold text-aletis-grafite-escuro dark:text-white"
+          >
+            <span className="flex items-center gap-2">
+              <Hash size={14} className="text-aletis-grafite-medio" /> Sinais brutos para auditoria ({rawJudicialSignals.length})
+            </span>
+            <span className="text-[11px] text-aletis-grafite-medio">{showRaw ? 'ocultar' : 'ver'}</span>
+          </button>
+          {showRaw && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {rawJudicialSignals.map((s) => (
+                <code key={s} className="px-2 py-0.5 rounded bg-aletis-bege/50 dark:bg-white/5 border border-aletis-borda dark:border-white/10 text-[10px] font-mono text-aletis-grafite-escuro dark:text-white/70">
+                  {s}
+                </code>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TabSocios({ lead }: { lead: LeadFull }) {
   if (!lead.cnpj) {
     return (
@@ -2689,6 +3639,8 @@ function TabScore({ lead }: { lead: LeadFull }) {
     { label: 'Área estimada', value: b.hectares, max: 10, icon: Tractor },
     { label: 'Velocity do passivo', value: b.velocity ?? 0, max: 10, icon: Zap, hint: m?.velocity },
     { label: 'Fit regional ALETIS', value: b.fitRegional ?? 0, max: 15, icon: MapPin, hint: m?.fitRegional },
+    { label: 'Cross-source', value: b.multiSource ?? 0, max: 5, icon: Archive, hint: m?.multiSource },
+    { label: 'Crise pública (DOU)', value: b.douCrise ?? 0, max: 5, icon: AlertTriangle, hint: m?.douCrise },
   ]
   return (
     <>
@@ -2841,7 +3793,8 @@ function HotLeadsPanel({
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-aletis-grafite-escuro dark:text-white truncate">
                     {a.nome}
-                    <span className="ml-2 text-[10px] font-normal text-aletis-grafite-medio dark:text-white/50 font-mono">
+                    <span className="mx-2 text-aletis-grafite-medio/50" aria-hidden="true">·</span>
+                    <span className="text-[10px] font-normal text-aletis-grafite-medio dark:text-white/50 font-mono">
                       {a.cpfCnpj}
                     </span>
                   </p>

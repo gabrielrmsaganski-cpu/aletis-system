@@ -46,6 +46,69 @@ function hojeIso(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+/**
+ * Sane defaults: garante que TODAS as seções têm os arrays/objetos
+ * esperados — defesa contra dossiês legacy/parciais persistidos antes
+ * da validação atual ou via PUT incompleto. Sem isso, o frontend
+ * crashava em `valor.administradores.map(...)` quando o legacy vinha
+ * com `operacional: {}`.
+ */
+/** Gera id estável quando ausente (item legacy salvo sem id). */
+function ensureIds<T>(arr: T[] | undefined, prefix: string): T[] {
+  return (arr ?? []).map((item, i) => {
+    const it = item as T & { id?: string }
+    return it.id ? item : ({ ...item, id: `${prefix}-${i}-${Date.now()}` } as T)
+  })
+}
+
+function normalizarDossie(d: DossieAgro): DossieAgro {
+  const vazio = dossieAgroVazio(d.clienteId, d.dataBase ?? hojeIso())
+  return {
+    ...d,
+    grupoEconomico: {
+      ...(d.grupoEconomico ?? {}),
+      pessoasFisicas: ensureIds(d.grupoEconomico?.pessoasFisicas, 'pf'),
+      pessoasJuridicas: ensureIds(d.grupoEconomico?.pessoasJuridicas, 'pj'),
+    },
+    operacional: {
+      ...(d.operacional ?? {}),
+      administradores: ensureIds(d.operacional?.administradores, 'adm'),
+      comercializacao: ensureIds(d.operacional?.comercializacao, 'com'),
+      fornecedores: ensureIds(d.operacional?.fornecedores, 'forn'),
+    },
+    producao: {
+      ...(d.producao ?? {}),
+      agricultura: ensureIds(d.producao?.agricultura, 'agri'),
+      pecuaria: ensureIds(d.producao?.pecuaria, 'pec'),
+      dataBase: d.producao?.dataBase ?? vazio.producao.dataBase,
+    },
+    imoveis: {
+      ...(d.imoveis ?? {}),
+      propriedades: ensureIds(d.imoveis?.propriedades, 'prop'),
+      vendasTerra: ensureIds(d.imoveis?.vendasTerra, 'vt'),
+      arrendamentosRecebidos: ensureIds(d.imoveis?.arrendamentosRecebidos, 'arr'),
+      armazenagens: ensureIds(d.imoveis?.armazenagens, 'arm'),
+    },
+    maquinas: { ...(d.maquinas ?? {}), maquinas: ensureIds(d.maquinas?.maquinas, 'maq') },
+    dividas: {
+      ...(d.dividas ?? {}),
+      bancarias: ensureIds(d.dividas?.bancarias, 'db'),
+      fornecedores: ensureIds(d.dividas?.fornecedores, 'df'),
+      terras: ensureIds(d.dividas?.terras, 'dt'),
+      dataBase: d.dividas?.dataBase ?? vazio.dividas.dataBase,
+    },
+    capitalGiro: d.capitalGiro ?? vazio.capitalGiro,
+    relacionamentoBancario: {
+      ...(d.relacionamentoBancario ?? {}),
+      contas: ensureIds(d.relacionamentoBancario?.contas, 'cta'),
+    },
+    comerciais: {
+      ...(d.comerciais ?? {}),
+      relacoes: ensureIds(d.comerciais?.relacoes, 'rel'),
+    },
+  }
+}
+
 /** Valida minimamente o payload recebido no PUT. */
 function validarDossiePayload(body: unknown): { ok: true; dossie: DossieAgro } | { ok: false; erro: string } {
   if (!body || typeof body !== 'object') {
@@ -74,7 +137,12 @@ function validarDossiePayload(body: unknown): { ok: true; dossie: DossieAgro } |
 export default async function dossieRoutes(fastify: FastifyInstance): Promise<void> {
   const repo = getDossieRepository()
 
-  /* ---- GET dossiê corrente ---- */
+  /* ---- GET dossiê corrente ----
+   * Cliente existe + dossie ainda não foi criado → 200 com `data` = dossie vazio
+   * pré-populado e flag `novo: true`. Antes era 404, o que poluía o console
+   * frontend mesmo no caminho feliz (primeira visita à aba "Dossiê").
+   * Cliente não existe → 404 (continua erro real).
+   */
   fastify.get('/api/clientes/:id/dossie', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string }
     const resolved = resolverClienteId(id)
@@ -84,15 +152,13 @@ export default async function dossieRoutes(fastify: FastifyInstance): Promise<vo
     }
     const dossie = repo.get(resolved.clienteId)
     if (!dossie) {
-      // resposta 404 padronizada — a UI cria o dossiê vazio no primeiro save
-      reply.status(404)
       return {
-        success: false,
-        error: 'Dossiê ainda não criado',
-        data: { clienteId: resolved.clienteId, vazio: dossieAgroVazio(resolved.clienteId, hojeIso()) },
+        success: true,
+        data: dossieAgroVazio(resolved.clienteId, hojeIso()),
+        novo: true,
       }
     }
-    return { success: true, data: dossie }
+    return { success: true, data: normalizarDossie(dossie) }
   })
 
   /* ---- GET resumo (usado por list/tool Alix) ---- */

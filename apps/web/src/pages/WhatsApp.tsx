@@ -534,7 +534,7 @@ export default function WhatsApp() {
   }
 
   return (
-    <div className="min-h-screen bg-aletis-bege">
+    <div className="flex flex-col">
       {/* ── Page Header ─────────────────────────────────────── */}
       <header className="mb-6">
         <h1 className="text-3xl lg:text-4xl font-display font-bold text-aletis-grafite-escuro tracking-tight">
@@ -546,7 +546,8 @@ export default function WhatsApp() {
       </header>
 
       {/* ── Chat Interface ──────────────────────────────────── */}
-      <div className="card-premium overflow-hidden" style={{ height: 'calc(100vh - 220px)', minHeight: '500px' }}>
+      {/* Altura calcula descontando ticker (32) + header (~64) + padding (~64) + page header (~80) ≈ 240px */}
+      <div className="card-premium overflow-hidden h-[calc(100vh-240px)] min-h-[500px]">
         <div className="flex h-full">
           {/* ── Left Panel: Contact List ───────────────────── */}
           <div

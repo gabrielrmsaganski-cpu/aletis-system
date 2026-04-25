@@ -325,13 +325,21 @@ function gerarPrevisao7Dias(mun: MunicipioDados): PrevisaoDia[] {
 
 function gerarHistorico30Dias(mun: MunicipioDados): DadoHistorico[] {
   const dados: DadoHistorico[] = []
+  // Fallback razoável quando tempAtual=0/undefined (município sem leitura
+  // recente). Antes, base=0-2±3 → série caía pra ~−5/+1°C → flatline esquisito
+  // no canto inferior do gráfico.
+  const TEMP_DEFAULT = 22
+  const tempBase =
+    typeof mun.tempAtual === 'number' && Number.isFinite(mun.tempAtual) && mun.tempAtual > 0
+      ? mun.tempAtual
+      : TEMP_DEFAULT
   for (let d = 29; d >= 0; d--) {
     const dt = new Date()
     dt.setDate(dt.getDate() - d)
     const seed = hashStr(mun.codigoIbge + 'hist' + dt.toISOString().slice(0, 10))
     const rng = seededRng(seed)
 
-    const baseTemp = mun.tempAtual - 2 + (rng() - 0.5) * 6
+    const baseTemp = tempBase - 2 + (rng() - 0.5) * 6
     const precip = rng() > 0.55 ? Number((rng() * 25).toFixed(1)) : 0
 
     dados.push({
@@ -912,7 +920,8 @@ export default function Clima() {
                 orientation="left"
                 tick={{ fontSize: 10, fill: '#C9A84C' }}
                 label={{ value: 'Temp (C)', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#C9A84C' } }}
-                domain={['auto', 'auto']}
+                domain={[(dataMin: number) => Math.floor(dataMin - 2), (dataMax: number) => Math.ceil(dataMax + 2)]}
+                allowDecimals={false}
               />
               <YAxis
                 yAxisId="precip"
@@ -938,6 +947,8 @@ export default function Clima() {
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 4, stroke: '#C9A84C', strokeWidth: 2, fill: '#fff' }}
+                connectNulls
+                isAnimationActive={false}
               />
               <Bar
                 yAxisId="precip"

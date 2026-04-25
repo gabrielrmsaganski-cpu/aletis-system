@@ -283,28 +283,40 @@ export default async function (fastify: FastifyInstance) {
    *  Converte entre taxas equivalentes (compostas)
    * ------------------------------------------------------------------ */
   fastify.get('/api/credito/converter-taxa', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { taxa, tipo } = request.query as { taxa?: string; tipo?: string }
+    const q = request.query as { taxa?: string; tipo?: string; de?: string; para?: string }
 
-    if (!taxa || isNaN(Number(taxa))) {
+    if (!q.taxa || isNaN(Number(q.taxa))) {
       reply.status(400)
       return { success: false, error: 'taxa é obrigatória (número, ex: 1.5)' }
     }
 
-    const tipoValido = tipo as 'mensal' | 'anual' | 'diaria'
-    if (!tipo || !['mensal', 'anual', 'diaria'].includes(tipo)) {
+    // `de` é alias de `tipo` (frontend envia ?de=&para=, backend canônico é `tipo`).
+    const origem = (q.tipo ?? q.de) as 'mensal' | 'anual' | 'diaria' | undefined
+    const PERIODOS = ['mensal', 'anual', 'diaria'] as const
+
+    if (!origem || !PERIODOS.includes(origem)) {
       reply.status(400)
-      return { success: false, error: 'tipo deve ser "mensal", "anual" ou "diaria"' }
+      return { success: false, error: 'tipo (ou de) deve ser "mensal", "anual" ou "diaria"' }
     }
 
-    const resultado = converterTaxa(Number(taxa), tipoValido)
+    const destino = q.para as 'mensal' | 'anual' | 'diaria' | undefined
+    if (destino && !PERIODOS.includes(destino)) {
+      reply.status(400)
+      return { success: false, error: 'para deve ser "mensal", "anual" ou "diaria"' }
+    }
+
+    const resultado = converterTaxa(Number(q.taxa), origem)
 
     return {
       success: true,
       data: {
+        // `taxa`: valor convertido para `para` (se fornecido) — contrato esperado pelo Credito.tsx.
+        taxa: destino ? resultado[destino] : resultado[origem],
         ...resultado,
         entrada: {
-          taxa: Number(taxa),
-          tipo,
+          taxa: Number(q.taxa),
+          tipo: origem,
+          ...(destino ? { para: destino } : {}),
         },
         nota: 'Taxas equivalentes compostas (juros sobre juros). Fórmula: (1+i)^n - 1',
       },

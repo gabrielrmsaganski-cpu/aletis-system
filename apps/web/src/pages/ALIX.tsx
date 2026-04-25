@@ -199,37 +199,267 @@ function extractDocumentsFromMessage(msg: ChatMessage): DocumentoGerado[] {
 // Markdown-lite renderer
 // ────────────────────────────────────────────────────────────
 
-function renderContent(content: string): React.ReactNode {
+/**
+ * MessageErrorBoundary — isola crashes do renderContent em uma bolha específica.
+ * Evita que uma mensagem corrompida derrube a conversa inteira; se ocorrer erro
+ * mostra uma mensagem compacta com fallback de texto puro.
+ */
+class MessageErrorBoundary extends React.Component<
+  { children: React.ReactNode; content?: string | null | undefined },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: { children: React.ReactNode; content?: string | null | undefined }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error }
+  }
+  componentDidCatch(error: Error) {
+    console.warn('[MessageErrorBoundary]', error.message)
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="text-xs text-amber-700 dark:text-amber-300 italic bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded p-2">
+          <div className="font-semibold mb-1">⚠️ mensagem com problema de formatação</div>
+          <div className="whitespace-pre-wrap text-aletis-grafite-escuro dark:text-white/85 font-mono text-[11px]">
+            {typeof this.props.content === 'string' ? this.props.content.slice(0, 800) : '(sem conteúdo)'}
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+/**
+ * Renderiza inline: **bold**, _italic_, `code`, [link](url).
+ */
+function renderInline(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = []
+  let remaining = text
+  let key = 0
+  // Regex priority: code > link > bold > italic
+  const patterns: Array<{ re: RegExp; type: 'code' | 'link' | 'b' | 'i' }> = [
+    { re: /`([^`]+)`/, type: 'code' },
+    { re: /\[([^\]]+)\]\(([^)]+)\)/, type: 'link' },
+    { re: /\*\*([^*]+)\*\*/, type: 'b' },
+    { re: /(?<![a-z0-9_])_([^_]+)_(?![a-z0-9_])/i, type: 'i' },
+  ]
+  while (remaining.length > 0) {
+    let best: { match: RegExpMatchArray; type: typeof patterns[number]['type'] } | null = null
+    for (const p of patterns) {
+      const m = remaining.match(p.re)
+      if (m && (best == null || (m.index ?? 0) < (best.match.index ?? 0))) {
+        best = { match: m, type: p.type }
+      }
+    }
+    if (!best) {
+      parts.push(<span key={`t-${key++}`}>{remaining}</span>)
+      break
+    }
+    const idx = best.match.index ?? 0
+    if (idx > 0) parts.push(<span key={`t-${key++}`}>{remaining.slice(0, idx)}</span>)
+    if (best.type === 'b') {
+      parts.push(<strong key={`b-${key++}`} className="font-semibold text-aletis-grafite-escuro dark:text-white">{best.match[1]}</strong>)
+    } else if (best.type === 'i') {
+      parts.push(<em key={`i-${key++}`} className="italic text-aletis-grafite-medio dark:text-white/70">{best.match[1]}</em>)
+    } else if (best.type === 'code') {
+      parts.push(
+        <code key={`c-${key++}`} className="px-1 py-0.5 rounded bg-slate-100 dark:bg-white/10 text-aletis-grafite-escuro dark:text-white/90 text-[0.88em] font-mono">
+          {best.match[1]}
+        </code>,
+      )
+    } else if (best.type === 'link') {
+      parts.push(
+        <a
+          key={`l-${key++}`}
+          href={best.match[2]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-aletis-verde hover:underline"
+        >
+          {best.match[1]}
+        </a>,
+      )
+    }
+    remaining = remaining.slice(idx + best.match[0].length)
+  }
+  return parts
+}
+
+/** Detecta se a linha é um separador de tabela `|---|---|` */
+function isTableSeparator(line: string): boolean {
+  const t = line.trim()
+  if (!t.startsWith('|')) return false
+  return /^\|(\s*:?-+:?\s*\|)+\s*$/.test(t)
+}
+
+/** Parse célula a partir de uma linha `| a | b | c |`. */
+function parseTableRow(line: string): string[] {
+  const t = line.trim().replace(/^\|/, '').replace(/\|$/, '')
+  return t.split('|').map((c) => c.trim())
+}
+
+function renderContent(content: string | undefined | null): React.ReactNode {
+  if (content == null || typeof content !== 'string') {
+    return <span className="text-aletis-grafite-medio dark:text-white/50 italic">(sem conteúdo)</span>
+  }
+  if (content.length === 0) {
+    return <span className="text-aletis-grafite-medio dark:text-white/50 italic">(resposta vazia)</span>
+  }
   const lines = content.split('\n')
-  return (
-    <>
-      {lines.map((line, i) => {
-        if (!line.trim()) return <br key={i} />
-        const parts: React.ReactNode[] = []
-        let remaining = line
-        let key = 0
-        while (remaining.length > 0) {
-          const bold = remaining.match(/\*\*(.+?)\*\*/)
-          const italic = remaining.match(/_([^_]+)_/)
-          const first =
-            bold && italic
-              ? bold.index! < italic.index! ? { match: bold, type: 'b' as const } : { match: italic, type: 'i' as const }
-              : bold ? { match: bold, type: 'b' as const }
-              : italic ? { match: italic, type: 'i' as const }
-              : null
-          if (!first) {
-            parts.push(<span key={`t-${key++}`}>{remaining}</span>)
-            break
-          }
-          if (first.match.index! > 0) parts.push(<span key={`t-${key++}`}>{remaining.slice(0, first.match.index)}</span>)
-          if (first.type === 'b') parts.push(<strong key={`b-${key++}`} className="font-semibold text-aletis-grafite-escuro">{first.match[1]}</strong>)
-          else parts.push(<em key={`i-${key++}`} className="italic text-aletis-grafite-medio">{first.match[1]}</em>)
-          remaining = remaining.slice(first.match.index! + first.match[0].length)
-        }
-        return <div key={i}>{parts}</div>
-      })}
-    </>
-  )
+  const blocks: React.ReactNode[] = []
+  let i = 0
+  let key = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+    const trimmed = line.trim()
+
+    // Linha vazia → separador (pula sequências de linhas vazias, 1 <br>)
+    if (!trimmed) {
+      // colapsa múltiplas vazias — só emite um gap
+      let emitted = false
+      while (i < lines.length && !lines[i].trim()) {
+        if (!emitted) { blocks.push(<div key={`gap-${key++}`} className="h-2" />); emitted = true }
+        i++
+      }
+      continue
+    }
+
+    // Header (# ## ###)
+    const h = trimmed.match(/^(#{1,4})\s+(.+)$/)
+    if (h) {
+      const level = h[1].length
+      const txt = h[2]
+      const size = level === 1 ? 'text-lg' : level === 2 ? 'text-base' : 'text-sm'
+      blocks.push(
+        <div key={`h-${key++}`} className={`${size} font-semibold text-aletis-grafite-escuro dark:text-white mt-2 mb-1`}>
+          {renderInline(txt)}
+        </div>,
+      )
+      i++
+      continue
+    }
+
+    // Horizontal rule
+    if (/^-{3,}$|^_{3,}$|^\*{3,}$/.test(trimmed)) {
+      blocks.push(<hr key={`hr-${key++}`} className="my-2 border-aletis-borda dark:border-white/10" />)
+      i++
+      continue
+    }
+
+    // Tabela: linha começa com `|`, próxima é separador
+    if (trimmed.startsWith('|') && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+      const header = parseTableRow(lines[i])
+      i += 2 // pula header + separador
+      const rows: string[][] = []
+      while (i < lines.length && lines[i].trim().startsWith('|') && !isTableSeparator(lines[i])) {
+        rows.push(parseTableRow(lines[i]))
+        i++
+      }
+      blocks.push(
+        <div key={`tbl-${key++}`} className="my-2 overflow-x-auto rounded-lg border border-aletis-borda dark:border-white/10">
+          <table className="w-full text-xs border-collapse">
+            <thead className="bg-aletis-bege/40 dark:bg-white/[0.04]">
+              <tr>
+                {header.map((c, ci) => (
+                  <th key={ci} className="px-3 py-2 text-left font-semibold text-aletis-grafite-escuro dark:text-white border-b border-aletis-borda dark:border-white/10">
+                    {renderInline(c)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, ri) => (
+                <tr key={ri} className="border-b last:border-b-0 border-aletis-borda/60 dark:border-white/5">
+                  {r.map((c, ci) => (
+                    <td key={ci} className="px-3 py-1.5 text-aletis-grafite-escuro dark:text-white/85 align-top">
+                      {renderInline(c)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      )
+      continue
+    }
+
+    // Lista ordenada/não-ordenada — agrupa sequência
+    const ulMatch = trimmed.match(/^[-*•]\s+(.+)$/)
+    const olMatch = trimmed.match(/^(\d+)[.)]\s+(.+)$/)
+    if (ulMatch || olMatch) {
+      const items: React.ReactNode[] = []
+      const ordered = !!olMatch
+      while (i < lines.length) {
+        const l = lines[i].trim()
+        const um = l.match(/^[-*•]\s+(.+)$/)
+        const om = l.match(/^\d+[.)]\s+(.+)$/)
+        if (!um && !om) break
+        const txt = um ? um[1] : om![1]
+        items.push(
+          <li key={`li-${i}`} className="text-aletis-grafite-escuro dark:text-white/85 leading-relaxed">
+            {renderInline(txt)}
+          </li>,
+        )
+        i++
+      }
+      blocks.push(
+        ordered
+          ? <ol key={`ol-${key++}`} className="list-decimal pl-5 my-1 space-y-0.5">{items}</ol>
+          : <ul key={`ul-${key++}`} className="list-disc pl-5 my-1 space-y-0.5">{items}</ul>,
+      )
+      continue
+    }
+
+    // Blockquote
+    if (trimmed.startsWith('> ')) {
+      const qLines: string[] = []
+      while (i < lines.length && lines[i].trim().startsWith('> ')) {
+        qLines.push(lines[i].trim().slice(2))
+        i++
+      }
+      blocks.push(
+        <blockquote key={`bq-${key++}`} className="border-l-2 border-aletis-verde/50 pl-3 my-2 text-aletis-grafite-medio dark:text-white/60 italic">
+          {qLines.map((l, qi) => <div key={qi}>{renderInline(l)}</div>)}
+        </blockquote>,
+      )
+      continue
+    }
+
+    // Parágrafo normal — agrupa linhas consecutivas como um bloco
+    const paraLines: string[] = [line]
+    i++
+    while (
+      i < lines.length &&
+      lines[i].trim() &&
+      !lines[i].trim().startsWith('|') &&
+      !lines[i].trim().startsWith('#') &&
+      !/^[-*•]\s+/.test(lines[i].trim()) &&
+      !/^\d+[.)]\s+/.test(lines[i].trim()) &&
+      !lines[i].trim().startsWith('> ') &&
+      !/^-{3,}$|^_{3,}$|^\*{3,}$/.test(lines[i].trim())
+    ) {
+      paraLines.push(lines[i])
+      i++
+    }
+    blocks.push(
+      <p key={`p-${key++}`} className="text-aletis-grafite-escuro dark:text-white/85 leading-relaxed">
+        {paraLines.map((pl, pi) => (
+          <React.Fragment key={pi}>
+            {pi > 0 && <br />}
+            {renderInline(pl)}
+          </React.Fragment>
+        ))}
+      </p>,
+    )
+  }
+
+  return <>{blocks}</>
 }
 
 // ────────────────────────────────────────────────────────────
@@ -262,46 +492,91 @@ async function streamChat(
   handlers: SSEHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
-  const res = await fetch('/api/alix/chat/stream', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal,
-  })
-  if (!res.body) throw new Error('Resposta sem body (streaming não suportado pelo navegador)')
+  // Timeout defensivo de 5min — ALIX pode levar minutos (Opus com thinking),
+  // mas >5min indica travamento. Evita spinner infinito na UI.
+  const internalCtl = new AbortController()
+  const timeout = setTimeout(() => internalCtl.abort(new Error('stream-timeout-5min')), 5 * 60_000)
+  const finalSignal = signal
+    ? anyAbortSignal(signal, internalCtl.signal)
+    : internalCtl.signal
+  const startedAt = Date.now()
+  let gotAnyEvent = false
 
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
+  try {
+    const res = await fetch('/api/alix/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: finalSignal,
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status} ao iniciar stream`)
+    if (!res.body) throw new Error('Resposta sem body (streaming não suportado pelo navegador)')
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
 
-    // Events are delimited by blank line (\n\n)
-    let idx: number
-    while ((idx = buffer.indexOf('\n\n')) !== -1) {
-      const frame = buffer.slice(0, idx)
-      buffer = buffer.slice(idx + 2)
-      let event = 'message'
-      let data = ''
-      for (const line of frame.split('\n')) {
-        if (line.startsWith('event:')) event = line.slice(6).trim()
-        else if (line.startsWith('data:')) data += line.slice(5).trim()
-      }
-      if (!data) continue
-      try {
-        const payload = JSON.parse(data)
-        if (event === 'token' && typeof payload.text === 'string') handlers.onToken?.(payload.text)
-        else if (event === 'tool' && typeof payload.name === 'string') handlers.onTool?.(payload.name)
-        else if (event === 'done') handlers.onDone?.(payload)
-        else if (event === 'error') handlers.onError?.(payload.error || 'erro')
-      } catch {
-        // ignore malformed frame
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+
+      // Events are delimited by blank line (\n\n)
+      let idx: number
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const frame = buffer.slice(0, idx)
+        buffer = buffer.slice(idx + 2)
+        let event = 'message'
+        let data = ''
+        for (const line of frame.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim()
+          else if (line.startsWith('data:')) data += line.slice(5).trim()
+        }
+        if (!data) continue
+        try {
+          const payload = JSON.parse(data)
+          gotAnyEvent = true
+          if (event === 'token' && typeof payload.text === 'string') handlers.onToken?.(payload.text)
+          else if (event === 'tool' && typeof payload.name === 'string') handlers.onTool?.(payload.name)
+          else if (event === 'done') handlers.onDone?.(payload)
+          else if (event === 'error') handlers.onError?.(payload.error || 'erro')
+          // event === 'ping' é heartbeat — ignora silenciosamente
+          // event === 'thinking' é status — ignora (ou pode ser tratado futuramente)
+        } catch {
+          // ignore malformed frame
+        }
       }
     }
+    // Conexão fechou sem evento nenhum = degrade silencioso
+    if (!gotAnyEvent) {
+      handlers.onError?.('conexão fechou sem resposta — tente de novo')
+    }
+  } catch (err) {
+    const msg = (err as Error)?.message || 'falha no stream'
+    if (msg.includes('stream-timeout')) {
+      handlers.onError?.(`tempo esgotado (>5min) após ${Math.round((Date.now() - startedAt) / 1000)}s`)
+    } else if (msg.includes('abort') || msg.includes('aborted')) {
+      // cancelamento manual — não exibe erro
+    } else {
+      handlers.onError?.(msg)
+    }
+  } finally {
+    clearTimeout(timeout)
   }
+}
+
+/** Compõe múltiplos AbortSignal em um só (polyfill para navegadores sem AbortSignal.any). */
+function anyAbortSignal(...signals: AbortSignal[]): AbortSignal {
+  // Usa AbortSignal.any se disponível (Chrome 116+, FF 124+)
+  if ('any' in AbortSignal && typeof (AbortSignal as any).any === 'function') {
+    return (AbortSignal as any).any(signals)
+  }
+  const ctl = new AbortController()
+  for (const s of signals) {
+    if (s.aborted) { ctl.abort(s.reason); break }
+    s.addEventListener('abort', () => ctl.abort(s.reason), { once: true })
+  }
+  return ctl.signal
 }
 
 // ────────────────────────────────────────────────────────────
@@ -335,7 +610,12 @@ export default function ALIX() {
   const [memoryMd, setMemoryMd] = useState<string | null>(null)
   const [memoryLoading, setMemoryLoading] = useState(false)
   const [streamEnabled, setStreamEnabled] = useState<boolean>(() => {
-    try { return localStorage.getItem(STREAM_KEY) === '1' } catch { return false }
+    // Default true: streaming entrega tokens em tempo real e tem fallback
+    // robusto. localStorage só desabilita se valor for explicitamente '0'.
+    try {
+      const v = localStorage.getItem(STREAM_KEY)
+      return v === null ? true : v === '1'
+    } catch { return true }
   })
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -369,7 +649,24 @@ export default function ALIX() {
     let cancelled = false
     setIsLoadingSession(true)
     apiFetch<ChatSession>(`/alix/session/${activeSessionId}`)
-      .then((session) => { if (!cancelled) setMessages(session?.messages || []) })
+      .then((session) => {
+        if (cancelled) return
+        const remote = session?.messages || []
+        // Preserva mensagens locais (id começando com "local-" ou "stream-")
+        // que ainda não foram persistidas — evita wipe de placeholder durante
+        // streaming quando esse useEffect dispara em paralelo (race condition).
+        setMessages((prev) => {
+          const localOnly = prev.filter((m) => /^(local-|stream-)/.test(m.id))
+          if (localOnly.length === 0) return remote
+          // Mescla: remote + locais não duplicados (por content+role)
+          const merged = [...remote]
+          for (const lm of localOnly) {
+            const dup = merged.some((rm) => rm.role === lm.role && rm.content === lm.content && Math.abs((rm.timestamp || 0) - (lm.timestamp || 0)) < 60_000)
+            if (!dup) merged.push(lm)
+          }
+          return merged
+        })
+      })
       .catch(() => {
         if (!cancelled) {
           setActiveSessionId(null)
@@ -591,19 +888,69 @@ export default function ALIX() {
         }])
         await streamChat(body, {
           onTool: (name) => {
-            toolsAgg.push(name)
-            setMessages((prev) => prev.map((m) => m.id === placeholderId ? { ...m, toolsUsed: [...(m.toolsUsed || []), name] } : m))
+            try {
+              toolsAgg.push(name)
+              // Se o placeholder foi wiped por race com useEffect(session refetch),
+              // re-adiciona com toolsUsed atualizado.
+              setMessages((prev) => {
+                const has = prev.some((m) => m.id === placeholderId)
+                if (has) return prev.map((m) => m.id === placeholderId ? { ...m, toolsUsed: [...(m.toolsUsed || []), name] } : m)
+                return [...prev, { id: placeholderId, role: 'assistant', content: agg, timestamp: Date.now(), toolsUsed: [...toolsAgg] } as ChatMessage]
+              })
+            } catch { /* ignora handler error */ }
           },
           onToken: (t) => {
-            agg += t
-            setMessages((prev) => prev.map((m) => m.id === placeholderId ? { ...m, content: agg } : m))
+            try {
+              agg += t
+              setMessages((prev) => {
+                const has = prev.some((m) => m.id === placeholderId)
+                if (has) return prev.map((m) => m.id === placeholderId ? { ...m, content: agg } : m)
+                return [...prev, { id: placeholderId, role: 'assistant', content: agg, timestamp: Date.now(), toolsUsed: [...toolsAgg] } as ChatMessage]
+              })
+            } catch { /* ignora handler error */ }
           },
           onDone: (payload) => {
-            setMessages((prev) => prev.map((m) => m.id === placeholderId ? { ...payload.reply, id: payload.reply.id || placeholderId } : m))
-            if (!activeSessionId || activeSessionId !== payload.sessionId) {
-              setActiveSessionId(payload.sessionId)
+            try {
+              // Normaliza payload.reply defensivamente — backend pode enviar
+              // formato inesperado, e não queremos que isso quebre o React.
+              // Fallback explícito para `agg` evita "(sem conteúdo)" quando
+              // payload.reply.content vem vazio mas o stream entregou tokens.
+              const fallbackContent = agg || '(resposta vazia)'
+              const incomingContent = typeof payload?.reply?.content === 'string' && payload.reply.content.length > 0
+                ? payload.reply.content
+                : fallbackContent
+              const safeReply: ChatMessage = (payload?.reply && typeof payload.reply === 'object')
+                ? {
+                    id: payload.reply.id || placeholderId,
+                    role: payload.reply.role || 'assistant',
+                    content: incomingContent,
+                    timestamp: payload.reply.timestamp || Date.now(),
+                    toolsUsed: Array.isArray(payload.reply.toolsUsed) ? payload.reply.toolsUsed : toolsAgg,
+                    metadata: payload.reply.metadata,
+                    sources: Array.isArray(payload.reply.sources) ? payload.reply.sources : [],
+                  }
+                : {
+                    id: placeholderId,
+                    role: 'assistant',
+                    content: fallbackContent,
+                    timestamp: Date.now(),
+                    toolsUsed: toolsAgg,
+                  }
+              // Se o placeholder ainda existir, substitui. Se foi wiped por race
+              // com useEffect(session refetch), append safeReply pra garantir
+              // que a resposta sempre apareça.
+              setMessages((prev) => {
+                const has = prev.some((m) => m.id === placeholderId)
+                if (has) return prev.map((m) => m.id === placeholderId ? safeReply : m)
+                return [...prev, safeReply]
+              })
+              if (payload?.sessionId && (!activeSessionId || activeSessionId !== payload.sessionId)) {
+                setActiveSessionId(payload.sessionId)
+              }
+              refreshSessions()
+            } catch (err) {
+              console.warn('[ALIX] onDone handler falhou:', err)
             }
-            refreshSessions()
           },
           onError: (errMsg) => {
             setMessages((prev) => prev.map((m) => m.id === placeholderId ? { ...m, content: `Erro no stream: ${errMsg}` } : m))
@@ -614,7 +961,33 @@ export default function ALIX() {
           method: 'POST',
           body: JSON.stringify(body),
         })
-        setMessages((prev) => [...prev, resp.reply])
+        // Defensiva: backend pode devolver string em vez de ChatMessage.
+        // Normaliza para sempre ser um objeto válido antes de empurrar no estado.
+        const normalizedReply: ChatMessage =
+          typeof resp.reply === 'string'
+            ? {
+                id: `assistant-${Date.now()}`,
+                role: 'assistant',
+                content: resp.reply,
+                timestamp: Date.now(),
+              }
+            : (resp.reply && typeof resp.reply === 'object'
+                ? {
+                    id: (resp.reply as any).id || `assistant-${Date.now()}`,
+                    role: (resp.reply as any).role || 'assistant',
+                    content: typeof (resp.reply as any).content === 'string' ? (resp.reply as any).content : '(resposta vazia)',
+                    timestamp: (resp.reply as any).timestamp || Date.now(),
+                    toolsUsed: Array.isArray((resp.reply as any).toolsUsed) ? (resp.reply as any).toolsUsed : undefined,
+                    metadata: (resp.reply as any).metadata,
+                    sources: Array.isArray((resp.reply as any).sources) ? (resp.reply as any).sources : undefined,
+                  }
+                : {
+                    id: `assistant-${Date.now()}`,
+                    role: 'assistant',
+                    content: '(resposta vazia)',
+                    timestamp: Date.now(),
+                  })
+        setMessages((prev) => [...prev, normalizedReply])
         if (!activeSessionId || activeSessionId !== resp.sessionId) {
           setActiveSessionId(resp.sessionId)
         }
@@ -785,12 +1158,22 @@ export default function ALIX() {
               sessions.map((s) => {
                 const active = s.id === activeSessionId
                 return (
-                  <button
+                  <div
                     key={s.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => handleSelectSession(s.id)}
-                    className={`w-full text-left p-3 border-b border-aletis-borda/50 transition-colors group ${
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        handleSelectSession(s.id)
+                      }
+                    }}
+                    className={`w-full text-left p-3 border-b border-aletis-borda/50 transition-colors group cursor-pointer focus:outline-none focus:ring-2 focus:ring-aletis-dourado/40 ${
                       active ? 'bg-aletis-bege' : 'hover:bg-aletis-bege/50'
                     }`}
+                    aria-pressed={active}
+                    aria-label={`Abrir conversa ${s.title}`}
                   >
                     <div className="flex items-start gap-2">
                       <MessageSquare className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${active ? 'text-aletis-verde' : 'text-aletis-grafite-claro'}`} />
@@ -805,6 +1188,7 @@ export default function ALIX() {
                         </div>
                       </div>
                       <button
+                        type="button"
                         onClick={(e) => handleDeleteSession(s.id, e)}
                         className="opacity-0 group-hover:opacity-100 p-1 text-aletis-grafite-claro hover:text-alerta transition-opacity"
                         title="Deletar"
@@ -813,7 +1197,7 @@ export default function ALIX() {
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
-                  </button>
+                  </div>
                 )
               })
             )}
@@ -1022,7 +1406,7 @@ export default function ALIX() {
               </div>
             )}
 
-            {messages.map((msg) => {
+            {messages.filter((msg) => msg && typeof msg === 'object' && (msg.role === 'user' || msg.role === 'assistant')).map((msg) => {
               const isUser = msg.role === 'user'
               const docs = isUser ? [] : extractDocumentsFromMessage(msg)
               const userAttachments = isUser && msg.metadata && Array.isArray((msg.metadata as any).attachments)
@@ -1074,7 +1458,9 @@ export default function ALIX() {
                       </div>
                     )}
                     <div className="text-sm leading-relaxed whitespace-pre-wrap font-body">
-                      {renderContent(msg.content)}
+                      <MessageErrorBoundary content={msg.content}>
+                        {renderContent(msg.content)}
+                      </MessageErrorBoundary>
                     </div>
                     {docs.length > 0 && (
                       <div className="mt-3 pt-2 border-t border-aletis-borda/40 flex flex-wrap gap-2">
