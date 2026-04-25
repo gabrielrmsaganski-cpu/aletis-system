@@ -11,6 +11,7 @@ import type { MultipartFile } from '@fastify/multipart'
 
 import { getDocumentIntakeService } from '../services/alix/intake/DocumentIntakeService.js'
 import { MAX_FILE_BYTES } from '../services/alix/intake/types.js'
+import { isMimeAllowed } from '../lib/upload-validation.js'
 
 const ok = <T>(data: T) => ({ success: true, data })
 const fail = (error: string, code = 'ERROR') => ({ success: false, error, code })
@@ -21,8 +22,12 @@ export default async function alixDocumentsRoutes(
   const svc = getDocumentIntakeService()
 
   // -------- POST /api/alix/documents/upload --------
+  // Query:
+  //   sessionId    — sessão Alix (default 'anon')
+  //   clienteId    — se presente, o documento é auto-anexado ao cliente no CRM
+  //                  e a nota de histórico é inserida via AlixMemoryService
   fastify.post('/api/alix/documents/upload', async (
-    request: FastifyRequest<{ Querystring: { sessionId?: string } }>,
+    request: FastifyRequest<{ Querystring: { sessionId?: string; clienteId?: string } }>,
     reply: FastifyReply,
   ) => {
     let file: MultipartFile | undefined
@@ -40,6 +45,13 @@ export default async function alixDocumentsRoutes(
 
     if (!file) {
       return reply.status(400).send(fail('Nenhum arquivo enviado (campo multipart).', 'NO_FILE'))
+    }
+
+    // Whitelist de MIME — recusa antes de gastar memória com toBuffer().
+    if (!isMimeAllowed(file.mimetype)) {
+      return reply
+        .status(415)
+        .send(fail(`Tipo de arquivo não suportado: ${file.mimetype}.`, 'UNSUPPORTED_MEDIA_TYPE'))
     }
 
     let buffer: Buffer
@@ -66,6 +78,24 @@ export default async function alixDocumentsRoutes(
         mimetype: file.mimetype,
         sessionId,
       })
+
+      // Auto-anexa ao cliente no CRM quando clienteId vem no query.
+      // Registra nota no histórico via AlixMemoryService com tipo/resumo.
+      const clienteId = (request.query?.clienteId ?? '').toString().trim()
+      let anexadoAoCliente: { clienteId: string; ok: true; tipoDetectado?: string } | null = null
+      if (clienteId) {
+        try {
+          const { getAlixMemoryService } = await import('../services/alix/memory/AlixMemoryService.js')
+          const mem = getAlixMemoryService()
+          const tipo = doc.metadata?.agroTipo as string | undefined
+          const resumo = `Documento anexado: ${doc.filename}${tipo ? ` (tipo=${tipo})` : ''} · id=${doc.id}`
+          await mem.appendNota(clienteId, 'historico', resumo)
+          anexadoAoCliente = { clienteId, ok: true, tipoDetectado: tipo }
+        } catch (err) {
+          request.log.warn({ err }, '[alix-documents] falha ao anexar ao cliente')
+        }
+      }
+
       // Na resposta: preserva extractedText completo (util para o front
       // mostrar preview) mas omite imageBase64 (pesado).
       const { imageBase64: _omit, ...publicDoc } = doc
@@ -73,6 +103,7 @@ export default async function alixDocumentsRoutes(
         ok({
           ...publicDoc,
           hasImage: !!doc.imageBase64,
+          anexadoAoCliente,
         }),
       )
     } catch (err) {

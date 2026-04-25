@@ -17,7 +17,12 @@ LOG_DIR="/var/log/aletis"
 LOG_FILE="$LOG_DIR/aletis-refresh-sicar-$(date +%Y%m%d).log"
 
 # Cron roda com PATH mínimo — garantimos pnpm + node via locais conhecidos.
+# Inclui mise (gerenciador usado nesta VM), pnpm global e nvm — o primeiro
+# diretório existente define node/pnpm.
 for dir in \
+    "$HOME/.local/share/mise/shims" \
+    "$HOME/.local/share/mise/installs/node/22/bin" \
+    "$HOME/.local/share/mise/installs/node/20/bin" \
     "$HOME/.local/share/pnpm" \
     "$HOME/.nvm/versions/node/v22.11.0/bin" \
     "$HOME/.nvm/versions/node/v20.18.0/bin" \

@@ -15,6 +15,8 @@ import { aggregateTelemetry, telemetryPath, type TelemetryRecord } from '../serv
 import { readFileSync, existsSync } from 'fs'
 import { clientes } from './clientes.js'
 import { propostas, propostasInteligentes } from './propostas.js'
+import { upsertCliente as pgUpsertCliente } from '../db/ClienteRepository.js'
+import { upsertProposta as pgUpsertProposta } from '../db/PropostaRepository.js'
 
 // ── Singleton ─────────────────────────────────────────────
 
@@ -60,15 +62,27 @@ function getAlixService(): AlixService {
   })
 
   // Alix Insano F4 — backends de escrita no CRM
+  // Cada `setCliente`/`setPropostaInteligente`/`updateProposta` agora faz
+  // dual-write: Map em memória (source of truth runtime) + Postgres
+  // (best-effort via flag ALETIS_PG_ENABLED). Mesmo padrão dos handlers
+  // tradicionais — ALIX não pode ser exceção, ou perdemos as escritas dela
+  // quando o servidor reiniciar.
   registerCrmWriteBackends({
-    setCliente: (c) => { clientes.set(c.id as string, c as any); },
-    setPropostaInteligente: (p) => { propostasInteligentes.set(p.id as string, p as any); },
+    setCliente: (c) => {
+      clientes.set(c.id as string, c as any)
+      void pgUpsertCliente(c as unknown as Parameters<typeof pgUpsertCliente>[0])
+    },
+    setPropostaInteligente: (p) => {
+      propostasInteligentes.set(p.id as string, p as any)
+      void pgUpsertProposta(p as unknown as Parameters<typeof pgUpsertProposta>[0])
+    },
     updateProposta: (id, partial) => {
-      const p = propostas.get(id);
-      if (!p) return false;
-      Object.assign(p as any, partial, { atualizadoEm: new Date().toISOString() });
-      propostas.set(id, p);
-      return true;
+      const p = propostas.get(id)
+      if (!p) return false
+      Object.assign(p as any, partial, { atualizadoEm: new Date().toISOString() })
+      propostas.set(id, p)
+      void pgUpsertProposta(p as unknown as Parameters<typeof pgUpsertProposta>[0])
+      return true
     },
     getLead: (cpfCnpj) => getProspeccaoService().getLead(cpfCnpj),
   });
@@ -115,16 +129,33 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
       }
 
       const multi = isMultiagentEnabled()
+      const safeAttachments = Array.isArray(attachments) ? attachments.filter((x) => typeof x === 'string') : undefined
+      const safeClienteId = typeof clienteId === 'string' && clienteId.trim() ? clienteId.trim() : undefined
       const result = multi
-        ? await (await getOrchestrator()).chat(sessionId, message.trim())
-        : await alix.chat(sessionId, message.trim(), {
-            attachments: Array.isArray(attachments) ? attachments.filter((x) => typeof x === 'string') : undefined,
-            clienteId: typeof clienteId === 'string' && clienteId.trim() ? clienteId.trim() : undefined,
+        ? await (await getOrchestrator()).chat(sessionId, message.trim(), {
+            attachments: safeAttachments,
+            clienteId: safeClienteId,
           })
+        : await alix.chat(sessionId, message.trim(), {
+            attachments: safeAttachments,
+            clienteId: safeClienteId,
+          })
+      // Normaliza `reply` em objeto ChatMessage (Orchestrator devolve string,
+      // AlixService devolve objeto). UI espera objeto.
+      const replyObj =
+        typeof result.reply === 'string'
+          ? {
+              id: result.session.messages[result.session.messages.length - 1]?.id,
+              role: 'assistant' as const,
+              content: result.reply,
+              timestamp: result.session.messages[result.session.messages.length - 1]?.timestamp ?? Date.now(),
+              toolsUsed: result.session.messages[result.session.messages.length - 1]?.toolsUsed,
+            }
+          : result.reply
       return reply.status(200).send({
         success: true,
         data: {
-          reply: result.reply,
+          reply: replyObj,
           sessionId: result.session.id,
           session: {
             id: result.session.id,
@@ -176,36 +207,76 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
 
     send('start', { sessionId, ts: Date.now() })
 
-    try {
-      const result = await alix.chat(sessionId, message.trim(), {
-        attachments: Array.isArray(attachments) ? attachments.filter((x) => typeof x === 'string') : undefined,
-        clienteId: typeof clienteId === 'string' && clienteId.trim() ? clienteId.trim() : undefined,
-      })
+    // Heartbeat a cada 10s enquanto LLM processa — evita que o cliente perceba
+    // conexão morta enquanto tools são executadas.
+    const heartbeat = setInterval(() => send('ping', { ts: Date.now() }), 10_000)
 
-      if (result.reply.toolsUsed) {
-        for (const t of result.reply.toolsUsed) send('tool', { name: t })
+    try {
+      // Pensamento inicial — avisa o UI que estamos trabalhando
+      send('thinking', { text: 'analisando pergunta e escolhendo tools…' })
+
+      const multi = isMultiagentEnabled()
+      const toolsUsed: string[] = []
+
+      let replyContent: string
+      let replySessionId: string
+      let replyObj: any
+
+      if (multi) {
+        // Caminho principal: Orchestrator (Opus + 60+ tools, inclusive
+        // prospeccao_buscar, delegate_deal_analyzer, inventário, etc.)
+        const orch = await getOrchestrator()
+        const result = await orch.chat(sessionId, message.trim(), {
+          attachments: Array.isArray(attachments) ? attachments.filter((x) => typeof x === 'string') : undefined,
+          clienteId: typeof clienteId === 'string' && clienteId.trim() ? clienteId.trim() : undefined,
+          onToolCall: (name) => {
+            toolsUsed.push(name)
+            try { send('tool', { name }) } catch { /* stream fechado */ }
+          },
+        })
+        replyContent = result.reply
+        replySessionId = result.session.id
+        replyObj = {
+          id: result.session.messages[result.session.messages.length - 1]?.id,
+          role: 'assistant',
+          content: result.reply,
+          timestamp: Date.now(),
+          toolsUsed,
+        }
+      } else {
+        // Legacy — mantido apenas para cenários com ALIX_MULTIAGENT_ENABLED=false
+        const result = await alix.chat(sessionId, message.trim(), {
+          attachments: Array.isArray(attachments) ? attachments.filter((x) => typeof x === 'string') : undefined,
+          clienteId: typeof clienteId === 'string' && clienteId.trim() ? clienteId.trim() : undefined,
+          onToolCall: (name: string) => {
+            toolsUsed.push(name)
+            try { send('tool', { name }) } catch { /* stream fechado */ }
+          },
+        })
+        replyContent = result.reply.content || ''
+        replySessionId = result.session.id
+        replyObj = result.reply
       }
 
-      // Stream content by word chunks (~40 chars each)
-      const content = result.reply.content || ''
-      const CHUNK = 48
-      for (let i = 0; i < content.length; i += CHUNK) {
-        send('token', { text: content.slice(i, i + CHUNK) })
-        // Micro-pausa para UI poder renderizar progressivamente
-        await new Promise((r) => setTimeout(r, 10))
+      // Stream palavra-a-palavra — delay 4ms. Fica natural sem drenar CPU.
+      const words = replyContent.split(/(\s+)/) // preserva espaços/quebras
+      for (const w of words) {
+        send('token', { text: w })
+        if (w.trim().length > 0) await new Promise((r) => setTimeout(r, 4))
       }
 
       send('done', {
-        reply: result.reply,
-        sessionId: result.session.id,
-        sources: result.reply.sources || [],
-        toolsUsed: result.reply.toolsUsed || [],
+        reply: replyObj,
+        sessionId: replySessionId,
+        sources: replyObj?.sources || [],
+        toolsUsed: replyObj?.toolsUsed || toolsUsed,
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro desconhecido'
       request.log.error({ err }, '[ALIX] stream error')
       send('error', { error: msg })
     } finally {
+      clearInterval(heartbeat)
       reply.raw.end()
     }
   })
@@ -325,5 +396,49 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
     },
   )
 
-  console.log('[ALIX] Rotas registradas: POST /api/alix/chat, GET/POST/DELETE /api/alix/session(s), GET /api/alix/llm/health, GET /api/alix/telemetry/:sessionId')
+  // ── GET /api/alix/push/health ─────────────────────────
+  // Status do canal de push (WhatsApp ou log-only) — útil para admin saber
+  // se alertas críticos estão chegando no destino configurado.
+  fastify.get('/api/alix/push/health', async (_req, reply) => {
+    try {
+      const { getAlixPushChannel } = await import('../services/alix/push/AlixPushChannel.js')
+      const { getProspeccaoService } = await import('../services/prospeccao/ProspeccaoService.js')
+      const { getProactiveService } = await import('../services/alix/ProactiveService.js')
+      const ch = getAlixPushChannel()
+      const proactive = getProactiveService(getProspeccaoService(), (ch as any).storageDir || process.cwd())
+      return reply.send({ success: true, data: { ...ch.health(), nextBriefingAt: proactive.getNextBriefingAt?.() || null } })
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  // ── POST /api/alix/push/test ──────────────────────────
+  // Envia uma mensagem de teste via canal de push (respeitando dryrun/flags).
+  fastify.post('/api/alix/push/test', async (req: FastifyRequest<{ Body: { body?: string } }>, reply) => {
+    try {
+      const { getAlixPushChannel } = await import('../services/alix/push/AlixPushChannel.js')
+      const ch = getAlixPushChannel()
+      const body = (req.body?.body || '').trim() ||
+        `🧪 *ALIX — teste de push*\nSe você recebeu esta mensagem, o canal está funcional (${new Date().toLocaleString('pt-BR')}).`
+      const result = await ch.send({ body, opts: { tag: 'test', force: true } })
+      return reply.send({ success: true, data: result })
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  // ── POST /api/alix/briefing/run ───────────────────────
+  // Dispara o briefing diário sob demanda (dev/admin).
+  fastify.post('/api/alix/briefing/run', async (_req, reply) => {
+    try {
+      const { getDailyBriefingService } = await import('../services/alix/push/DailyBriefingService.js')
+      const svc = getDailyBriefingService()
+      const result = await svc.sendDailyBriefing()
+      return reply.send({ success: true, data: result })
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  console.log('[ALIX] Rotas registradas: POST /api/alix/chat, GET/POST/DELETE /api/alix/session(s), GET /api/alix/llm/health, GET /api/alix/telemetry/:sessionId, GET /api/alix/push/health, POST /api/alix/push/test, POST /api/alix/briefing/run')
 }

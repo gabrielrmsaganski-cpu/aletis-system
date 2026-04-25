@@ -2,10 +2,28 @@ import Fastify, { FastifyServerOptions } from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
 import multipart from '@fastify/multipart'
+import rateLimit from '@fastify/rate-limit'
+import metricsPlugin from 'fastify-metrics'
+import axios from 'axios'
+import axiosRetry from 'axios-retry'
 import { join, dirname } from 'path'
 import { readdirSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { createRequire } from 'module'
+
+// Retry global no axios — fontes externas (BCB/CEPEA/INMET/IBGE/etc.) ocasionalmente
+// retornam 429/503/timeout. Sem retry, um spike marca a fonte como offline.
+// 2 retries com backoff exponencial atende a maioria dos casos transientes.
+axiosRetry(axios, {
+  retries: 2,
+  retryDelay: axiosRetry.exponentialDelay,
+  retryCondition: (error) => {
+    if (axiosRetry.isNetworkOrIdempotentRequestError(error)) return true
+    const code = error.response?.status
+    return code === 429 || code === 502 || code === 503 || code === 504
+  },
+  shouldResetTimeout: true,
+})
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -13,6 +31,17 @@ const require = createRequire(import.meta.url)
 
 const PORT = Number(process.env.PORT) || 3001
 const HOST = process.env.HOST || '0.0.0.0'
+
+/** Trace IDs curtos (12 chars URL-safe) — alternativa leve ao UUID v4. */
+function cryptoRandomId(): string {
+  const bytes = new Uint8Array(9)
+  if (typeof globalThis.crypto?.getRandomValues === 'function') {
+    globalThis.crypto.getRandomValues(bytes)
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256)
+  }
+  return Buffer.from(bytes).toString('base64url')
+}
 
 /** Probe for pino-pretty — optional dev dependency */
 function buildLoggerOptions(): FastifyServerOptions['logger'] {
@@ -30,14 +59,89 @@ function buildLoggerOptions(): FastifyServerOptions['logger'] {
 }
 
 async function buildApp() {
-  const fastify = Fastify({ logger: buildLoggerOptions() })
+  const fastify = Fastify({
+    logger: buildLoggerOptions(),
+    // Trace ID por request: aceita `x-trace-id` do client (front, gateway,
+    // outro service) APENAS se passar na regex de segurança; senão gera um
+    // próprio. NÃO usamos `requestIdHeader` do Fastify — ele lê o header
+    // sem validar e abriria injection no log/response.
+    genReqId(req) {
+      const headerId = (req.headers['x-trace-id'] || req.headers['x-request-id']) as string | undefined
+      if (typeof headerId === 'string' && /^[A-Za-z0-9_-]{6,128}$/.test(headerId)) return headerId
+      return cryptoRandomId()
+    },
+    requestIdLogLabel: 'traceId',
+  })
+
+  // Eco do trace-id no response para o cliente correlacionar.
+  fastify.addHook('onSend', async (request, reply) => {
+    reply.header('x-trace-id', request.id)
+  })
 
   // --- CORS ---
-  await fastify.register(cors, { origin: true, credentials: true })
+  // Whitelist via env (CORS_ALLOWED_ORIGINS=https://app.aletis.com.br,https://aletis.com.br).
+  // Em dev, sem env: permite tudo. Em prod sem env: erro claro (nunca abre por padrão).
+  const corsEnv = process.env.CORS_ALLOWED_ORIGINS?.trim()
+  const isProd = process.env.NODE_ENV === 'production'
+  let corsOrigin: boolean | string[] | RegExp[]
+  if (corsEnv) {
+    corsOrigin = corsEnv.split(',').map((o) => o.trim()).filter(Boolean)
+  } else if (isProd) {
+    throw new Error(
+      '[ALETIS] CORS_ALLOWED_ORIGINS é obrigatório em produção (ex: "https://app.aletis.com.br,https://aletis.com.br").'
+    )
+  } else {
+    corsOrigin = true // dev: aberto
+    fastify.log.warn('[ALETIS] CORS aberto (dev). Em prod use CORS_ALLOWED_ORIGINS.')
+  }
+  await fastify.register(cors, { origin: corsOrigin, credentials: true })
+
+  // --- Rate-limit global (proteção básica contra abuso) ---
+  // 300 req/min por IP no global; rotas pesadas (ALIX/Foundry) configuram
+  // limites mais restritivos via opção rateLimit no próprio handler.
+  await fastify.register(rateLimit, {
+    global: true,
+    max: Number(process.env.RATE_LIMIT_MAX ?? 300),
+    timeWindow: process.env.RATE_LIMIT_WINDOW ?? '1 minute',
+    allowList: ['127.0.0.1', '::1'],
+    cache: 10_000,
+    errorResponseBuilder: (_req, ctx) => ({
+      success: false,
+      error: `Limite de requisições excedido (${ctx.max}/${ctx.after}). Aguarde e tente novamente.`,
+      code: 'RATE_LIMIT_EXCEEDED',
+      statusCode: 429,
+      retryAfter: Math.ceil(ctx.ttl / 1000),
+    }),
+  })
+
+  // --- Métricas Prometheus em /metrics ---
+  // fastify-metrics expõe req duration, count, status code, route, e métricas
+  // default do prom-client (cpu, mem, gc, event-loop). Default endpoint /metrics.
+  await fastify.register(metricsPlugin, {
+    endpoint: '/metrics',
+    routeMetrics: {
+      enabled: true,
+      registeredRoutesOnly: false,
+    },
+    defaultMetrics: { enabled: true },
+  })
 
   // --- JWT (Portal do Cliente) ---
+  // Em produção, JWT_SECRET é OBRIGATÓRIO (sem fallback hardcoded — risco de
+  // forjar tokens). Em dev/test, cai num secret default avisando o operador.
+  const jwtSecret = process.env.JWT_SECRET
+  if (!jwtSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        '[ALETIS] JWT_SECRET é obrigatório em produção. Configure-o no .env ou no provedor de secrets.'
+      )
+    }
+    fastify.log.warn(
+      '[ALETIS] JWT_SECRET não setado — usando secret default DEV. Não use em produção.'
+    )
+  }
   await fastify.register(jwt, {
-    secret: process.env.JWT_SECRET || 'aletis-portal-dev-secret-change-me-in-prod',
+    secret: jwtSecret || 'aletis-portal-dev-secret-change-me-in-prod',
     sign: { expiresIn: '12h' },
   })
 
@@ -129,9 +233,45 @@ async function start(): Promise<void> {
   try {
     await app.listen({ port: PORT, host: HOST })
     app.log.info(`ALETIS API server running on http://${HOST}:${PORT}`)
-    app.log.info('Routes registered:')
-    const routes = app.printRoutes()
-    console.log(routes)
+    // printRoutes() é caro e polui logs em produção (Pino estruturado).
+    // Em prod só logamos o número de rotas; em dev mostramos a árvore.
+    if (process.env.NODE_ENV === 'production') {
+      app.log.info(`Routes registered (count): ${app.printRoutes().split('\n').filter(Boolean).length}`)
+    } else {
+      app.log.info('Routes registered:')
+      const routes = app.printRoutes()
+      console.log(routes)
+    }
+
+    // Hidratação/seed do Map de clientes a partir do Postgres
+    // (ALETIS_PG_ENABLED=1):
+    //   - PG tem dados → sobrescreve Map com PG (estado persistido vence)
+    //   - PG vazio → dumpa Map (seed) no PG (one-shot bootstrap)
+    // Best-effort: erro de PG é só log (servidor já está saudável).
+    try {
+      const { hydrateOrSeedClientesPg } = await import('./routes/clientes.js')
+      const r = await hydrateOrSeedClientesPg()
+      if (r.hydrated > 0) {
+        app.log.info(`[ALETIS-PG] ${r.hydrated} cliente(s) hidratado(s) do Postgres.`)
+      } else if (r.seeded > 0) {
+        app.log.info(`[ALETIS-PG] PG vazio — semeado com ${r.seeded} cliente(s) do seed em memória.`)
+      }
+    } catch (err) {
+      app.log.warn({ err }, '[ALETIS-PG] hydrate/seed cliente falhou — seguindo com Map em memória.')
+    }
+
+    // Mesmo padrão para propostas (legacy + inteligente).
+    try {
+      const { hydrateOrSeedPropostasPg } = await import('./routes/propostas.js')
+      const r = await hydrateOrSeedPropostasPg()
+      if (r.hydrated > 0) {
+        app.log.info(`[ALETIS-PG] ${r.hydrated} proposta(s) hidratada(s) do Postgres.`)
+      } else if (r.seeded > 0) {
+        app.log.info(`[ALETIS-PG] PG vazio — semeado com ${r.seeded} proposta(s) do seed em memória.`)
+      }
+    } catch (err) {
+      app.log.warn({ err }, '[ALETIS-PG] hydrate/seed proposta falhou — seguindo com Map em memória.')
+    }
 
     // Alix Insano F8 — ProactiveService (ingest + insights)
     if ((process.env.ALIX_PROACTIVE_ENABLED ?? 'true').toLowerCase() !== 'false') {
@@ -166,8 +306,11 @@ async function start(): Promise<void> {
         }
       }
 
-      setTimeout(() => void runProbe(), 15_000)
-      setInterval(() => void runProbe(), 10 * 60_000)
+      // .unref() em ambos: timers de probe não impedem o processo de
+      // fechar limpo (testes, SIGTERM em prod). Sem isso, Node fica
+      // preso no event loop até o próximo fire.
+      setTimeout(() => void runProbe(), 15_000).unref()
+      setInterval(() => void runProbe(), 10 * 60_000).unref()
     } catch (err) {
       app.log.warn({ err }, '[Fontes] Não foi possível agendar sondagens periódicas')
     }
@@ -177,6 +320,13 @@ async function start(): Promise<void> {
   }
 }
 
-start()
+// Só chama start() quando esse arquivo é o entrypoint (dev/prod), não quando
+// importado por testes (Vitest faz `await import(...)` para usar buildApp).
+const isMain =
+  typeof process.argv[1] === 'string' &&
+  import.meta.url === `file://${process.argv[1]}`
+if (isMain || process.env.ALETIS_FORCE_START === '1') {
+  start()
+}
 
 export { buildApp }

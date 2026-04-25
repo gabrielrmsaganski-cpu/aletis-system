@@ -16,7 +16,12 @@ async function main() {
   console.log('[ingest:dou] Concluído:', result);
   console.log(`  Atos varridos: ${result.scanned}`);
   console.log(`  Atos com match agro+crise: ${result.agroMatched}`);
+  console.log(`  Atos com documento extraído: ${result.withDocs}`);
+  console.log(`  Detalhes buscados no 2º passe: ${result.enrichedByDetail}`);
   console.log(`  Leads novos (CPF/CNPJ): ${result.newLeads}`);
+  if (Object.keys(result.discardReasons).length > 0) {
+    console.log('  Descartes por etapa:', result.discardReasons);
+  }
 }
 
 main().catch(err => {
