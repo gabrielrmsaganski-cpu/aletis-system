@@ -6,6 +6,7 @@
  */
 import React from 'react'
 import { Loader2 } from 'lucide-react'
+import BrandWatermark from './BrandWatermark'
 
 // ────────────────────────────────────────────────────────────
 // Formatters (pt-BR, tabular-friendly)
@@ -347,28 +348,45 @@ export function PageHero({
   children?: React.ReactNode
 }) {
   return (
-    <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-aletis-verde via-aletis-verde-escuro to-[#06281c] text-white shadow-[0_30px_60px_-20px_rgba(6,40,28,0.55)]">
+    <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-aletis-verde via-aletis-verde-escuro to-[#1d3024] text-aletis-cream shadow-brand-lg">
       <div
-        className="absolute inset-0 opacity-[0.12] pointer-events-none"
+        className="absolute inset-0 opacity-[0.16] pointer-events-none"
         style={{
           backgroundImage:
-            'radial-gradient(circle at 12% 20%, #C9A84C 0%, transparent 45%), radial-gradient(circle at 92% 85%, #2A8F64 0%, transparent 45%)',
+            'radial-gradient(circle at 12% 20%, #cb9d52 0%, transparent 45%), radial-gradient(circle at 92% 85%, #b2bda1 0%, transparent 45%), url(/brand/pattern/repetidor.png)',
+          backgroundSize: 'auto, auto, 360px',
+          backgroundBlendMode: 'normal, normal, soft-light',
+          backgroundRepeat: 'no-repeat, no-repeat, repeat',
         }}
+      />
+      {/* Watermark do símbolo bracket-A — assinatura ornamental do hero */}
+      <BrandWatermark
+        size={520}
+        tone="cream"
+        opacity={0.06}
+        className="absolute -right-24 -bottom-32 hidden md:block"
+        rotate={-8}
+      />
+      <BrandWatermark
+        size={180}
+        tone="gold"
+        opacity={0.09}
+        className="absolute right-10 -top-6 hidden lg:block"
       />
       <div className="relative px-6 py-7 lg:px-10 lg:py-9 space-y-7">
         <header className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-6 items-start">
           <div className="min-w-0">
             {eyebrow && (
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-aletis-dourado/15 border border-aletis-dourado/30 text-aletis-dourado text-[10.5px] font-semibold uppercase tracking-[0.16em]">
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-aletis-gold/18 border border-aletis-gold/40 text-aletis-gold text-[10.5px] font-display font-semibold uppercase tracking-[0.18em]">
                 {EyebrowIcon && <EyebrowIcon size={12} />}
                 {eyebrow}
               </span>
             )}
-            <h1 className="mt-3 font-display text-[28px] lg:text-[36px] font-bold leading-[1.1] tracking-tight">
+            <h1 className="mt-3 font-display text-[28px] lg:text-[38px] font-bold leading-[1.05] tracking-[0.005em] text-aletis-cream">
               {title}
             </h1>
             {description && (
-              <p className="mt-2 text-white/70 text-sm lg:text-[13.5px] max-w-2xl leading-relaxed">
+              <p className="mt-2 font-body text-aletis-sage-claro/85 text-sm lg:text-[13.5px] max-w-2xl leading-relaxed">
                 {description}
               </p>
             )}

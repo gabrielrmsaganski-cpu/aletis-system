@@ -21,6 +21,7 @@ import {
   TOOL_CATALOG,
   type ToolEntry,
 } from '../../navigation/toolCatalog'
+import BrandMark from './BrandMark'
 
 const RECENT_KEY = 'aletis:palette:recent'
 const RECENT_MAX = 5
@@ -171,6 +172,23 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
           flex flex-col max-h-[75vh]
         "
       >
+        {/* Brand header — assinatura ALETIS na abertura da paleta */}
+        <div
+          className="px-5 py-3.5 border-b border-aletis-cream-escuro/60 flex items-center justify-between"
+          style={{
+            backgroundImage:
+              'linear-gradient(180deg, rgba(23,37,27,0.96) 0%, rgba(13,22,17,0.98) 100%), url(/brand/pattern/repetidor.png)',
+            backgroundSize: 'auto, 240px',
+            backgroundBlendMode: 'normal, soft-light',
+          }}
+        >
+          <BrandMark variant="full" tone="cream" size={28} />
+          <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-display font-semibold tracking-[0.18em] uppercase text-aletis-gold/85">
+            <Command size={11} />
+            Paleta de comandos
+          </span>
+        </div>
+
         {/* Search bar */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-aletis-borda dark:border-white/10">
           <Search size={18} className="text-aletis-grafite-medio dark:text-white/40 flex-shrink-0" />

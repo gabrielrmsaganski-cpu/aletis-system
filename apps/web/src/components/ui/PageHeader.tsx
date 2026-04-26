@@ -13,6 +13,7 @@
 import type { ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import Breadcrumbs from './Breadcrumbs'
+import { BrandSymbol } from './BrandMark'
 import { CATEGORIES, getToolByRoute } from '../../navigation/toolCatalog'
 
 export interface PageHeaderProps {
@@ -38,26 +39,35 @@ export default function PageHeader({
     <header className={`mb-8 ${className}`}>
       {!hideBreadcrumbs && <Breadcrumbs className="mb-3" />}
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div className="max-w-3xl">
-          {eyebrow && (
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-[10px] font-semibold tracking-[0.24em] uppercase text-aletis-dourado-escuro">
-                {eyebrow}
-              </span>
-              <span
-                className="h-px flex-1 max-w-[80px] bg-gradient-to-r from-aletis-dourado/60 to-transparent"
-                aria-hidden="true"
-              />
-            </div>
-          )}
-          <h1 className="font-display text-3xl lg:text-[38px] leading-[1.1] tracking-tight text-aletis-grafite-escuro dark:text-white">
-            {title}
-          </h1>
-          {description && (
-            <p className="mt-2.5 text-[14.5px] leading-relaxed text-aletis-grafite-medio dark:text-white/60">
-              {description}
-            </p>
-          )}
+        <div className="max-w-3xl flex items-start gap-4">
+          {/* Selo bracket-A à esquerda — assinatura visual de seção */}
+          <span
+            aria-hidden="true"
+            className="hidden md:inline-flex shrink-0 mt-1 w-12 h-12 rounded-xl border border-aletis-cream-escuro bg-aletis-cream-papel items-center justify-center shadow-brand-sm"
+          >
+            <BrandSymbol tone="verde" size={28} />
+          </span>
+          <div className="min-w-0">
+            {eyebrow && (
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-[10px] font-display font-semibold tracking-[0.24em] uppercase text-aletis-gold-escuro">
+                  {eyebrow}
+                </span>
+                <span
+                  className="h-px flex-1 max-w-[80px] bg-gradient-to-r from-aletis-gold/60 to-transparent"
+                  aria-hidden="true"
+                />
+              </div>
+            )}
+            <h1 className="font-display text-3xl lg:text-[38px] leading-[1.05] tracking-tight text-aletis-verde dark:text-aletis-cream">
+              {title}
+            </h1>
+            {description && (
+              <p className="mt-2.5 font-body text-[14px] leading-relaxed text-aletis-verde-medio dark:text-aletis-sage">
+                {description}
+              </p>
+            )}
+          </div>
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
