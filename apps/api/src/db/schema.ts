@@ -290,8 +290,43 @@ export const financeiroLancamento = pgTable(
   }),
 )
 
+/* ─────────────────────────────────────────────────────────────
+ * 12. alix_memory — memória estruturada por cliente (proativa)
+ * ──────────────────────────────────────────────────────────── */
+export const alixMemory = pgTable('alix_memory', {
+  clienteId: text('cliente_id').primaryKey(),
+  clienteNome: text('cliente_nome').notNull(),
+  atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  payload: jsonb('payload').notNull(), // MemoriaCliente completo
+})
+
+/* ─────────────────────────────────────────────────────────────
+ * 13. alix_insight — insights diários da Alix (append-only por dia)
+ * ──────────────────────────────────────────────────────────── */
+export const alixInsight = pgTable(
+  'alix_insight',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    dia: varchar('dia', { length: 10 }).notNull(), // YYYY-MM-DD
+    clienteId: text('cliente_id'),
+    tipo: text('tipo').notNull(), // 'oportunidade'|'risco'|'alerta'|'briefing'|'outro'
+    severidade: text('severidade'), // 'info'|'atencao'|'critico'
+    titulo: text('titulo').notNull(),
+    detalhe: text('detalhe'),
+    payload: jsonb('payload').notNull(),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    diaIdx: index('alix_insight_dia_idx').on(t.dia),
+    clienteIdx: index('alix_insight_cliente_idx').on(t.clienteId, t.dia),
+    tipoIdx: index('alix_insight_tipo_idx').on(t.tipo),
+  }),
+)
+
 export type Cliente = typeof cliente.$inferSelect
 export type ClienteInsert = typeof cliente.$inferInsert
+export type AlixMemoryRow = typeof alixMemory.$inferSelect
+export type AlixInsightRow = typeof alixInsight.$inferSelect
 export type Dossie = typeof dossie.$inferSelect
 export type Proposta = typeof proposta.$inferSelect
 export type LeadPgfn = typeof leadPgfn.$inferSelect

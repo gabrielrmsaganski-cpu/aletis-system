@@ -296,6 +296,18 @@ export class AlixMemoryService {
 
     const fp = filePathFor(safeId)
     await fs.writeFile(fp, serializar(merged), 'utf-8')
+
+    // Wave-PG-14: dual-write best-effort no Postgres.
+    void (async () => {
+      try {
+        const repo = await import('../../../db/AlixMemoryRepository.js')
+        await repo.upsertAlixMemory(merged as unknown as Parameters<typeof repo.upsertAlixMemory>[0])
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[AlixMemoryService.upsert] dual-write PG falhou:', (err as Error).message)
+      }
+    })()
+
     return merged
   }
 
