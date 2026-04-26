@@ -296,6 +296,155 @@ export async function financeiroCounts(): Promise<{
   return out
 }
 
+/* ── Queries analíticas (SQL agregadas) ──────────────────── */
+
+/**
+ * Margem por cliente (SQL): soma receitas vinculadas a cliente
+ * (proposta_id OU cliente_cpf_cnpj) menos despesas com clienteVinculo
+ * no mesmo CPF/CNPJ. Filtros opcionais por ano (sobre competencia).
+ */
+export async function margemPorClienteSql(opts: {
+  ano?: number
+  limit?: number
+}): Promise<Array<{ clienteCpfCnpj: string; clienteNome: string | null; receitas: number; despesas: number; margem: number }>> {
+  if (!isPgEnabled()) return []
+  try {
+    const db = getDb()
+    const limit = Math.min(Math.max(1, opts.limit ?? 20), 200)
+    const yearFilter = opts.ano ? sql`AND substring(competencia, 1, 4) = ${String(opts.ano)}` : sql``
+    const result = await db.execute<{ cpfcnpj: string; nome: string | null; receitas: string; despesas: string }>(
+      sql`
+        WITH r AS (
+          SELECT cliente_cpf_cnpj AS cpfcnpj,
+                 MAX(cliente_nome) AS nome,
+                 COALESCE(SUM(valor_liquido), 0)::text AS total
+          FROM financeiro_receita
+          WHERE cliente_cpf_cnpj IS NOT NULL ${yearFilter}
+          GROUP BY cliente_cpf_cnpj
+        ),
+        d AS (
+          SELECT cliente_vinculo_cpf_cnpj AS cpfcnpj,
+                 COALESCE(SUM(valor), 0)::text AS total
+          FROM financeiro_despesa
+          WHERE cliente_vinculo_cpf_cnpj IS NOT NULL ${yearFilter}
+          GROUP BY cliente_vinculo_cpf_cnpj
+        )
+        SELECT
+          COALESCE(r.cpfcnpj, d.cpfcnpj) AS cpfcnpj,
+          r.nome,
+          COALESCE(r.total, '0') AS receitas,
+          COALESCE(d.total, '0') AS despesas
+        FROM r
+        FULL OUTER JOIN d ON r.cpfcnpj = d.cpfcnpj
+        ORDER BY (COALESCE(r.total::numeric, 0) - COALESCE(d.total::numeric, 0)) DESC
+        LIMIT ${limit}
+      `,
+    )
+    const rows = (result as unknown as { rows?: Array<{ cpfcnpj: string; nome: string | null; receitas: string; despesas: string }> }).rows
+      ?? (result as unknown as Array<{ cpfcnpj: string; nome: string | null; receitas: string; despesas: string }>)
+    return (rows ?? []).map((r) => ({
+      clienteCpfCnpj: r.cpfcnpj,
+      clienteNome: r.nome,
+      receitas: Number(r.receitas) || 0,
+      despesas: Number(r.despesas) || 0,
+      margem: (Number(r.receitas) || 0) - (Number(r.despesas) || 0),
+    }))
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[FinanceiroRepo.margemPorClienteSql] fail:', (err as Error).message)
+    return []
+  }
+}
+
+/**
+ * Fluxo por competência (SQL): agrega receitas/despesas/impostos por
+ * YYYY-MM no intervalo informado.
+ */
+export async function fluxoCompetenciaSql(opts: {
+  desde?: string
+  ate?: string
+}): Promise<Array<{ competencia: string; receitas: number; despesas: number; impostos: number; saldo: number }>> {
+  if (!isPgEnabled()) return []
+  try {
+    const db = getDb()
+    const desde = opts.desde ?? '2024-01'
+    const ate = opts.ate ?? new Date().toISOString().slice(0, 7)
+    const result = await db.execute<{ competencia: string; receitas: string; despesas: string; impostos: string }>(
+      sql`
+        WITH meses AS (
+          SELECT competencia FROM financeiro_receita
+          WHERE competencia BETWEEN ${desde} AND ${ate}
+          UNION SELECT competencia FROM financeiro_despesa
+          WHERE competencia BETWEEN ${desde} AND ${ate}
+          UNION SELECT competencia FROM financeiro_imposto
+          WHERE competencia BETWEEN ${desde} AND ${ate}
+        )
+        SELECT
+          m.competencia,
+          COALESCE((SELECT SUM(valor_liquido) FROM financeiro_receita WHERE competencia = m.competencia), 0)::text AS receitas,
+          COALESCE((SELECT SUM(valor) FROM financeiro_despesa WHERE competencia = m.competencia), 0)::text AS despesas,
+          COALESCE((SELECT SUM(valor) FROM financeiro_imposto WHERE competencia = m.competencia), 0)::text AS impostos
+        FROM meses m
+        ORDER BY m.competencia ASC
+      `,
+    )
+    const rows = (result as unknown as { rows?: Array<{ competencia: string; receitas: string; despesas: string; impostos: string }> }).rows
+      ?? (result as unknown as Array<{ competencia: string; receitas: string; despesas: string; impostos: string }>)
+    return (rows ?? []).map((r) => {
+      const rec = Number(r.receitas) || 0
+      const des = Number(r.despesas) || 0
+      const imp = Number(r.impostos) || 0
+      return {
+        competencia: r.competencia,
+        receitas: rec,
+        despesas: des,
+        impostos: imp,
+        saldo: rec - des - imp,
+      }
+    })
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[FinanceiroRepo.fluxoCompetenciaSql] fail:', (err as Error).message)
+    return []
+  }
+}
+
+/** Top categorias de despesa por soma de valor (no mês ou geral). */
+export async function topCategoriasSql(opts: {
+  competencia?: string
+  limit?: number
+}): Promise<Array<{ categoria: string; total: number; n: number }>> {
+  if (!isPgEnabled()) return []
+  try {
+    const db = getDb()
+    const limit = Math.min(Math.max(1, opts.limit ?? 10), 50)
+    const compFilter = opts.competencia ? sql`WHERE competencia = ${opts.competencia}` : sql``
+    const result = await db.execute<{ categoria: string; total: string; n: string }>(
+      sql`
+        SELECT categoria,
+               COALESCE(SUM(valor), 0)::text AS total,
+               COUNT(*)::text AS n
+        FROM financeiro_despesa
+        ${compFilter}
+        GROUP BY categoria
+        ORDER BY SUM(valor) DESC NULLS LAST
+        LIMIT ${limit}
+      `,
+    )
+    const rows = (result as unknown as { rows?: Array<{ categoria: string; total: string; n: string }> }).rows
+      ?? (result as unknown as Array<{ categoria: string; total: string; n: string }>)
+    return (rows ?? []).map((r) => ({
+      categoria: r.categoria,
+      total: Number(r.total) || 0,
+      n: Number(r.n) || 0,
+    }))
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[FinanceiroRepo.topCategoriasSql] fail:', (err as Error).message)
+    return []
+  }
+}
+
 /* ── Delete (cascata best-effort no caller) ──────────────── */
 export async function deleteReceita(id: string): Promise<void> {
   if (!isPgEnabled()) return

@@ -476,4 +476,42 @@ export default async function (fastify: FastifyInstance) {
     reply.header('Content-Disposition', `attachment; filename="fechamento-${competencia}.pdf"`)
     return reply.send(buf)
   })
+
+  /* ════════════════ SQL QUERIES (Wave-PG-13) ════════════════
+   * Endpoints indexados que aproveitam financeiro_* no PG. Mais
+   * rápidos que filtros em RAM e permitem agregações analíticas.
+   */
+
+  /** Margem por cliente (SQL). Soma receitas vinculadas (proposta_id ou
+   * cliente_cpf_cnpj) menos despesas com clienteVinculo no mesmo CPF/CNPJ.
+   * Retorna lista ordenada por margem desc. */
+  fastify.get('/api/financeiro/sql/margem-cliente', async (req: FastifyRequest) => {
+    const { ano, limit } = req.query as { ano?: string; limit?: string }
+    const repo = await import('../db/FinanceiroRepository.js')
+    const data = await repo.margemPorClienteSql({
+      ano: ano ? Number(ano) : undefined,
+      limit: limit ? Number(limit) : 20,
+    })
+    return ok(data)
+  })
+
+  /** Fluxo por competência (SQL). Agrega receitas/despesas/impostos por
+   * YYYY-MM no PG e devolve série pra plotar gráficos sem carregar tudo. */
+  fastify.get('/api/financeiro/sql/fluxo-competencia', async (req: FastifyRequest) => {
+    const { desde, ate } = req.query as { desde?: string; ate?: string }
+    const repo = await import('../db/FinanceiroRepository.js')
+    const data = await repo.fluxoCompetenciaSql({ desde, ate })
+    return ok(data)
+  })
+
+  /** Top categorias de despesa por valor (SQL). */
+  fastify.get('/api/financeiro/sql/top-categorias', async (req: FastifyRequest) => {
+    const { competencia, limit } = req.query as { competencia?: string; limit?: string }
+    const repo = await import('../db/FinanceiroRepository.js')
+    const data = await repo.topCategoriasSql({
+      competencia,
+      limit: limit ? Number(limit) : 10,
+    })
+    return ok(data)
+  })
 }
