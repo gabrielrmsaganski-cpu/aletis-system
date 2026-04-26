@@ -672,7 +672,30 @@ export class DataSourceManager {
     }
     await Promise.all(workers);
 
+    // Espelha o snapshot atual no PG (best-effort) — Wave-PG-11.
+    // Cada estado pós-probe vira upsert; transições de status disparam
+    // audit_log automaticamente via FonteStatusRepository.
+    void this.persistFontesPg();
+
     return { ...summary, durationMs: Date.now() - started };
+  }
+
+  /** Wave-PG-11: dump do registry para `fonte_status` no Postgres. */
+  private async persistFontesPg(): Promise<void> {
+    try {
+      const { upsertFontesBatch } = await import('../db/FonteStatusRepository.js');
+      const rows = Array.from(this.registry.values()).map((entry) => ({
+        nome: entry.nome,
+        status: (entry.status ?? 'offline') as 'online' | 'offline' | 'degraded',
+        ultimaAtualizacao: entry.ultimaAtualizacao ? new Date(entry.ultimaAtualizacao) : undefined,
+        latenciaMs: entry.latenciaMs ?? undefined,
+        ultimoErro: entry.ultimoErro ?? undefined,
+        erros24h: entry.erros24h ?? 0,
+      }));
+      await upsertFontesBatch(rows);
+    } catch {
+      /* best-effort */
+    }
   }
 
   // ── Summary for Dashboard ────────────────────────────────
