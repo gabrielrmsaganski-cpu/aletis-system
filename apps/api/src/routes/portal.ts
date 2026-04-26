@@ -812,6 +812,105 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
+  /* ──────────────────────────────────────────────────────────────────────
+   *  Endpoints admin (consultor) — CRUD de pendências do cliente.
+   *  Sem autenticação adicional aqui (mesmo padrão das outras rotas
+   *  /api/clientes/:id), assumindo proteção upstream do dashboard
+   *  do consultor.
+   * ────────────────────────────────────────────────────────────────────── */
+  fastify.get('/api/clientes/:id/portal/pendencias', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    if (!clientes.get(id)) return reply.status(404).send({ success: false, error: 'Cliente não encontrado' })
+    return { success: true, data: listarPendencias(id) }
+  })
+
+  fastify.post('/api/clientes/:id/portal/pendencias', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    if (!clientes.get(id)) return reply.status(404).send({ success: false, error: 'Cliente não encontrado' })
+    const body = req.body as {
+      titulo?: string
+      descricao?: string
+      categoria?: 'fiscal' | 'contrato' | 'identidade' | 'patrimonio' | 'agro' | 'outros'
+      obrigatorio?: boolean
+      solicitadoPor?: string
+    } | undefined
+    const titulo = body?.titulo?.trim()
+    if (!titulo) return reply.status(400).send({ success: false, error: 'titulo obrigatório' })
+    const p = criarPendencia({
+      clienteId: id,
+      titulo,
+      descricao: body?.descricao,
+      categoria: body?.categoria || 'outros',
+      obrigatorio: body?.obrigatorio !== false,
+      solicitadoPor: body?.solicitadoPor,
+    })
+    registrarEvento({ clienteId: id, tipo: 'pendencia_criada', canal: 'consultor', detalhes: { pendenciaId: p.id, titulo } })
+    return reply.status(201).send({ success: true, data: p })
+  })
+
+  fastify.patch('/api/clientes/:id/portal/pendencias/:pid', async (req, reply) => {
+    const { id, pid } = req.params as { id: string; pid: string }
+    const body = req.body as {
+      status?: 'pendente' | 'enviado' | 'aprovado' | 'rejeitado'
+      observacao?: string
+    } | undefined
+    const upd = atualizarPendencia(id, pid, {
+      status: body?.status,
+      observacao: body?.observacao,
+      revisadoEm: body?.status === 'aprovado' || body?.status === 'rejeitado' ? new Date().toISOString() : undefined,
+    })
+    if (!upd) return reply.status(404).send({ success: false, error: 'Pendência não encontrada' })
+    if (upd.status === 'aprovado' || upd.status === 'rejeitado') {
+      registrarEvento({ clienteId: id, tipo: 'pendencia_resolvida', canal: 'consultor', detalhes: { pendenciaId: pid, status: upd.status } })
+    }
+    return { success: true, data: upd }
+  })
+
+  fastify.delete('/api/clientes/:id/portal/pendencias/:pid', async (req, reply) => {
+    const { id, pid } = req.params as { id: string; pid: string }
+    const ok = removerPendencia(id, pid)
+    if (!ok) return reply.status(404).send({ success: false, error: 'Pendência não encontrada' })
+    return { success: true }
+  })
+
+  /* ── POST /api/clientes/:id/portal/convidar ──────────────────────────
+   * Auto-convite: cria/regera acesso E dispara magic-link via WhatsApp/email.
+   * Substitui o fluxo "consultor copia senha e cola no WhatsApp". */
+  fastify.post('/api/clientes/:id/portal/convidar', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const c = clientes.get(id)
+    if (!c) return reply.status(404).send({ success: false, error: 'Cliente não encontrado' })
+    if (!c.portalAcesso) {
+      return reply.status(400).send({ success: false, error: 'Configure o acesso do portal antes de convidar.' })
+    }
+    const { token } = emitirToken({
+      clienteId: id,
+      tipo: 'magic',
+      canal: c.email ? 'email' : 'whatsapp',
+      metadata: { fluxo: 'convite-consultor' },
+    })
+    const base = resolvePortalBaseUrl(req)
+    const url = `${base}/portal-cliente?magic=${encodeURIComponent(token)}`
+
+    const out = await enviarBoasVindas({
+      destinatario: { email: c.email, whatsapp: c.telefone },
+      nome: c.nome,
+      url,
+      consultor: c.consultor,
+    })
+    registrarEvento({
+      clienteId: id, tipo: 'magic_solicitado', canal: 'consultor',
+      detalhes: { fluxo: 'convite', whatsapp: out.whatsapp, email: out.email },
+    })
+    return {
+      success: true,
+      data: {
+        url,
+        canais: out,
+      },
+    }
+  })
+
   /* ── POST /api/portal/auth/trocar-senha ─────────────────────────────── */
   fastify.post(
     '/api/portal/auth/trocar-senha',
