@@ -16,6 +16,7 @@
     "db:studio": "drizzle-kit studio",
     "db:push": "drizzle-kit push",
     "migrate:leads": "tsx --env-file=../../.env scripts/migrate-leads-to-pg.ts",
+    "migrate:storage": "tsx --env-file=../../.env scripts/migrate-storage-to-pg.ts",
     "ingest:pgfn": "tsx scripts/ingest-pgfn.ts",
     "ingest:sicar": "tsx scripts/ingest-sicar.ts",
     "ingest:dou": "tsx --env-file=../../.env scripts/ingest-dou.ts",
