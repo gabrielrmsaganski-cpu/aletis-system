@@ -19,6 +19,7 @@ import { buildProspeccaoTools } from './tools/prospeccao.js';
 import { safeWrapRegistry } from './tools/safe-handler.js';
 import { buildCalculatorTools } from './tools/calculators.js';
 import { buildCrmReadTools } from './tools/crm-read.js';
+import { buildAlixPowerTools } from './tools/alix-power.js';
 import { buildNewsTools } from './tools/news.js';
 import { buildCalendarioSafraTools } from './tools/calendario-safra.js';
 import { buildOnboardingTools } from './tools/onboarding.js';
@@ -281,6 +282,11 @@ Data de hoje: ${hoje}`;
     // Inventário patrimonial + custo operacional por cultura
     const inv = buildInventarioTools();
     for (const t of inv.tools) { tools.push(t); registry[t.name] = inv.registry[t.name]; }
+
+    // Power tools — CusteioService write, DSCR, simular reestruturação,
+    // contratos, magic-link/pendência/WhatsApp on-demand, extração de docs
+    const pw = buildAlixPowerTools();
+    for (const t of pw.tools) { tools.push(t); registry[t.name] = pw.registry[t.name]; }
 
     // Delegações
     const ctxBase = (): SubAgentContext => ({
