@@ -223,7 +223,7 @@ class MessageErrorBoundary extends React.Component<
       return (
         <div className="text-xs text-amber-700 dark:text-amber-300 italic bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded p-2">
           <div className="font-semibold mb-1">⚠️ mensagem com problema de formatação</div>
-          <div className="whitespace-pre-wrap text-aletis-grafite-escuro dark:text-white/85 font-mono text-[11px]">
+          <div className="whitespace-pre-wrap text-current font-mono text-[11px]">
             {typeof this.props.content === 'string' ? this.props.content.slice(0, 800) : '(sem conteúdo)'}
           </div>
         </div>
@@ -376,7 +376,7 @@ function renderContent(content: string | undefined | null): React.ReactNode {
               {rows.map((r, ri) => (
                 <tr key={ri} className="border-b last:border-b-0 border-aletis-borda/60 dark:border-white/5">
                   {r.map((c, ci) => (
-                    <td key={ci} className="px-3 py-1.5 text-aletis-grafite-escuro dark:text-white/85 align-top">
+                    <td key={ci} className="px-3 py-1.5 text-current align-top">
                       {renderInline(c)}
                     </td>
                   ))}
@@ -402,7 +402,7 @@ function renderContent(content: string | undefined | null): React.ReactNode {
         if (!um && !om) break
         const txt = um ? um[1] : om![1]
         items.push(
-          <li key={`li-${i}`} className="text-aletis-grafite-escuro dark:text-white/85 leading-relaxed">
+          <li key={`li-${i}`} className="text-current leading-relaxed">
             {renderInline(txt)}
           </li>,
         )
@@ -448,7 +448,7 @@ function renderContent(content: string | undefined | null): React.ReactNode {
       i++
     }
     blocks.push(
-      <p key={`p-${key++}`} className="text-aletis-grafite-escuro dark:text-white/85 leading-relaxed">
+      <p key={`p-${key++}`} className="text-current leading-relaxed">
         {paraLines.map((pl, pi) => (
           <React.Fragment key={pi}>
             {pi > 0 && <br />}

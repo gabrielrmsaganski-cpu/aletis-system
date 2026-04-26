@@ -280,7 +280,7 @@ export default function CusteioAgricola() {
       </div>
 
       {/* Lista */}
-      <div className="bg-white dark:bg-white/5 rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-white/5 rounded-xl shadow-sm overflow-x-auto custom-scrollbar">
         {loading ? (
           <div className="p-10 flex items-center justify-center">
             <Loader2 className="animate-spin text-aletis-dourado" size={28} />
@@ -1262,7 +1262,7 @@ function TabCronograma({
         <p className="text-sm text-aletis-grafite-medio dark:text-white/50">Nenhuma parcela.</p>
       )}
       {parcelas.map((p, i) => (
-        <div key={p.id} className="bg-gray-50 dark:bg-white/5 rounded-lg p-3 border border-gray-100 dark:border-white/10 grid grid-cols-[1fr_150px_150px_auto] gap-3 items-end">
+        <div key={p.id} className="bg-gray-50 dark:bg-white/5 rounded-lg p-3 border border-gray-100 dark:border-white/10 grid grid-cols-1 sm:grid-cols-[1fr_150px_150px_auto] gap-3 items-end">
           <Field label="Fase">
             <select
               className={inputCls}

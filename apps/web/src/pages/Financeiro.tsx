@@ -650,7 +650,7 @@ function FinanceiroSqlPanel() {
   const maxSaldo = Math.max(1, ...fluxo.map((f) => Math.abs(f.saldo)))
 
   return (
-    <div className="rounded-xl border border-aletis-borda/60 bg-white shadow-sm overflow-hidden">
+    <div className="rounded-xl border border-aletis-borda/60 bg-white shadow-sm overflow-x-auto custom-scrollbar">
       <button
         onClick={handleToggle}
         className="w-full px-4 py-3 flex items-center justify-between hover:bg-aletis-bege/30 transition-colors"
@@ -1144,7 +1144,7 @@ function ReceitasSection({ competencia, showToast }: { competencia: string; show
         <input ref={fileRef} type="file" accept=".xml,.pdf" multiple className="hidden" onChange={(e) => e.target.files && handleUploadNf(e.target.files)} />
       </div>
 
-      <div className="rounded-xl border border-aletis-borda/60 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-xl border border-aletis-borda/60 bg-white shadow-sm overflow-x-auto custom-scrollbar">
         <table className="w-full text-sm">
           <thead className="bg-aletis-bege/50 text-xs uppercase tracking-wide text-aletis-grafite-medio">
             <tr>
@@ -1249,7 +1249,7 @@ function DespesasSection({ competencia, showToast }: { competencia: string; show
         </button>
       </div>
 
-      <div className="rounded-xl border border-aletis-borda/60 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-xl border border-aletis-borda/60 bg-white shadow-sm overflow-x-auto custom-scrollbar">
         <table className="w-full text-sm">
           <thead className="bg-aletis-bege/50 text-xs uppercase tracking-wide text-aletis-grafite-medio">
             <tr>
@@ -1380,7 +1380,7 @@ function ImpostosSection({ competencia, showToast }: { competencia: string; show
         )}
       </div>
 
-      <div className="rounded-xl border border-aletis-borda/60 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-xl border border-aletis-borda/60 bg-white shadow-sm overflow-x-auto custom-scrollbar">
         <table className="w-full text-sm">
           <thead className="bg-aletis-bege/50 text-xs uppercase tracking-wide text-aletis-grafite-medio">
             <tr>
@@ -1633,7 +1633,7 @@ function ExtratosSection({ competencia, showToast }: { competencia: string; show
 
       <ReconciliacaoSugestoes showToast={showToast} onReconciliado={refetch} />
 
-      <div className="rounded-xl border border-aletis-borda/60 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-xl border border-aletis-borda/60 bg-white shadow-sm overflow-x-auto custom-scrollbar">
         <table className="w-full text-sm">
           <thead className="bg-aletis-bege/50 text-xs uppercase tracking-wide text-aletis-grafite-medio">
             <tr>

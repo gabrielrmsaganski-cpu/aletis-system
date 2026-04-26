@@ -126,8 +126,15 @@ export function useConfirmationStream() {
           }),
         )
       } else if (ev.type === 'pending:created' && ev.confirmation) {
-        // Pode ser um pending avulso ou de batch; batch:created também virá
-        setTimeout(() => refreshFromApi(), 300)
+        // Update incremental: se o pending pertence a batch, deixa o
+        // batch:created cuidar; se for avulso, adiciona em `singles`
+        // sem disparar refresh full (evita loop SSE→refresh→SSE).
+        const conf = ev.confirmation
+        if (!conf.batchId) {
+          setSingles((prev) =>
+            prev.some((p) => p.id === conf.id) ? prev : [conf, ...prev],
+          )
+        }
       }
     }
 

@@ -2493,7 +2493,7 @@ export default function ClienteDetalhes() {
             )}
 
             {exposicao.map((e, idx) => (
-              <div key={idx} className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-3 p-3 rounded-lg border border-aletis-borda/50 bg-aletis-bege/20">
+              <div key={idx} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-3 p-3 rounded-lg border border-aletis-borda/50 bg-aletis-bege/20">
                 <input
                   className="input-field py-2 text-sm"
                   placeholder="commodity"
