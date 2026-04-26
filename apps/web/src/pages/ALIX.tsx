@@ -580,6 +580,63 @@ function anyAbortSignal(...signals: AbortSignal[]): AbortSignal {
 }
 
 // ────────────────────────────────────────────────────────────
+// Wave-PG-17: AlixStatsFooter — rodapé da sidebar com stats PG
+// (NPS agregado + confirmations pendentes). Auto-refresh 30s.
+// ────────────────────────────────────────────────────────────
+function AlixStatsFooter() {
+  const [stats, setStats] = useState<{ total: number; positive: number; negative: number; neutral: number } | null>(null)
+  const [pendentes, setPendentes] = useState<number>(0)
+
+  const carregar = useCallback(async () => {
+    try {
+      const [s, p] = await Promise.all([
+        fetch('/api/alix/feedback/stats').then((r) => r.json()).catch(() => null),
+        fetch('/api/alix/confirmations/pendentes').then((r) => r.json()).catch(() => null),
+      ])
+      if (s?.success) setStats(s.data)
+      if (p?.success && Array.isArray(p.data)) setPendentes(p.data.length)
+    } catch { /* swallow */ }
+  }, [])
+
+  useEffect(() => {
+    void carregar()
+    const id = setInterval(() => void carregar(), 30_000)
+    return () => clearInterval(id)
+  }, [carregar])
+
+  if (!stats || stats.total === 0 && pendentes === 0) {
+    // Estado vazio — escondemos o footer pra não poluir.
+    return null
+  }
+
+  const npsPct = stats.total > 0 ? Math.round((stats.positive / stats.total) * 100) : null
+
+  return (
+    <div className="border-t border-aletis-borda px-3 py-2 bg-aletis-bege/30">
+      <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-medio mb-1">PG · Postgres</p>
+      <div className="grid grid-cols-3 gap-1.5 text-[10px]">
+        <div className="text-center">
+          <p className="text-aletis-grafite-claro">NPS</p>
+          <p className="font-semibold text-aletis-grafite-escuro tabular-nums">
+            {npsPct == null ? '—' : `${npsPct}%`}
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="text-aletis-grafite-claro">Feedbacks</p>
+          <p className="font-semibold text-aletis-grafite-escuro tabular-nums">{stats.total}</p>
+        </div>
+        <div className="text-center">
+          <p className="text-aletis-grafite-claro">Pend.</p>
+          <p className={`font-semibold tabular-nums ${pendentes > 0 ? 'text-amber-700' : 'text-aletis-grafite-escuro'}`}>
+            {pendentes}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────
 // Main Component
 // ────────────────────────────────────────────────────────────
 
@@ -1202,6 +1259,8 @@ export default function ALIX() {
               })
             )}
           </div>
+          {/* Wave-PG-17: stats agregados do PG (rodapé da sidebar) */}
+          <AlixStatsFooter />
         </aside>
       )}
 

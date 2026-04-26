@@ -177,8 +177,27 @@ export async function listFeedback(opts?: {
   }
 }
 
-export async function feedbackStats(): Promise<{ total: number; positive: number; negative: number; neutral: number }> {
-  const out = { total: 0, positive: 0, negative: 0, neutral: 0 }
+export interface FeedbackStats {
+  total: number
+  /** Compat: positive/negative/neutral (3 buckets canônicos). */
+  positive: number
+  negative: number
+  neutral: number
+  /** Distribuição completa por rating (qualquer string, mantém ordem desc). */
+  porRating: Array<{ rating: string | null; n: number }>
+}
+
+const POSITIVE_RATINGS = new Set(['positive', 'positivo', 'util', 'útil', 'thumbs-up'])
+const NEGATIVE_RATINGS = new Set(['negative', 'negativo', 'incorreto', 'irrelevante', 'off-tom', 'thumbs-down'])
+
+export async function feedbackStats(): Promise<FeedbackStats> {
+  const out: FeedbackStats = {
+    total: 0,
+    positive: 0,
+    negative: 0,
+    neutral: 0,
+    porRating: [],
+  }
   if (!isPgEnabled()) return out
   try {
     const db = getDb()
@@ -186,11 +205,15 @@ export async function feedbackStats(): Promise<{ total: number; positive: number
       .select({ rating: alixFeedback.rating, n: sql<number>`count(*)::int` })
       .from(alixFeedback)
       .groupBy(alixFeedback.rating)
-    for (const r of rows) {
+    out.porRating = rows
+      .map((r) => ({ rating: r.rating, n: r.n }))
+      .sort((a, b) => b.n - a.n)
+    for (const r of out.porRating) {
       out.total += r.n
-      if (r.rating === 'positive') out.positive = r.n
-      else if (r.rating === 'negative') out.negative = r.n
-      else if (r.rating === 'neutral') out.neutral = r.n
+      const k = (r.rating ?? '').toLowerCase()
+      if (POSITIVE_RATINGS.has(k)) out.positive += r.n
+      else if (NEGATIVE_RATINGS.has(k)) out.negative += r.n
+      else out.neutral += r.n
     }
   } catch {
     /* ignore */

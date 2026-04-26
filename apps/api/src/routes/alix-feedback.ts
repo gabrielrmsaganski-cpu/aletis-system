@@ -53,5 +53,33 @@ export default async function alixFeedbackRoutes(fastify: FastifyInstance): Prom
     return reply.send({ success: true, data: { feedbacks, rankingTools: ranking } })
   })
 
-  console.log('[ALIX] Feedback routes registradas: POST /api/alix/feedback, GET /api/alix/feedback/recent')
+  /**
+   * GET /api/alix/feedback/stats
+   * Wave-PG-17 — agregado de feedback do Postgres (NPS/qualidade Alix).
+   * PG off → shape consistente com totais zerados.
+   */
+  fastify.get('/api/alix/feedback/stats', async (_req, _reply) => {
+    const repo = await import('../db/AlixConfirmationFeedbackRepository.js')
+    const stats = await repo.feedbackStats()
+    return { success: true, data: stats }
+  })
+
+  /**
+   * GET /api/alix/confirmations/pendentes?sessionId=
+   * Lista confirmations PG com status=pending. Permite UI mostrar
+   * "5 ações aguardando aprovação" e pular pra cada batch.
+   */
+  fastify.get('/api/alix/confirmations/pendentes', async (
+    req: FastifyRequest<{ Querystring: { sessionId?: string; limit?: string } }>,
+  ) => {
+    const repo = await import('../db/AlixConfirmationFeedbackRepository.js')
+    const list = await repo.listConfirmations({
+      sessionId: req.query?.sessionId,
+      status: 'pending',
+      limit: Number(req.query?.limit) || 50,
+    })
+    return { success: true, data: list }
+  })
+
+  console.log('[ALIX] Feedback routes registradas: POST /api/alix/feedback, GET /api/alix/feedback/recent + /stats + /confirmations/pendentes')
 }
