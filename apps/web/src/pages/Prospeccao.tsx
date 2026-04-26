@@ -48,6 +48,7 @@ import {
   History,
   Siren,
   RotateCw,
+  Database,
 } from 'lucide-react'
 
 // ────────────────────────────────────────────────────────────
@@ -941,6 +942,9 @@ export default function Prospeccao() {
         onOpen={openLeadByCpf}
         onRefresh={loadHotLeads}
       />
+
+      {/* Wave-PG-12: query rápida via SQL indexado (39k leads PGFN no PG) */}
+      <QuickSqlPanel onOpen={openLeadByCpf} />
 
       {/* Fila persistente de enriquecimento — visível só se tem trabalho ativo */}
       {filaStats && (filaStats.pending + filaStats.running + filaStats.failed > 0) && (
@@ -3711,6 +3715,223 @@ function InfoRow({
       <span className={`text-aletis-grafite-escuro dark:text-white flex-1 ${mono ? 'font-mono text-xs' : ''}`}>
         {value}
       </span>
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────
+// QuickSqlPanel — Wave-PG-12: query indexada nos 39k leads PGFN
+// Filtros simples (UF, score min, dívida range, ajuizado, orderBy) e
+// resultado em até 200 linhas. Aproveita índices do Postgres
+// (lead_pgfn_uf_idx + lead_pgfn_score_idx) — muito mais rápido
+// que filtrar Map em RAM.
+// ────────────────────────────────────────────────────────────
+interface SqlLeadRow {
+  cnpjCpf: string
+  nome: string | null
+  uf: string | null
+  totalDivida: string | null
+  inscricoesCount: number | null
+  ajuizado: boolean
+  agroScore: number | null
+}
+
+function QuickSqlPanel({ onOpen }: { onOpen: (cpfCnpj: string) => void }) {
+  const [uf, setUf] = useState('')
+  const [minDividaMi, setMinDividaMi] = useState('')
+  const [ajuizado, setAjuizado] = useState<'all' | 'true' | 'false'>('all')
+  const [orderBy, setOrderBy] = useState<'divida' | 'score' | 'nome'>('divida')
+  const [limit, setLimit] = useState(50)
+  const [rows, setRows] = useState<SqlLeadRow[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [aviso, setAviso] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+
+  const search = useCallback(async () => {
+    setLoading(true)
+    setAviso(null)
+    try {
+      const params = new URLSearchParams()
+      if (uf) params.set('uf', uf)
+      if (minDividaMi) params.set('minDivida', String(Number(minDividaMi) * 1_000_000))
+      if (ajuizado !== 'all') params.set('ajuizado', ajuizado)
+      params.set('orderBy', orderBy)
+      params.set('limit', String(limit))
+      const r = await fetch(`/api/prospeccao/leads/sql?${params.toString()}`)
+      const j = await r.json()
+      if (!j.success) throw new Error(j.error || 'falha SQL')
+      setRows(j.leads ?? [])
+      setTotal(j.total ?? 0)
+      if (j.aviso) setAviso(j.aviso)
+    } catch (e) {
+      setAviso((e as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }, [uf, minDividaMi, ajuizado, orderBy, limit])
+
+  return (
+    <div className="rounded-2xl border border-aletis-borda dark:border-white/5 bg-white dark:bg-aletis-grafite-escuro shadow-sm overflow-hidden">
+      <button
+        onClick={() => {
+          const next = !open
+          setOpen(next)
+          if (next && rows.length === 0) void search()
+        }}
+        className="w-full px-6 py-4 flex items-center justify-between hover:bg-aletis-bege/30 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <Database size={18} className="text-aletis-verde" />
+          <div className="text-left">
+            <h2 className="font-display text-base font-bold text-aletis-grafite-escuro dark:text-white">
+              Query rápida via SQL (Postgres)
+            </h2>
+            <p className="text-xs text-aletis-grafite-medio dark:text-white/60">
+              Filtros indexados nos 39k leads PGFN — bem mais rápido que filtros em RAM
+            </p>
+          </div>
+        </div>
+        <ChevronRight
+          size={16}
+          className={`text-aletis-grafite-claro transition-transform ${open ? 'rotate-90' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="px-6 pb-6 space-y-4 border-t border-aletis-borda/50">
+          <div className="pt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
+            <label className="block text-xs">
+              <span className="text-aletis-grafite-medio dark:text-white/60">UF</span>
+              <input
+                type="text"
+                value={uf}
+                maxLength={2}
+                onChange={(e) => setUf(e.target.value.toUpperCase())}
+                placeholder="PR"
+                className="mt-1 w-full px-2 py-1.5 rounded border border-aletis-borda bg-white text-sm"
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="text-aletis-grafite-medio dark:text-white/60">Dívida mín (R$ mi)</span>
+              <input
+                type="number"
+                value={minDividaMi}
+                onChange={(e) => setMinDividaMi(e.target.value)}
+                placeholder="50"
+                className="mt-1 w-full px-2 py-1.5 rounded border border-aletis-borda bg-white text-sm"
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="text-aletis-grafite-medio dark:text-white/60">Ajuizado</span>
+              <select
+                value={ajuizado}
+                onChange={(e) => setAjuizado(e.target.value as 'all' | 'true' | 'false')}
+                className="mt-1 w-full px-2 py-1.5 rounded border border-aletis-borda bg-white text-sm"
+              >
+                <option value="all">Todos</option>
+                <option value="true">Sim</option>
+                <option value="false">Não</option>
+              </select>
+            </label>
+            <label className="block text-xs">
+              <span className="text-aletis-grafite-medio dark:text-white/60">Ordenar por</span>
+              <select
+                value={orderBy}
+                onChange={(e) => setOrderBy(e.target.value as 'divida' | 'score' | 'nome')}
+                className="mt-1 w-full px-2 py-1.5 rounded border border-aletis-borda bg-white text-sm"
+              >
+                <option value="divida">Dívida (maior primeiro)</option>
+                <option value="score">Score agro (maior primeiro)</option>
+                <option value="nome">Nome (alfabético)</option>
+              </select>
+            </label>
+            <label className="block text-xs">
+              <span className="text-aletis-grafite-medio dark:text-white/60">Limite</span>
+              <select
+                value={limit}
+                onChange={(e) => setLimit(Number(e.target.value))}
+                className="mt-1 w-full px-2 py-1.5 rounded border border-aletis-borda bg-white text-sm"
+              >
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+            </label>
+          </div>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={search}
+              disabled={loading}
+              className="px-4 py-2 rounded-lg bg-aletis-verde text-white text-xs font-semibold hover:bg-aletis-verde-claro transition disabled:opacity-50"
+            >
+              {loading ? 'Consultando…' : 'Buscar via PG'}
+            </button>
+            <p className="text-xs text-aletis-grafite-claro tabular-nums">
+              {total > 0 ? `${total.toLocaleString('pt-BR')} leads (mostrando ${rows.length})` : ''}
+            </p>
+          </div>
+          {aviso && (
+            <p className="text-xs text-amber-700 italic">{aviso}</p>
+          )}
+          {rows.length > 0 && (
+            <div className="overflow-x-auto rounded-lg border border-aletis-borda/50 bg-aletis-bege/30">
+              <table className="w-full text-sm">
+                <thead className="bg-aletis-grafite-escuro/5 text-[10px] uppercase tracking-wider text-aletis-grafite-medio">
+                  <tr>
+                    <th className="text-left px-3 py-2">Nome</th>
+                    <th className="text-left px-3 py-2">CNPJ/CPF</th>
+                    <th className="text-left px-3 py-2">UF</th>
+                    <th className="text-right px-3 py-2">Dívida (R$)</th>
+                    <th className="text-center px-3 py-2">Insc.</th>
+                    <th className="text-center px-3 py-2">Score</th>
+                    <th className="text-center px-3 py-2">Aj.</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-aletis-borda/40">
+                  {rows.map((r) => (
+                    <tr
+                      key={r.cnpjCpf}
+                      onClick={() => onOpen(r.cnpjCpf)}
+                      className="cursor-pointer hover:bg-white"
+                    >
+                      <td className="px-3 py-2 font-medium text-aletis-grafite-escuro truncate max-w-[280px]">
+                        {r.nome ?? '—'}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-[11px] text-aletis-grafite-medio">
+                        {r.cnpjCpf}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-aletis-verde/10 text-aletis-verde-escuro">
+                          {r.uf ?? '—'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-aletis-grafite-escuro">
+                        {r.totalDivida
+                          ? `${(Number(r.totalDivida) / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`
+                          : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-center tabular-nums text-aletis-grafite-medio">
+                        {r.inscricoesCount ?? '—'}
+                      </td>
+                      <td className="px-3 py-2 text-center tabular-nums text-aletis-grafite-medio">
+                        {r.agroScore ?? '—'}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {r.ajuizado ? (
+                          <span className="text-red-600">⚖</span>
+                        ) : (
+                          <span className="text-aletis-grafite-claro">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
