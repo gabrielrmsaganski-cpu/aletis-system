@@ -338,6 +338,8 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
         return reply.status(200).send({
           sucesso: true,
           aviso: 'PG desligado — sem histórico persistido. Habilite ALETIS_PG_ENABLED=1.',
+          desde: desde.toISOString(),
+          total: 0,
           eventos: [],
         })
       }
@@ -399,6 +401,9 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
         return reply.status(200).send({
           sucesso: true,
           aviso: 'PG desligado — uptime indisponível.',
+          janelaHoras: horas,
+          desde: desde.toISOString(),
+          media: 0,
           fontes: [],
         })
       }
