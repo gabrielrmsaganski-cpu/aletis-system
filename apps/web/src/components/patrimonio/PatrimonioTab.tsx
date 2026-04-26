@@ -150,9 +150,9 @@ export default function PatrimonioTab({ clienteId }: { clienteId: string }) {
   }, [clienteId, carregar])
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-5">
+    <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_420px] gap-5">
       {/* Coluna esquerda: inventário */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 min-w-0">
         <CardSection
           title="Patrimônio do cliente"
           subtitle="Maquinário, imóveis, benfeitorias, animais e estoque — base de garantia e custo operacional."
@@ -230,7 +230,7 @@ export default function PatrimonioTab({ clienteId }: { clienteId: string }) {
       </div>
 
       {/* Coluna direita: calculadora */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 min-w-0">
         <CalculadoraCustoOperacional />
       </div>
 
