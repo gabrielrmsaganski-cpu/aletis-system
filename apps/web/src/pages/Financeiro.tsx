@@ -10,7 +10,7 @@
  *   • Fechamento   — checklist + geração ZIP/PDF pro contador
  *   • Configurações — empresa, contador, regime, contas bancárias
  */
-import React, { useState, useMemo, useEffect, useRef } from 'react'
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useApi, apiFetch } from '../hooks/useApi'
 import {
   DollarSign,
@@ -44,6 +44,8 @@ import {
   Paperclip,
   Link2,
   RefreshCw,
+  Database,
+  ChevronRight,
 } from 'lucide-react'
 
 /* ================= Helpers ================= */
@@ -574,6 +576,210 @@ function DashboardSection({ showToast }: { showToast: (t: 'sucesso' | 'erro', m:
           )}
         </div>
       </div>
+
+      {/* Wave-PG-13: análise SQL via Postgres (queries indexadas) */}
+      <FinanceiroSqlPanel />
+    </div>
+  )
+}
+
+/* ────────────────────────────────────────────────────────────
+ * FinanceiroSqlPanel — consome /api/financeiro/sql/* (Wave-PG-13).
+ * Painel colapsável independente dos widgets nativos (que rodam em
+ * RAM). Aqui as queries são SQL agregado direto no PG — escalam pra
+ * milhões de linhas sem custar memória do node.
+ * ──────────────────────────────────────────────────────────── */
+interface MargemRow {
+  clienteCpfCnpj: string
+  clienteNome: string | null
+  receitas: number
+  despesas: number
+  margem: number
+}
+interface FluxoRow {
+  competencia: string
+  receitas: number
+  despesas: number
+  impostos: number
+  saldo: number
+}
+interface CategoriaRow {
+  categoria: string
+  total: number
+  n: number
+}
+
+function FinanceiroSqlPanel() {
+  const [open, setOpen] = useState(false)
+  const [margens, setMargens] = useState<MargemRow[]>([])
+  const [fluxo, setFluxo] = useState<FluxoRow[]>([])
+  const [categorias, setCategorias] = useState<CategoriaRow[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const carregar = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const ano = new Date().getFullYear()
+      const desde = `${ano}-01`
+      const ate = `${ano}-12`
+      const [r1, r2, r3] = await Promise.all([
+        fetch(`/api/financeiro/sql/margem-cliente?ano=${ano}&limit=10`).then((r) => r.json()),
+        fetch(`/api/financeiro/sql/fluxo-competencia?desde=${desde}&ate=${ate}`).then((r) => r.json()),
+        fetch('/api/financeiro/sql/top-categorias?limit=8').then((r) => r.json()),
+      ])
+      setMargens(r1?.data ?? [])
+      setFluxo(r2?.data ?? [])
+      setCategorias(r3?.data ?? [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha SQL')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const handleToggle = useCallback(() => {
+    const next = !open
+    setOpen(next)
+    if (next && margens.length === 0 && fluxo.length === 0 && categorias.length === 0) {
+      void carregar()
+    }
+  }, [open, carregar, margens.length, fluxo.length, categorias.length])
+
+  const maxSaldo = Math.max(1, ...fluxo.map((f) => Math.abs(f.saldo)))
+
+  return (
+    <div className="rounded-xl border border-aletis-borda/60 bg-white shadow-sm overflow-hidden">
+      <button
+        onClick={handleToggle}
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-aletis-bege/30 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <Database className="h-4 w-4 text-aletis-verde" />
+          <div className="text-left">
+            <h3 className="font-display text-sm font-semibold text-aletis-grafite-escuro">
+              Análise SQL via Postgres
+            </h3>
+            <p className="text-[11px] text-aletis-grafite-claro">
+              Margem por cliente · Fluxo {new Date().getFullYear()} · Top categorias — queries indexadas no PG
+            </p>
+          </div>
+        </div>
+        <ChevronRight
+          size={14}
+          className={`text-aletis-grafite-claro transition-transform ${open ? 'rotate-90' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 border-t border-aletis-borda/50 space-y-4 pt-4">
+          {error && (
+            <p className="text-xs text-rose-600">{error}</p>
+          )}
+          {loading && (
+            <p className="text-xs text-aletis-grafite-medio italic">Carregando do PG…</p>
+          )}
+
+          {/* Fluxo competência mini-chart */}
+          <div>
+            <h4 className="text-xs font-semibold text-aletis-grafite-escuro mb-2">
+              Fluxo por competência ({fluxo.length} meses)
+            </h4>
+            {fluxo.length > 0 ? (
+              <div className="flex items-end gap-1 h-24 overflow-x-auto pb-1">
+                {fluxo.map((f) => (
+                  <div
+                    key={f.competencia}
+                    className="flex flex-col items-center gap-1 min-w-[40px]"
+                    title={`${f.competencia}: rec R$ ${f.receitas.toFixed(0)} / desp R$ ${f.despesas.toFixed(0)} / saldo R$ ${f.saldo.toFixed(0)}`}
+                  >
+                    <div
+                      className={`w-6 rounded-t ${f.saldo >= 0 ? 'bg-emerald-400' : 'bg-rose-400'}`}
+                      style={{ height: `${(Math.abs(f.saldo) / maxSaldo) * 100}%`, minHeight: '2px' }}
+                    />
+                    <div className="text-[9px] text-aletis-grafite-claro tabular-nums">{f.competencia.slice(5)}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-aletis-grafite-claro italic">
+                Sem dados no PG ainda — registre receitas/despesas pra popular.
+              </p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Margem por cliente */}
+            <div>
+              <h4 className="text-xs font-semibold text-aletis-grafite-escuro mb-2">
+                Margem por cliente (top {margens.length})
+              </h4>
+              {margens.length > 0 ? (
+                <ul className="space-y-1.5 text-xs">
+                  {margens.map((m) => (
+                    <li
+                      key={m.clienteCpfCnpj}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="font-medium text-aletis-grafite-escuro truncate">
+                        {m.clienteNome || m.clienteCpfCnpj}
+                      </span>
+                      <span
+                        className={`tabular-nums font-mono ${m.margem >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}
+                      >
+                        R$ {m.margem.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-[11px] text-aletis-grafite-claro italic">
+                  Sem clientes vinculados ainda.
+                </p>
+              )}
+            </div>
+
+            {/* Top categorias */}
+            <div>
+              <h4 className="text-xs font-semibold text-aletis-grafite-escuro mb-2">
+                Top categorias de despesa
+              </h4>
+              {categorias.length > 0 ? (
+                <ul className="space-y-1.5 text-xs">
+                  {categorias.map((c) => (
+                    <li
+                      key={c.categoria}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="text-aletis-grafite-escuro">
+                        {c.categoria} <span className="text-aletis-grafite-claro">({c.n})</span>
+                      </span>
+                      <span className="tabular-nums font-mono text-aletis-grafite-escuro">
+                        R$ {c.total.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-[11px] text-aletis-grafite-claro italic">
+                  Sem despesas registradas no PG.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end pt-2 border-t border-aletis-borda/50">
+            <button
+              onClick={carregar}
+              disabled={loading}
+              className="text-[11px] text-aletis-verde hover:underline disabled:opacity-50 inline-flex items-center gap-1"
+            >
+              <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} /> Recarregar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
