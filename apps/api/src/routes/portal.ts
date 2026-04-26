@@ -49,6 +49,9 @@ import { join } from 'node:path'
  *  Helpers
  * ======================================================================== */
 
+const formatBRL = (v: number): string =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
+
 /** Storage local de uploads do portal (cofre digital).
  *  Em produção, plugar S3/MinIO via env ALETIS_PORTAL_UPLOAD_BUCKET. */
 const UPLOAD_DIR = process.env.ALETIS_PORTAL_UPLOAD_DIR
@@ -175,8 +178,20 @@ function computarPulse(clienteId: string) {
   }
 }
 
-/** Middleware: garante JWT válido e anexa clienteId + cliente ao request. */
+/** Middleware: garante JWT válido e anexa clienteId + cliente ao request.
+ *
+ *  Aceita o JWT via Authorization: Bearer (padrão) ou via query string
+ *  `?_t=` (necessário para EventSource/SSE, que não suporta headers
+ *  customizados). O token na URL fica visível em logs do servidor; mitigar
+ *  via TLS + log scrubber em produção. */
 async function autenticarPortal(request: FastifyRequest, reply: FastifyReply) {
+  // Se Authorization ausente mas _t query presente, sintetiza o header.
+  if (!request.headers.authorization) {
+    const tok = (request.query as { _t?: string } | undefined)?._t
+    if (tok) {
+      ;(request.headers as Record<string, string>).authorization = `Bearer ${tok}`
+    }
+  }
   try {
     await request.jwtVerify()
   } catch {
@@ -689,6 +704,164 @@ export default async function (fastify: FastifyInstance) {
   fastify.get('/api/portal/pulse', { preHandler: autenticarPortal }, async (req) => {
     const clienteId = (req as any).clienteId as string
     return { success: true, data: computarPulse(clienteId) }
+  })
+
+  /* ── GET /api/portal/cronograma ──────────────────────────────────────
+   * Cronograma de pagamentos derivado dos contratos: distribui o saldo em
+   * aberto em parcelas mensais com a primeira parcela 30 dias à frente.
+   * Heurística simples — em produção, plugar plano real do consultor. */
+  fastify.get('/api/portal/cronograma', { preHandler: autenticarPortal }, async (req) => {
+    const clienteId = (req as any).clienteId as string
+    const c = clientes.get(clienteId)
+    const empty = { totalAberto: 0, parcelas: [], parcelaPadrao: 0, totalParcelas: 0 }
+    if (!c) return { success: true, data: empty }
+    const totalAberto = Math.max(0, c.valorTotalDivida - c.valorTotalPago)
+    if (totalAberto <= 0) return { success: true, data: empty }
+    // Heurística: 72 meses default. Ajustar quando plano real vier.
+    const N = 72
+    const valorParcela = Math.round((totalAberto / N) * 100) / 100
+    const parcelas: Array<{
+      numero: number
+      vencimento: string
+      valor: number
+      status: 'futuro' | 'proximo' | 'pago' | 'atrasado'
+      pagoEm?: string
+    }> = []
+    const hoje = new Date()
+    let pagosRestantes = c.pagamentos.length
+    for (let i = 0; i < Math.min(N, 36); i++) {
+      const d = new Date(hoje)
+      d.setMonth(d.getMonth() + i + 1 - pagosRestantes)
+      const passado = d.getTime() < hoje.getTime()
+      const proximo = !passado && i === pagosRestantes
+      parcelas.push({
+        numero: i + 1,
+        vencimento: d.toISOString(),
+        valor: valorParcela,
+        status: pagosRestantes > i
+          ? 'pago'
+          : passado
+          ? 'atrasado'
+          : proximo
+          ? 'proximo'
+          : 'futuro',
+        pagoEm: pagosRestantes > i ? c.pagamentos[i]?.data : undefined,
+      })
+    }
+    return { success: true, data: { totalAberto, parcelas, parcelaPadrao: valorParcela, totalParcelas: N } }
+  })
+
+  /* ── GET /api/portal/memoria-simplificada ────────────────────────────
+   * Memória "do leigo": 4 blocos plain-text do que aconteceu no caso. */
+  fastify.get('/api/portal/memoria-simplificada', { preHandler: autenticarPortal }, async (req) => {
+    const clienteId = (req as any).clienteId as string
+    const c = clientes.get(clienteId)
+    if (!c) return { success: false, error: 'Cliente não encontrado' }
+    const original = c.dividas.reduce((a, d) => a + d.valorOriginal, 0)
+    const atual = c.dividas.reduce((a, d) => a + d.valorAtualizado, 0)
+    const economia = Math.max(0, original - atual)
+    const pago = c.valorTotalPago
+    const blocos = [
+      {
+        chave: 'origem',
+        titulo: 'O que você devia',
+        valor: original,
+        descricao:
+          `Quando você procurou a ALETIS, o saldo somado de seus ${c.dividas.length} contrato(s) era de ${formatBRL(original)}. Esse era o número "oficial" dos credores.`,
+      },
+      {
+        chave: 'descoberta',
+        titulo: 'O que descobrimos',
+        valor: economia,
+        descricao:
+          economia > 0
+            ? `Auditando os contratos peça por peça, identificamos ${formatBRL(economia)} que não deveriam estar lá — anatocismo, capitalização indevida, encargos abusivos. Esse valor virou poder de negociação na mesa.`
+            : 'Os contratos foram auditados e não encontramos abusividade significativa neste momento. O foco passa a ser estrutura de pagamento e prazo.',
+      },
+      {
+        chave: 'plano',
+        titulo: 'O plano que vamos pagar',
+        valor: atual,
+        descricao:
+          `Saldo final negociado: ${formatBRL(atual)}. Esse é o número que vai constar dos novos contratos com os credores. Confira na seção "Cronograma de pagamentos".`,
+      },
+      {
+        chave: 'pago',
+        titulo: 'O que você já pagou',
+        valor: pago,
+        descricao:
+          pago > 0
+            ? `Você já honrou ${formatBRL(pago)} do plano. Continue assim e o caso será encerrado no prazo combinado.`
+            : 'Ainda não há pagamentos registrados pelo plano. Quando começarem, eles aparecem aqui.',
+      },
+    ]
+    return { success: true, data: { economia, original, atual, pago, blocos } }
+  })
+
+  /* ── GET /api/portal/mensagens/stream ────────────────────────────────
+   * SSE para mensagens em tempo real — cliente substitui polling.
+   * Heartbeat 25s para manter NAT/proxy abertos. */
+  fastify.get('/api/portal/mensagens/stream', { preHandler: autenticarPortal }, async (req, reply) => {
+    const clienteId = (req as any).clienteId as string
+    reply.raw.setHeader('Content-Type', 'text/event-stream')
+    reply.raw.setHeader('Cache-Control', 'no-cache, no-transform')
+    reply.raw.setHeader('Connection', 'keep-alive')
+    reply.raw.setHeader('X-Accel-Buffering', 'no')
+    reply.raw.flushHeaders?.()
+
+    const send = (event: string, data: unknown) => {
+      reply.raw.write(`event: ${event}\n`)
+      reply.raw.write(`data: ${JSON.stringify(data)}\n\n`)
+    }
+
+    // Snapshot inicial
+    const c = clientes.get(clienteId)
+    send('snapshot', c?.portalMensagens ?? [])
+    let lastCount = c?.portalMensagens?.length ?? 0
+    let lastIds = new Set((c?.portalMensagens ?? []).map((m) => m.id))
+
+    // Poll-bridge (até WebSocket): observa mudanças no array mensagens
+    // e empurra deltas. Refresh leve a cada 3s, < polling do client.
+    const interval = setInterval(() => {
+      const current = clientes.get(clienteId)?.portalMensagens ?? []
+      if (current.length !== lastCount) {
+        const novas = current.filter((m) => !lastIds.has(m.id))
+        for (const m of novas) send('mensagem', m)
+        lastIds = new Set(current.map((m) => m.id))
+        lastCount = current.length
+      }
+    }, 3_000)
+
+    const heartbeat = setInterval(() => {
+      reply.raw.write(`: heartbeat\n\n`)
+    }, 25_000)
+
+    req.raw.on('close', () => {
+      clearInterval(interval)
+      clearInterval(heartbeat)
+    })
+  })
+
+  /* ── POST /api/portal/assinatura/iniciar ─────────────────────────────
+   * Stub de assinatura digital: gera link unique para Gov.br / Clicksign /
+   * D4Sign. Hoje retorna URL placeholder sinalizando "em construção".
+   * Quando integração real for plugada, mantém mesmo contrato. */
+  fastify.post('/api/portal/assinatura/iniciar', { preHandler: autenticarPortal }, async (req, reply) => {
+    const clienteId = (req as any).clienteId as string
+    const body = req.body as { documentoId?: string; provider?: 'govbr' | 'clicksign' | 'd4sign' } | undefined
+    const docId = body?.documentoId
+    if (!docId) return reply.status(400).send({ success: false, error: 'documentoId obrigatório' })
+    const provider = body?.provider || 'govbr'
+    // Em produção: chamar provider e devolver URL. Hoje: link de demo.
+    return {
+      success: true,
+      data: {
+        provider,
+        url: `https://assinatura.aletis.com.br/iniciar?cli=${encodeURIComponent(clienteId)}&doc=${encodeURIComponent(docId)}&p=${provider}`,
+        expiraEm: new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString(),
+        modo: 'preview',
+      },
+    }
   })
 
   /* ── GET /api/portal/pendencias ────────────────────────────────────────

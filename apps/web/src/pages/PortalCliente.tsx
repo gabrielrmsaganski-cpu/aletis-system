@@ -169,6 +169,36 @@ interface UploadDTO {
   url?: string
 }
 
+interface ParcelaDTO {
+  numero: number
+  vencimento: string
+  valor: number
+  status: 'futuro' | 'proximo' | 'pago' | 'atrasado'
+  pagoEm?: string
+}
+
+interface CronogramaDTO {
+  totalAberto: number
+  parcelaPadrao: number
+  totalParcelas: number
+  parcelas: ParcelaDTO[]
+}
+
+interface MemoriaBlocoDTO {
+  chave: 'origem' | 'descoberta' | 'plano' | 'pago'
+  titulo: string
+  valor: number
+  descricao: string
+}
+
+interface MemoriaSimplificadaDTO {
+  economia: number
+  original: number
+  atual: number
+  pago: number
+  blocos: MemoriaBlocoDTO[]
+}
+
 /* ──────────────────────────────────────────────────────────────
  * Helpers
  * ──────────────────────────────────────────────────────────── */
@@ -1099,6 +1129,143 @@ function CofreDigital({ uploads, token }: { uploads: UploadDTO[]; token: string 
 }
 
 /* ──────────────────────────────────────────────────────────────
+ * CRONOGRAMA DE PAGAMENTOS
+ * ──────────────────────────────────────────────────────────── */
+function CronogramaCard({ cronograma }: { cronograma: CronogramaDTO | null }) {
+  if (!cronograma || cronograma.parcelas.length === 0) return null
+  const proxima = cronograma.parcelas.find((p) => p.status === 'proximo')
+  const futuras = cronograma.parcelas.filter((p) => p.status !== 'pago').slice(0, 6)
+  const pagas = cronograma.parcelas.filter((p) => p.status === 'pago').length
+
+  return (
+    <div className="card-premium p-6">
+      <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-aletis-gold/15 border border-aletis-gold/40 flex items-center justify-center">
+            <Clock className="w-5 h-5 text-aletis-gold-escuro" />
+          </div>
+          <div>
+            <p className="font-display text-base font-bold text-aletis-verde">Cronograma de pagamentos</p>
+            <p className="font-body text-[12.5px] text-aletis-verde-medio">
+              {pagas} pagas · {cronograma.totalParcelas - pagas} restantes · parcela média {formatBRL(cronograma.parcelaPadrao)}
+            </p>
+          </div>
+        </div>
+        {proxima && (
+          <div className="rounded-xl border border-aletis-gold/40 bg-aletis-gold/10 px-4 py-2">
+            <p className="font-display text-[10px] uppercase tracking-widest text-aletis-gold-escuro">Próximo vencimento</p>
+            <p className="font-display text-lg font-bold text-aletis-verde tabular-nums">
+              {formatBRL(proxima.valor)} · <span className="text-aletis-gold-escuro">{formatDate(proxima.vencimento)}</span>
+            </p>
+          </div>
+        )}
+      </div>
+
+      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {futuras.map((p) => (
+          <li
+            key={p.numero}
+            className={`rounded-xl border px-4 py-3 flex items-center gap-3 transition ${
+              p.status === 'pago' ? 'border-aletis-sage/45 bg-aletis-sage/15' :
+              p.status === 'atrasado' ? 'border-red-200 bg-red-50' :
+              p.status === 'proximo' ? 'border-aletis-gold/45 bg-aletis-gold/10 shadow-brand-sm' :
+              'border-aletis-cream-escuro bg-aletis-cream-papel'
+            }`}
+          >
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-display font-bold text-sm ${
+              p.status === 'pago' ? 'bg-aletis-verde-medio text-aletis-cream' :
+              p.status === 'proximo' ? 'bg-aletis-gold text-aletis-verde' :
+              'bg-aletis-cream border border-aletis-cream-escuro text-aletis-verde-medio'
+            }`}>
+              {p.numero}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-display text-sm font-bold text-aletis-verde tabular-nums">{formatBRL(p.valor)}</p>
+              <p className="font-body text-[11.5px] text-aletis-verde-medio">
+                vencimento {formatDate(p.vencimento)}
+                {p.status === 'proximo' && <span className="ml-1 text-aletis-gold-escuro font-bold">· próximo</span>}
+                {p.status === 'atrasado' && <span className="ml-1 text-red-700 font-bold">· em atraso</span>}
+              </p>
+            </div>
+            {p.status === 'proximo' && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-full px-3 py-1 font-display text-[11px] font-semibold uppercase tracking-wider bg-aletis-verde text-aletis-cream hover:bg-aletis-verde-medio"
+                title="Em breve: gerar boleto/PIX"
+                disabled
+              >
+                Pagar
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * MEMÓRIA DE CÁLCULO SIMPLIFICADA — versão "do leigo"
+ * ──────────────────────────────────────────────────────────── */
+function MemoriaSimplificada({ memoria }: { memoria: MemoriaSimplificadaDTO | null }) {
+  if (!memoria) return null
+  const max = Math.max(memoria.original, memoria.atual, memoria.pago, 1)
+  const economiaPct = memoria.original > 0 ? Math.round((memoria.economia / memoria.original) * 100) : 0
+
+  return (
+    <div className="card-premium p-6">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-10 h-10 rounded-xl bg-aletis-sage/25 border border-aletis-sage/40 flex items-center justify-center">
+          <FileText className="w-5 h-5 text-aletis-verde" />
+        </div>
+        <div>
+          <p className="font-display text-base font-bold text-aletis-verde">Como chegamos a esse número</p>
+          <p className="font-body text-[12.5px] text-aletis-verde-medio">
+            Memória de cálculo em linguagem simples — peça também a versão técnica auditável ao seu consultor.
+          </p>
+        </div>
+      </div>
+
+      {memoria.economia > 0 && (
+        <div className="mb-5 rounded-2xl border border-aletis-gold/40 bg-gradient-to-br from-aletis-gold/15 to-aletis-cream-papel px-5 py-4">
+          <p className="font-display text-[10.5px] uppercase tracking-widest text-aletis-gold-escuro">
+            Você descobriu que devia menos
+          </p>
+          <p className="mt-1 font-display text-3xl sm:text-4xl font-bold text-aletis-verde tabular-nums">
+            {formatBRL(memoria.economia)} <span className="text-base text-aletis-gold-escuro font-semibold">· {economiaPct}%</span>
+          </p>
+        </div>
+      )}
+
+      <ul className="space-y-3">
+        {memoria.blocos.map((b) => {
+          const w = Math.round((b.valor / max) * 100)
+          const accent = b.chave === 'descoberta' ? 'gold' : b.chave === 'pago' ? 'sage' : b.chave === 'plano' ? 'verde' : 'cinza'
+          const barCls = accent === 'gold' ? 'bg-aletis-gold' :
+            accent === 'sage' ? 'bg-aletis-verde-medio' :
+            accent === 'verde' ? 'bg-aletis-verde' :
+            'bg-aletis-cream-escuro'
+          return (
+            <li key={b.chave}>
+              <div className="flex items-baseline justify-between gap-2 mb-1">
+                <p className="font-display text-[12.5px] font-semibold uppercase tracking-wider text-aletis-verde-medio">
+                  {b.titulo}
+                </p>
+                <p className="font-display text-base font-bold text-aletis-verde tabular-nums">{formatBRL(b.valor)}</p>
+              </div>
+              <div className="h-1.5 bg-aletis-cream-escuro/60 rounded-full overflow-hidden">
+                <div className={`h-full rounded-full ${barCls}`} style={{ width: `${Math.max(2, w)}%` }} />
+              </div>
+              <p className="mt-1.5 font-body text-[12.5px] leading-snug text-aletis-verde-medio">{b.descricao}</p>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+/* ──────────────────────────────────────────────────────────────
  * UPLOAD ESPONTÂNEO — botão drag-drop
  * ──────────────────────────────────────────────────────────── */
 function UploadEspontaneo({ token, onUploaded }: { token: string; onUploaded: () => Promise<void> }) {
@@ -1186,6 +1353,8 @@ function ClientDashboard({
   const [documentos, setDocumentos] = useState<DocumentoDTO[]>([])
   const [pendencias, setPendencias] = useState<PendenciaDTO[]>([])
   const [uploads, setUploads] = useState<UploadDTO[]>([])
+  const [cronograma, setCronograma] = useState<CronogramaDTO | null>(null)
+  const [memoria, setMemoria] = useState<MemoriaSimplificadaDTO | null>(null)
   const [mensagens, setMensagens] = useState<MensagemDTO[]>([])
   const [chatInput, setChatInput] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -1195,7 +1364,7 @@ function ClientDashboard({
   const chatRef = useRef<HTMLDivElement>(null)
 
   const fetchTudo = useCallback(async () => {
-    const [pl, c, s, t, d, p, u, m] = await Promise.all([
+    const [pl, c, s, t, d, p, u, cr, me, m] = await Promise.all([
       apiCall<PulseDTO>('/api/portal/pulse', { token }),
       apiCall<Contrato>('/api/portal/contrato', { token }),
       apiCall<StepperItem[]>('/api/portal/stepper', { token }),
@@ -1203,6 +1372,8 @@ function ClientDashboard({
       apiCall<DocumentoDTO[]>('/api/portal/documentos', { token }),
       apiCall<PendenciaDTO[]>('/api/portal/pendencias', { token }),
       apiCall<UploadDTO[]>('/api/portal/uploads', { token }),
+      apiCall<CronogramaDTO>('/api/portal/cronograma', { token }),
+      apiCall<MemoriaSimplificadaDTO>('/api/portal/memoria-simplificada', { token }),
       apiCall<MensagemDTO[]>('/api/portal/mensagens', { token }),
     ])
     if (pl.ok) setPulse(pl.data)
@@ -1212,22 +1383,54 @@ function ClientDashboard({
     if (d.ok) setDocumentos(d.data)
     if (p.ok) setPendencias(p.data)
     if (u.ok) setUploads(u.data)
+    if (cr.ok) setCronograma(cr.data)
+    if (me.ok) setMemoria(me.data)
     if (m.ok) setMensagens(m.data)
   }, [token])
 
   useEffect(() => { fetchTudo() }, [fetchTudo])
 
-  // Polling leve de pulse + mensagens (15s)
+  // Polling leve de pulse (15s); mensagens via SSE separado.
   useEffect(() => {
     const h = window.setInterval(async () => {
-      const [pl, m] = await Promise.all([
-        apiCall<PulseDTO>('/api/portal/pulse', { token }),
-        apiCall<MensagemDTO[]>('/api/portal/mensagens', { token }),
-      ])
+      const pl = await apiCall<PulseDTO>('/api/portal/pulse', { token })
       if (pl.ok) setPulse(pl.data)
-      if (m.ok) setMensagens(m.data)
     }, 15_000)
     return () => window.clearInterval(h)
+  }, [token])
+
+  // Stream de mensagens via SSE — em tempo real (substitui polling).
+  // Fallback gracios para polling se SSE falhar.
+  useEffect(() => {
+    if (typeof EventSource === 'undefined') return
+    // EventSource não suporta headers customizados — passamos token na URL.
+    // Em produção, validar token via cookie HTTP-only seria mais seguro.
+    const url = `/api/portal/mensagens/stream?_t=${encodeURIComponent(token)}`
+    let es: EventSource | null = null
+    try {
+      es = new EventSource(url, { withCredentials: false })
+      es.addEventListener('snapshot', (ev: MessageEvent) => {
+        try { setMensagens(JSON.parse(ev.data) as MensagemDTO[]) } catch { /* ignore */ }
+      })
+      es.addEventListener('mensagem', (ev: MessageEvent) => {
+        try {
+          const m = JSON.parse(ev.data) as MensagemDTO
+          setMensagens((prev) => prev.some((x) => x.id === m.id) ? prev : [...prev, m])
+        } catch { /* ignore */ }
+      })
+      es.onerror = () => { /* retry automático nativo */ }
+    } catch { /* SSE bloqueado; polling abaixo cobre */ }
+    // Polling-fallback de baixa frequência caso SSE não conecte
+    const fallback = window.setInterval(async () => {
+      if (!es || es.readyState === 2 /* CLOSED */) {
+        const m = await apiCall<MensagemDTO[]>('/api/portal/mensagens', { token })
+        if (m.ok) setMensagens(m.data)
+      }
+    }, 30_000)
+    return () => {
+      es?.close()
+      window.clearInterval(fallback)
+    }
   }, [token])
 
   useEffect(() => {
@@ -1367,6 +1570,16 @@ function ClientDashboard({
               </div>
             )}
           </section>
+        )}
+
+        {/* Cronograma de pagamentos */}
+        {cronograma && cronograma.parcelas.length > 0 && (
+          <section><CronogramaCard cronograma={cronograma} /></section>
+        )}
+
+        {/* Memória de cálculo simplificada */}
+        {memoria && (
+          <section><MemoriaSimplificada memoria={memoria} /></section>
         )}
 
         {/* Pendências + Upload espontâneo */}
