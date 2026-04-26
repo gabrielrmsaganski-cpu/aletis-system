@@ -183,6 +183,113 @@ export const auditLog = pgTable(
   }),
 )
 
+/* ─────────────────────────────────────────────────────────────
+ * 8. financeiro_receita — receitas operacionais (NF-e/NFS-e)
+ * ──────────────────────────────────────────────────────────── */
+export const financeiroReceita = pgTable(
+  'financeiro_receita',
+  {
+    id: text('id').primaryKey(),
+    competencia: varchar('competencia', { length: 7 }).notNull(), // YYYY-MM
+    descricao: text('descricao'),
+    clienteNome: text('cliente_nome'),
+    clienteCpfCnpj: text('cliente_cpf_cnpj'),
+    valorBruto: numeric('valor_bruto', { precision: 18, scale: 2 }),
+    valorLiquido: numeric('valor_liquido', { precision: 18, scale: 2 }),
+    status: text('status').notNull(), // 'emitida'|'recebida'|'atrasada'|'cancelada'
+    dataEmissao: timestamp('data_emissao', { withTimezone: true }),
+    dataRecebimento: timestamp('data_recebimento', { withTimezone: true }),
+    propostaId: text('proposta_id'),
+    payload: jsonb('payload').notNull(),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    competenciaIdx: index('fin_receita_competencia_idx').on(t.competencia),
+    statusIdx: index('fin_receita_status_idx').on(t.status),
+    propostaIdx: index('fin_receita_proposta_idx').on(t.propostaId),
+  }),
+)
+
+/* ─────────────────────────────────────────────────────────────
+ * 9. financeiro_despesa — despesas operacionais
+ * ──────────────────────────────────────────────────────────── */
+export const financeiroDespesa = pgTable(
+  'financeiro_despesa',
+  {
+    id: text('id').primaryKey(),
+    competencia: varchar('competencia', { length: 7 }).notNull(),
+    descricao: text('descricao'),
+    fornecedorNome: text('fornecedor_nome'),
+    fornecedorCpfCnpj: text('fornecedor_cpf_cnpj'),
+    clienteVinculoCpfCnpj: text('cliente_vinculo_cpf_cnpj'), // margem por cliente
+    categoria: text('categoria').notNull(),
+    valor: numeric('valor', { precision: 18, scale: 2 }),
+    status: text('status').notNull(), // 'pendente'|'paga'|'atrasada'|'cancelada'
+    dataVencimento: timestamp('data_vencimento', { withTimezone: true }),
+    dataPagamento: timestamp('data_pagamento', { withTimezone: true }),
+    payload: jsonb('payload').notNull(),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    competenciaIdx: index('fin_despesa_competencia_idx').on(t.competencia),
+    statusIdx: index('fin_despesa_status_idx').on(t.status),
+    categoriaIdx: index('fin_despesa_categoria_idx').on(t.categoria),
+    clienteVinculoIdx: index('fin_despesa_cliente_idx').on(t.clienteVinculoCpfCnpj),
+  }),
+)
+
+/* ─────────────────────────────────────────────────────────────
+ * 10. financeiro_imposto — DAS, INSS, ISS, DARF a pagar
+ * ──────────────────────────────────────────────────────────── */
+export const financeiroImposto = pgTable(
+  'financeiro_imposto',
+  {
+    id: text('id').primaryKey(),
+    competencia: varchar('competencia', { length: 7 }).notNull(),
+    tipo: text('tipo').notNull(), // 'das_simples'|'inss_pro_labore'|'iss'|'irpj'|'csll'|'pis'|'cofins'|'outro'
+    descricao: text('descricao'),
+    valor: numeric('valor', { precision: 18, scale: 2 }),
+    status: text('status').notNull(), // 'a_pagar'|'pago'|'atrasado'
+    dataVencimento: timestamp('data_vencimento', { withTimezone: true }),
+    dataPagamento: timestamp('data_pagamento', { withTimezone: true }),
+    payload: jsonb('payload').notNull(),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    competenciaIdx: index('fin_imposto_competencia_idx').on(t.competencia),
+    tipoIdx: index('fin_imposto_tipo_idx').on(t.tipo),
+    statusIdx: index('fin_imposto_status_idx').on(t.status),
+  }),
+)
+
+/* ─────────────────────────────────────────────────────────────
+ * 11. financeiro_lancamento — extrato bancário (OFX)
+ * ──────────────────────────────────────────────────────────── */
+export const financeiroLancamento = pgTable(
+  'financeiro_lancamento',
+  {
+    id: text('id').primaryKey(),
+    competencia: varchar('competencia', { length: 7 }).notNull(),
+    contaBancaria: text('conta_bancaria'),
+    data: timestamp('data', { withTimezone: true }),
+    descricao: text('descricao'),
+    valor: numeric('valor', { precision: 18, scale: 2 }),
+    tipo: text('tipo'), // 'credito'|'debito'
+    vinculadoTipo: text('vinculado_tipo'), // 'receita'|'despesa'|'imposto'|null
+    vinculadoId: text('vinculado_id'),
+    payload: jsonb('payload').notNull(),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    competenciaIdx: index('fin_lanc_competencia_idx').on(t.competencia),
+    dataIdx: index('fin_lanc_data_idx').on(t.data),
+    vinculadoIdx: index('fin_lanc_vinculado_idx').on(t.vinculadoTipo, t.vinculadoId),
+  }),
+)
+
 export type Cliente = typeof cliente.$inferSelect
 export type ClienteInsert = typeof cliente.$inferInsert
 export type Dossie = typeof dossie.$inferSelect
@@ -190,3 +297,7 @@ export type Proposta = typeof proposta.$inferSelect
 export type LeadPgfn = typeof leadPgfn.$inferSelect
 export type AlixSession = typeof alixSession.$inferSelect
 export type AlixMessage = typeof alixMessage.$inferSelect
+export type FinanceiroReceita = typeof financeiroReceita.$inferSelect
+export type FinanceiroDespesa = typeof financeiroDespesa.$inferSelect
+export type FinanceiroImposto = typeof financeiroImposto.$inferSelect
+export type FinanceiroLancamento = typeof financeiroLancamento.$inferSelect

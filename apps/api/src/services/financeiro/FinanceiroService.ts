@@ -119,6 +119,22 @@ export class FinanceiroService {
     const tmp = `${this.dbFile}.tmp`
     writeFileSync(tmp, JSON.stringify(data, null, 2))
     renameSync(tmp, this.dbFile)
+
+    // Wave-PG-13: dual-write best-effort para Postgres. Não bloqueia o
+    // request — fire-and-forget; falha de PG vira warn.
+    void (async () => {
+      try {
+        const repo = await import('../../db/FinanceiroRepository.js')
+        await repo.dumpAll({
+          receitas: this.receitas.values() as unknown as Iterable<Parameters<typeof repo.upsertReceita>[0]>,
+          despesas: this.despesas.values() as unknown as Iterable<Parameters<typeof repo.upsertDespesa>[0]>,
+          impostos: this.impostos.values() as unknown as Iterable<Parameters<typeof repo.upsertImposto>[0]>,
+          lancamentos: this.lancamentos.values() as unknown as Iterable<Parameters<typeof repo.upsertLancamento>[0]>,
+        })
+      } catch (err) {
+        console.warn('[FinanceiroService.save] dual-write PG falhou:', (err as Error).message)
+      }
+    })()
   }
 
   /* ────────────────── Anexos ────────────────── */
