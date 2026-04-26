@@ -33,6 +33,8 @@ interface Stats {
   alixFeedback: number
   bscSnapshots: number
   financeiro: number
+  inventarios: number
+  planosCusteio: number
 }
 
 const STORAGE_ROOT = join(process.cwd(), 'storage')
@@ -262,6 +264,48 @@ async function migratePropostas(): Promise<number> {
   return 0
 }
 
+async function migrateInventarios(): Promise<number> {
+  const dir = join(STORAGE_ROOT, 'inventario')
+  if (!existsSync(dir)) return 0
+  const repo = await import('../src/db/InventarioCusteioRepository.js')
+  let n = 0
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith('.json')) continue
+    try {
+      const raw = readFileSync(join(dir, f), 'utf-8')
+      const inv = JSON.parse(raw)
+      if (!inv.clienteId) continue
+      await repo.upsertInventario(inv)
+      n++
+    } catch (err) {
+      console.warn(`  ⚠ falha ${f}: ${(err as Error).message}`)
+    }
+  }
+  console.log(`[migrate] Inventarios: ${n} migrados`)
+  return n
+}
+
+async function migratePlanosCusteio(): Promise<number> {
+  const dir = join(STORAGE_ROOT, 'custeio')
+  if (!existsSync(dir)) return 0
+  const repo = await import('../src/db/InventarioCusteioRepository.js')
+  let n = 0
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith('.json')) continue
+    try {
+      const raw = readFileSync(join(dir, f), 'utf-8')
+      const plano = JSON.parse(raw)
+      if (!plano.id) continue
+      await repo.upsertPlanoCusteio(plano)
+      n++
+    } catch (err) {
+      console.warn(`  ⚠ falha ${f}: ${(err as Error).message}`)
+    }
+  }
+  console.log(`[migrate] PlanosCusteio: ${n} migrados`)
+  return n
+}
+
 async function main() {
   if (!isPgEnabled()) {
     console.error('[migrate] ALETIS_PG_ENABLED!=1 — abortando.')
@@ -283,6 +327,8 @@ async function main() {
     alixFeedback: await migrateAlixFeedback(),
     bscSnapshots: await migrateBscSnapshots(),
     financeiro: await migrateFinanceiro(),
+    inventarios: await migrateInventarios(),
+    planosCusteio: await migratePlanosCusteio(),
   }
   const dur = Date.now() - t0
 

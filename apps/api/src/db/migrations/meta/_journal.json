@@ -36,6 +36,13 @@
       "when": 1777196836914,
       "tag": "0004_tidy_kid_colt",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1777199456493,
+      "tag": "0005_aspiring_barracuda",
+      "breakpoints": true
     }
   ]
 }

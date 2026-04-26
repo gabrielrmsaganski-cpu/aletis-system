@@ -67,6 +67,16 @@ export class InventarioService {
         resumo: this.calcResumo(inv.ativos),
       }
       writeFileSync(this.fileFor(inv.clienteId), JSON.stringify(dados, null, 2))
+
+      // Wave-PG-16: dual-write best-effort no Postgres
+      void (async () => {
+        try {
+          const repo = await import('../../db/InventarioCusteioRepository.js')
+          await repo.upsertInventario(dados as unknown as Parameters<typeof repo.upsertInventario>[0])
+        } catch (err) {
+          console.warn('[InventarioService.save] dual-write PG falhou:', (err as Error).message)
+        }
+      })()
     } catch (err) {
       console.warn('[InventarioService] save falhou:', (err as Error).message)
       throw err

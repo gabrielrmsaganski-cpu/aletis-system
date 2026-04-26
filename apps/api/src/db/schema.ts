@@ -385,6 +385,39 @@ export const alixFeedback = pgTable(
   }),
 )
 
+/* ─────────────────────────────────────────────────────────────
+ * 17. inventario_cliente — patrimônio do cliente (1 por cliente)
+ * ──────────────────────────────────────────────────────────── */
+export const inventarioCliente = pgTable('inventario_cliente', {
+  clienteId: text('cliente_id').primaryKey(),
+  atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  totalAtivos: integer('total_ativos').default(0),
+  valorTotal: numeric('valor_total', { precision: 18, scale: 2 }),
+  payload: jsonb('payload').notNull(),
+})
+
+/* ─────────────────────────────────────────────────────────────
+ * 18. plano_custeio — Plano simples de custeio agrícola (BNDES/Sicredi)
+ * ──────────────────────────────────────────────────────────── */
+export const planoCusteio = pgTable(
+  'plano_custeio',
+  {
+    id: text('id').primaryKey(),
+    clienteId: text('cliente_id'),
+    safra: varchar('safra', { length: 7 }), // 2025/26
+    status: text('status'), // 'rascunho'|'submetido'|'aprovado'|'reprovado'|'arquivado'
+    valorTotal: numeric('valor_total', { precision: 18, scale: 2 }),
+    payload: jsonb('payload').notNull(),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    clienteIdx: index('plano_custeio_cliente_idx').on(t.clienteId),
+    safraIdx: index('plano_custeio_safra_idx').on(t.safra),
+    statusIdx: index('plano_custeio_status_idx').on(t.status),
+  }),
+)
+
 export type Cliente = typeof cliente.$inferSelect
 export type ClienteInsert = typeof cliente.$inferInsert
 export type AlixMemoryRow = typeof alixMemory.$inferSelect
@@ -392,6 +425,8 @@ export type AlixInsightRow = typeof alixInsight.$inferSelect
 export type BscSnapshotRow = typeof bscSnapshot.$inferSelect
 export type AlixConfirmationRow = typeof alixConfirmation.$inferSelect
 export type AlixFeedbackRow = typeof alixFeedback.$inferSelect
+export type InventarioRow = typeof inventarioCliente.$inferSelect
+export type PlanoCusteioRow = typeof planoCusteio.$inferSelect
 export type Dossie = typeof dossie.$inferSelect
 export type Proposta = typeof proposta.$inferSelect
 export type LeadPgfn = typeof leadPgfn.$inferSelect

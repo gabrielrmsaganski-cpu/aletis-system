@@ -178,6 +178,16 @@ export class CusteioService {
     const tmp = `${final}.tmp`
     writeFileSync(tmp, JSON.stringify(plano, null, 2), 'utf8')
     renameSync(tmp, final)
+
+    // Wave-PG-16: dual-write best-effort no Postgres
+    void (async () => {
+      try {
+        const repo = await import('../../db/InventarioCusteioRepository.js')
+        await repo.upsertPlanoCusteio(plano as unknown as Parameters<typeof repo.upsertPlanoCusteio>[0])
+      } catch (err) {
+        console.warn('[CusteioService.writeAtomic] dual-write PG falhou:', (err as Error).message)
+      }
+    })()
   }
 
   // ───────── CRUD ─────────
