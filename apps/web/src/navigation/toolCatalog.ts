@@ -32,6 +32,7 @@ import {
   BarChart3,
   Settings,
   Sparkles,
+  Activity,
 } from 'lucide-react'
 
 export type ToolCategory =
@@ -310,6 +311,18 @@ export const TOOL_CATALOG: ToolEntry[] = [
     route: '/configuracoes',
     category: 'gestao',
     keywords: ['configuracoes', 'settings', 'perfil', 'empresa', 'contador', 'permissoes', 'integracoes'],
+    showInSidebar: true,
+  },
+  {
+    id: 'fontes',
+    title: 'Fontes de dados',
+    tagline: 'SLA das 36 fontes externas',
+    description:
+      'Painel de saúde das 36 fontes oficiais (BCB, CEPEA, CONAB, INMET, IBGE, ANP, NASA, etc.) com status atual, latência, uptime % nas últimas 24h/7d, timeline de transições e último erro. Telemetria persistida em Postgres via audit_log.',
+    icon: Activity,
+    route: '/fontes',
+    category: 'gestao',
+    keywords: ['fontes', 'sla', 'uptime', 'monitoramento', 'observability', 'health', 'integracoes', 'apis'],
     showInSidebar: true,
   },
 ]
