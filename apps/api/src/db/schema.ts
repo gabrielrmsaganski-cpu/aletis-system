@@ -418,6 +418,174 @@ export const planoCusteio = pgTable(
   }),
 )
 
+/* ─────────────────────────────────────────────────────────────
+ * 19. portal_acesso — credenciais de login do cliente final
+ *     (1 por cliente). Persistência durável das credenciais que
+ *     antes ficavam apenas em RAM dentro de Cliente.portalAcesso.
+ * ──────────────────────────────────────────────────────────── */
+export const portalAcesso = pgTable(
+  'portal_acesso',
+  {
+    clienteId: text('cliente_id').primaryKey(),
+    usuario: text('usuario').notNull(),
+    senhaHash: text('senha_hash').notNull(),
+    salt: text('salt').notNull(),
+    ativo: boolean('ativo').default(true).notNull(),
+    forcaTrocaSenha: boolean('forca_troca_senha').default(true).notNull(),
+    ultimoLoginEm: timestamp('ultimo_login_em', { withTimezone: true }),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    usuarioIdx: index('portal_acesso_usuario_idx').on(t.usuario),
+    ativoIdx: index('portal_acesso_ativo_idx').on(t.ativo),
+  }),
+)
+
+/* ─────────────────────────────────────────────────────────────
+ * 20. portal_token — magic-link / reset de senha / refresh
+ *     Tokens de uso único, com TTL e auditoria de redenção.
+ * ──────────────────────────────────────────────────────────── */
+export const portalToken = pgTable(
+  'portal_token',
+  {
+    id: text('id').primaryKey(),
+    clienteId: text('cliente_id').notNull(),
+    tipo: text('tipo').notNull(), // 'magic'|'reset'|'refresh'
+    tokenHash: text('token_hash').notNull(), // sha256(token), nunca o raw
+    expiraEm: timestamp('expira_em', { withTimezone: true }).notNull(),
+    consumidoEm: timestamp('consumido_em', { withTimezone: true }),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    canal: text('canal'), // 'email'|'whatsapp'|'sms'|null
+    metadata: jsonb('metadata'), // ip, user-agent, ref
+  },
+  (t) => ({
+    clienteTipoIdx: index('portal_token_cliente_tipo_idx').on(t.clienteId, t.tipo),
+    expIdx: index('portal_token_exp_idx').on(t.expiraEm),
+  }),
+)
+
+/* ─────────────────────────────────────────────────────────────
+ * 21. portal_mensagem — chat persistente cliente↔consultor
+ * ──────────────────────────────────────────────────────────── */
+export const portalMensagem = pgTable(
+  'portal_mensagem',
+  {
+    id: text('id').primaryKey(),
+    clienteId: text('cliente_id').notNull(),
+    de: text('de').notNull(), // 'cliente'|'consultor'|'alix'
+    autorNome: text('autor_nome'),
+    texto: text('texto').notNull(),
+    anexos: jsonb('anexos'), // [{ nome, url, mime, tamanho }]
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    lidaEm: timestamp('lida_em', { withTimezone: true }),
+  },
+  (t) => ({
+    clienteIdx: index('portal_mensagem_cliente_idx').on(t.clienteId, t.criadoEm),
+  }),
+)
+
+/* ─────────────────────────────────────────────────────────────
+ * 22. portal_documento_pendente — checklist de docs que o
+ *     consultor solicita ao cliente (Inbox de Pendências)
+ * ──────────────────────────────────────────────────────────── */
+export const portalDocumentoPendente = pgTable(
+  'portal_documento_pendente',
+  {
+    id: text('id').primaryKey(),
+    clienteId: text('cliente_id').notNull(),
+    titulo: text('titulo').notNull(),
+    descricao: text('descricao'),
+    categoria: text('categoria'), // 'fiscal'|'contrato'|'identidade'|'patrimonio'|'agro'|'outros'
+    obrigatorio: boolean('obrigatorio').default(true).notNull(),
+    status: text('status').default('pendente').notNull(), // 'pendente'|'enviado'|'aprovado'|'rejeitado'
+    uploadId: text('upload_id'), // referência a portal_upload quando enviado
+    solicitadoPor: text('solicitado_por'), // nome do consultor
+    solicitadoEm: timestamp('solicitado_em', { withTimezone: true }).defaultNow().notNull(),
+    enviadoEm: timestamp('enviado_em', { withTimezone: true }),
+    revisadoEm: timestamp('revisado_em', { withTimezone: true }),
+    observacao: text('observacao'),
+  },
+  (t) => ({
+    clienteStatusIdx: index('portal_doc_pend_cliente_status_idx').on(t.clienteId, t.status),
+  }),
+)
+
+/* ─────────────────────────────────────────────────────────────
+ * 23. portal_upload — arquivos enviados pelo cliente (cofre)
+ * ──────────────────────────────────────────────────────────── */
+export const portalUpload = pgTable(
+  'portal_upload',
+  {
+    id: text('id').primaryKey(),
+    clienteId: text('cliente_id').notNull(),
+    pendenciaId: text('pendencia_id'), // null = upload espontâneo
+    nomeOriginal: text('nome_original').notNull(),
+    nomeStorage: text('nome_storage').notNull(),
+    mime: text('mime').notNull(),
+    tamanho: integer('tamanho').notNull(), // bytes
+    sha256: text('sha256'),
+    categoria: text('categoria'),
+    enviadoPor: text('enviado_por').notNull(), // 'cliente' | 'consultor'
+    enviadoEm: timestamp('enviado_em', { withTimezone: true }).defaultNow().notNull(),
+    metadata: jsonb('metadata'),
+  },
+  (t) => ({
+    clienteIdx: index('portal_upload_cliente_idx').on(t.clienteId, t.enviadoEm),
+    pendenciaIdx: index('portal_upload_pendencia_idx').on(t.pendenciaId),
+  }),
+)
+
+/* ─────────────────────────────────────────────────────────────
+ * 24. portal_evento — auditoria de acesso e ações no portal
+ * ──────────────────────────────────────────────────────────── */
+export const portalEvento = pgTable(
+  'portal_evento',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    clienteId: text('cliente_id').notNull(),
+    tipo: text('tipo').notNull(), // 'login'|'login_falhou'|'logout'|'magic_solicitado'|'magic_consumido'|'reset_solicitado'|'senha_alterada'|'documento_enviado'|'mensagem_enviada'|'doc_visualizado'
+    canal: text('canal'), // 'web'|'mobile'|'magic'
+    ip: text('ip'),
+    userAgent: text('user_agent'),
+    detalhes: jsonb('detalhes'),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    clienteIdx: index('portal_evento_cliente_idx').on(t.clienteId, t.criadoEm),
+    tipoIdx: index('portal_evento_tipo_idx').on(t.tipo),
+  }),
+)
+
+/* ─────────────────────────────────────────────────────────────
+ * 25. portal_push — subscriptions Web Push (PWA) para notificar
+ *     cliente quando consultor envia mensagem ou doc.
+ * ──────────────────────────────────────────────────────────── */
+export const portalPush = pgTable(
+  'portal_push',
+  {
+    id: text('id').primaryKey(),
+    clienteId: text('cliente_id').notNull(),
+    endpoint: text('endpoint').notNull(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    userAgent: text('user_agent'),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    ultimoUsoEm: timestamp('ultimo_uso_em', { withTimezone: true }),
+  },
+  (t) => ({
+    clienteIdx: index('portal_push_cliente_idx').on(t.clienteId),
+  }),
+)
+
+export type PortalAcessoRow = typeof portalAcesso.$inferSelect
+export type PortalTokenRow = typeof portalToken.$inferSelect
+export type PortalMensagemRow = typeof portalMensagem.$inferSelect
+export type PortalDocumentoPendenteRow = typeof portalDocumentoPendente.$inferSelect
+export type PortalUploadRow = typeof portalUpload.$inferSelect
+export type PortalEventoRow = typeof portalEvento.$inferSelect
+export type PortalPushRow = typeof portalPush.$inferSelect
+
 export type Cliente = typeof cliente.$inferSelect
 export type ClienteInsert = typeof cliente.$inferInsert
 export type AlixMemoryRow = typeof alixMemory.$inferSelect
