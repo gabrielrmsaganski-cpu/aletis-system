@@ -14,6 +14,7 @@ import { useState, useCallback, useEffect } from 'react'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import CommandPalette from '../ui/CommandPalette'
+import BrandFooter from '../ui/BrandFooter'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -78,7 +79,7 @@ export default function Layout({ children }: LayoutProps) {
   }, [])
 
   return (
-    <div className="min-h-screen bg-aletis-bege dark:bg-[#141416]">
+    <div className="min-h-screen bg-aletis-cream dark:bg-aletis-verde-escuro">
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggle={toggleSidebar}
@@ -108,6 +109,9 @@ export default function Layout({ children }: LayoutProps) {
             {children}
           </div>
         </main>
+
+        {/* Rodapé global de marca — assinatura ALETIS no fim de cada página */}
+        <BrandFooter />
       </div>
 
       <CommandPalette open={paletteOpen} onClose={closePalette} />

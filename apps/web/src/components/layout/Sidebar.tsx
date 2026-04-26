@@ -1,15 +1,16 @@
 /**
- * Sidebar (Barra Lateral) — v2.
+ * Sidebar (Barra Lateral) — v3 — Identidade Visual oficial ALETIS.
  *
- * Lê todos os itens do toolCatalog e os agrupa pelas categorias
- * definidas lá. Cada item tem tooltip flutuante (titulo + descrição
- * curta) no hover, funciona colapsado ou expandido, e mostra um
- * hint "⌘K" abaixo do logo incentivando a descoberta.
+ * Fundo verde-dark (#17251b) com padrão repetidor sutil em soft-light.
+ * Tipografia Chakra Petch para rótulos e seções, Verdana para itens.
+ * Logo oficial via <BrandMark/>.
  */
 import { useMemo } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, LogOut, Command } from 'lucide-react'
 import Tooltip from '../ui/Tooltip'
+import BrandMark from '../ui/BrandMark'
+import BrandWatermark from '../ui/BrandWatermark'
 import {
   CATEGORIES,
   TOOL_CATALOG,
@@ -57,27 +58,56 @@ export default function Sidebar({
   const sidebarContent = (
     <div
       className={`
-        flex flex-col h-full
-        bg-gradient-to-b from-aletis-verde to-aletis-verde-escuro
+        relative flex flex-col h-full
+        bg-aletis-verde
         transition-[width] duration-300 ease-out
         ${collapsed ? 'w-16' : 'w-[272px]'}
       `}
+      style={{
+        backgroundImage:
+          'linear-gradient(180deg, rgba(13,22,17,0.92) 0%, rgba(23,37,27,0.96) 50%, rgba(13,22,17,0.98) 100%), url(/brand/pattern/repetidor.png)',
+        backgroundSize: 'auto, 320px',
+        backgroundBlendMode: 'normal, soft-light',
+        backgroundRepeat: 'no-repeat, repeat',
+      }}
     >
+      {/* Faixa dourada vertical à direita — assinatura sutil da marca */}
+      <span
+        aria-hidden="true"
+        className="absolute top-0 right-0 h-full w-px bg-gradient-to-b from-transparent via-aletis-gold/30 to-transparent"
+      />
+
+      {/* Watermark do símbolo bracket-A no rodapé — selo de marca */}
+      {!collapsed && (
+        <BrandWatermark
+          size={340}
+          tone="cream"
+          opacity={0.05}
+          className="absolute -right-16 -bottom-10 z-0"
+        />
+      )}
+      {collapsed && (
+        <BrandWatermark
+          size={120}
+          tone="cream"
+          opacity={0.07}
+          className="absolute -right-3 bottom-24 z-0"
+        />
+      )}
+
       {/* Logo area */}
-      <div className="flex items-center gap-3 px-4 pt-6 pb-4 border-b border-white/10">
-        <Link to="/dashboard" className="flex-shrink-0 w-8 h-8 rounded-lg bg-aletis-dourado/20 flex items-center justify-center hover:bg-aletis-dourado/30 transition-colors" aria-label="Ir para Dashboard">
-          <span className="text-aletis-dourado font-display font-bold text-sm">A</span>
+      <div className="flex items-center px-4 pt-5 pb-5 border-b border-aletis-sage/15">
+        <Link
+          to="/dashboard"
+          className="flex items-center gap-3 group"
+          aria-label="Ir para Dashboard"
+        >
+          {collapsed ? (
+            <BrandMark variant="symbol" tone="cream" size={32} />
+          ) : (
+            <BrandMark variant="full" tone="cream" size={34} />
+          )}
         </Link>
-        {!collapsed && (
-          <div className="overflow-hidden flex-1">
-            <h1 className="font-display text-aletis-dourado text-xl font-bold leading-tight tracking-wide">
-              ALETIS
-            </h1>
-            <p className="text-white/60 text-[10px] tracking-widest uppercase leading-tight">
-              Consultoria agro-financeira
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Command palette trigger */}
@@ -94,19 +124,23 @@ export default function Sidebar({
               onClick={onOpenPalette}
               className={`
                 group flex items-center gap-2 rounded-xl
-                bg-white/5 hover:bg-white/10 border border-white/10 hover:border-aletis-dourado/40
+                bg-aletis-cream/[0.04] hover:bg-aletis-cream/[0.10]
+                border border-aletis-sage/15 hover:border-aletis-gold/45
                 transition-all duration-200
                 ${collapsed ? 'w-9 h-9 justify-center' : 'w-full px-3 py-2'}
               `}
               aria-label="Abrir busca global"
             >
-              <Command size={14} className="text-aletis-dourado/80 group-hover:text-aletis-dourado flex-shrink-0" />
+              <Command
+                size={14}
+                className="text-aletis-gold/80 group-hover:text-aletis-gold flex-shrink-0"
+              />
               {!collapsed && (
                 <>
-                  <span className="text-[12px] text-white/50 group-hover:text-white/70 flex-1 text-left">
+                  <span className="text-[12px] font-body text-aletis-cream/55 group-hover:text-aletis-cream/85 flex-1 text-left">
                     Buscar qualquer coisa…
                   </span>
-                  <span className="inline-flex items-center gap-0.5 text-[10px] font-mono text-white/40 group-hover:text-white/60 px-1.5 py-0.5 rounded border border-white/10">
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-mono text-aletis-cream/45 group-hover:text-aletis-cream/70 px-1.5 py-0.5 rounded border border-aletis-sage/20">
                     ⌘K
                   </span>
                 </>
@@ -126,13 +160,18 @@ export default function Sidebar({
           <div key={category.id}>
             {!collapsed && (
               <div className="flex items-center gap-2 px-3 mb-2">
-                <p className="text-[10px] font-semibold tracking-[0.2em] text-white/40 uppercase">
+                <p className="text-[10px] font-display font-semibold tracking-[0.22em] text-aletis-sage/75 uppercase">
                   {category.label}
                 </p>
-                <span className="h-px flex-1 bg-white/10" aria-hidden="true" />
+                <span className="h-px flex-1 bg-aletis-sage/15" aria-hidden="true" />
               </div>
             )}
-            {collapsed && <div className="mb-1 mx-auto w-6 border-t border-white/10" aria-hidden="true" />}
+            {collapsed && (
+              <div
+                className="mb-1 mx-auto w-6 border-t border-aletis-sage/15"
+                aria-hidden="true"
+              />
+            )}
             <ul className="space-y-0.5">
               {items.map((item) => (
                 <SidebarItem
@@ -149,30 +188,36 @@ export default function Sidebar({
       </nav>
 
       {/* User area */}
-      <div className="border-t border-white/10 p-3">
+      <div className="border-t border-aletis-sage/15 p-3">
         <div
           className={`
             flex items-center gap-3 rounded-xl p-2
-            hover:bg-white/8 transition-colors duration-200
+            hover:bg-aletis-cream/5 transition-colors duration-200
             ${collapsed ? 'justify-center' : ''}
           `}
         >
           <div
-            className="flex-shrink-0 w-9 h-9 rounded-full bg-aletis-dourado/25 border border-aletis-dourado/40 flex items-center justify-center"
+            className="flex-shrink-0 w-9 h-9 rounded-full bg-aletis-gold/20 border border-aletis-gold/45 flex items-center justify-center"
             aria-hidden="true"
           >
-            <span className="text-aletis-dourado text-xs font-semibold">CK</span>
+            <span className="text-aletis-gold font-display text-xs font-semibold tracking-wide">
+              CK
+            </span>
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-medium truncate">Christian Kohler</p>
-              <p className="text-white/50 text-[11px] truncate">Consultor sênior</p>
+              <p className="font-body text-aletis-cream text-sm font-bold truncate">
+                Christian Kohler
+              </p>
+              <p className="font-body text-aletis-sage/80 text-[11px] truncate">
+                Consultor sênior
+              </p>
             </div>
           )}
           {!collapsed && (
             <button
               onClick={handleLogout}
-              className="text-white/40 hover:text-white/70 transition-colors p-1"
+              className="text-aletis-cream/45 hover:text-aletis-cream transition-colors p-1"
               aria-label="Sair"
               title="Sair"
             >
@@ -183,15 +228,19 @@ export default function Sidebar({
       </div>
 
       {/* Collapse toggle */}
-      <div className="border-t border-white/10 p-2">
+      <div className="border-t border-aletis-sage/15 p-2">
         <button
           onClick={onToggle}
-          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-white/40 hover:text-white/70 hover:bg-white/5 transition-all duration-200"
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-aletis-cream/50 hover:text-aletis-cream hover:bg-aletis-cream/5 transition-all duration-200"
           aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
           title={collapsed ? 'Expandir menu' : 'Recolher menu'}
         >
           {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-          {!collapsed && <span className="text-xs">Recolher</span>}
+          {!collapsed && (
+            <span className="font-display text-[11px] uppercase tracking-[0.18em]">
+              Recolher
+            </span>
+          )}
         </button>
       </div>
     </div>
@@ -200,7 +249,7 @@ export default function Sidebar({
   return (
     <>
       <aside
-        className="hidden lg:flex fixed top-0 left-0 h-screen z-40"
+        className="hidden lg:flex fixed top-0 left-0 h-screen z-40 shadow-brand-lg"
         aria-label="Barra lateral"
       >
         {sidebarContent}
@@ -208,7 +257,7 @@ export default function Sidebar({
 
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-aletis-verde-escuro/60 backdrop-blur-sm z-40 lg:hidden"
           onClick={onMobileClose}
           aria-hidden="true"
         />
@@ -217,6 +266,7 @@ export default function Sidebar({
       <aside
         className={`
           fixed top-0 left-0 h-screen z-50 lg:hidden
+          shadow-brand-lg
           transform transition-transform duration-300 ease-in-out
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
@@ -245,25 +295,27 @@ function SidebarItem({ tool, collapsed, active, onClick }: SidebarItemProps) {
       aria-current={active ? 'page' : undefined}
       className={`
         group relative flex items-center gap-3 rounded-xl
-        text-sm font-medium transition-all duration-200
+        text-[13px] font-body transition-all duration-200
         ${collapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'}
         ${
           active
-            ? 'bg-white/15 text-white shadow-inner'
-            : 'text-white/60 hover:text-white hover:bg-white/8'
+            ? 'bg-aletis-sage/15 text-aletis-cream'
+            : 'text-aletis-cream/65 hover:text-aletis-cream hover:bg-aletis-cream/[0.06]'
         }
       `}
     >
       {active && (
         <span
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-aletis-dourado"
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-aletis-gold"
           aria-hidden="true"
         />
       )}
       <Icon
-        size={19}
+        size={18}
         className={`flex-shrink-0 transition-colors duration-200 ${
-          active ? 'text-aletis-dourado' : 'text-white/55 group-hover:text-white/85'
+          active
+            ? 'text-aletis-gold'
+            : 'text-aletis-sage group-hover:text-aletis-cream'
         }`}
         aria-hidden="true"
       />
@@ -271,17 +323,17 @@ function SidebarItem({ tool, collapsed, active, onClick }: SidebarItemProps) {
         <>
           <span className="flex-1 truncate">{tool.title}</span>
           {badge === 'novo' && (
-            <span className="text-[8px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded-full bg-aletis-dourado text-aletis-verde-escuro">
+            <span className="text-[8.5px] font-display font-bold tracking-[0.14em] uppercase px-1.5 py-0.5 rounded-full bg-aletis-gold text-aletis-verde">
               novo
             </span>
           )}
           {badge === 'ia' && (
-            <span className="text-[8px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded-full bg-aletis-dourado/80 text-aletis-verde-escuro">
+            <span className="text-[8.5px] font-display font-bold tracking-[0.14em] uppercase px-1.5 py-0.5 rounded-full bg-aletis-gold/80 text-aletis-verde">
               IA
             </span>
           )}
           {badge === 'beta' && (
-            <span className="text-[8px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded-full bg-white/15 text-white/80">
+            <span className="text-[8.5px] font-display font-bold tracking-[0.14em] uppercase px-1.5 py-0.5 rounded-full bg-aletis-sage/30 text-aletis-cream">
               beta
             </span>
           )}
