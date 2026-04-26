@@ -19,13 +19,32 @@ interface LayoutProps {
   children: React.ReactNode
 }
 
+const SIDEBAR_KEY = 'aletis:sidebar:collapsed'
+
+function loadSidebarCollapsed(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem(SIDEBAR_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 export default function Layout({ children }: LayoutProps) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(loadSidebarCollapsed)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
 
   const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed((prev) => !prev)
+    setSidebarCollapsed((prev) => {
+      const next = !prev
+      try {
+        window.localStorage.setItem(SIDEBAR_KEY, next ? '1' : '0')
+      } catch {
+        /* ignore quota/private mode */
+      }
+      return next
+    })
   }, [])
 
   const toggleMobileMenu = useCallback(() => {

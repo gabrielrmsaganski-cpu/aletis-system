@@ -930,7 +930,11 @@ export default function Clima() {
                 label={{ value: 'Precip (mm)', angle: 90, position: 'insideRight', style: { fontSize: 11, fill: '#3B82F6' } }}
                 domain={[0, 'auto']}
               />
-              <Tooltip content={<ChartTooltip />} />
+              <Tooltip
+                content={<ChartTooltip />}
+                wrapperStyle={{ outline: 'none' }}
+                cursor={{ fill: '#0F4C35', fillOpacity: 0.04 }}
+              />
               <Legend
                 verticalAlign="top"
                 height={36}

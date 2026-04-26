@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { useApi, apiFetch } from '../hooks/useApi'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
@@ -784,7 +785,19 @@ export default function Propostas() {
             <div className="flex flex-col items-center justify-center py-16 text-aletis-grafite-claro">
               <FileCheck className="w-12 h-12 mb-3 opacity-40" />
               <p className="text-sm font-body">Nenhuma proposta encontrada</p>
-              <p className="text-xs font-body mt-1">Tente ajustar os filtros de busca</p>
+              <p className="text-xs font-body mt-1">
+                {proposals.length === 0
+                  ? 'Comece gerando uma proposta para um cliente da carteira.'
+                  : 'Tente ajustar os filtros de busca.'}
+              </p>
+              {proposals.length === 0 && (
+                <Link
+                  to="/crm"
+                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-aletis-verde text-white text-xs font-semibold hover:bg-aletis-verde-claro transition"
+                >
+                  Abrir CRM e escolher cliente
+                </Link>
+              )}
             </div>
           )}
         </div>

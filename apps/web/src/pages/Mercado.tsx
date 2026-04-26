@@ -802,7 +802,11 @@ export default function Mercado() {
                   width={75}
                   domain={['auto', 'auto']}
                 />
-                <Tooltip content={<PriceTooltip />} />
+                <Tooltip
+                  content={<PriceTooltip />}
+                  wrapperStyle={{ outline: 'none' }}
+                  cursor={{ stroke: '#C9A84C', strokeWidth: 1, strokeDasharray: '3 3' }}
+                />
                 <Area
                   type="monotone"
                   dataKey="price"
