@@ -5,17 +5,16 @@ interface SectionProps {
   id?: string
   children: ReactNode
   className?: string
-  tone?: 'marfim' | 'bege' | 'escuro' | 'profundo'
+  tone?: 'marfim' | 'bege' | 'escuro' | 'profundo' | 'cream'
   compact?: boolean
 }
 
 const toneClasses: Record<NonNullable<SectionProps['tone']>, string> = {
-  marfim: 'bg-aletis-marfim text-aletis-grafite-escuro',
-  bege: 'bg-aletis-bege text-aletis-grafite-escuro',
-  escuro:
-    'bg-gradient-to-b from-aletis-verde-escuro via-aletis-verde-escuro to-aletis-verde-profundo text-white',
-  profundo:
-    'bg-gradient-to-b from-aletis-verde-profundo via-[#04140F] to-aletis-verde-profundo text-white',
+  marfim: 'bg-aletis-cream-marfim text-aletis-verde',
+  cream: 'bg-aletis-cream text-aletis-verde',
+  bege: 'bg-aletis-cream-papel text-aletis-verde',
+  escuro: 'bg-aletis-hero text-aletis-cream',
+  profundo: 'bg-aletis-hero text-aletis-cream',
 }
 
 export function Section({ id, children, className, tone = 'marfim', compact }: SectionProps) {
