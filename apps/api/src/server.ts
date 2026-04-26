@@ -1,3 +1,9 @@
+// OpenTelemetry — DEVE ser carregado antes de qualquer outro import
+// para que o auto-instrumentation enxergue os módulos. No-op quando
+// OTEL_ENABLED!=1 (overhead zero em dev).
+import { initOtel } from './lib/otel.js'
+initOtel()
+
 import Fastify, { FastifyServerOptions } from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
