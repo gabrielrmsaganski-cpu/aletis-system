@@ -342,11 +342,56 @@ export const bscSnapshot = pgTable(
   }),
 )
 
+/* ─────────────────────────────────────────────────────────────
+ * 15. alix_confirmation — pendings + batches de confirmação ALIX
+ * ──────────────────────────────────────────────────────────── */
+export const alixConfirmation = pgTable(
+  'alix_confirmation',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id'),
+    tipo: text('tipo').notNull(), // 'pending'|'batch'
+    status: text('status').notNull(), // 'pending'|'approved'|'rejected'|'expired'
+    expiraEm: timestamp('expira_em', { withTimezone: true }),
+    payload: jsonb('payload').notNull(),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    statusIdx: index('alix_confirmation_status_idx').on(t.status),
+    sessionIdx: index('alix_confirmation_session_idx').on(t.sessionId),
+    expiraIdx: index('alix_confirmation_expira_idx').on(t.expiraEm),
+  }),
+)
+
+/* ─────────────────────────────────────────────────────────────
+ * 16. alix_feedback — NPS + thumbs up/down em respostas Alix
+ * ──────────────────────────────────────────────────────────── */
+export const alixFeedback = pgTable(
+  'alix_feedback',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    sessionId: text('session_id'),
+    messageId: text('message_id'),
+    rating: text('rating'), // 'positive'|'negative'|'neutral'
+    motivo: text('motivo'),
+    comentario: text('comentario'),
+    payload: jsonb('payload').notNull(),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    sessionIdx: index('alix_feedback_session_idx').on(t.sessionId, t.criadoEm),
+    ratingIdx: index('alix_feedback_rating_idx').on(t.rating),
+  }),
+)
+
 export type Cliente = typeof cliente.$inferSelect
 export type ClienteInsert = typeof cliente.$inferInsert
 export type AlixMemoryRow = typeof alixMemory.$inferSelect
 export type AlixInsightRow = typeof alixInsight.$inferSelect
 export type BscSnapshotRow = typeof bscSnapshot.$inferSelect
+export type AlixConfirmationRow = typeof alixConfirmation.$inferSelect
+export type AlixFeedbackRow = typeof alixFeedback.$inferSelect
 export type Dossie = typeof dossie.$inferSelect
 export type Proposta = typeof proposta.$inferSelect
 export type LeadPgfn = typeof leadPgfn.$inferSelect

@@ -58,6 +58,17 @@ export class FeedbackService {
     } catch (err) {
       console.warn('[FeedbackService] append falhou:', (err as Error).message)
     }
+
+    // Wave-PG-17: dual-write best-effort no Postgres
+    void (async () => {
+      try {
+        const repo = await import('../../../db/AlixConfirmationFeedbackRepository.js')
+        await repo.appendFeedback(full as unknown as Parameters<typeof repo.appendFeedback>[0])
+      } catch (err) {
+        console.warn('[FeedbackService.record] dual-write PG falhou:', (err as Error).message)
+      }
+    })()
+
     return full
   }
 

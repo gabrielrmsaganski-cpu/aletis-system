@@ -143,6 +143,20 @@ export class AlixConfirmationStore {
       const batches = Array.from(this.batches.values())
       const data = { v: 1, savedAt: Date.now(), pendings, batches }
       writeFileSync(this.snapshotFile(), JSON.stringify(data))
+
+      // Wave-PG-17: dual-write best-effort no Postgres
+      void (async () => {
+        try {
+          const repo = await import('../../db/AlixConfirmationFeedbackRepository.js')
+          await repo.dumpConfirmations({
+            pendings: pendings as unknown as Iterable<Parameters<typeof repo.upsertConfirmation>[0]>,
+            batches: batches as unknown as Iterable<Parameters<typeof repo.upsertConfirmation>[0]>,
+          })
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn('[AlixConfirmationStore.persistSnapshot] dual-write PG falhou:', (err as Error).message)
+        }
+      })()
     } catch {
       /* best-effort */
     }
