@@ -93,6 +93,18 @@ export class BscService {
     await fs.mkdir(STORAGE_DIR, { recursive: true })
     const file = join(STORAGE_DIR, `${clienteId}.jsonl`)
     await fs.appendFile(file, JSON.stringify(record) + '\n', 'utf-8')
+
+    // Wave-PG-15: dual-write best-effort no Postgres
+    void (async () => {
+      try {
+        const repo = await import('../../db/BscRepository.js')
+        await repo.appendBscSnapshot(record as unknown as Parameters<typeof repo.appendBscSnapshot>[0])
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[BscService.snapshot] dual-write PG falhou:', (err as Error).message)
+      }
+    })()
+
     return { resultado, record }
   }
 

@@ -323,10 +323,30 @@ export const alixInsight = pgTable(
   }),
 )
 
+/* ─────────────────────────────────────────────────────────────
+ * 14. bsc_snapshot — Balanced Scorecard append-only por cliente
+ * ──────────────────────────────────────────────────────────── */
+export const bscSnapshot = pgTable(
+  'bsc_snapshot',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    clienteId: text('cliente_id').notNull(),
+    calculadoEm: timestamp('calculado_em', { withTimezone: true }).notNull(),
+    statusGeral: text('status_geral'), // 'verde'|'amarelo'|'vermelho'|null
+    notaGlobal: numeric('nota_global', { precision: 5, scale: 2 }),
+    payload: jsonb('payload').notNull(), // BscSnapshotRecord completo
+  },
+  (t) => ({
+    clienteIdx: index('bsc_snapshot_cliente_idx').on(t.clienteId, t.calculadoEm),
+    statusIdx: index('bsc_snapshot_status_idx').on(t.statusGeral),
+  }),
+)
+
 export type Cliente = typeof cliente.$inferSelect
 export type ClienteInsert = typeof cliente.$inferInsert
 export type AlixMemoryRow = typeof alixMemory.$inferSelect
 export type AlixInsightRow = typeof alixInsight.$inferSelect
+export type BscSnapshotRow = typeof bscSnapshot.$inferSelect
 export type Dossie = typeof dossie.$inferSelect
 export type Proposta = typeof proposta.$inferSelect
 export type LeadPgfn = typeof leadPgfn.$inferSelect
