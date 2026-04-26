@@ -1,25 +1,9 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Playfair_Display } from 'next/font/google'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { FloatingChat } from '@/components/layout/FloatingChat'
 import { siteConfig } from '@/lib/siteConfig'
 import './globals.css'
-
-const inter = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-body',
-  weight: ['300', '400', '500', '600', '700'],
-})
-
-const playfair = Playfair_Display({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-display',
-  weight: ['400', '600', '700', '800'],
-  style: ['normal', 'italic'],
-})
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
@@ -38,6 +22,12 @@ export const metadata: Metadata = {
     'crédito rural',
     'superendividamento produtor rural',
     'inteligência financeira agro',
+    'finanças estratégicas',
+    'agrobusiness',
+    'BPO financeiro',
+    'gestão financeira',
+    'fomento rural',
+    'governança e controles',
     'ALETIS',
   ],
   openGraph: {
@@ -78,17 +68,23 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#0A3526',
+  themeColor: '#17251b',
   width: 'device-width',
   initialScale: 1,
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${inter.variable} ${playfair.variable}`}>
+    <html lang="pt-BR">
       <body className="min-h-screen antialiased">
+        <a
+          href="#conteudo"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-full focus:bg-aletis-gold focus:px-4 focus:py-2 focus:font-display focus:text-xs focus:font-semibold focus:uppercase focus:tracking-wider2 focus:text-aletis-verde"
+        >
+          Pular para conteúdo
+        </a>
         <Header />
-        <main id="conteudo" className="pt-[76px]">
+        <main id="conteudo" className="pt-[80px]">
           {children}
         </main>
         <Footer />

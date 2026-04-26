@@ -1,15 +1,18 @@
 /**
  * Configuração central do site ALETIS — navegação, contato, SEO base.
  * Único ponto de verdade; qualquer alteração institucional passa aqui.
+ *
+ * Quatro pilares conforme Manual de Identidade Visual oficial:
+ *   Agro · Corporate · Fomento · Gestão
  */
 
 export const siteConfig = {
   name: 'ALETIS',
-  tagline: 'Finanças Estratégicas',
+  tagline: 'Finanças Estratégicas & Agrobusiness',
   shortDescription:
     'Inteligência financeira e estratégica para o agronegócio brasileiro.',
   longDescription:
-    'A ALETIS conduz reestruturações de dívida, revisão de contratos rurais e diagnósticos financeiros para produtores, grupos e empresas do agro — com metodologia proprietária, tecnologia sob medida e visão integrada de mercado.',
+    'A ALETIS reúne quatro pilares — Agro, Corporate, Fomento e Gestão — em uma mesa técnica independente. Reestruturação de dívida rural, BPO financeiro, captação estruturada e governança corporativa, com metodologia proprietária e tecnologia sob medida.',
   url: 'https://aletis.com.br',
   ogImage: '/og-aletis.png',
   locale: 'pt-BR',
@@ -28,7 +31,7 @@ export const siteConfig = {
 export const nav = {
   primary: [
     { label: 'Sobre', href: '/sobre' },
-    { label: 'Consultoria', href: '/solucoes' },
+    { label: 'Soluções', href: '/solucoes' },
     { label: 'Para quem é', href: '/para-quem-e' },
     { label: 'Calculadoras', href: '/calculadoras' },
     { label: 'Insights', href: '/insights' },
@@ -42,12 +45,12 @@ export const nav = {
       { label: 'Contato', href: '/contato' },
     ],
     solucoes: [
+      { label: 'ALETIS Agro', href: '/solucoes#agro' },
+      { label: 'ALETIS Corporate', href: '/solucoes#corporate' },
+      { label: 'ALETIS Fomento', href: '/solucoes#fomento' },
+      { label: 'ALETIS Gestão', href: '/solucoes#gestao' },
       { label: 'Diagnóstico Financeiro', href: '/solucoes#diagnostico' },
       { label: 'Reestruturação de Dívida', href: '/solucoes#reestruturacao' },
-      { label: 'Revisional & Abusividade', href: '/solucoes#revisional' },
-      { label: 'Estruturação Financeira', href: '/solucoes#estruturacao' },
-      { label: 'Inteligência de Mercado', href: '/solucoes#mercado' },
-      { label: 'Gestão de Crise', href: '/solucoes#crise' },
     ],
     ferramentas: [
       { label: 'Simulador de reestruturação', href: '/calculadoras/reestruturacao' },
@@ -62,34 +65,34 @@ export const nav = {
   },
 } as const
 
+/**
+ * Pilares oficiais — conforme Manual de Identidade Visual.
+ * Usados no Footer institucional e em /solucoes.
+ */
 export const pilares = [
   {
-    key: 'inteligencia',
-    titulo: 'Inteligência Financeira',
-    descricao:
-      'Diagnóstico auditável, memória de cálculo e mapeamento de abusividade antes de qualquer conversa com credor.',
-    icone: 'BrainCircuit',
-  },
-  {
-    key: 'reestruturacao',
-    titulo: 'Reestruturação Estratégica',
-    descricao:
-      'Planos multi-credor com DSCR realista, garantias otimizadas e proteção patrimonial.',
-    icone: 'LineChart',
-  },
-  {
     key: 'agro',
-    titulo: 'Visão de Agro',
-    descricao:
-      'Safra, basis, clima, câmbio e CPR dentro da mesma mesa: finanças que entendem campo.',
+    titulo: 'ALETIS Agro',
+    descricao: 'Crédito rural & gestão financeira do produtor',
     icone: 'Wheat',
   },
   {
-    key: 'execucao',
-    titulo: 'Execução até o fim',
-    descricao:
-      'O plano não termina na assinatura. DSCR mensal, alertas precoces e renegociação preventiva por toda a vigência do acordo.',
-    icone: 'Handshake',
+    key: 'corporate',
+    titulo: 'ALETIS Corporate',
+    descricao: 'BPO & gestão financeira para empresas',
+    icone: 'Building2',
+  },
+  {
+    key: 'fomento',
+    titulo: 'ALETIS Fomento',
+    descricao: 'Crédito & reestruturação',
+    icone: 'Sprout',
+  },
+  {
+    key: 'gestao',
+    titulo: 'ALETIS Gestão',
+    descricao: 'Governança & controles',
+    icone: 'ShieldCheck',
   },
 ] as const
 

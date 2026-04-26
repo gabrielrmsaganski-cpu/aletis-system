@@ -3,20 +3,99 @@
 @tailwind utilities;
 
 /* ═══════════════════════════════════════════════════════════════
-   ALETIS — Site Institucional · Design System
-   Verde profundo · Dourado sofisticado · Marfim elegante
+   ALETIS — Site Institucional · Design System Premium
+   Manual de Identidade Visual oficial (Bulbo Agência)
+   Verde-dark · Sage · Cream · Gold
+   Tipografia: Chakra Petch (display) + Verdana (body)
    ═══════════════════════════════════════════════════════════════ */
 
+/* ────────────────────────────────────────────────────────────── */
+/* Tipografia oficial — self-hosted                                */
+/* ────────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('/fonts/chakra/ChakraPetch-Light.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/chakra/ChakraPetch-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/chakra/ChakraPetch-Medium.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/chakra/ChakraPetch-SemiBold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/chakra/ChakraPetch-Bold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/chakra/ChakraPetch-Italic.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/chakra/ChakraPetch-BoldItalic.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Verdana';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Verdana'), url('/fonts/verdana/Verdana.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Verdana';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Verdana Bold'), url('/fonts/verdana/Verdana-Bold.ttf') format('truetype');
+}
+
 :root {
-  --aletis-verde: #0F4C35;
-  --aletis-verde-escuro: #0A3526;
-  --aletis-verde-profundo: #062019;
-  --aletis-dourado: #C9A84C;
-  --aletis-dourado-suave: #E8C97A;
-  --aletis-marfim: #FDFBF6;
-  --aletis-bege: #F8F5EF;
-  --aletis-borda: #E2DDD5;
-  --aletis-grafite: #1C1C1E;
+  --font-display: 'Chakra Petch';
+  --font-body: 'Verdana';
+
+  /* Paleta oficial */
+  --aletis-verde: #17251b;
+  --aletis-verde-escuro: #0d1611;
+  --aletis-verde-profundo: #080d09;
+  --aletis-verde-medio: #465b4a;
+  --aletis-sage: #b2bda1;
+  --aletis-sage-claro: #cdd5c0;
+  --aletis-cream: #ede9d9;
+  --aletis-cream-papel: #f5f2e7;
+  --aletis-cream-marfim: #fbf9f0;
+  --aletis-gold: #cb9d52;
+  --aletis-gold-escuro: #a87f3d;
+  --aletis-gold-claro: #e3bd80;
+  --aletis-cinza: #d9d9d9;
+  --aletis-grafite: #3d3d3d;
+  --aletis-borda: #d9d3bc;
 }
 
 @layer base {
@@ -28,22 +107,26 @@
   }
 
   body {
-    @apply bg-aletis-marfim text-aletis-grafite-escuro font-body antialiased;
-    font-feature-settings: 'ss01', 'cv01', 'cv11';
+    background: var(--aletis-cream-marfim);
+    color: var(--aletis-verde);
+    font-family: 'Verdana', 'Segoe UI', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
   }
 
-  /* Seleção premium */
   ::selection {
-    background: rgba(201, 168, 76, 0.35);
-    color: #062019;
+    background: var(--aletis-gold);
+    color: var(--aletis-verde);
   }
 
-  /* Headings display */
-  h1, h2, h3 {
-    @apply font-display tracking-tight;
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Chakra Petch', system-ui, sans-serif;
+    color: inherit;
+    letter-spacing: 0.005em;
+    font-weight: 600;
   }
+  h1 { font-weight: 700; letter-spacing: 0.01em; }
 
-  /* Scrollbar refinado */
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -52,84 +135,105 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(15, 76, 53, 0.25);
+    background: rgba(70, 91, 74, 0.32);
     border-radius: 999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(15, 76, 53, 0.5);
+    background: rgba(70, 91, 74, 0.6);
   }
 
-  /* Foco premium global */
   *:focus-visible {
-    outline: 2px solid rgba(201, 168, 76, 0.7);
+    outline: 2px solid var(--aletis-gold);
     outline-offset: 3px;
     border-radius: 4px;
   }
 }
 
 @layer components {
-  /* ─── Linha dourada hair-line ─── */
+  /* ─── Hairline + ornamentos ─── */
   .gold-hairline {
-    @apply inline-block h-px w-10 bg-aletis-dourado;
+    @apply inline-block h-px w-10 bg-aletis-gold;
+  }
+  .gold-divider {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-aletis-gold/45 to-transparent;
   }
 
-  /* ─── Eyebrow (pequeno label acima de títulos) ─── */
+  /* ─── Eyebrow ─── */
   .eyebrow {
-    @apply inline-flex items-center gap-2 text-[11px] font-display font-semibold uppercase tracking-widest2 text-aletis-dourado-escuro;
+    @apply inline-flex items-center gap-2 text-[11px] font-display font-semibold uppercase tracking-widest2 text-aletis-gold-escuro;
   }
-
   .eyebrow--light {
-    @apply text-aletis-dourado;
+    @apply text-aletis-gold;
   }
 
   /* ─── Botões premium ─── */
   .btn-primary {
-    @apply relative inline-flex items-center justify-center gap-2 rounded-full bg-aletis-dourado px-6 py-3 font-display text-sm font-semibold uppercase tracking-wider2 text-aletis-verde-escuro shadow-gold transition-all duration-300 hover:bg-aletis-dourado-suave hover:-translate-y-0.5 hover:shadow-[0_14px_45px_-18px_rgba(201,168,76,0.75)] active:translate-y-0;
+    @apply relative inline-flex items-center justify-center gap-2 rounded-full bg-aletis-gold px-7 py-3.5 font-display text-[12.5px] font-semibold uppercase tracking-wider2 text-aletis-verde shadow-gold transition-all duration-300 hover:bg-aletis-gold-claro hover:-translate-y-0.5 hover:shadow-gold-lg active:translate-y-0;
   }
-
   .btn-ghost {
-    @apply relative inline-flex items-center justify-center gap-2 rounded-full border border-aletis-dourado/40 bg-transparent px-6 py-3 font-display text-sm font-semibold uppercase tracking-wider2 text-aletis-dourado transition-all duration-300 hover:border-aletis-dourado hover:bg-aletis-dourado/10;
+    @apply relative inline-flex items-center justify-center gap-2 rounded-full border border-aletis-gold/45 bg-transparent px-7 py-3.5 font-display text-[12.5px] font-semibold uppercase tracking-wider2 text-aletis-gold transition-all duration-300 hover:border-aletis-gold hover:bg-aletis-gold/10;
   }
-
   .btn-secondary {
-    @apply relative inline-flex items-center justify-center gap-2 rounded-full border border-aletis-verde/30 bg-white px-6 py-3 font-display text-sm font-semibold uppercase tracking-wider2 text-aletis-verde-escuro transition-all duration-300 hover:border-aletis-verde hover:bg-aletis-verde hover:text-white;
+    @apply relative inline-flex items-center justify-center gap-2 rounded-full border border-aletis-verde/30 bg-white px-7 py-3.5 font-display text-[12.5px] font-semibold uppercase tracking-wider2 text-aletis-verde transition-all duration-300 hover:border-aletis-verde hover:bg-aletis-verde hover:text-aletis-cream;
+  }
+  .btn-cream {
+    @apply relative inline-flex items-center justify-center gap-2 rounded-full bg-aletis-cream-papel px-7 py-3.5 font-display text-[12.5px] font-semibold uppercase tracking-wider2 text-aletis-verde border border-aletis-borda transition-all duration-300 hover:bg-white hover:border-aletis-gold/50;
   }
 
-  /* ─── Card premium ─── */
+  /* ─── Cards ─── */
   .card-premium {
-    @apply relative overflow-hidden rounded-2xl border border-aletis-borda/70 bg-white p-6 shadow-premium-sm transition-all duration-500 hover:-translate-y-1 hover:border-aletis-dourado/40 hover:shadow-premium;
+    @apply relative overflow-hidden rounded-2xl border border-aletis-borda/70 bg-white p-6 shadow-premium-sm transition-all duration-500 hover:-translate-y-1 hover:border-aletis-gold/45 hover:shadow-premium;
   }
-
+  .card-premium::before {
+    content: '';
+    @apply pointer-events-none absolute inset-x-0 top-0 h-[2px] rounded-t-2xl bg-gradient-to-r from-transparent via-aletis-gold/70 to-transparent opacity-0 transition-opacity duration-500;
+  }
+  .card-premium:hover::before {
+    @apply opacity-100;
+  }
+  .card-cream {
+    @apply relative overflow-hidden rounded-2xl border border-aletis-cream-escuro/70 p-6 shadow-premium-sm transition-all duration-500 hover:-translate-y-1 hover:border-aletis-gold/45 hover:shadow-premium;
+    background: linear-gradient(180deg, #fbf9f0 0%, #ede9d9 100%);
+  }
   .card-dark {
-    @apply relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-aletis-verde-escuro to-aletis-verde-profundo p-6 text-white shadow-premium;
+    @apply relative overflow-hidden rounded-2xl border border-aletis-sage/15 p-6 text-aletis-cream shadow-premium;
+    background: linear-gradient(140deg, #17251b 0%, #1f2f25 60%, #243a2c 100%);
+  }
+  .card-glass {
+    @apply relative rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-white/[0.02] backdrop-blur-xl shadow-premium;
   }
 
-  /* ─── Container refinado ─── */
+  /* ─── Container ─── */
   .container-refined {
     @apply mx-auto w-full max-w-[1240px] px-5 sm:px-8 lg:px-10;
   }
-
-  /* ─── Link de navegação ─── */
-  .nav-link {
-    @apply relative font-body text-sm font-medium text-white/75 transition-colors duration-200 hover:text-white;
+  .container-wide {
+    @apply mx-auto w-full max-w-[1440px] px-5 sm:px-8 lg:px-12;
   }
 
+  /* ─── Nav link ─── */
+  .nav-link {
+    @apply relative font-body text-[13px] font-medium text-aletis-cream/75 transition-colors duration-200 hover:text-aletis-cream;
+  }
   .nav-link::after {
     content: '';
     position: absolute;
     left: 0;
-    bottom: -6px;
+    bottom: -8px;
     width: 0;
     height: 1px;
-    background: var(--aletis-dourado);
+    background: var(--aletis-gold);
     transition: width 0.3s ease;
   }
-
-  .nav-link:hover::after {
+  .nav-link:hover::after,
+  .nav-link.is-active::after {
     width: 100%;
   }
+  .nav-link.is-active {
+    @apply text-aletis-cream;
+  }
 
-  /* ─── Ornamento de moldura dourada ─── */
+  /* ─── Moldura dourada ─── */
   .gold-frame {
     position: relative;
   }
@@ -137,35 +241,100 @@
     content: '';
     position: absolute;
     inset: 0;
-    border: 1px solid rgba(201, 168, 76, 0.25);
+    border: 1px solid rgba(203, 157, 82, 0.25);
     border-radius: inherit;
     pointer-events: none;
   }
 
-  /* ─── Gradiente texto dourado ─── */
+  /* ─── Texto gradiente gold ─── */
   .text-gold-gradient {
-    background: linear-gradient(135deg, #F5E6B8 0%, #C9A84C 50%, #A68A3A 100%);
+    background: linear-gradient(135deg, #f0d9a8 0%, #cb9d52 50%, #a87f3d 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .text-cream-gradient {
+    background: linear-gradient(135deg, #fbf9f0 0%, #ede9d9 60%, #cdd5c0 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
 
-  /* ─── Serif display com tracking fino ─── */
+  /* ─── Padrão repetidor ─── */
+  .bg-aletis-repetidor {
+    background-image: url('/brand/pattern/repetidor.png');
+    background-size: 320px;
+    background-repeat: repeat;
+    background-blend-mode: soft-light;
+  }
+  .bg-aletis-hero {
+    background-color: var(--aletis-verde);
+    background-image:
+      linear-gradient(135deg, rgba(13,22,17,0.96) 0%, rgba(23,37,27,0.92) 50%, rgba(36,58,44,0.94) 100%),
+      url('/brand/pattern/repetidor.png');
+    background-size: auto, 360px;
+    background-blend-mode: normal, soft-light;
+    background-repeat: no-repeat, repeat;
+  }
+
+  /* ─── Tipografia display ─── */
+  .display-3xl {
+    @apply font-display font-bold tracking-tight;
+    font-size: clamp(48px, 7vw, 96px);
+    line-height: 0.98;
+    letter-spacing: -0.01em;
+  }
   .display-xl {
-    @apply font-display text-4xl leading-[1.05] tracking-tight md:text-[56px] lg:text-[68px];
+    @apply font-display font-bold tracking-tight;
+    font-size: clamp(40px, 5.4vw, 72px);
+    line-height: 1.02;
   }
   .display-lg {
-    @apply font-display text-3xl leading-[1.1] tracking-tight md:text-5xl;
+    @apply font-display font-bold tracking-tight;
+    font-size: clamp(32px, 4.4vw, 56px);
+    line-height: 1.06;
   }
   .display-md {
-    @apply font-display text-2xl leading-[1.15] tracking-tight md:text-[34px];
+    @apply font-display font-semibold tracking-tight;
+    font-size: clamp(24px, 3vw, 40px);
+    line-height: 1.12;
+  }
+
+  /* ─── Section padding ─── */
+  .section-pad {
+    @apply py-20 md:py-24 lg:py-28;
+  }
+  .section-pad-sm {
+    @apply py-12 md:py-16 lg:py-20;
+  }
+
+  /* ─── Stat / KPI ─── */
+  .stat-num {
+    @apply font-display text-[44px] md:text-[56px] font-bold leading-none tabular-nums tracking-tight text-aletis-verde;
+  }
+  .stat-num-light {
+    @apply font-display text-[44px] md:text-[56px] font-bold leading-none tabular-nums tracking-tight text-aletis-cream;
+  }
+  .stat-label {
+    @apply mt-2 font-display text-[10.5px] uppercase tracking-widest2 text-aletis-verde-medio;
+  }
+  .stat-label-light {
+    @apply mt-2 font-display text-[10.5px] uppercase tracking-widest2 text-aletis-sage;
+  }
+
+  /* ─── Chip / pill ─── */
+  .chip-gold {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-aletis-gold/40 bg-aletis-gold/10 px-3 py-1 text-[10.5px] font-display font-semibold uppercase tracking-widest2 text-aletis-gold-escuro;
+  }
+  .chip-sage {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-aletis-sage/45 bg-aletis-sage/15 px-3 py-1 text-[10.5px] font-display font-semibold uppercase tracking-widest2 text-aletis-verde;
+  }
+  .chip-dark {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-aletis-sage/20 bg-aletis-cream/5 px-3 py-1 text-[10.5px] font-display font-semibold uppercase tracking-widest2 text-aletis-cream;
   }
 }
 
-/* ─── Reveal (fade-up ao entrar no viewport) ─── */
-/* Padrão: visível. Só esconde quando o componente client montou e ainda
-   não intersectou (classe .is-hidden aplicada pelo JS). Isso garante que
-   sem JS, em SSR, reader-mode ou crawlers, o conteúdo permaneça legível. */
+/* ─── Reveal (scroll-triggered fade-up) ─── */
 .reveal {
   opacity: 1;
   transform: none;
@@ -182,7 +351,6 @@
   transform: none;
 }
 
-/* Respeita usuários que preferem menos movimento */
 @media (prefers-reduced-motion: reduce) {
   .reveal,
   .reveal.is-hidden {

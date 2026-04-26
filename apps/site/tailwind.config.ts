@@ -5,63 +5,106 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        /**
+         * Paleta oficial ALETIS — Manual de Identidade Visual (Bulbo Agência).
+         * verde-dark   #17251b  primary brand (fundos imersivos, hero, header)
+         * verde-medio  #465b4a  secondary brand (botões, active)
+         * sage         #b2bda1  apoio neutro (chips, divisórias, padrões)
+         * cream        #ede9d9  papel da marca (backgrounds claros, cards)
+         * gold         #cb9d52  acento estratégico (CTAs, destaques)
+         * cinza        #d9d9d9  neutro de UI
+         */
         aletis: {
           verde: {
-            DEFAULT: '#0F4C35',
-            escuro: '#0A3526',
-            profundo: '#062019',
-            medio: '#1B6B4A',
-            claro: '#2A8F64',
+            DEFAULT: '#17251b',
+            escuro: '#0d1611',
+            profundo: '#080d09',
+            medio: '#465b4a',
+            claro: '#6b7d6f',
           },
+          sage: {
+            DEFAULT: '#b2bda1',
+            escuro: '#8e9a7d',
+            claro: '#cdd5c0',
+          },
+          cream: {
+            DEFAULT: '#ede9d9',
+            escuro: '#d9d3bc',
+            papel: '#f5f2e7',
+            marfim: '#fbf9f0',
+          },
+          gold: {
+            DEFAULT: '#cb9d52',
+            escuro: '#a87f3d',
+            claro: '#e3bd80',
+            brilho: '#f0d9a8',
+          },
+          cinza: {
+            DEFAULT: '#d9d9d9',
+            grafite: '#3d3d3d',
+          },
+          // Aliases legados — apontados para a paleta nova para evitar
+          // regressão em componentes ainda não migrados.
           dourado: {
-            DEFAULT: '#C9A84C',
-            escuro: '#A68A3A',
-            suave: '#E8C97A',
-            claro: '#F5E6B8',
-            brilho: '#F2D98A',
+            DEFAULT: '#cb9d52',
+            escuro: '#a87f3d',
+            suave: '#e3bd80',
+            claro: '#f0d9a8',
+            brilho: '#f0d9a8',
           },
-          marfim: '#FDFBF6',
-          bege: '#F8F5EF',
+          marfim: '#fbf9f0',
+          bege: '#ede9d9',
           grafite: {
-            escuro: '#1C1C1E',
-            medio: '#4A4A4A',
-            claro: '#6B6B6B',
+            escuro: '#17251b',
+            medio: '#465b4a',
+            claro: '#6b7d6f',
           },
-          borda: '#E2DDD5',
-          bordaSutil: '#EDE8DF',
+          borda: '#d9d3bc',
+          bordaSutil: '#e9e3d2',
         },
-        positivo: '#1B8F5A',
-        alerta: '#C0392B',
-        atencao: '#C9A84C',
+        positivo: '#465b4a',
+        alerta: '#a83232',
+        atencao: '#cb9d52',
       },
       fontFamily: {
-        display: ['var(--font-display)', 'Playfair Display', 'serif'],
-        body: ['var(--font-body)', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)', '"Chakra Petch"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        body: ['var(--font-body)', 'Verdana', '"Segoe UI"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       letterSpacing: {
         wider2: '0.12em',
         widest2: '0.22em',
+        widest3: '0.28em',
       },
       boxShadow: {
-        premium: '0 20px 60px -25px rgba(10, 53, 38, 0.35)',
-        'premium-sm': '0 8px 24px -12px rgba(10, 53, 38, 0.25)',
-        gold: '0 10px 40px -18px rgba(201, 168, 76, 0.55)',
+        premium: '0 22px 64px -28px rgba(13, 22, 17, 0.45)',
+        'premium-sm': '0 8px 24px -12px rgba(13, 22, 17, 0.30)',
+        gold: '0 12px 38px -16px rgba(203, 157, 82, 0.55)',
+        'gold-lg': '0 18px 56px -20px rgba(203, 157, 82, 0.7)',
         'inner-hair': 'inset 0 1px 0 0 rgba(255, 255, 255, 0.06)',
+        'brand-sm': '0 1px 2px 0 rgba(23,37,27,0.08)',
+        brand: '0 4px 14px -4px rgba(23,37,27,0.18)',
+        'brand-lg': '0 12px 28px -8px rgba(23,37,27,0.28)',
       },
       backgroundImage: {
-        'grain':
+        grain:
           "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")",
         'hero-radial':
-          'radial-gradient(circle at 18% 18%, rgba(201, 168, 76, 0.18) 0%, transparent 38%), radial-gradient(circle at 82% 70%, rgba(42, 143, 100, 0.14) 0%, transparent 45%)',
+          'radial-gradient(circle at 18% 18%, rgba(203, 157, 82, 0.22) 0%, transparent 38%), radial-gradient(circle at 82% 70%, rgba(178, 189, 161, 0.16) 0%, transparent 45%)',
         'gold-sheen':
-          'linear-gradient(135deg, rgba(201, 168, 76, 0.0) 0%, rgba(201, 168, 76, 0.25) 48%, rgba(201, 168, 76, 0) 100%)',
+          'linear-gradient(135deg, rgba(203, 157, 82, 0) 0%, rgba(203, 157, 82, 0.28) 48%, rgba(203, 157, 82, 0) 100%)',
+        'aletis-pattern': "url('/brand/pattern/repetidor.png')",
+        'aletis-cream':
+          'linear-gradient(180deg, #fbf9f0 0%, #ede9d9 100%)',
       },
       animation: {
         'fade-up': 'fadeUp 0.9s cubic-bezier(0.22, 1, 0.36, 1) both',
         'fade-in': 'fadeIn 0.8s ease-out both',
         'gold-shimmer': 'goldShimmer 8s ease-in-out infinite',
-        'ticker': 'ticker 60s linear infinite',
+        ticker: 'ticker 60s linear infinite',
         'pulse-soft': 'pulseSoft 3.2s ease-in-out infinite',
+        'float-slow': 'floatSlow 7s ease-in-out infinite',
+        'rotate-slow': 'rotateSlow 60s linear infinite',
       },
       keyframes: {
         fadeUp: {
@@ -83,6 +126,14 @@ const config: Config = {
         pulseSoft: {
           '0%, 100%': { opacity: '0.6', transform: 'scale(1)' },
           '50%': { opacity: '1', transform: 'scale(1.03)' },
+        },
+        floatSlow: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-8px)' },
+        },
+        rotateSlow: {
+          from: { transform: 'rotate(0deg)' },
+          to: { transform: 'rotate(360deg)' },
         },
       },
     },
