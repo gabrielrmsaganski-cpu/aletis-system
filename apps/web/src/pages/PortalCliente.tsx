@@ -199,6 +199,15 @@ interface MemoriaSimplificadaDTO {
   blocos: MemoriaBlocoDTO[]
 }
 
+interface AuditoriaEventoDTO {
+  id: number
+  tipo: string
+  canal?: string
+  criadoEm: string
+  ip?: string
+  detalhes?: Record<string, unknown>
+}
+
 /* ──────────────────────────────────────────────────────────────
  * Helpers
  * ──────────────────────────────────────────────────────────── */
@@ -1266,6 +1275,90 @@ function MemoriaSimplificada({ memoria }: { memoria: MemoriaSimplificadaDTO | nu
 }
 
 /* ──────────────────────────────────────────────────────────────
+ * TRILHA DE AUDITORIA + EXPORT LGPD
+ * ──────────────────────────────────────────────────────────── */
+const TIPO_LABEL: Record<string, string> = {
+  login: 'Você entrou no portal',
+  login_falhou: 'Tentativa de login com erro',
+  logout: 'Você saiu',
+  magic_solicitado: 'Link mágico solicitado',
+  magic_consumido: 'Você entrou via link mágico',
+  reset_solicitado: 'Reset de senha solicitado',
+  reset_concluido: 'Senha redefinida',
+  senha_alterada: 'Senha alterada',
+  documento_enviado: 'Documento enviado por você',
+  mensagem_enviada: 'Mensagem enviada',
+  doc_visualizado: 'Documento visualizado',
+  pendencia_criada: 'Consultor solicitou um documento',
+  pendencia_resolvida: 'Pendência revisada pelo consultor',
+}
+
+function AuditoriaTimeline({ eventos, token }: { eventos: AuditoriaEventoDTO[]; token: string }) {
+  const [exporting, setExporting] = useState(false)
+
+  async function exportarDados() {
+    setExporting(true)
+    try {
+      const r = await fetch('/api/portal/exportar-meus-dados', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!r.ok) throw new Error('falha')
+      const blob = await r.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `aletis-meus-dados-${Date.now()}.json`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 2_000)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  if (eventos.length === 0) return null
+
+  return (
+    <div className="card-premium p-6">
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-aletis-cream-papel border border-aletis-cream-escuro flex items-center justify-center">
+            <Shield className="w-5 h-5 text-aletis-verde-medio" />
+          </div>
+          <div>
+            <p className="font-display text-base font-bold text-aletis-verde">Trilha de auditoria</p>
+            <p className="font-body text-[12.5px] text-aletis-verde-medio">
+              Tudo que aconteceu na sua conta — você sempre pode conferir e baixar (LGPD).
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={exportarDados}
+          disabled={exporting}
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-display text-[11px] font-semibold uppercase tracking-wider bg-aletis-cream text-aletis-verde border border-aletis-cream-escuro hover:bg-white hover:border-aletis-gold/45 transition disabled:opacity-60"
+        >
+          {exporting ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+          {exporting ? 'gerando…' : 'baixar meus dados'}
+        </button>
+      </div>
+      <ol className="relative border-l-2 border-aletis-cream-escuro pl-5 space-y-3 max-h-72 overflow-y-auto custom-scrollbar pr-2">
+        {eventos.slice(0, 30).map((e) => (
+          <li key={e.id} className="relative">
+            <span className="absolute -left-[26px] top-1 w-3 h-3 rounded-full bg-aletis-sage border-2 border-white shadow-brand-sm" />
+            <p className="font-display text-[10.5px] uppercase tracking-widest text-aletis-verde-medio">
+              {formatDateTime(e.criadoEm)} {e.canal ? `· ${e.canal}` : ''}
+            </p>
+            <p className="mt-0.5 font-body text-[13px] text-aletis-verde">
+              {TIPO_LABEL[e.tipo] || e.tipo}
+              {e.ip && <span className="ml-2 font-mono text-[11px] text-aletis-verde-claro">{e.ip}</span>}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+/* ──────────────────────────────────────────────────────────────
  * UPLOAD ESPONTÂNEO — botão drag-drop
  * ──────────────────────────────────────────────────────────── */
 function UploadEspontaneo({ token, onUploaded }: { token: string; onUploaded: () => Promise<void> }) {
@@ -1355,6 +1448,7 @@ function ClientDashboard({
   const [uploads, setUploads] = useState<UploadDTO[]>([])
   const [cronograma, setCronograma] = useState<CronogramaDTO | null>(null)
   const [memoria, setMemoria] = useState<MemoriaSimplificadaDTO | null>(null)
+  const [auditoria, setAuditoria] = useState<AuditoriaEventoDTO[]>([])
   const [mensagens, setMensagens] = useState<MensagemDTO[]>([])
   const [chatInput, setChatInput] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -1364,7 +1458,7 @@ function ClientDashboard({
   const chatRef = useRef<HTMLDivElement>(null)
 
   const fetchTudo = useCallback(async () => {
-    const [pl, c, s, t, d, p, u, cr, me, m] = await Promise.all([
+    const [pl, c, s, t, d, p, u, cr, me, au, m] = await Promise.all([
       apiCall<PulseDTO>('/api/portal/pulse', { token }),
       apiCall<Contrato>('/api/portal/contrato', { token }),
       apiCall<StepperItem[]>('/api/portal/stepper', { token }),
@@ -1374,6 +1468,7 @@ function ClientDashboard({
       apiCall<UploadDTO[]>('/api/portal/uploads', { token }),
       apiCall<CronogramaDTO>('/api/portal/cronograma', { token }),
       apiCall<MemoriaSimplificadaDTO>('/api/portal/memoria-simplificada', { token }),
+      apiCall<AuditoriaEventoDTO[]>('/api/portal/auditoria', { token }),
       apiCall<MensagemDTO[]>('/api/portal/mensagens', { token }),
     ])
     if (pl.ok) setPulse(pl.data)
@@ -1385,6 +1480,7 @@ function ClientDashboard({
     if (u.ok) setUploads(u.data)
     if (cr.ok) setCronograma(cr.data)
     if (me.ok) setMemoria(me.data)
+    if (au.ok) setAuditoria(au.data)
     if (m.ok) setMensagens(m.data)
   }, [token])
 
@@ -1639,6 +1735,11 @@ function ClientDashboard({
               </ol>
             </div>
           </section>
+        )}
+
+        {/* Auditoria + Export LGPD */}
+        {auditoria.length > 0 && (
+          <section><AuditoriaTimeline eventos={auditoria} token={token} /></section>
         )}
 
         {/* Chat */}

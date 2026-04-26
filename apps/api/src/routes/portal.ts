@@ -39,6 +39,7 @@ import {
   adicionarUpload,
   buscarUpload,
   registrarEvento,
+  listarEventos,
 } from '../services/PortalStore.js'
 import { createHash, randomBytes } from 'node:crypto'
 import { mkdir, writeFile, readFile } from 'node:fs/promises'
@@ -93,6 +94,16 @@ function rateLimitCheck(key: string, max: number, windowMs: number): boolean {
 function clientIp(req: FastifyRequest): string {
   const xfwd = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
   return xfwd || req.ip || 'unknown'
+}
+
+/** Mascara IP para visualização do próprio cliente (privacy). */
+function maskIp(ip: string): string {
+  if (ip.includes('.')) {
+    const parts = ip.split('.')
+    if (parts.length === 4) return `${parts[0]}.${parts[1]}.•••.•••`
+  }
+  if (ip.includes(':')) return ip.replace(/[0-9a-f]+$/i, '••••')
+  return ip
 }
 
 /** Resolve a URL pública do portal a partir de envs ou request origin. */
@@ -840,6 +851,57 @@ export default async function (fastify: FastifyInstance) {
       clearInterval(interval)
       clearInterval(heartbeat)
     })
+  })
+
+  /* ── GET /api/portal/auditoria ────────────────────────────────────────
+   * Trilha de auditoria do cliente: últimos 50 eventos de portal
+   * (login, magic, upload, mensagem, etc). LGPD-friendly: cliente
+   * sempre pode ver tudo sobre si. */
+  fastify.get('/api/portal/auditoria', { preHandler: autenticarPortal }, async (req) => {
+    const clienteId = (req as any).clienteId as string
+    const eventos = listarEventos(clienteId, 80).map((e) => ({
+      id: e.id,
+      tipo: e.tipo,
+      canal: e.canal,
+      criadoEm: e.criadoEm,
+      ip: e.ip ? maskIp(e.ip) : undefined,
+      detalhes: e.detalhes,
+    }))
+    return { success: true, data: eventos }
+  })
+
+  /* ── GET /api/portal/exportar-meus-dados ─────────────────────────────
+   * LGPD Art. 18 IV — direito de portabilidade. Baixa JSON com tudo
+   * que o portal sabe do cliente (perfil, contratos, pendências,
+   * uploads, mensagens, auditoria). */
+  fastify.get('/api/portal/exportar-meus-dados', { preHandler: autenticarPortal }, async (req, reply) => {
+    const clienteId = (req as any).clienteId as string
+    const c = clientes.get(clienteId)
+    if (!c) return reply.status(404).send({ success: false, error: 'Cliente não encontrado' })
+    const dump = {
+      meta: {
+        geradoEm: new Date().toISOString(),
+        clienteId,
+        sistema: 'ALETIS Portal v1',
+        baseLegal: 'LGPD Art. 18 IV — portabilidade',
+      },
+      perfil: projetarClienteMe(clienteId),
+      contrato: projetarContrato(clienteId),
+      timeline: projetarTimeline(clienteId),
+      documentos: projetarDocumentos(clienteId),
+      pendencias: listarPendencias(clienteId),
+      uploads: listarUploads(clienteId).map(({ nomeStorage: _ns, ...u }) => u),
+      mensagens: c.portalMensagens ?? [],
+      auditoria: listarEventos(clienteId, 200).map((e) => ({
+        ...e, ip: e.ip ? maskIp(e.ip) : undefined,
+      })),
+    }
+    reply.header('Content-Type', 'application/json; charset=utf-8')
+    reply.header(
+      'Content-Disposition',
+      `attachment; filename="aletis-meus-dados-${clienteId}-${Date.now()}.json"`,
+    )
+    return reply.send(JSON.stringify(dump, null, 2))
   })
 
   /* ── POST /api/portal/assinatura/iniciar ─────────────────────────────
