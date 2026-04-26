@@ -318,6 +318,173 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
     }
   });
 
+  // ── GET /api/fontes/historico ─────────────────────────────
+  // Wave-PG-11 — timeline de transições de status das fontes (audit_log).
+  // Query params:
+  //   - fonte=cepea_soja   filtra por uma fonte específica
+  //   - desde=ISO          recorta a partir de uma data (default: 7 dias)
+  //   - limit=N            máximo de eventos (default: 100, max 500)
+  fastify.get('/api/fontes/historico', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const q = request.query as { fonte?: string; desde?: string; limit?: string }
+      const limit = Math.min(Math.max(Number(q.limit) || 100, 1), 500)
+      const desde = q.desde ? new Date(q.desde) : new Date(Date.now() - 7 * 24 * 3600 * 1000)
+      if (isNaN(desde.getTime())) {
+        return reply.status(400).send({ sucesso: false, erro: '`desde` deve ser ISO 8601 válido' })
+      }
+
+      const { isPgEnabled, getDb } = await import('../db/client.js')
+      if (!isPgEnabled()) {
+        return reply.status(200).send({
+          sucesso: true,
+          aviso: 'PG desligado — sem histórico persistido. Habilite ALETIS_PG_ENABLED=1.',
+          eventos: [],
+        })
+      }
+
+      const { auditLog } = await import('../db/schema.js')
+      const { eq, and, gte, like, desc } = await import('drizzle-orm')
+      const db = getDb()
+      const filtros = [
+        eq(auditLog.acao, 'fonte_state_transition'),
+        gte(auditLog.criadoEm, desde),
+      ]
+      if (q.fonte) {
+        filtros.push(like(auditLog.recurso, `fonte:${q.fonte}`))
+      } else {
+        filtros.push(like(auditLog.recurso, 'fonte:%'))
+      }
+      const rows = await db
+        .select()
+        .from(auditLog)
+        .where(and(...filtros))
+        .orderBy(desc(auditLog.criadoEm))
+        .limit(limit)
+
+      const eventos = rows.map((r) => ({
+        id: Number(r.id),
+        criadoEm: r.criadoEm,
+        fonte: (r.recurso ?? '').replace(/^fonte:/, ''),
+        de: (r.dadosAntes as { status?: string } | null)?.status ?? null,
+        para: (r.dadosDepois as { status?: string } | null)?.status ?? null,
+        latenciaMs: (r.dadosDepois as { latenciaMs?: number } | null)?.latenciaMs ?? null,
+        ultimoErro: (r.dadosDepois as { ultimoErro?: string } | null)?.ultimoErro ?? null,
+      }))
+
+      return reply.status(200).send({
+        sucesso: true,
+        desde: desde.toISOString(),
+        total: eventos.length,
+        eventos,
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'erro desconhecido'
+      return reply.status(500).send({ sucesso: false, erro: msg })
+    }
+  })
+
+  // ── GET /api/fontes/uptime ─────────────────────────────
+  // Wave-PG-11 — uptime % nas últimas N horas. Calcula a partir de
+  // (snapshot atual no fonte_status) + (transitions no audit_log).
+  // Heurística: a fonte está no estado atual desde a última transition
+  // ou desde a primeira observação (se não houver transition no período).
+  fastify.get('/api/fontes/uptime', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const q = request.query as { horas?: string }
+      const horas = Math.min(Math.max(Number(q.horas) || 24, 1), 720)
+      const desde = new Date(Date.now() - horas * 3600 * 1000)
+
+      const { isPgEnabled, getDb } = await import('../db/client.js')
+      if (!isPgEnabled()) {
+        return reply.status(200).send({
+          sucesso: true,
+          aviso: 'PG desligado — uptime indisponível.',
+          fontes: [],
+        })
+      }
+
+      const { listFonteStatus } = await import('../db/FonteStatusRepository.js')
+      const { auditLog } = await import('../db/schema.js')
+      const { eq, and, gte, like, asc } = await import('drizzle-orm')
+      const db = getDb()
+      const transitions = await db
+        .select()
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.acao, 'fonte_state_transition'),
+            like(auditLog.recurso, 'fonte:%'),
+            gte(auditLog.criadoEm, desde),
+          ),
+        )
+        .orderBy(asc(auditLog.criadoEm))
+
+      // Agrupa por fonte
+      const byFonte = new Map<string, Array<{ at: Date; status: string }>>()
+      for (const t of transitions) {
+        const fonte = (t.recurso ?? '').replace(/^fonte:/, '')
+        const status = (t.dadosDepois as { status?: string } | null)?.status ?? 'unknown'
+        if (!byFonte.has(fonte)) byFonte.set(fonte, [])
+        byFonte.get(fonte)!.push({ at: t.criadoEm!, status })
+      }
+
+      // Estado atual do snapshot
+      const atuais = await listFonteStatus()
+      const totalMs = horas * 3600 * 1000
+
+      const fontes = atuais.map((f) => {
+        const ts = byFonte.get(f.nome) ?? []
+        // Constrói segmentos: cada segmento [t_inicio, t_fim, status]
+        // Se não há transitions, a fonte estava no status atual o tempo todo.
+        if (ts.length === 0) {
+          return {
+            nome: f.nome,
+            statusAtual: f.status,
+            transitions: 0,
+            uptimePct: f.status === 'online' ? 100 : f.status === 'degraded' ? 50 : 0,
+          }
+        }
+        let cursorMs = desde.getTime()
+        // Estado no início do período = inverso da primeira transição
+        let statusAtualSeg = ts[0].status === 'online' ? 'offline' : 'online'
+        let onlineMs = 0
+        for (const trans of ts) {
+          const tMs = trans.at.getTime()
+          const dur = Math.max(0, tMs - cursorMs)
+          if (statusAtualSeg === 'online') onlineMs += dur
+          else if (statusAtualSeg === 'degraded') onlineMs += dur * 0.5
+          cursorMs = tMs
+          statusAtualSeg = trans.status
+        }
+        // Último segmento até "agora"
+        const dur = Math.max(0, Date.now() - cursorMs)
+        if (statusAtualSeg === 'online') onlineMs += dur
+        else if (statusAtualSeg === 'degraded') onlineMs += dur * 0.5
+
+        return {
+          nome: f.nome,
+          statusAtual: f.status,
+          transitions: ts.length,
+          uptimePct: Number(((onlineMs / totalMs) * 100).toFixed(1)),
+        }
+      })
+
+      const mediaUptime =
+        fontes.length === 0 ? 0 : Number((fontes.reduce((s, f) => s + f.uptimePct, 0) / fontes.length).toFixed(1))
+
+      return reply.status(200).send({
+        sucesso: true,
+        janelaHoras: horas,
+        desde: desde.toISOString(),
+        media: mediaUptime,
+        fontes: fontes.sort((a, b) => a.uptimePct - b.uptimePct),
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'erro desconhecido'
+      return reply.status(500).send({ sucesso: false, erro: msg })
+    }
+  })
+
   // ── GET /api/fontes/health ─────────────────────────────
   // Quick health check summary
   fastify.get('/api/fontes/health', async (_request: FastifyRequest, reply: FastifyReply) => {
