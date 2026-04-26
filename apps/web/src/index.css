@@ -2,6 +2,124 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------- */
+/* Tipografia oficial — Chakra Petch (display) + Verdana (body)     */
+/* ---------------------------------------------------------------- */
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('/fonts/chakra/ChakraPetch-Light.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/chakra/ChakraPetch-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/chakra/ChakraPetch-Medium.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/chakra/ChakraPetch-SemiBold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/chakra/ChakraPetch-Bold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/chakra/ChakraPetch-Italic.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/chakra/ChakraPetch-BoldItalic.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Verdana';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Verdana'), url('/fonts/verdana/Verdana.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Verdana';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Verdana Bold'), url('/fonts/verdana/Verdana-Bold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Verdana';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Verdana Italic'), url('/fonts/verdana/Verdana-Italic.ttf') format('truetype');
+}
+
+/* ---------------------------------------------------------------- */
+/* Tokens semânticos da identidade ALETIS                           */
+/* ---------------------------------------------------------------- */
+:root {
+  /* Paleta oficial */
+  --aletis-verde-dark: #17251b;
+  --aletis-verde-medio: #465b4a;
+  --aletis-sage: #b2bda1;
+  --aletis-sage-claro: #cdd5c0;
+  --aletis-cream: #ede9d9;
+  --aletis-cream-papel: #f5f2e7;
+  --aletis-gold: #cb9d52;
+  --aletis-gold-escuro: #a87f3d;
+  --aletis-cinza: #d9d9d9;
+  --aletis-grafite: #3d3d3d;
+
+  /* Semânticos UI (light) */
+  --bg-app: var(--aletis-cream);
+  --bg-surface: #ffffff;
+  --bg-surface-soft: var(--aletis-cream-papel);
+  --bg-inverse: var(--aletis-verde-dark);
+  --text-strong: var(--aletis-verde-dark);
+  --text-soft: var(--aletis-verde-medio);
+  --text-muted: #6b7d6f;
+  --border-default: #d9d3bc;
+  --border-strong: var(--aletis-sage);
+  --accent: var(--aletis-gold);
+}
+
+.dark {
+  --bg-app: #0d1611;
+  --bg-surface: #17251b;
+  --bg-surface-soft: #1d3024;
+  --bg-inverse: var(--aletis-cream);
+  --text-strong: var(--aletis-cream);
+  --text-soft: var(--aletis-sage);
+  --text-muted: #8a9a8d;
+  --border-default: rgba(178, 189, 161, 0.18);
+  --border-strong: rgba(178, 189, 161, 0.4);
+}
+
+/* ---------------------------------------------------------------- */
+/* Base                                                             */
+/* ---------------------------------------------------------------- */
 @layer base {
   * {
     -webkit-font-smoothing: antialiased;
@@ -9,92 +127,238 @@
   }
   html {
     scroll-behavior: smooth;
+    background: var(--bg-app);
   }
   body {
-    @apply font-body text-aletis-grafite-escuro;
+    font-family: 'Verdana', 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg-app);
+    color: var(--text-strong);
+    font-size: 14px;
+    line-height: 1.55;
   }
-  h1, h2, h3 {
-    @apply font-display;
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Chakra Petch', system-ui, sans-serif;
+    color: inherit;
+    letter-spacing: 0.005em;
+    font-weight: 600;
+  }
+  h1 { font-weight: 700; letter-spacing: 0.01em; }
+  /* Reforço para textos de marca */
+  .font-display {
+    font-family: 'Chakra Petch', system-ui, sans-serif;
+  }
+  .font-body {
+    font-family: 'Verdana', 'Segoe UI', system-ui, sans-serif;
+  }
+  ::selection {
+    background: var(--aletis-gold);
+    color: var(--aletis-verde-dark);
   }
 }
 
+/* ---------------------------------------------------------------- */
+/* Componentes                                                      */
+/* ---------------------------------------------------------------- */
 @layer components {
+
+  /* ---- Cards ---- */
   .card {
-    @apply bg-white rounded-2xl border border-aletis-borda shadow-sm hover:shadow-md transition-shadow duration-300;
+    @apply bg-white rounded-2xl border border-aletis-borda shadow-brand-sm hover:shadow-brand transition-all duration-300;
+  }
+  .card-cream {
+    @apply rounded-2xl border border-aletis-cream-escuro/70 shadow-brand-sm hover:shadow-brand transition-all duration-300;
+    background:
+      linear-gradient(180deg, #f7f4ea 0%, #ede9d9 100%);
   }
   .card-premium {
-    @apply relative bg-white rounded-2xl border border-aletis-borda/70 shadow-[0_4px_20px_-8px_rgba(15,76,53,0.12)] hover:shadow-[0_10px_30px_-10px_rgba(15,76,53,0.22)] hover:border-aletis-dourado/40 hover:-translate-y-0.5 transition-all duration-300;
+    @apply relative bg-white rounded-2xl border border-aletis-borda/70
+      shadow-brand-sm hover:shadow-brand-lg
+      hover:border-aletis-gold/50 hover:-translate-y-0.5
+      transition-all duration-300;
   }
   .card-premium::before {
     content: "";
-    @apply pointer-events-none absolute inset-x-0 top-0 h-[2px] rounded-t-2xl bg-gradient-to-r from-transparent via-aletis-dourado/60 to-transparent opacity-0 transition-opacity duration-300;
+    @apply pointer-events-none absolute inset-x-0 top-0 h-[2px] rounded-t-2xl
+      bg-gradient-to-r from-transparent via-aletis-gold/70 to-transparent
+      opacity-0 transition-opacity duration-300;
   }
   .card-premium:hover::before {
     @apply opacity-100;
   }
-  /* Dark surfaces for hero/KPI on dark backgrounds */
+  .card-dark {
+    background:
+      linear-gradient(140deg, #17251b 0%, #1f2f25 60%, #243a2c 100%);
+    @apply rounded-2xl border border-aletis-sage/15 text-aletis-cream
+      shadow-brand-lg;
+  }
+
+  /* Surfaces para hero/KPI sobre fundos verdes */
   .surface-dark {
-    @apply bg-white/[0.04] border-white/10 backdrop-blur;
+    @apply bg-white/[0.05] border-aletis-sage/15 backdrop-blur;
   }
   .surface-dark-hover {
-    @apply hover:bg-white/[0.08] hover:border-white/15 transition-colors;
+    @apply hover:bg-white/[0.09] hover:border-aletis-sage/30 transition-colors;
   }
-  /* Eyebrow label consistente em seções importantes */
+
+  /* ---- Tipografia utilitária ---- */
   .eyebrow {
-    @apply text-[10.5px] font-semibold uppercase tracking-[0.16em] text-aletis-dourado-escuro;
+    @apply text-[10.5px] font-display font-semibold uppercase
+      tracking-[0.18em] text-aletis-gold-escuro;
   }
   .eyebrow-light {
-    @apply text-[10.5px] font-semibold uppercase tracking-[0.16em] text-aletis-dourado;
+    @apply text-[10.5px] font-display font-semibold uppercase
+      tracking-[0.18em] text-aletis-gold;
   }
   .section-chip {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-aletis-verde/15 bg-aletis-verde/5 px-2.5 py-1 text-[10px] font-display font-semibold uppercase tracking-wider text-aletis-verde;
+    @apply inline-flex items-center gap-1.5 rounded-full
+      border border-aletis-verde/15 bg-aletis-sage/25
+      px-2.5 py-1 text-[10px] font-display font-semibold
+      uppercase tracking-[0.16em] text-aletis-verde;
   }
+  .section-chip-gold {
+    @apply inline-flex items-center gap-1.5 rounded-full
+      border border-aletis-gold/35 bg-aletis-gold/15
+      px-2.5 py-1 text-[10px] font-display font-semibold
+      uppercase tracking-[0.16em] text-aletis-gold-escuro;
+  }
+
+  /* ---- KPI ---- */
   .kpi-card {
-    @apply relative overflow-hidden rounded-2xl border border-aletis-borda/60 bg-gradient-to-br from-white to-aletis-bege/40 p-5 shadow-[0_2px_10px_-4px_rgba(15,76,53,0.1)] transition-all duration-300 hover:shadow-[0_10px_24px_-10px_rgba(15,76,53,0.25)] hover:border-aletis-dourado/40;
+    @apply relative overflow-hidden rounded-2xl
+      border border-aletis-borda/70
+      bg-gradient-to-br from-white to-aletis-cream/60
+      p-5 shadow-brand-sm transition-all duration-300
+      hover:shadow-brand hover:border-aletis-gold/40;
   }
+  .kpi-card::after {
+    content: "";
+    @apply pointer-events-none absolute inset-x-0 bottom-0 h-[3px]
+      bg-gradient-to-r from-transparent via-aletis-gold/0 to-transparent
+      transition-all duration-300;
+  }
+  .kpi-card:hover::after {
+    @apply via-aletis-gold/70;
+  }
+
+  /* ---- Buttons ---- */
   .btn-primary {
-    @apply bg-aletis-verde text-white px-6 py-3 rounded-xl font-semibold hover:bg-aletis-verde-medio transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98];
+    @apply inline-flex items-center justify-center gap-2
+      bg-aletis-verde text-aletis-cream
+      px-5 py-2.5 rounded-xl
+      font-display font-semibold uppercase tracking-wider text-[12.5px]
+      hover:bg-aletis-verde-medio
+      shadow-brand hover:shadow-brand-lg
+      transition-all duration-200 active:scale-[0.98];
   }
   .btn-gold {
-    @apply bg-aletis-dourado text-white px-6 py-3 rounded-xl font-semibold hover:bg-aletis-dourado-escuro transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98];
+    @apply inline-flex items-center justify-center gap-2
+      bg-aletis-gold text-aletis-verde
+      px-5 py-2.5 rounded-xl
+      font-display font-semibold uppercase tracking-wider text-[12.5px]
+      hover:bg-aletis-gold-escuro hover:text-aletis-cream
+      shadow-brand-gold
+      transition-all duration-200 active:scale-[0.98];
   }
   .btn-outline {
-    @apply border-2 border-aletis-verde text-aletis-verde px-6 py-3 rounded-xl font-semibold hover:bg-aletis-verde hover:text-white transition-all duration-200;
+    @apply inline-flex items-center justify-center gap-2
+      border-2 border-aletis-verde text-aletis-verde
+      bg-transparent
+      px-5 py-2.5 rounded-xl
+      font-display font-semibold uppercase tracking-wider text-[12.5px]
+      hover:bg-aletis-verde hover:text-aletis-cream
+      transition-all duration-200;
   }
-  .input-field {
-    @apply w-full px-4 py-3 rounded-xl border border-aletis-borda bg-white text-aletis-grafite-escuro placeholder:text-aletis-grafite-claro focus:outline-none focus:ring-2 focus:ring-aletis-verde/30 focus:border-aletis-verde transition-all;
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2
+      text-aletis-verde-medio
+      px-4 py-2 rounded-lg text-sm font-medium
+      hover:bg-aletis-cream hover:text-aletis-verde
+      transition-all duration-200;
   }
-  .badge {
-    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold;
-  }
-  .badge-verde { @apply badge bg-positivo/10 text-positivo; }
-  .badge-dourado { @apply badge bg-aletis-dourado/10 text-aletis-dourado-escuro; }
-  .badge-vermelho { @apply badge bg-alerta/10 text-alerta; }
-  .badge-ambar { @apply badge bg-ambar/10 text-ambar; }
 
+  /* ---- Inputs ---- */
+  .input-field {
+    @apply w-full px-4 py-3 rounded-xl
+      border border-aletis-borda bg-white
+      text-aletis-verde placeholder:text-aletis-verde-claro
+      focus:outline-none focus:ring-2 focus:ring-aletis-gold/35
+      focus:border-aletis-gold transition-all;
+  }
+
+  /* ---- Badges ---- */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full
+      text-[11px] font-display font-semibold tracking-wide;
+  }
+  .badge-verde {
+    @apply badge bg-aletis-verde-medio/12 text-aletis-verde-medio
+      border border-aletis-verde-medio/30;
+  }
+  .badge-gold,
+  .badge-dourado {
+    @apply badge bg-aletis-gold/15 text-aletis-gold-escuro
+      border border-aletis-gold/40;
+  }
+  .badge-sage {
+    @apply badge bg-aletis-sage/30 text-aletis-verde
+      border border-aletis-sage/50;
+  }
+  .badge-vermelho {
+    @apply badge bg-alerta/10 text-alerta border border-alerta/25;
+  }
+  .badge-ambar {
+    @apply badge bg-aletis-gold/15 text-aletis-gold-escuro
+      border border-aletis-gold/35;
+  }
+
+  /* ---- Sidebar ---- */
   .sidebar-link {
-    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all duration-200;
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-xl
+      text-[13px] font-display font-medium tracking-wide
+      text-aletis-cream/70 hover:text-aletis-cream
+      hover:bg-aletis-sage/10
+      transition-all duration-200;
   }
   .sidebar-link.active {
-    @apply bg-white/15 text-white shadow-inner;
+    @apply bg-aletis-sage/15 text-aletis-cream;
+    box-shadow: inset 3px 0 0 0 var(--aletis-gold);
   }
 
-  /* Custom scrollbar */
+  /* ---- Pattern overlay (repetidor) ---- */
+  .bg-aletis-repetidor {
+    background-image: url('/brand/pattern/repetidor.png');
+    background-size: 320px;
+    background-repeat: repeat;
+    background-blend-mode: soft-light;
+  }
+  .bg-aletis-repetidor-soft {
+    background-color: var(--aletis-verde-dark);
+    background-image: url('/brand/pattern/repetidor.png');
+    background-size: 320px;
+    background-repeat: repeat;
+    background-blend-mode: overlay;
+    background-position: center;
+  }
+
+  /* ---- Scrollbar ---- */
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
     background: transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-aletis-borda rounded-full;
+    @apply bg-aletis-sage/40 rounded-full;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    @apply bg-aletis-grafite-claro;
+    @apply bg-aletis-sage/70;
   }
 }
 
-/* Ticker animation */
+/* ---------------------------------------------------------------- */
+/* Animações                                                        */
+/* ---------------------------------------------------------------- */
 .ticker-wrapper {
   overflow: hidden;
   white-space: nowrap;
@@ -106,13 +370,18 @@
 .ticker-content:hover {
   animation-play-state: paused;
 }
-
-/* Gauge animation */
 @keyframes fillGauge {
   from { stroke-dashoffset: 283; }
 }
-
-/* Skeleton loading */
 .skeleton {
-  @apply animate-pulse bg-aletis-borda/50 rounded;
+  @apply animate-pulse bg-aletis-sage/25 rounded;
+}
+
+/* Respeito a preferências de motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

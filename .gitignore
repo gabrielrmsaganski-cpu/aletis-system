@@ -123,3 +123,11 @@ coverage/
 playwright-report/
 test-results/
 .playwright-mcp/
+
+# Asset master files (Adobe Illustrator + PDF do manual de identidade)
+# As fontes/PNGs já estão exportadas em apps/web/public/brand e public/fonts
+Identidade visual/
+*.ai
+
+# Loadtest artifacts (regenerated)
+apps/api/loadtest/last-run.json

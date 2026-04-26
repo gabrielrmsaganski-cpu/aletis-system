@@ -5,42 +5,88 @@ export default {
   theme: {
     extend: {
       colors: {
+        /**
+         * Paleta oficial ALETIS (Manual de Identidade Visual — Bulbo Agência)
+         *  - verde-dark   #17251b  primary brand (fundos imersivos, sidebar, hero)
+         *  - verde-medio  #465b4a  secondary brand (botões/active states)
+         *  - sage         #b2bda1  apoio neutro (chips, divisórias, padrões)
+         *  - cream        #ede9d9  papel da marca (backgrounds claros, cards)
+         *  - gold         #cb9d52  acento estratégico (CTAs, destaques, KPIs hero)
+         *  - cinza        #d9d9d9  neutro de UI (skeleton, divisor leve)
+         */
         aletis: {
           verde: {
-            DEFAULT: '#0F4C35',
-            escuro: '#0A3526',
-            medio: '#1B6B4A',
-            claro: '#2A8F64',
+            DEFAULT: '#17251b',
+            escuro: '#0d1611',
+            medio: '#465b4a',
+            claro: '#6b7d6f',
           },
+          sage: {
+            DEFAULT: '#b2bda1',
+            escuro: '#8e9a7d',
+            claro: '#cdd5c0',
+          },
+          cream: {
+            DEFAULT: '#ede9d9',
+            escuro: '#d9d3bc',
+            papel: '#f5f2e7',
+          },
+          gold: {
+            DEFAULT: '#cb9d52',
+            escuro: '#a87f3d',
+            claro: '#e3bd80',
+          },
+          cinza: {
+            DEFAULT: '#d9d9d9',
+            escuro: '#a8a8a8',
+            grafite: '#3d3d3d',
+          },
+          // Aliases legados — apontados para a paleta nova para evitar regressão
+          // em componentes ainda não migrados.
           dourado: {
-            DEFAULT: '#C9A84C',
-            escuro: '#A68A3A',
-            suave: '#E8C97A',
-            claro: '#F5E6B8',
+            DEFAULT: '#cb9d52',
+            escuro: '#a87f3d',
+            suave: '#e3bd80',
+            claro: '#f0d9a8',
           },
-          bege: '#F8F5EF',
+          bege: '#ede9d9',
           grafite: {
-            escuro: '#1C1C1E',
-            medio: '#4A4A4A',
-            claro: '#6B6B6B',
+            escuro: '#17251b',
+            medio: '#465b4a',
+            claro: '#6b7d6f',
           },
-          borda: '#E2DDD5',
+          borda: '#d9d3bc',
         },
-        alerta: '#C0392B',
-        positivo: '#27AE60',
-        ambar: '#E67E22',
+        // Status colors derivados da paleta, sem cores estranhas à marca
+        positivo: '#465b4a',
+        alerta: '#a83232',
+        ambar: '#cb9d52',
       },
       fontFamily: {
-        display: ['Playfair Display', 'serif'],
-        body: ['Inter', 'sans-serif'],
+        display: ['"Chakra Petch"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        body: ['Verdana', '"Segoe UI"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+      },
+      backgroundImage: {
+        'aletis-pattern': "url('/brand/pattern/repetidor.png')",
+        'aletis-hero':
+          'linear-gradient(135deg, #17251b 0%, #1d3024 45%, #243a2c 100%)',
+        'aletis-cream':
+          'linear-gradient(180deg, #f5f2e7 0%, #ede9d9 100%)',
+      },
+      boxShadow: {
+        'brand-sm': '0 1px 2px 0 rgba(23,37,27,0.08)',
+        'brand': '0 4px 14px -4px rgba(23,37,27,0.18)',
+        'brand-lg': '0 12px 28px -8px rgba(23,37,27,0.28)',
+        'brand-gold': '0 8px 24px -10px rgba(203,157,82,0.45)',
       },
       animation: {
-        'ticker': 'ticker 60s linear infinite',
+        ticker: 'ticker 60s linear infinite',
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'fade-in': 'fadeIn 0.5s ease-out',
         'slide-up': 'slideUp 0.5s ease-out',
         'slide-in-right': 'slideInRight 0.3s ease-out',
-        'gauge': 'gauge 1.5s ease-out',
+        gauge: 'gauge 1.5s ease-out',
       },
       keyframes: {
         ticker: {

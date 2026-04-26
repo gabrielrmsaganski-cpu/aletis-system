@@ -16,8 +16,8 @@ export default defineConfig({
         short_name: 'ALETIS',
         description:
           'ALETIS Consultoria Agro-Financeira — CRM, propostas, dossiês e inteligência de mercado para consultores rurais.',
-        theme_color: '#0F4C35',
-        background_color: '#F5F1E8',
+        theme_color: '#17251b',
+        background_color: '#ede9d9',
         display: 'standalone',
         orientation: 'portrait-primary',
         start_url: '/dashboard',
