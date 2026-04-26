@@ -138,6 +138,105 @@ export default async function prospeccaoRoutes(app: FastifyInstance) {
   })
 
   /**
+   * Wave-PG-12: query SQL direto na tabela lead_pgfn (39k leads).
+   * Vantagem: filtros indexados (UF, agroScore, totalDivida) muito
+   * mais rápidos que filtrar Map em RAM com 39k entries.
+   *
+   * Query params:
+   *   - uf=PR              filtra por UF
+   *   - minScore=75        agroScore >= N
+   *   - minDivida=1000000  totalDivida >= R$ (em reais)
+   *   - maxDivida=50000000 totalDivida <= R$
+   *   - ajuizado=true|false
+   *   - limit=N            default 50, max 500
+   *   - offset=N           paginação
+   *   - orderBy=divida|score|nome    default 'divida desc'
+   */
+  app.get('/api/prospeccao/leads/sql', async (req: FastifyRequest, reply: FastifyReply) => {
+    const q = req.query as {
+      uf?: string
+      minScore?: string
+      minDivida?: string
+      maxDivida?: string
+      ajuizado?: string
+      limit?: string
+      offset?: string
+      orderBy?: string
+    }
+
+    try {
+      const { isPgEnabled, getDb } = await import('../db/client.js')
+      if (!isPgEnabled()) {
+        return reply.status(200).send({
+          success: true,
+          aviso: 'PG desligado — use /api/prospeccao/buscar (RAM).',
+          total: 0,
+          leads: [],
+        })
+      }
+      const { leadPgfn } = await import('../db/schema.js')
+      const { and, eq, gte, lte, desc, asc, sql } = await import('drizzle-orm')
+      const db = getDb()
+
+      const limit = Math.min(Math.max(Number(q.limit) || 50, 1), 500)
+      const offset = Math.max(Number(q.offset) || 0, 0)
+
+      const filters = [] as Array<ReturnType<typeof and>>
+      if (q.uf && /^[A-Z]{2}$/.test(q.uf)) filters.push(eq(leadPgfn.uf, q.uf) as any)
+      if (q.minScore) filters.push(gte(leadPgfn.agroScore, Number(q.minScore)) as any)
+      if (q.minDivida) filters.push(gte(leadPgfn.totalDivida, String(Number(q.minDivida))) as any)
+      if (q.maxDivida) filters.push(lte(leadPgfn.totalDivida, String(Number(q.maxDivida))) as any)
+      if (q.ajuizado === 'true') filters.push(eq(leadPgfn.ajuizado, true) as any)
+      if (q.ajuizado === 'false') filters.push(eq(leadPgfn.ajuizado, false) as any)
+
+      const whereClause = filters.length > 0 ? and(...(filters as Parameters<typeof and>)) : undefined
+
+      const orderClause = (() => {
+        switch (q.orderBy) {
+          case 'score':
+            return desc(leadPgfn.agroScore)
+          case 'nome':
+            return asc(leadPgfn.nome)
+          case 'divida':
+          default:
+            return desc(leadPgfn.totalDivida)
+        }
+      })()
+
+      const baseSelect = db
+        .select({
+          cnpjCpf: leadPgfn.cnpjCpf,
+          nome: leadPgfn.nome,
+          uf: leadPgfn.uf,
+          totalDivida: leadPgfn.totalDivida,
+          inscricoesCount: leadPgfn.inscricoesCount,
+          ajuizado: leadPgfn.ajuizado,
+          agroScore: leadPgfn.agroScore,
+        })
+        .from(leadPgfn)
+
+      const rows = whereClause
+        ? await baseSelect.where(whereClause).orderBy(orderClause).limit(limit).offset(offset)
+        : await baseSelect.orderBy(orderClause).limit(limit).offset(offset)
+
+      const totalRow = whereClause
+        ? await db.select({ n: sql<number>`count(*)::int` }).from(leadPgfn).where(whereClause)
+        : await db.select({ n: sql<number>`count(*)::int` }).from(leadPgfn)
+
+      return reply.status(200).send({
+        success: true,
+        total: totalRow[0]?.n ?? 0,
+        limit,
+        offset,
+        leads: rows,
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'erro desconhecido'
+      return reply.status(500).send({ success: false, error: msg })
+    }
+  })
+
+  /**
    * Hot-swap do índice SICAR — usado pelo orquestrador `refresh-sicar` depois
    * do ingest. Relê `sicar-imoveis.json` do disco sem restart da API.
    * Resposta inclui stats novas (pro cron logar delta).
