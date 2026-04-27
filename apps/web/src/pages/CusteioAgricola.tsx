@@ -436,7 +436,7 @@ function ModalNovoPlano({
           <h2 className="text-lg font-bold text-aletis-verde dark:text-white flex items-center gap-2">
             <Plus size={20} /> Novo Plano de Custeio
           </h2>
-          <button onClick={onClose} className="text-aletis-grafite-medio hover:text-aletis-grafite">
+          <button onClick={onClose} aria-label="Fechar modal" className="p-1.5 rounded-lg text-aletis-grafite-medio hover:text-aletis-grafite">
             <X size={20} />
           </button>
         </div>

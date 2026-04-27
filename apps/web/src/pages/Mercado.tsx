@@ -17,6 +17,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
+import type { TooltipProps } from 'recharts'
+import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
 import {
   TrendingUp,
   TrendingDown,
@@ -438,13 +440,13 @@ function CommodityCard({ commodity }: { commodity: Commodity }) {
 // ────────────────────────────────────────────────────────────
 // Custom Tooltip for Area Chart
 // ────────────────────────────────────────────────────────────
-function PriceTooltip({ active, payload, label }: any) {
+function PriceTooltip({ active, payload, label }: TooltipProps<ValueType, NameType>) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-aletis-grafite-escuro text-white px-4 py-3 rounded-xl shadow-xl border border-white/10">
       <p className="text-xs text-white/60 font-body mb-1">{label}</p>
       <p className="text-base font-display font-semibold text-aletis-dourado-suave">
-        {fmtBRL(payload[0].value)}
+        {fmtBRL(Number(payload[0].value ?? 0))}
       </p>
     </div>
   )

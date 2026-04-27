@@ -21,6 +21,8 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
+import type { TooltipProps } from 'recharts'
+import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
 import {
   Sun,
   Cloud,
@@ -483,7 +485,7 @@ function condicaoLabel(c: string): string {
 // Custom Tooltip for chart
 // ────────────────────────────────────────────────────────────
 
-function ChartTooltip({ active, payload, label }: any) {
+function ChartTooltip({ active, payload, label }: TooltipProps<ValueType, NameType>) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-white rounded-xl border border-aletis-borda shadow-lg p-3">

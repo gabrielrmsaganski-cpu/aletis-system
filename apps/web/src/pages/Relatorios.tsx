@@ -24,6 +24,8 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
+import type { TooltipProps } from 'recharts'
+import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
 import {
   Users,
   TrendingUp,
@@ -231,7 +233,7 @@ const AUDITORIA_LOG = [
 // Chart Tooltip
 // ────────────────────────────────────────────────────────────
 
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label }: TooltipProps<ValueType, NameType>) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-white rounded-xl border border-aletis-borda shadow-lg p-3">
@@ -245,7 +247,7 @@ function CustomTooltip({ active, payload, label }: any) {
   )
 }
 
-function PieTooltip({ active, payload }: any) {
+function PieTooltip({ active, payload }: TooltipProps<ValueType, NameType>) {
   if (!active || !payload?.length) return null
   const d = payload[0]
   return (

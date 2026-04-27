@@ -587,7 +587,7 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
               </p>
             )}
           </div>
-          <button onClick={onClose} className="rounded-lg p-1 text-aletis-grafite-medio hover:bg-aletis-bege">
+          <button onClick={onClose} aria-label="Fechar modal" className="rounded-lg p-2 text-aletis-grafite-medio hover:bg-aletis-bege">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -1002,7 +1002,7 @@ function PreviewModal({ id, onClose }: { id: string; onClose: () => void }) {
                 <Download className="h-3 w-3" /> PDF
               </a>
             )}
-            <button onClick={onClose} className="rounded-lg p-1 text-aletis-grafite-medio hover:bg-aletis-bege">
+            <button onClick={onClose} aria-label="Fechar modal" className="rounded-lg p-2 text-aletis-grafite-medio hover:bg-aletis-bege">
               <X className="h-5 w-5" />
             </button>
           </div>

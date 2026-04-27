@@ -731,7 +731,11 @@ function TrocarSenhaModal({
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-display text-lg font-bold text-aletis-verde">Trocar senha</h2>
           {!obrigatorio && (
-            <button onClick={onClose} className="text-aletis-verde-medio hover:text-aletis-verde">
+            <button
+              onClick={onClose}
+              aria-label="Fechar modal"
+              className="text-aletis-verde-medio hover:text-aletis-verde p-1.5 rounded-lg"
+            >
               <XCircle size={20} />
             </button>
           )}

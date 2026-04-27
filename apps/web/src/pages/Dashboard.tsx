@@ -27,6 +27,8 @@ import {
   Pie,
   Cell,
 } from 'recharts'
+import type { TooltipProps } from 'recharts'
+import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
 import {
   Users,
   TrendingUp,
@@ -208,13 +210,13 @@ const STAGE_ORDER = [
 // ────────────────────────────────────────────────────────────
 // Custom Tooltip for Area Chart
 // ────────────────────────────────────────────────────────────
-function PortfolioTooltip({ active, payload, label }: any) {
+function PortfolioTooltip({ active, payload, label }: TooltipProps<ValueType, NameType>) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-aletis-grafite-escuro text-white px-4 py-3 rounded-xl shadow-xl border border-white/10">
       <p className="text-xs text-white/60 font-body mb-1">{label}</p>
       <p className="text-base font-display font-semibold text-aletis-dourado-suave">
-        {formatBRL(payload[0].value)}
+        {formatBRL(Number(payload[0].value ?? 0))}
       </p>
     </div>
   )
@@ -223,7 +225,7 @@ function PortfolioTooltip({ active, payload, label }: any) {
 // ────────────────────────────────────────────────────────────
 // Custom Tooltip for Pie Chart
 // ────────────────────────────────────────────────────────────
-function StageTooltip({ active, payload }: any) {
+function StageTooltip({ active, payload }: TooltipProps<ValueType, NameType>) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-aletis-grafite-escuro text-white px-4 py-3 rounded-xl shadow-xl border border-white/10">

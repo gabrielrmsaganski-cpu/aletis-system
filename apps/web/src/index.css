@@ -154,6 +154,25 @@
     background: var(--aletis-gold);
     color: var(--aletis-verde-dark);
   }
+
+  /* ── Focus-visible global (WCAG 2.4.11 Focus Appearance) ──
+     Garante anel dourado em qualquer elemento interativo no foco
+     por teclado. Não afeta clique/toque (que usam :focus em vez
+     de :focus-visible). Pode ser sobrescrito por componentes que
+     já definem :focus-visible próprio (input-field, btn-*). */
+  button:focus-visible,
+  a:focus-visible,
+  [role='button']:focus-visible,
+  [tabindex]:not([tabindex='-1']):focus-visible {
+    outline: 2px solid var(--aletis-gold);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+  /* Nunca mostre o anel-padrão do browser quando foco veio do mouse */
+  button:focus:not(:focus-visible),
+  a:focus:not(:focus-visible) {
+    outline: none;
+  }
 }
 
 /* ---------------------------------------------------------------- */
