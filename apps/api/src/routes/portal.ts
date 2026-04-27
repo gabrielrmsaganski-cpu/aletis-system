@@ -45,6 +45,17 @@ import { createHash, randomBytes } from 'node:crypto'
 import { mkdir, writeFile, readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { parseBody } from '../lib/validate.js'
+import {
+  LoginSchema,
+  MagicRequestSchema,
+  MagicRedeemSchema,
+  ForgotSchema,
+  ResetSchema,
+  TrocarSenhaSchema,
+  MensagemBodySchema,
+  UploadJsonSchema,
+} from './portal-schemas.js'
 
 /* ========================================================================
  *  Helpers
@@ -400,16 +411,10 @@ export default async function (fastify: FastifyInstance) {
         return reply.status(429).send({ success: false, error: 'Muitas tentativas. Aguarde 1 minuto.', code: 'RATE_LIMIT' })
       }
 
-      const body = request.body as { usuario?: string; senha?: string } | undefined
-      const usuarioRaw = body?.usuario?.toString() ?? ''
-      const senha = body?.senha?.toString() ?? ''
-      if (!usuarioRaw || !senha) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Usuário e senha são obrigatórios',
-          code: 'BAD_REQUEST',
-        })
-      }
+      const parsed = parseBody(LoginSchema, request, reply)
+      if (!parsed) return
+      const usuarioRaw = parsed.usuario
+      const senha = parsed.senha
       // Limit por usuário também
       const usuario = normalizarUsuario(usuarioRaw)
       if (!rateLimitCheck(`login:user:${usuario}`, 5, 60_000)) {
@@ -556,14 +561,9 @@ export default async function (fastify: FastifyInstance) {
       const clienteId = (request as any).clienteId as string
       const cliente = clientes.get(clienteId)
       if (!cliente) return reply.status(404).send({ success: false, error: 'Cliente não encontrado' })
-      const body = request.body as { texto?: string } | undefined
-      const texto = body?.texto?.trim()
-      if (!texto) {
-        return reply.status(400).send({ success: false, error: 'Mensagem vazia', code: 'BAD_REQUEST' })
-      }
-      if (texto.length > 2000) {
-        return reply.status(400).send({ success: false, error: 'Mensagem muito longa (máx 2000)', code: 'BAD_REQUEST' })
-      }
+      const parsed = parseBody(MensagemBodySchema, request, reply)
+      if (!parsed) return
+      const texto = parsed.texto
       const msg: PortalMensagem = {
         id: `pm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         de: 'cliente',
@@ -588,9 +588,9 @@ export default async function (fastify: FastifyInstance) {
     if (!rateLimitCheck(`magic:${clientIp(req)}`, 5, 60_000)) {
       return reply.status(429).send({ success: false, error: 'Muitas tentativas. Tente em 1 minuto.', code: 'RATE_LIMIT' })
     }
-    const body = req.body as { identificador?: string } | undefined
-    const id = body?.identificador?.trim() || ''
-    if (!id) return reply.status(400).send({ success: false, error: 'Informe e-mail, CPF/CNPJ ou usuário.', code: 'BAD_REQUEST' })
+    const parsed = parseBody(MagicRequestSchema, req, reply)
+    if (!parsed) return
+    const id = parsed.identificador
 
     const cliente = localizarClienteParaAuth(id)
     // Sempre 200 — não confirmamos existência da conta para anonymous.
@@ -624,9 +624,9 @@ export default async function (fastify: FastifyInstance) {
     if (!rateLimitCheck(`redeem:${clientIp(req)}`, 10, 60_000)) {
       return reply.status(429).send({ success: false, error: 'Muitas tentativas.', code: 'RATE_LIMIT' })
     }
-    const body = req.body as { token?: string } | undefined
-    const token = body?.token?.trim()
-    if (!token) return reply.status(400).send({ success: false, error: 'Token ausente', code: 'BAD_REQUEST' })
+    const parsed = parseBody(MagicRedeemSchema, req, reply)
+    if (!parsed) return
+    const token = parsed.token
 
     const rec = consumirToken(token, 'magic')
     if (!rec) {
@@ -656,9 +656,9 @@ export default async function (fastify: FastifyInstance) {
     if (!rateLimitCheck(`forgot:${clientIp(req)}`, 5, 60_000)) {
       return reply.status(429).send({ success: false, error: 'Muitas tentativas.', code: 'RATE_LIMIT' })
     }
-    const body = req.body as { identificador?: string } | undefined
-    const id = body?.identificador?.trim() || ''
-    if (!id) return reply.status(400).send({ success: false, error: 'Informe identificador', code: 'BAD_REQUEST' })
+    const parsed = parseBody(ForgotSchema, req, reply)
+    if (!parsed) return
+    const id = parsed.identificador
 
     const cliente = localizarClienteParaAuth(id)
     if (cliente && cliente.portalAcesso?.ativo !== false) {
@@ -681,13 +681,9 @@ export default async function (fastify: FastifyInstance) {
   /* ── POST /api/portal/auth/reset ──────────────────────────────────────
    * Conclui reset com token + nova senha. */
   fastify.post('/api/portal/auth/reset', async (req, reply) => {
-    const body = req.body as { token?: string; novaSenha?: string } | undefined
-    const token = body?.token?.trim()
-    const nova = body?.novaSenha?.toString() ?? ''
-    if (!token) return reply.status(400).send({ success: false, error: 'Token ausente', code: 'BAD_REQUEST' })
-    if (nova.length < 8) {
-      return reply.status(400).send({ success: false, error: 'Senha precisa ter ao menos 8 caracteres', code: 'WEAK_PASSWORD' })
-    }
+    const parsed = parseBody(ResetSchema, req, reply)
+    if (!parsed) return
+    const { token, novaSenha: nova } = parsed
     const rec = consumirToken(token, 'reset')
     if (!rec) {
       return reply.status(401).send({ success: false, error: 'Link inválido ou expirado', code: 'INVALID_TOKEN' })
@@ -948,18 +944,13 @@ export default async function (fastify: FastifyInstance) {
 
     const ct = (req.headers['content-type'] || '').toString()
     if (ct.startsWith('application/json')) {
-      const body = req.body as {
-        nome?: string; mime?: string; conteudoBase64?: string;
-        pendenciaId?: string; categoria?: string;
-      } | undefined
-      if (!body?.conteudoBase64) {
-        return reply.status(400).send({ success: false, error: 'conteudoBase64 ausente', code: 'BAD_REQUEST' })
-      }
-      buf = Buffer.from(body.conteudoBase64, 'base64')
-      nomeOriginal = (body.nome || 'arquivo.bin').slice(0, 255)
-      mime = (body.mime || 'application/octet-stream').slice(0, 200)
-      pendenciaId = body.pendenciaId
-      categoria = body.categoria
+      const parsed = parseBody(UploadJsonSchema, req, reply)
+      if (!parsed) return
+      buf = Buffer.from(parsed.conteudoBase64, 'base64')
+      nomeOriginal = (parsed.nome || 'arquivo.bin').slice(0, 255)
+      mime = (parsed.mime || 'application/octet-stream').slice(0, 200)
+      pendenciaId = parsed.pendenciaId
+      categoria = parsed.categoria
     } else {
       // multipart: usa @fastify/multipart se disponível em runtime
       try {
@@ -1156,17 +1147,9 @@ export default async function (fastify: FastifyInstance) {
       if (!cliente || !cliente.portalAcesso) {
         return reply.status(404).send({ success: false, error: 'Cliente sem acesso configurado' })
       }
-      const body = request.body as { senhaAtual?: string; novaSenha?: string } | undefined
-      const senhaAtual = body?.senhaAtual?.toString() ?? ''
-      const novaSenha = body?.novaSenha?.toString() ?? ''
-      if (!senhaAtual || !novaSenha) {
-        return reply.status(400).send({ success: false, error: 'Informe senha atual e nova senha' })
-      }
-      if (novaSenha.length < 8) {
-        return reply
-          .status(400)
-          .send({ success: false, error: 'Nova senha deve ter ao menos 8 caracteres' })
-      }
+      const parsed = parseBody(TrocarSenhaSchema, request, reply)
+      if (!parsed) return
+      const { senhaAtual, novaSenha } = parsed
       const ok = verificarSenha(
         senhaAtual,
         cliente.portalAcesso.senhaHash,
