@@ -20,6 +20,8 @@ import { safeWrapRegistry } from './tools/safe-handler.js';
 import { buildCalculatorTools } from './tools/calculators.js';
 import { buildCrmReadTools } from './tools/crm-read.js';
 import { buildAlixPowerTools } from './tools/alix-power.js';
+import { buildProactiveInsightsTools } from './tools/proactive-insights.js';
+import { buildAlertRulesTools } from './tools/alert-rules.js';
 import { buildNewsTools } from './tools/news.js';
 import { buildCalendarioSafraTools } from './tools/calendario-safra.js';
 import { buildOnboardingTools } from './tools/onboarding.js';
@@ -287,6 +289,16 @@ Data de hoje: ${hoje}`;
     // contratos, magic-link/pendência/WhatsApp on-demand, extração de docs
     const pw = buildAlixPowerTools();
     for (const t of pw.tools) { tools.push(t); registry[t.name] = pw.registry[t.name]; }
+
+    // Wave A5 — fechamento do loop proativo: listar insights pendentes +
+    // responder (ack/done/snooze/descartar). Permite ALIX acompanhar o que
+    // Christian já agiu e não repetir.
+    const pi = buildProactiveInsightsTools();
+    for (const t of pi.tools) { tools.push(t); registry[t.name] = pi.registry[t.name]; }
+
+    // Wave B1 — alertas de mercado por cliente (CRUD + ListAll).
+    const ar = buildAlertRulesTools();
+    for (const t of ar.tools) { tools.push(t); registry[t.name] = ar.registry[t.name]; }
 
     // Delegações
     const ctxBase = (): SubAgentContext => ({

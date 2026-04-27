@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { apiFetch } from '../hooks/useApi'
 import { InlineButton } from '../components/ui'
 import PatrimonioTab from '../components/patrimonio/PatrimonioTab'
+import AlixContextHint from '../components/alix/AlixContextHint'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
 import { MapThumbnail } from '../components/MapThumbnail'
@@ -1215,6 +1216,9 @@ export default function ClienteDetalhes() {
           Voltar ao CRM
         </Link>
       </div>
+
+      {/* Wave B4 — banner contextual ALIX (insights pendentes do cliente) */}
+      {id && <AlixContextHint clienteId={id} tela="cliente-detalhes" />}
 
       {/* ════════════════════════════════════════════════════════
            HEADER SECTION

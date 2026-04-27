@@ -67,6 +67,7 @@ export class ProspeccaoService {
   private ibgeSidra: IbgeSidraSource
   private repo: LeadsRepository
   private queue: EnrichmentQueue
+  private readonly storageDir: string
 
   /** Controle de lotes em execução (key = batchId). */
   private activeBatches = new Map<string, { cancelled: boolean }>()
@@ -78,6 +79,7 @@ export class ProspeccaoService {
   public get sourcesRegistry() { return this.sources }
 
   constructor(storageDir: string) {
+    this.storageDir = storageDir
     this.pgfn = new PGFNSource(storageDir)
     this.dou = new DOUSource(storageDir)
     this.socios = new SocioExpansionSource(storageDir)
@@ -95,8 +97,53 @@ export class ProspeccaoService {
     this.repo = new LeadsRepository(storageDir)
     this.queue = new EnrichmentQueue(storageDir)
     this.queue.setRunner(async (cpfCnpj) => {
+      // Captura score "antes" para detectar saltos significativos (Wave A2)
+      const prev = this.repo.getEnriched(cpfCnpj)
+      // LeadFull.score é objeto LeadScore com .total — extraímos só o total.
+      const prevScore = (prev?.score?.total ?? null) as number | null
       const enriched = await this.enrichLead(cpfCnpj)
       if (!enriched) throw new Error('enrichLead devolveu null')
+
+      // Wave A2: emite insight 'lead-enriquecido' quando score sobe ≥20 pts
+      // OU quando lead virou "quente" (≥85) por consequência do enrichment.
+      try {
+        const newScore = (enriched.score?.total ?? 0) as number
+        const delta = prevScore !== null ? newScore - prevScore : null
+        const virouQuente = newScore >= 85 && (prevScore ?? 0) < 85
+        const grandeSalto = delta !== null && delta >= 20
+        if (virouQuente || grandeSalto) {
+          // import dinâmico evita ciclo (Prospeccao não conhece Proactive).
+          // ProactiveService já foi instanciado no boot — passamos parent
+          // dir como fallback se for o primeiro chamador (improvável aqui).
+          const { getProactiveService } = await import('../alix/ProactiveService.js')
+          const parentDir = this.storageDir.replace(/[\\/]prospeccao$/, '')
+          const proactive = getProactiveService(this, parentDir)
+          const motivos: string[] = []
+          if (virouQuente) motivos.push(`virou quente (score ${newScore})`)
+          if (grandeSalto) motivos.push(`score saltou ${prevScore}→${newScore} (+${delta})`)
+          proactive.recordInsight({
+            tipo: 'lead-enriquecido',
+            urgencia: virouQuente ? 'critico' : 'importante',
+            titulo: `${(enriched.nome || enriched.cpfCnpj).slice(0, 50)} — ${motivos.join(' · ')}`,
+            detalhes: [
+              `Lead ${enriched.cpfCnpj} (${enriched.tipoPessoa}) ${motivos.join(' e ')}.`,
+              `Total dívida: R$ ${(enriched.totalDivida ?? 0).toLocaleString('pt-BR')}.`,
+              enriched.car ? `CAR: ${enriched.car.areaImovel?.toFixed(1)}ha em ${enriched.car.uf}/${enriched.car.municipio}.` : 'CAR ainda não localizado.',
+              enriched.cnpj ? `CNAE: ${(enriched.cnpj as any).cnaeFiscal ?? '-'}.` : '',
+            ].filter(Boolean).join(' '),
+            payload: {
+              cpfCnpj: enriched.cpfCnpj,
+              nome: enriched.nome,
+              prevScore,
+              newScore,
+              delta,
+              virouQuente,
+            },
+          })
+        }
+      } catch (err) {
+        console.warn('[ProspeccaoService] hook enrichment→insight falhou:', (err as Error).message)
+      }
     })
     this.queue.start()
   }

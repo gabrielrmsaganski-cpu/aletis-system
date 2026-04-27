@@ -633,3 +633,12 @@ export function getWhatsAppBrain(alix: AlixService, storageDir: string): WhatsAp
   if (!_instance) _instance = new WhatsAppBrain(alix, storageDir)
   return _instance
 }
+
+/**
+ * Acessa o brain só se já foi inicializado (rotas WhatsApp registradas).
+ * Útil para watchers que querem inspecionar sessões sem forçar boot do
+ * serviço quando a integração WhatsApp não está em uso.
+ */
+export function getWhatsAppBrainIfInitialized(): WhatsAppBrain | null {
+  return _instance
+}

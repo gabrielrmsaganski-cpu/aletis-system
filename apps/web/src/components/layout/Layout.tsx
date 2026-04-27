@@ -10,11 +10,14 @@
  *   - window.dispatchEvent(new Event('aletis:palette:open'))
  *   - botões/links internos podem chamar a callback via prop drilling futuro
  */
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import CommandPalette from '../ui/CommandPalette'
 import BrandFooter from '../ui/BrandFooter'
+import { ToastContainer } from '../Toast'
+import { useToast } from '../../hooks/useToast'
+import { useInsightsStream, type ProactiveInsight } from '../../hooks/useInsightsStream'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -35,6 +38,21 @@ export default function Layout({ children }: LayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(loadSidebarCollapsed)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+
+  // ── Wave B5: toast em tempo real para novos insights da ALIX ──
+  const toastApi = useToast(7000)
+  const seenIdsRef = useRef<Set<string>>(new Set())
+  useInsightsStream((insight: ProactiveInsight) => {
+    // dedupe por id (evita duplicar se SSE reconectar e re-emitir)
+    if (seenIdsRef.current.has(insight.id)) return
+    seenIdsRef.current.add(insight.id)
+    // só mostra urgências altas — info ficaria barulhento
+    if (insight.urgencia === 'critico') {
+      toastApi.show(`🔴 ${insight.titulo}`, 'error')
+    } else if (insight.urgencia === 'importante') {
+      toastApi.show(`🟡 ${insight.titulo}`, 'warning')
+    }
+  })
 
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => {
@@ -115,6 +133,7 @@ export default function Layout({ children }: LayoutProps) {
       </div>
 
       <CommandPalette open={paletteOpen} onClose={closePalette} />
+      <ToastContainer toasts={toastApi.toasts} onDismiss={toastApi.dismiss} />
     </div>
   )
 }

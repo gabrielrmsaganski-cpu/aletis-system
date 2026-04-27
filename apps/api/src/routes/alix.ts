@@ -449,5 +449,252 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
     }
   })
 
-  console.log('[ALIX] Rotas registradas: POST /api/alix/chat, GET/POST/DELETE /api/alix/session(s), GET /api/alix/llm/health, GET /api/alix/telemetry/:sessionId, GET /api/alix/push/health, POST /api/alix/push/test, POST /api/alix/briefing/run')
+  // ── Wave B1 — Alert Rules CRUD ────────────────────────
+  // GET /api/alix/rules → lista todas
+  // GET /api/alix/rules/:clienteId → lista de um cliente
+  // POST /api/alix/rules → cria
+  // DELETE /api/alix/rules/:ruleId → remove
+  // PATCH /api/alix/rules/:ruleId → atualiza valor/operador/ativo
+  // POST /api/alix/rules/evaluate-now → roda watcher manualmente
+  fastify.get('/api/alix/rules', async (_req, reply) => {
+    try {
+      const { getAlertRulesService } = await import('../services/alix/AlertRulesService.js')
+      const rules = getAlertRulesService().listAll()
+      return reply.send({ success: true, data: rules, total: rules.length })
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  fastify.get<{ Params: { clienteId: string } }>('/api/alix/rules/:clienteId', async (req, reply) => {
+    try {
+      const { getAlertRulesService } = await import('../services/alix/AlertRulesService.js')
+      const rules = getAlertRulesService().list(req.params.clienteId)
+      return reply.send({ success: true, data: rules, total: rules.length })
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  fastify.post<{ Body: Record<string, unknown> }>('/api/alix/rules', async (req, reply) => {
+    try {
+      const { getAlertRulesService } = await import('../services/alix/AlertRulesService.js')
+      const b = (req.body || {}) as Record<string, any>
+      if (!b.clienteId || !b.tipo || !b.simbolo || !b.operador || b.valor == null) {
+        return reply.status(400).send({ success: false, error: 'clienteId, tipo, simbolo, operador, valor são obrigatórios' })
+      }
+      const rule = await getAlertRulesService().create({
+        clienteId: String(b.clienteId),
+        tipo: b.tipo,
+        simbolo: String(b.simbolo),
+        operador: b.operador,
+        valor: Number(b.valor),
+        unidade: b.unidade,
+        motivo: b.motivo,
+        cooldownDias: b.cooldownDias != null ? Number(b.cooldownDias) : undefined,
+      })
+      return reply.status(201).send({ success: true, data: rule })
+    } catch (err) {
+      return reply.status(400).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  fastify.patch<{ Params: { ruleId: string }; Body: Record<string, unknown> }>('/api/alix/rules/:ruleId', async (req, reply) => {
+    try {
+      const { getAlertRulesService } = await import('../services/alix/AlertRulesService.js')
+      const updated = await getAlertRulesService().update(req.params.ruleId, (req.body || {}) as any)
+      if (!updated) return reply.status(404).send({ success: false, error: 'Regra não encontrada' })
+      return reply.send({ success: true, data: updated })
+    } catch (err) {
+      return reply.status(400).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  fastify.delete<{ Params: { ruleId: string } }>('/api/alix/rules/:ruleId', async (req, reply) => {
+    try {
+      const { getAlertRulesService } = await import('../services/alix/AlertRulesService.js')
+      const ok = await getAlertRulesService().delete(req.params.ruleId)
+      if (!ok) return reply.status(404).send({ success: false, error: 'Regra não encontrada' })
+      return reply.send({ success: true })
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  // ── Wave B4 — context hint (pré-computa "o que mudou" antes de o user
+  // abrir o chat). Frontend chama ao abrir ClienteDetalhes; backend
+  // retorna insights pendentes do cliente + sugestões de foco.
+  fastify.post<{ Body: { clienteId: string; tela?: string } }>(
+    '/api/alix/context-hint',
+    async (req, reply) => {
+      try {
+        const clienteId = String(req.body?.clienteId || '').trim()
+        if (!clienteId) return reply.status(400).send({ success: false, error: 'clienteId obrigatório' })
+        const tela = req.body?.tela ? String(req.body.tela).slice(0, 80) : undefined
+
+        const { getProactiveService } = await import('../services/alix/ProactiveService.js')
+        const { getProspeccaoService } = await import('../services/prospeccao/ProspeccaoService.js')
+        const storageDir = join(process.cwd(), 'storage')
+        const proactive = getProactiveService(getProspeccaoService(), storageDir)
+
+        // Insights dos últimos 14 dias filtrados por clienteId no payload
+        const all = await proactive.getRecentInsights(14)
+        const ofCliente = all.filter((i) => {
+          const p = (i.payload || {}) as Record<string, unknown>
+          return String(p.clienteId || '') === clienteId
+        })
+
+        // descontar insights já respondidos (responses.jsonl)
+        const respondidos = new Set<string>()
+        const responsesFile = join(storageDir, 'alix-insights', 'responses.jsonl')
+        if (existsSync(responsesFile)) {
+          try {
+            const raw = readFileSync(responsesFile, 'utf-8').trim()
+            for (const line of raw.split('\n')) {
+              if (!line) continue
+              try {
+                const r = JSON.parse(line)
+                if (r?.insightId) respondidos.add(r.insightId)
+              } catch {/* skip */}
+            }
+          } catch {/* skip */}
+        }
+        const pendentes = ofCliente.filter((i) => !respondidos.has(i.id))
+
+        // Regras de alerta ativas para este cliente
+        let regras: Array<{ id: string; tipo: string; simbolo: string; regra: string }> = []
+        try {
+          const { getAlertRulesService } = await import('../services/alix/AlertRulesService.js')
+          regras = getAlertRulesService()
+            .list(clienteId)
+            .filter((r) => r.ativo)
+            .map((r) => ({ id: r.id, tipo: r.tipo, simbolo: r.simbolo, regra: `${r.simbolo} ${r.operador} ${r.valor}` }))
+        } catch {/* skip */}
+
+        // Sugestão de foco baseada no insight de maior urgência
+        const ordem = { critico: 2, importante: 1, info: 0 } as const
+        const top = [...pendentes].sort(
+          (a, b) => (ordem[b.urgencia] ?? 0) - (ordem[a.urgencia] ?? 0) || b.ts.localeCompare(a.ts),
+        )[0]
+        let sugestao: string | null = null
+        if (top) {
+          if (top.tipo === 'stage-stuck') sugestao = `Deal travado há mais de 14 dias — sugestão: pedir atualização de status ou rebaixar estágio.`
+          else if (top.tipo === 'whatsapp-mudo') sugestao = `Cliente parou de responder no WhatsApp — sugestão: msg curta de retomada ou template fora-da-janela 24h.`
+          else if (top.tipo === 'doc-vencendo') sugestao = `Documento pendente há tempo — sugestão: cobrar via WhatsApp ou reenviar magic-link do portal.`
+          else if (top.tipo === 'alerta-preco-disparado') sugestao = `Alerta de preço disparou — sugestão: revisar exposição e propor hedge.`
+          else sugestao = top.titulo
+        }
+
+        return reply.send({
+          success: true,
+          data: {
+            clienteId,
+            tela,
+            pendentes: pendentes.length,
+            criticos: pendentes.filter((i) => i.urgencia === 'critico').length,
+            importantes: pendentes.filter((i) => i.urgencia === 'importante').length,
+            insights: pendentes.slice(0, 6),
+            regrasAtivas: regras,
+            sugestao,
+          },
+        })
+      } catch (err) {
+        return reply.status(500).send({ success: false, error: (err as Error).message })
+      }
+    },
+  )
+
+  // ── Wave Onda B — disparar detectInsights manualmente (dev/admin) ──
+  fastify.post('/api/alix/insights/run', async (_req, reply) => {
+    try {
+      const { getProactiveService } = await import('../services/alix/ProactiveService.js')
+      const { getProspeccaoService } = await import('../services/prospeccao/ProspeccaoService.js')
+      const storageDir = join(process.cwd(), 'storage')
+      const proactive = getProactiveService(getProspeccaoService(), storageDir)
+      const insights = await proactive.detectInsights()
+      return reply.send({ success: true, data: { count: insights.length, insights: insights.slice(0, 5) } })
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  fastify.post('/api/alix/rules/evaluate-now', async (_req, reply) => {
+    try {
+      const { getProactiveService } = await import('../services/alix/ProactiveService.js')
+      const { getProspeccaoService } = await import('../services/prospeccao/ProspeccaoService.js')
+      const storageDir = join(process.cwd(), 'storage')
+      const proactive = getProactiveService(getProspeccaoService(), storageDir)
+      const result = await proactive.evaluateAlertRules()
+      return reply.send({ success: true, data: result })
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  // ── Wave B5 — SSE stream de insights ──────────────────
+  // GET /api/alix/insights/stream — broadcast em tempo real a cada
+  // novo insight emitido por recordInsight (cobre TODOS os watchers).
+  // Cliente: new EventSource('/api/alix/insights/stream') + onmessage.
+  fastify.get('/api/alix/insights/stream', async (req, reply) => {
+    const { getProactiveService } = await import('../services/alix/ProactiveService.js')
+    const { getProspeccaoService } = await import('../services/prospeccao/ProspeccaoService.js')
+    const storageDir = join(process.cwd(), 'storage')
+    const proactive = getProactiveService(getProspeccaoService(), storageDir)
+
+    // SSE headers
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    })
+    // primeiro frame para o cliente saber que tá conectado
+    reply.raw.write(`event: connected\ndata: ${JSON.stringify({ ts: new Date().toISOString() })}\n\n`)
+
+    // heartbeat a cada 25s para manter conexão viva (proxies cortam idle)
+    const hb = setInterval(() => {
+      try { reply.raw.write(`: heartbeat ${Date.now()}\n\n`) } catch {/* ignore */}
+    }, 25_000)
+
+    const onInsight = (insight: any) => {
+      try {
+        const payload = JSON.stringify(insight)
+        reply.raw.write(`event: insight\ndata: ${payload}\n\n`)
+      } catch {/* ignore */}
+    }
+    proactive.events.on('insight', onInsight)
+
+    req.raw.on('close', () => {
+      proactive.events.off('insight', onInsight)
+      clearInterval(hb)
+      try { reply.raw.end() } catch {/* ignore */}
+    })
+    // Marca como já-respondido pra Fastify não tentar serializar
+    return reply
+  })
+
+  // ── Wave B3 — Weekly report ───────────────────────────
+  fastify.get('/api/alix/weekly-report/preview', async (_req, reply) => {
+    try {
+      const { getWeeklyReportService } = await import('../services/alix/push/WeeklyReportService.js')
+      const svc = getWeeklyReportService()
+      const texto = await svc.buildReport()
+      return reply.send({ success: true, data: { texto, len: texto.length } })
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  fastify.post('/api/alix/weekly-report/run', async (_req, reply) => {
+    try {
+      const { getWeeklyReportService } = await import('../services/alix/push/WeeklyReportService.js')
+      const svc = getWeeklyReportService()
+      const result = await svc.sendWeeklyReport()
+      return reply.send({ success: true, data: result })
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  console.log('[ALIX] Rotas registradas: chat, sessions, llm/health, telemetry, push/health, push/test, briefing/run, rules CRUD + evaluate-now, weekly-report')
 }

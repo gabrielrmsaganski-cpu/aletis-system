@@ -21,9 +21,11 @@
 
 import { promises as fs, existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
+import { EventEmitter } from 'events';
 import type { ProspeccaoService } from '../prospeccao/ProspeccaoService.js';
 import { ingestDOUOnce } from '../prospeccao/sources/DOUSource.js';
 import { expandSociosFromPJs } from '../prospeccao/sources/SocioExpansionSource.js';
+import { getAlixPushChannel } from './push/AlixPushChannel.js';
 
 export type InsightTipo =
   | 'janela-critica'
@@ -32,7 +34,13 @@ export type InsightTipo =
   | 'crise-dou'
   | 'ingest-concluido'
   | 'briefing-diario'
-  | 'proposta-vencendo';
+  | 'proposta-vencendo'
+  | 'lead-enriquecido'      // Wave A2: score salto ≥20 após enrichment
+  | 'stage-stuck'           // Wave A3: cliente CRM travado >14d em mesmo estágio
+  | 'whatsapp-mudo'         // Wave A4: cliente parou de responder no WhatsApp >5d
+  | 'alerta-preco-disparado' // Wave B1: regra de preço por cliente bateu threshold
+  | 'macro-shift'           // Wave B2: shift macro (Selic/USD/IPCA/commodity) >|threshold|
+  | 'doc-vencendo';         // Wave B6: contrato/CAR/LO vencendo em 30/15/7d
 
 export interface Insight {
   id: string;
@@ -57,7 +65,12 @@ export class ProactiveService {
   private sociosTimer: NodeJS.Timeout | null = null;
   private insightsTimer: NodeJS.Timeout | null = null;
   private briefingTimer: NodeJS.Timeout | null = null;
+  private rulesTimer: NodeJS.Timeout | null = null;
+  private weeklyTimer: NodeJS.Timeout | null = null;
   private nextBriefingAt: Date | null = null;
+  private nextWeeklyAt: Date | null = null;
+  /** EventEmitter para broadcasts SSE — subscribers recebem cada novo insight. */
+  readonly events = new EventEmitter();
 
   constructor(
     private readonly prospeccao: ProspeccaoService,
@@ -100,10 +113,11 @@ export class ProactiveService {
    * Inicia os jobs periódicos (chame 1x no boot).
    * Intervalos pensados para dev (minutos) — em prod use env vars para ajustar.
    */
-  start(opts: { douIntervalMs?: number; sociosIntervalMs?: number; insightsIntervalMs?: number } = {}): void {
+  start(opts: { douIntervalMs?: number; sociosIntervalMs?: number; insightsIntervalMs?: number; rulesIntervalMs?: number } = {}): void {
     const douInterval = opts.douIntervalMs ?? (Number(process.env.ALIX_PROACTIVE_DOU_MS) || 24 * 60 * 60_000); // 24h
     const sociosInterval = opts.sociosIntervalMs ?? (Number(process.env.ALIX_PROACTIVE_SOCIOS_MS) || 7 * 24 * 60 * 60_000); // 7d
     const insightsInterval = opts.insightsIntervalMs ?? (Number(process.env.ALIX_PROACTIVE_INSIGHTS_MS) || 60 * 60_000); // 1h
+    const rulesInterval = opts.rulesIntervalMs ?? (Number(process.env.ALIX_PROACTIVE_RULES_MS) || 30 * 60_000); // 30min
 
     // DOU ingest diário
     this.douTimer = setInterval(() => this.runDOUIngest(), douInterval);
@@ -117,12 +131,45 @@ export class ProactiveService {
     this.insightsTimer = setInterval(() => this.detectInsights(), insightsInterval);
     if (this.insightsTimer.unref) this.insightsTimer.unref();
 
-    console.log(`[ProactiveService] Iniciado — DOU a cada ${douInterval / 60000}min, sócios ${sociosInterval / 3600000}h, insights ${insightsInterval / 60000}min`);
+    // Wave B1 — Avaliação de regras de preço por cliente, a cada 30min.
+    // Cruza AlertRulesService.listAll() com MarketBriefService.generateBrief().
+    this.rulesTimer = setInterval(() => this.evaluateAlertRules().catch(() => {}), rulesInterval);
+    if (this.rulesTimer.unref) this.rulesTimer.unref();
+
+    console.log(`[ProactiveService] Iniciado — DOU a cada ${douInterval / 60000}min, sócios ${sociosInterval / 3600000}h, insights ${insightsInterval / 60000}min, regras ${rulesInterval / 60000}min`);
+
+    // ── Status do canal de push (visibilidade no boot) ──
+    try {
+      const ch = getAlixPushChannel(this.storageDir);
+      const h = ch.health();
+      const allowImp = (process.env.ALIX_PUSH_ALLOW_IMPORTANTE || '').toLowerCase() === 'true';
+      const dest = h.destination.kind === 'whatsapp' ? `WhatsApp → ${h.targetNumber}` : 'log-only (sem destino)';
+      const mode = h.dryRun ? 'DRYRUN' : (h.enabled ? 'ARMED' : 'DESLIGADO');
+      const flagAllow = allowImp ? '+importante' : 'só crítico';
+      const ready = h.destination.kind === 'whatsapp' && !h.dryRun && h.enabled;
+      const icon = ready ? '✅' : '⚠️ ';
+      console.log(`${icon} [AlixPush] modo=${mode} destino=${dest} (${flagAllow})`);
+      if (!ready) {
+        console.log('   ↳ Para ativar push real defina:');
+        console.log('     ALIX_PROACTIVE_PUSH_WHATSAPP=<E.164 ex: 5541999999999>');
+        console.log('     WHATSAPP_ACCESS_TOKEN=<token Meta Cloud API>');
+        console.log('     WHATSAPP_PHONE_NUMBER_ID=<id da Meta>');
+        console.log('     ALIX_PUSH_ALLOW_IMPORTANTE=true   (opcional, libera urgência "importante")');
+      }
+    } catch (err) {
+      console.warn('[ProactiveService] não consegui inspecionar AlixPushChannel:', (err as Error).message);
+    }
 
     // Briefing diário ao amanhecer (cron lógico) — default 07:07 local
     const briefingEnabled = (process.env.ALIX_BRIEFING_ENABLED || 'true').toLowerCase() === 'true';
     if (briefingEnabled) {
       this.scheduleDailyBriefing();
+    }
+
+    // Wave B3 — Weekly executive report (segunda 08:03 local por default)
+    const weeklyEnabled = (process.env.ALIX_WEEKLY_REPORT_ENABLED || 'true').toLowerCase() === 'true';
+    if (weeklyEnabled) {
+      this.scheduleWeeklyReport();
     }
 
     // Warm-up: roda insights imediatamente para povoar o dia
@@ -133,7 +180,152 @@ export class ProactiveService {
     if (this.douTimer) clearInterval(this.douTimer);
     if (this.sociosTimer) clearInterval(this.sociosTimer);
     if (this.insightsTimer) clearInterval(this.insightsTimer);
+    if (this.rulesTimer) clearInterval(this.rulesTimer);
     if (this.briefingTimer) clearTimeout(this.briefingTimer);
+    if (this.weeklyTimer) clearTimeout(this.weeklyTimer);
+  }
+
+  getNextWeeklyAt(): Date | null { return this.nextWeeklyAt; }
+
+  /**
+   * Wave B3 — agenda o weekly report para próxima segunda às 08:03 local
+   * (configurável via env). Usa setTimeout recursivo: dispara, reagenda
+   * para próxima semana.
+   */
+  private scheduleWeeklyReport(): void {
+    const hour = Number(process.env.ALIX_WEEKLY_REPORT_HOUR ?? 8);
+    const minute = Number(process.env.ALIX_WEEKLY_REPORT_MINUTE ?? 3);
+    const dow = Number(process.env.ALIX_WEEKLY_REPORT_DOW ?? 1); // 0=dom, 1=seg, ..., 6=sab
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(hour, minute, 0, 0);
+    // ajusta para o próximo `dow` desejado
+    let diff = (dow - next.getDay() + 7) % 7;
+    if (diff === 0 && next.getTime() <= now.getTime()) diff = 7;
+    next.setDate(next.getDate() + diff);
+    this.nextWeeklyAt = next;
+    const delayMs = next.getTime() - now.getTime();
+    this.weeklyTimer = setTimeout(async () => {
+      try {
+        const { getWeeklyReportService } = await import('./push/WeeklyReportService.js');
+        const svc = getWeeklyReportService(this.storageDir);
+        await svc.sendWeeklyReport();
+      } catch (err) {
+        console.warn('[ProactiveService] weekly report falhou:', (err as Error).message);
+      } finally {
+        this.scheduleWeeklyReport();
+      }
+    }, delayMs);
+    if (this.weeklyTimer.unref) this.weeklyTimer.unref();
+    const dias = Math.round(delayMs / 86400_000 * 10) / 10;
+    console.log(`[ProactiveService] Weekly report agendado para ${next.toISOString()} (em ~${dias}d)`);
+  }
+
+  /**
+   * Wave B1 — avalia todas as regras de alerta de mercado registradas
+   * por cliente. Para cada regra que bate o threshold E não está em
+   * cooldown, dispara insight `alerta-preco-disparado` e marca a regra
+   * como disparada (atualiza ultimoDisparo).
+   *
+   * Roda a cada 30min via rulesTimer; também pode ser chamado manualmente
+   * via endpoint POST /api/alix/rules/evaluate-now.
+   */
+  async evaluateAlertRules(): Promise<{ avaliadas: number; disparadas: number; shifts?: number }> {
+    try {
+      const { getAlertRulesService } = await import('./AlertRulesService.js');
+      const svc = getAlertRulesService(this.storageDir);
+      const rules = svc.listAll().filter(r => r.ativo);
+      // Não retorna cedo se rules vazio — macro-shift roda independente
+
+      // Gera brief uma vez e avalia regras + macro shifts contra ele
+      const { MarketBriefService } = await import('../MarketBriefService.js');
+      const { DataSourceManager } = await import('../DataSourceManager.js');
+      const brief = await new MarketBriefService(DataSourceManager.getInstance()).generateBrief();
+
+      let disparadas = 0;
+      // Resolve nomes de cliente para títulos legíveis
+      let clientesById = new Map<string, { nome: string; estagio?: string }>();
+      try {
+        const { alixGetClientes } = await import('../AlixService.js');
+        for (const c of alixGetClientes()) {
+          if (c?.id) clientesById.set(String(c.id), { nome: c.nome || String(c.id), estagio: c.estagio });
+        }
+      } catch {/* CRM pode estar vazio */}
+
+      for (const rule of rules) {
+        const ev = svc.evaluate(rule, brief);
+        if (!ev.bateu || ev.emCooldown) continue;
+        if (ev.valorAtual === null) continue;
+
+        const cli = clientesById.get(rule.clienteId);
+        const nomeCli = cli?.nome || rule.clienteId;
+        const seta = rule.operador.startsWith('>') ? '↑' : '↓';
+        const titulo = `${nomeCli.slice(0, 40)} · ${rule.simbolo.toUpperCase()} ${seta} ${rule.operador} ${rule.valor}`;
+        const detalhes =
+          `Regra "${rule.simbolo} ${rule.operador} ${rule.valor}" do cliente ${nomeCli} bateu. ` +
+          `Valor atual: ${ev.valorAtual} ${ev.unidadeAtual ?? ''} (fonte ${ev.fonte ?? '?'}).` +
+          (rule.motivo ? ` Motivo registrado: ${rule.motivo}.` : '') +
+          ` Cooldown: ${rule.cooldownDias}d.`;
+
+        this.recordInsight({
+          tipo: 'alerta-preco-disparado',
+          urgencia: 'critico',
+          titulo,
+          detalhes,
+          payload: {
+            ruleId: rule.id,
+            clienteId: rule.clienteId,
+            tipo: rule.tipo,
+            simbolo: rule.simbolo,
+            operador: rule.operador,
+            threshold: rule.valor,
+            valorAtual: ev.valorAtual,
+            unidade: ev.unidadeAtual,
+            fonte: ev.fonte,
+          },
+        });
+        await svc.markFired(rule.id);
+        disparadas++;
+      }
+
+      // ── Wave B2 — detecção de shifts macro com mesmo brief ──
+      // Detecta ANTES de salvar snapshot do dia (caso contrário, t1=hoje
+      // anularia o delta). Após detecção, salva snapshot se for o primeiro
+      // run do dia.
+      let shiftsCount = 0;
+      try {
+        const { getMacroShiftService } = await import('./MacroShiftService.js');
+        const macro = getMacroShiftService(this.storageDir);
+        const history = macro.loadHistory();
+        const shifts = macro.detectShifts(brief, history);
+        for (const s of shifts) {
+          this.recordInsight({
+            tipo: 'macro-shift',
+            urgencia: s.urgencia,
+            titulo: `${s.indicador} · shift ${s.janela} (${s.deltaPct != null ? (s.deltaPct >= 0 ? '+' : '') + s.deltaPct.toFixed(2) + '%' : s.delta.toFixed(0) + 'bp'})`,
+            detalhes: s.descricao + ' Avalie impacto em DSCR/hedge da carteira de clientes expostos.',
+            payload: {
+              indicador: s.indicador,
+              janela: s.janela,
+              valorAtual: s.valorAtual,
+              valorReferencia: s.valorReferencia,
+              delta: s.delta,
+              deltaPct: s.deltaPct,
+            },
+          });
+          shiftsCount++;
+        }
+        // Snapshot do dia (idempotente — só persiste se não existe)
+        await macro.snapshotIfNeeded(brief);
+      } catch (err) {
+        console.warn('[ProactiveService] macro-shift detect falhou:', (err as Error).message);
+      }
+
+      return { avaliadas: rules.length, disparadas, shifts: shiftsCount };
+    } catch (err) {
+      console.warn('[ProactiveService] evaluateAlertRules falhou:', (err as Error).message);
+      return { avaliadas: 0, disparadas: 0, shifts: 0 };
+    }
   }
 
   /**
@@ -341,14 +533,136 @@ export class ProactiveService {
       } catch (err) {
         console.warn('[ProactiveService] watcher cliente-sem-contato falhou:', (err as Error).message);
       }
+
+      // 6. Stage-stuck — Wave A3: cliente em estágio ativo travado >14d
+      // Diferente de cliente-sem-contato: aqui foco é deal em estágios que
+      // implicam ação iminente. Threshold mais agressivo (14d vs 30d).
+      try {
+        const { alixGetClientes } = await import('../AlixService.js');
+        const ESTAGIOS_ATIVOS = new Set(['negociacao', 'proposta', 'fechamento', 'acordo']);
+        const limite14 = new Date(hoje.getTime() - 14 * 86400_000);
+        for (const cliente of alixGetClientes()) {
+          if (!cliente?.id || !cliente.estagio) continue;
+          if (!ESTAGIOS_ATIVOS.has(String(cliente.estagio).toLowerCase())) continue;
+          // Usa atualizadoEm do cliente (proxy mais barato que ler memória)
+          const upd = cliente.atualizadoEm ? new Date(cliente.atualizadoEm) : null;
+          if (!upd || upd > limite14) continue;
+          const diasParado = Math.floor((hoje.getTime() - upd.getTime()) / 86400_000);
+          const urgencia = diasParado >= 21 ? 'critico' : 'importante';
+          insights.push(this.recordInsight({
+            tipo: 'stage-stuck',
+            urgencia,
+            titulo: `${(cliente.nome || cliente.id).slice(0, 40)} parado em "${cliente.estagio}" há ${diasParado}d`,
+            detalhes: `Deal em estágio ativo "${cliente.estagio}" sem progresso há ${diasParado} dias. Sugestão: reabordar com pitch específico do estágio ou rebaixar para análise.`,
+            payload: { clienteId: cliente.id, estagio: cliente.estagio, diasParado, atualizadoEm: cliente.atualizadoEm },
+          }));
+        }
+      } catch (err) {
+        console.warn('[ProactiveService] watcher stage-stuck falhou:', (err as Error).message);
+      }
+
+      // 8. Doc-vencendo — Wave B6: pendências do Portal cliente envelhecendo
+      // Critério: portal_documento_pendente.status='pendente' AND solicitadoEm muito antiga.
+      // 30d → importante, 60d → critico. Reforça follow-up de cobrança.
+      try {
+        if ((process.env.ALETIS_PG_ENABLED || '0') === '1') {
+          const { getDb } = await import('../../db/client.js');
+          const { portalDocumentoPendente } = await import('../../db/schema.js');
+          const { eq, lt, and, sql: drizzleSql } = await import('drizzle-orm');
+          const db = getDb();
+          const limite30 = new Date(hoje.getTime() - 30 * 86400_000);
+          const rows = await db
+            .select()
+            .from(portalDocumentoPendente)
+            .where(and(eq(portalDocumentoPendente.status, 'pendente'), lt(portalDocumentoPendente.solicitadoEm, limite30)))
+            .limit(50);
+
+          // Resolve nomes de cliente para títulos legíveis
+          let clientesById = new Map<string, string>();
+          try {
+            const { alixGetClientes } = await import('../AlixService.js');
+            for (const c of alixGetClientes()) {
+              if (c?.id) clientesById.set(String(c.id), c.nome || String(c.id));
+            }
+          } catch {/* CRM pode estar vazio */}
+
+          for (const r of rows) {
+            const solicitadoEm = r.solicitadoEm instanceof Date ? r.solicitadoEm : new Date(r.solicitadoEm);
+            const diasAberta = Math.floor((hoje.getTime() - solicitadoEm.getTime()) / 86400_000);
+            const urgencia = diasAberta >= 60 ? 'critico' : 'importante';
+            const nomeCli = clientesById.get(String(r.clienteId)) || r.clienteId;
+            insights.push(this.recordInsight({
+              tipo: 'doc-vencendo',
+              urgencia,
+              titulo: `${nomeCli.slice(0, 30)} · "${(r.titulo || 'doc').slice(0, 30)}" pendente há ${diasAberta}d`,
+              detalhes:
+                `Cliente ${nomeCli} tem documento "${r.titulo}" (${r.categoria || 's/categoria'}) pendente desde ${solicitadoEm.toLocaleDateString('pt-BR')} — ${diasAberta} dias sem upload. ` +
+                (r.obrigatorio ? 'Documento OBRIGATÓRIO. ' : 'Documento opcional. ') +
+                `Sugestão: cobrar via WhatsApp ou reenviar magic-link.`,
+              payload: {
+                pendenciaId: r.id,
+                clienteId: r.clienteId,
+                categoria: r.categoria,
+                obrigatorio: r.obrigatorio,
+                solicitadoEm: solicitadoEm.toISOString(),
+                diasAberta,
+              },
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn('[ProactiveService] watcher doc-vencendo falhou:', (err as Error).message);
+      }
+
+      // 7. WhatsApp-mudo — Wave A4: contato ativo que parou de responder >5d
+      // Critério: última msg do cliente (role=user) >5d, mas conversa estava
+      // ativa (>=3 mensagens nos últimos 30d). Evita falso-positivo de
+      // contato single-shot que nunca engajou.
+      try {
+        const { getWhatsAppBrainIfInitialized } = await import('../whatsapp/WhatsAppBrain.js');
+        const brain = getWhatsAppBrainIfInitialized();
+        if (brain) {
+          const sessions = await brain.listSessions();
+          const limite30dias = hoje.getTime() - 30 * 86400_000;
+          const limite5dias = hoje.getTime() - 5 * 86400_000;
+          for (const s of sessions) {
+            if (!s?.mensagens || s.mensagens.length < 3) continue;
+            // só conta se conversa estava ativa nos últimos 30d
+            if (s.atualizadoEm < limite30dias) continue;
+            // já escalado para humano? não dispara (Christian assumiu)
+            if (s.escalouHumano) continue;
+            // última mensagem do cliente (não da ALIX)
+            const ultimaUser = [...s.mensagens].reverse().find(m => m.role === 'user');
+            if (!ultimaUser) continue;
+            if (ultimaUser.timestamp >= limite5dias) continue;
+            const diasMudo = Math.floor((hoje.getTime() - ultimaUser.timestamp) / 86400_000);
+            if (diasMudo > 30) continue; // muito antigo, deixa cliente-sem-contato pegar
+            const urgencia = diasMudo >= 10 ? 'critico' : 'importante';
+            const nome = s.nomeContato || s.lead?.nome || s.waId;
+            insights.push(this.recordInsight({
+              tipo: 'whatsapp-mudo',
+              urgencia,
+              titulo: `${nome.slice(0, 40)} parou de responder no WhatsApp há ${diasMudo}d`,
+              detalhes: `Conversa ativa no WhatsApp com ${nome} (etapa "${s.etapa}") sem resposta há ${diasMudo} dias. Sugestão: msg curta de retomada ou template fora-da-janela 24h.`,
+              payload: { waId: s.waId, etapa: s.etapa, diasMudo, totalMsgs: s.mensagens.length, ultimoTexto: ultimaUser.content?.slice(0, 100) },
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn('[ProactiveService] watcher whatsapp-mudo falhou:', (err as Error).message);
+      }
     } catch (err) {
       console.warn('[ProactiveService] detectInsights falhou:', (err as Error).message);
     }
     return insights;
   }
 
-  /** Append-only ao JSONL do dia. */
-  private recordInsight(partial: Omit<Insight, 'id' | 'ts'>): Insight {
+  /**
+   * Append-only ao JSONL do dia.
+   * Público — usado por outros serviços (ProspeccaoService, WhatsAppBrain)
+   * para emitir insights sem tight coupling ao watcher.
+   */
+  recordInsight(partial: Omit<Insight, 'id' | 'ts'>): Insight {
     const insight: Insight = {
       id: `ins_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       ts: new Date().toISOString(),
@@ -361,6 +675,12 @@ export class ProactiveService {
     } catch (err) {
       console.warn('[ProactiveService] append insight falhou:', (err as Error).message);
     }
+
+    // Wave B5 — broadcast em tempo real para SSE subscribers (toast em qualquer
+    // tela do sistema). Cada subscriber recebe síncrono o evento "insight".
+    try {
+      this.events.emit('insight', insight);
+    } catch {/* listener errors must not break record */}
 
     // Push assíncrono para canal unificado (WhatsApp/log). Só críticos por default.
     // Import dinâmico para evitar ciclo com AlixPushChannel.
