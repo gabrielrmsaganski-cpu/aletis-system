@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file=../../.env src/server.ts",
-    "build": "tsc",
+    "build": "tsc && pnpm run build:copy-assets",
+    "build:copy-assets": "mkdir -p dist/db/migrations && cp -r src/db/migrations/. dist/db/migrations/ 2>/dev/null || true",
     "start": "node --env-file=../../.env dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",

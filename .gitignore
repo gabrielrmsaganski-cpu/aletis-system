@@ -131,3 +131,10 @@ Identidade visual/
 
 # Loadtest artifacts (regenerated)
 apps/api/loadtest/last-run.json
+
+# Storage runtime (uploads de clientes, leads, sicar shapefiles)
+apps/api/storage/
+apps/site/storage/
+
+# Backups gerados localmente
+backups/

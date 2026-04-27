@@ -37,11 +37,16 @@ RUN apk add --no-cache tini && addgroup -S aletis && adduser -S aletis -G aletis
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3011 \
-    HOST=0.0.0.0
+    HOST=0.0.0.0 \
+    ALETIS_AUTO_MIGRATE=1
 COPY --from=builder --chown=aletis:aletis /app/apps/api/dist ./dist
 COPY --from=builder --chown=aletis:aletis /app/apps/api/package.json ./package.json
 COPY --from=builder --chown=aletis:aletis /app/apps/api/node_modules ./node_modules
 COPY --from=builder --chown=aletis:aletis /app/packages ./packages
+# Migrations Drizzle precisam estar acessíveis em runtime para auto-migrate.
+# `pnpm build:copy-assets` já as copia para dist/db/migrations,
+# mas se algum bundler agressivo as omitir, garantimos via cópia direta.
+COPY --from=builder --chown=aletis:aletis /app/apps/api/src/db/migrations ./src/db/migrations
 USER aletis
 EXPOSE 3011
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=20s \

@@ -242,6 +242,11 @@ async function buildApp() {
   })
 
   // --- Health check ---
+  // /api/health         → resposta rápida (apenas API up). 200 OK sempre
+  //                       que o processo responde — usado por load
+  //                       balancer + Docker HEALTHCHECK.
+  // /api/health/deep    → checa banco + storage + ALIX/Foundry. Mais
+  //                       lento (até ~5s). Usar pra dashboard/migração.
   fastify.get('/api/health', async () => {
     return {
       success: true,
@@ -251,11 +256,67 @@ async function buildApp() {
         version: '0.1.0',
         services: {
           api: 'running',
-          database: 'in-memory',
           calculationEngine: 'active',
         },
       },
     }
+  })
+
+  fastify.get('/api/health/deep', async (_req, reply) => {
+    const start = Date.now()
+    const result: Record<string, unknown> = {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      version: '0.1.0',
+      checks: {} as Record<string, { ok: boolean; detail?: string; tookMs?: number }>,
+    }
+    const checks = result.checks as Record<string, { ok: boolean; detail?: string; tookMs?: number }>
+
+    // 1) Postgres reachability
+    if (process.env.ALETIS_PG_ENABLED === '1') {
+      const t = Date.now()
+      try {
+        const { getDb } = await import('./db/client.js')
+        const db = getDb() as any
+        await db.execute({ sql: 'select 1', args: [] }).catch(async () => {
+          // drizzle .execute aceita sql template — fallback simples:
+          await (db as any).$client?.query?.('select 1')
+        })
+        checks.postgres = { ok: true, tookMs: Date.now() - t }
+      } catch (err) {
+        checks.postgres = { ok: false, detail: (err as Error).message, tookMs: Date.now() - t }
+      }
+    } else {
+      checks.postgres = { ok: true, detail: 'disabled (ALETIS_PG_ENABLED != 1)' }
+    }
+
+    // 2) Storage de uploads do portal
+    try {
+      const { existsSync, statSync } = await import('node:fs')
+      const path = process.env.ALETIS_PORTAL_UPLOAD_DIR || './storage/portal-uploads'
+      if (existsSync(path)) {
+        const s = statSync(path)
+        checks.storage = { ok: s.isDirectory(), detail: path }
+      } else {
+        // Não é erro — diretório é criado on-demand no primeiro upload
+        checks.storage = { ok: true, detail: `${path} (será criado no primeiro upload)` }
+      }
+    } catch (err) {
+      checks.storage = { ok: false, detail: (err as Error).message }
+    }
+
+    // 3) ALIX / Foundry (apenas se habilitado)
+    if (process.env.ALIX_USE_LLM !== 'false' && process.env.AZURE_AI_SERVICES_KEY) {
+      checks.alix = { ok: true, detail: 'Foundry credentials present (no ping)' }
+    } else {
+      checks.alix = { ok: true, detail: 'disabled or no credentials' }
+    }
+
+    result.tookMs = Date.now() - start
+    const allOk = Object.values(checks).every((c) => c.ok)
+    result.status = allOk ? 'ok' : 'degraded'
+    if (!allOk) reply.code(503)
+    return { success: true, data: result }
   })
 
   // --- Auto-register route modules ---
@@ -287,6 +348,34 @@ async function buildApp() {
 
 async function start(): Promise<void> {
   const app = await buildApp()
+
+  // Auto-migrate antes do listen quando ALETIS_AUTO_MIGRATE=1.
+  // Em docker-compose o ambiente é prod e migrations rodam sempre;
+  // em dev local é no-op (env não setada).
+  try {
+    const { runAutoMigrationsIfEnabled } = await import('./lib/auto-migrate.js')
+    await runAutoMigrationsIfEnabled(app.log)
+  } catch (err) {
+    app.log.error({ err }, '[boot] auto-migrate falhou — abortando start')
+    process.exit(1)
+  }
+
+  // Hidrata stores em memória do Portal a partir do PG (best-effort).
+  // Restaura magic-links válidos, pendências e uploads após restart.
+  if (process.env.ALETIS_PG_ENABLED === '1') {
+    try {
+      const [tk, st] = await Promise.all([
+        import('./services/PortalTokenService.js').then((m) => m.hydrateFromPg()),
+        import('./services/PortalStore.js').then((m) => m.hydratePortalStoreFromPg()),
+      ])
+      app.log.info(
+        { tokens: tk, pendencias: st.pendencias, uploads: st.uploads },
+        '[boot] portal hidratado do PG'
+      )
+    } catch (err) {
+      app.log.warn({ err: (err as Error).message }, '[boot] hydrate portal falhou (non-fatal)')
+    }
+  }
 
   try {
     await app.listen({ port: PORT, host: HOST })

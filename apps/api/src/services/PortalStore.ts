@@ -103,6 +103,19 @@ export function criarPendencia(p: Omit<DocumentoPendencia, 'id' | 'solicitadoEm'
     solicitadoEm: new Date().toISOString(),
   }
   bucket(p.clienteId).pendencias.set(id, novo)
+  // Dual-write PG (fire-and-forget)
+  void import('../db/PortalRepository.js').then((m) => m.dbUpsertPendencia({
+    id: novo.id,
+    clienteId: novo.clienteId,
+    titulo: novo.titulo,
+    descricao: novo.descricao ?? null,
+    categoria: novo.categoria ?? null,
+    obrigatorio: novo.obrigatorio,
+    status: novo.status,
+    uploadId: novo.uploadId ?? null,
+    solicitadoPor: novo.solicitadoPor ?? null,
+    solicitadoEm: new Date(novo.solicitadoEm),
+  })).catch(() => {})
   return novo
 }
 
@@ -117,13 +130,30 @@ export function atualizarPendencia(
   if (!cur) return null
   const upd = { ...cur, ...patch }
   b.pendencias.set(pendenciaId, upd)
+  void import('../db/PortalRepository.js').then((m) => m.dbUpsertPendencia({
+    id: upd.id,
+    clienteId: upd.clienteId,
+    titulo: upd.titulo,
+    descricao: upd.descricao ?? null,
+    categoria: upd.categoria ?? null,
+    obrigatorio: upd.obrigatorio,
+    status: upd.status,
+    uploadId: upd.uploadId ?? null,
+    solicitadoPor: upd.solicitadoPor ?? null,
+    solicitadoEm: new Date(upd.solicitadoEm),
+    enviadoEm: upd.enviadoEm ? new Date(upd.enviadoEm) : null,
+    revisadoEm: upd.revisadoEm ? new Date(upd.revisadoEm) : null,
+    observacao: upd.observacao ?? null,
+  })).catch(() => {})
   return upd
 }
 
 export function removerPendencia(clienteId: string, pendenciaId: string): boolean {
   const b = BY_CLIENTE.get(clienteId)
   if (!b) return false
-  return b.pendencias.delete(pendenciaId)
+  const ok = b.pendencias.delete(pendenciaId)
+  if (ok) void import('../db/PortalRepository.js').then((m) => m.dbDeletePendencia(pendenciaId)).catch(() => {})
+  return ok
 }
 
 /* ── Uploads ───────────────────────────────────────────────── */
@@ -144,6 +174,19 @@ export function adicionarUpload(u: Omit<UploadCliente, 'id' | 'enviadoEm'>): Upl
     enviadoEm: new Date().toISOString(),
   }
   bucket(u.clienteId).uploads.set(id, novo)
+  void import('../db/PortalRepository.js').then((m) => m.dbInsertUpload({
+    id: novo.id,
+    clienteId: novo.clienteId,
+    pendenciaId: novo.pendenciaId ?? null,
+    nomeOriginal: novo.nomeOriginal,
+    nomeStorage: novo.nomeStorage,
+    mime: novo.mime,
+    tamanho: novo.tamanho,
+    sha256: novo.sha256 ?? null,
+    categoria: novo.categoria ?? null,
+    enviadoPor: novo.enviadoPor,
+    enviadoEm: new Date(novo.enviadoEm),
+  })).catch(() => {})
   return novo
 }
 
@@ -165,7 +208,66 @@ export function registrarEvento(
   b.eventos.push(ev)
   // Mantém até 200 últimos por cliente (rolling window)
   if (b.eventos.length > 200) b.eventos.splice(0, b.eventos.length - 200)
+  // PG é append-only — toda auditoria importa
+  void import('../db/PortalRepository.js').then((m) => m.dbInsertEvento({
+    clienteId: ev.clienteId,
+    tipo: ev.tipo,
+    canal: ev.canal ?? null,
+    ip: ev.ip ?? null,
+    userAgent: ev.userAgent ?? null,
+    detalhes: ev.detalhes ?? null,
+    criadoEm: new Date(ev.criadoEm),
+  })).catch(() => {})
   return ev
+}
+
+/**
+ * Hidrata os Maps em memória a partir do PG no boot.
+ * Restaura pendências e uploads após restart.
+ */
+export async function hydratePortalStoreFromPg(): Promise<{ pendencias: number; uploads: number }> {
+  try {
+    const m = await import('../db/PortalRepository.js')
+    const [pends, ups] = await Promise.all([m.dbLoadAllPendencias(), m.dbLoadAllUploads()])
+    for (const r of pends) {
+      const b = bucket(r.clienteId)
+      b.pendencias.set(r.id, {
+        id: r.id,
+        clienteId: r.clienteId,
+        titulo: r.titulo,
+        descricao: r.descricao ?? undefined,
+        categoria: (r.categoria ?? 'outros') as DocumentoPendencia['categoria'],
+        obrigatorio: r.obrigatorio,
+        status: r.status,
+        uploadId: r.uploadId ?? undefined,
+        solicitadoPor: r.solicitadoPor ?? undefined,
+        solicitadoEm: r.solicitadoEm.toISOString(),
+        enviadoEm: r.enviadoEm?.toISOString(),
+        revisadoEm: r.revisadoEm?.toISOString(),
+        observacao: r.observacao ?? undefined,
+      })
+    }
+    for (const r of ups) {
+      const b = bucket(r.clienteId)
+      b.uploads.set(r.id, {
+        id: r.id,
+        clienteId: r.clienteId,
+        pendenciaId: r.pendenciaId ?? undefined,
+        nomeOriginal: r.nomeOriginal,
+        nomeStorage: r.nomeStorage,
+        mime: r.mime,
+        tamanho: r.tamanho,
+        sha256: r.sha256 ?? undefined,
+        categoria: r.categoria ?? undefined,
+        enviadoPor: r.enviadoPor,
+        enviadoEm: r.enviadoEm.toISOString(),
+        url: `/api/portal/uploads/${r.id}`,
+      })
+    }
+    return { pendencias: pends.length, uploads: ups.length }
+  } catch {
+    return { pendencias: 0, uploads: 0 }
+  }
 }
 
 export function listarEventos(clienteId: string, limite = 50): PortalEvento[] {

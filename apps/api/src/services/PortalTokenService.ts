@@ -71,6 +71,22 @@ export function emitirToken(params: {
     metadata: params.metadata,
   }
   STORE.set(record.id, record)
+
+  // Dual-write best-effort no PG (fire-and-forget). PortalRepository
+  // é no-op silencioso quando ALETIS_PG_ENABLED != 1.
+  void import('../db/PortalRepository.js').then((m) =>
+    m.dbInsertToken({
+      id: record.id,
+      clienteId: record.clienteId,
+      tipo: record.tipo,
+      tokenHash: record.tokenHash,
+      expiraEm: new Date(record.expiraEm),
+      criadoEm: new Date(record.criadoEm),
+      canal: record.canal ?? null,
+      metadata: record.metadata ?? null,
+    })
+  ).catch(() => { /* nao bloquear */ })
+
   // Token cru carrega o id para lookup direto.
   return { token: `${record.id}.${tokenRaw}`, record }
 }
@@ -95,6 +111,7 @@ export function consumirToken(token: string, tipo: TokenTipo): TokenRecord | nul
   if (calc.length !== stored.length || !timingSafeEqual(calc, stored)) return null
 
   record.consumidoEm = Date.now()
+  void import('../db/PortalRepository.js').then((m) => m.dbConsumeToken(record.id)).catch(() => {})
   return { ...record }
 }
 
@@ -108,7 +125,35 @@ export function revogarTokensCliente(clienteId: string, tipo: TokenTipo): number
       n++
     }
   }
+  void import('../db/PortalRepository.js').then((m) => m.dbRevokeTokensByCliente(clienteId, tipo)).catch(() => {})
   return n
+}
+
+/**
+ * Hidrata o STORE em memória a partir do PG (boot).
+ * Restaura magic-links e resets ainda válidos após restart.
+ */
+export async function hydrateFromPg(): Promise<number> {
+  try {
+    const m = await import('../db/PortalRepository.js')
+    const rows = await m.dbLoadActiveTokens()
+    for (const r of rows) {
+      STORE.set(r.id, {
+        id: r.id,
+        clienteId: r.clienteId,
+        tipo: r.tipo,
+        tokenHash: r.tokenHash,
+        expiraEm: r.expiraEm.getTime(),
+        consumidoEm: r.consumidoEm?.getTime(),
+        criadoEm: r.criadoEm.getTime(),
+        canal: r.canal ?? undefined,
+        metadata: r.metadata ?? undefined,
+      })
+    }
+    return rows.length
+  } catch {
+    return 0
+  }
 }
 
 /** GC simples — chamado periodicamente do server para evitar leak. */
