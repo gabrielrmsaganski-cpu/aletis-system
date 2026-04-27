@@ -11,6 +11,7 @@ export const metadata: Metadata = {
   title: 'Política de Privacidade · Termos de Uso · LGPD',
   description:
     'Política de Privacidade, Termos de Uso e compromissos LGPD da ALETIS Finanças Estratégicas — como tratamos dados de clientes e visitantes.',
+  alternates: { canonical: '/politica-privacidade' },
 }
 
 const principios = [

@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   title: 'Calculadoras · Simuladores financeiros agro',
   description:
     'Três simuladores ALETIS: reestruturação de dívida, capacidade de pagamento safra e detector de abusividade. Sem cadastro, resultado em tempo real.',
+  alternates: { canonical: '/calculadoras' },
 }
 
 const calcs = [

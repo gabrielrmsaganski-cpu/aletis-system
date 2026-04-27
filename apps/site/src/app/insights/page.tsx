@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   title: 'Insights · Teses técnicas, mercado e reestruturação',
   description:
     'Editorial da ALETIS: teses revisionais, inteligência de mercado, DSCR aplicado ao agro, tecnologia ALIX e anatomia de mesas multi-credor.',
+  alternates: { canonical: '/insights' },
 }
 
 const ordenado = [...insights].sort((a, b) => b.publicadoEm.localeCompare(a.publicadoEm))

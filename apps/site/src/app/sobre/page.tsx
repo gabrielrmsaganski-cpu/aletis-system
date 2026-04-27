@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   title: 'Sobre · A mesa técnica do agro brasileiro',
   description:
     'A ALETIS une inteligência financeira, vivência de agro e tecnologia proprietária em uma mesa única — construída para reestruturar o passivo de produtores e grupos do agronegócio.',
+  alternates: { canonical: '/sobre' },
 }
 
 const valores = [

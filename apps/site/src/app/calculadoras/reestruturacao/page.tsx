@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: 'Simulador de reestruturação de dívida',
   description:
     'Estime a economia real em um acordo ALETIS. Saldo devedor, perfil de credores e prazo — retorno em tempo real com DSCR projetado.',
+  alternates: { canonical: '/calculadoras/reestruturacao' },
 }
 
 export default function Page() {

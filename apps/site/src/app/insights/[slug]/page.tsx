@@ -13,6 +13,7 @@ import {
   type InsightBlock,
 } from '@/lib/insights'
 import { fmtDate } from '@/lib/formatters'
+import { siteConfig } from '@/lib/siteConfig'
 
 type Props = { params: { slug: string } }
 
@@ -26,13 +27,22 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: insight.titulo,
     description: insight.resumo,
+    alternates: {
+      canonical: `/insights/${insight.slug}`,
+    },
     openGraph: {
       title: insight.titulo,
       description: insight.resumo,
       type: 'article',
+      url: `${siteConfig.url}/insights/${insight.slug}`,
       publishedTime: insight.publicadoEm,
       authors: [insight.autor],
-      tags: insight.tags,
+      tags: [...insight.tags],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: insight.titulo,
+      description: insight.resumo,
     },
   }
 }
@@ -102,8 +112,60 @@ export default function InsightDetail({ params }: Props) {
 
   const relacionados = getRelatedInsights(params.slug, 3)
 
+  // JSON-LD Article — schema.org/Article + BreadcrumbList.
+  // Schema.org Article eleva o snippet do Google e enriquece prévia
+  // do LinkedIn. BreadcrumbList expõe a navegação Home→Insights→Artigo.
+  const articleJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: insight.titulo,
+    description: insight.resumo,
+    image: `${siteConfig.url}/opengraph-image`,
+    datePublished: insight.publicadoEm,
+    dateModified: insight.publicadoEm,
+    author: {
+      '@type': 'Person',
+      name: insight.autor,
+      jobTitle: insight.autorRole,
+      affiliation: { '@type': 'Organization', name: siteConfig.name },
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: siteConfig.name,
+      logo: {
+        '@type': 'ImageObject',
+        url: `${siteConfig.url}/brand/logos/aletis-principal-cream.png`,
+      },
+    },
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': `${siteConfig.url}/insights/${insight.slug}`,
+    },
+    keywords: insight.tags.join(', '),
+    articleSection: categoriasLabel[insight.categoria],
+    inLanguage: 'pt-BR',
+    timeRequired: `PT${insight.leituraMin}M`,
+  }
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Início', item: siteConfig.url },
+      { '@type': 'ListItem', position: 2, name: 'Insights', item: `${siteConfig.url}/insights` },
+      { '@type': 'ListItem', position: 3, name: insight.titulo, item: `${siteConfig.url}/insights/${insight.slug}` },
+    ],
+  }
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       {/* Hero dedicado */}
       <section className="relative overflow-hidden bg-gradient-to-b from-aletis-verde-profundo via-aletis-verde-escuro to-aletis-verde-escuro pb-20 pt-32 text-white md:pb-28 md:pt-40">
         <div aria-hidden="true" className="absolute inset-0 bg-hero-radial opacity-80" />

@@ -19,6 +19,7 @@ export const metadata: Metadata = {
   title: 'Consultoria · Reestruturação, revisional e estruturação financeira do agro',
   description:
     'Consultoria financeira estratégica para o agronegócio: diagnóstico, reestruturação multi-credor, revisional, estruturação financeira, inteligência de mercado e gestão de crise. Sem vender software — entregando decisão.',
+  alternates: { canonical: '/solucoes' },
 }
 
 const frentes = [

@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   title: 'Para quem é · Produtores, grupos, cooperativas e empresas do agro',
   description:
     'A ALETIS atende produtores rurais, grupos agrícolas, cooperativas, cerealistas e empresas do agronegócio em situações de reestruturação, revisional ou profissionalização financeira.',
+  alternates: { canonical: '/para-quem-e' },
 }
 
 const publicos = [

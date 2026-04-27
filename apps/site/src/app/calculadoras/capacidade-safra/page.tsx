@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: 'Capacidade de pagamento safra',
   description:
     'Calcule quanto de dívida sua próxima safra suporta. DSCR projetado, stress test de −15% no preço e capacidade máxima de serviço da dívida.',
+  alternates: { canonical: '/calculadoras/capacidade-safra' },
 }
 
 export default function Page() {

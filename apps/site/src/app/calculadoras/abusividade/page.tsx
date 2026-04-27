@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: 'Detector de abusividade contratual',
   description:
     'Compare a taxa contratada com a taxa subsidiada da época e identifique risco revisional. Súmulas STJ 93, 296 e Res. BCB 4.966/21.',
+  alternates: { canonical: '/calculadoras/abusividade' },
 }
 
 export default function Page() {

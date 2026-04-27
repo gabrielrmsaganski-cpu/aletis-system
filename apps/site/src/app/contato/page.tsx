@@ -11,6 +11,7 @@ export const metadata: Metadata = {
   title: 'Contato · Fale com a mesa ALETIS',
   description:
     'Solicite diagnóstico gratuito, proposta comercial ou NDA. Retorno em até 1 dia útil — consultoria financeira estratégica para o agro.',
+  alternates: { canonical: '/contato' },
 }
 
 const whatsappHref = `https://wa.me/${siteConfig.contact.whatsapp}?text=${encodeURIComponent(
