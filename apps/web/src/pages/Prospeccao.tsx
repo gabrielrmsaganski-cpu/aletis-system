@@ -50,6 +50,7 @@ import {
   RotateCw,
   Database,
 } from 'lucide-react'
+import { TabSocios } from '../components/prospeccao/TabSocios'
 
 // ────────────────────────────────────────────────────────────
 // Tipos (espelham backend apps/api/src/services/prospeccao/types.ts)
@@ -217,7 +218,7 @@ interface HotLeadAlert {
   urgencia: 'imediata' | 'alta' | 'media'
   motivo: string
 }
-interface LeadFull {
+export interface LeadFull {
   cpfCnpj: string
   cpfCnpjClean: string
   tipoPessoa: 'PF' | 'PJ'
@@ -365,7 +366,7 @@ interface BatchState {
 // ────────────────────────────────────────────────────────────
 // Formatters
 // ────────────────────────────────────────────────────────────
-const fmtBRL = (v: number): string =>
+export const fmtBRL = (v: number): string =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
 const fmtBRLShort = (v: number): string => {
   // Formato compacto pt-BR — um único dígito após a vírgula para legibilidade,
@@ -383,7 +384,7 @@ const fmtNum = (n: number): string => n.toLocaleString('pt-BR')
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
 
-const CLASSIF_STYLE: Record<string, { bg: string; text: string; border: string; label: string; icon: React.ElementType }> = {
+export const CLASSIF_STYLE: Record<string, { bg: string; text: string; border: string; label: string; icon: React.ElementType }> = {
   quente: { bg: 'bg-red-50 dark:bg-red-950/30', text: 'text-red-700 dark:text-red-300', border: 'border-red-300 dark:border-red-800', label: 'Quente', icon: Flame },
   morno: { bg: 'bg-amber-50 dark:bg-amber-950/30', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-300 dark:border-amber-800', label: 'Morno', icon: Target },
   frio: { bg: 'bg-sky-50 dark:bg-sky-950/30', text: 'text-sky-700 dark:text-sky-300', border: 'border-sky-300 dark:border-sky-800', label: 'Frio', icon: Gauge },
@@ -3595,39 +3596,6 @@ function TabJudicial({ lead }: { lead: LeadFull }) {
           )}
         </div>
       )}
-    </div>
-  )
-}
-
-function TabSocios({ lead }: { lead: LeadFull }) {
-  if (!lead.cnpj) {
-    return (
-      <div className="text-center py-8 text-aletis-grafite-medio dark:text-white/50">
-        <Users size={32} className="mx-auto mb-2 opacity-40" />
-        Dados de sócios disponíveis após enriquecimento BrasilAPI.
-      </div>
-    )
-  }
-  if (lead.cnpj.socios.length === 0) {
-    return <p className="text-xs text-aletis-grafite-medio dark:text-white/50">Sem QSA cadastrado.</p>
-  }
-  return (
-    <div className="space-y-2">
-      {lead.cnpj.socios.map((s, i) => (
-        <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-aletis-bege/50 dark:bg-white/5 border border-aletis-borda dark:border-white/10">
-          <div className="w-9 h-9 rounded-full bg-aletis-verde/15 flex items-center justify-center">
-            <Users size={14} className="text-aletis-verde" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm text-aletis-grafite-escuro dark:text-white truncate">{s.nome}</p>
-            <p className="text-[11px] text-aletis-grafite-medio dark:text-white/50">
-              {s.qualificacao}
-              {s.faixaEtaria && ` · ${s.faixaEtaria}`}
-              {s.dataEntrada && ` · desde ${s.dataEntrada}`}
-            </p>
-          </div>
-        </div>
-      ))}
     </div>
   )
 }
