@@ -34,10 +34,12 @@ import {
   Image as ImageIcon,
   AlertTriangle,
   Zap,
+  Activity,
 } from 'lucide-react'
 import { apiFetch } from '../hooks/useApi'
 import { AlixConfirmationsPanel } from '../components/alix/AlixConfirmationBatch'
 import { SubagentIndicator, detectLastSubagent } from '../components/alix/SubagentIndicator'
+import AlixTelemetryPanel from '../components/alix/AlixTelemetryPanel'
 
 // ────────────────────────────────────────────────────────────
 // Types — mirror AlixService.ts server types
@@ -666,6 +668,7 @@ export default function ALIX() {
   const [memoryOpen, setMemoryOpen] = useState(false)
   const [memoryMd, setMemoryMd] = useState<string | null>(null)
   const [memoryLoading, setMemoryLoading] = useState(false)
+  const [showTelemetry, setShowTelemetry] = useState(false)
   const [streamEnabled, setStreamEnabled] = useState<boolean>(() => {
     // Default true: streaming entrega tokens em tempo real e tem fallback
     // robusto. localStorage só desabilita se valor for explicitamente '0'.
@@ -1365,6 +1368,17 @@ export default function ALIX() {
               Stream
             </button>
 
+            {/* Telemetria visual — abre overlay com custo/tokens/latência/tools */}
+            <button
+              onClick={() => setShowTelemetry(true)}
+              aria-label="Abrir painel de uso e custo da ALIX"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white border border-aletis-borda text-aletis-grafite-claro hover:text-aletis-grafite-escuro transition-colors"
+              title="Uso, custo, latência e top tools (60s polling)"
+            >
+              <Activity className="w-3 h-3" />
+              Uso
+            </button>
+
             <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-positivo/10 text-positivo text-xs font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-positivo animate-pulse" />
               Servidor
@@ -1681,6 +1695,22 @@ export default function ALIX() {
           </div>
         </div>
       </div>
+
+      {/* Overlay de telemetria — fecha com Esc ou clique no fundo */}
+      {showTelemetry && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center bg-aletis-verde-escuro/60 backdrop-blur-sm p-6 overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowTelemetry(false) }}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowTelemetry(false) }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Painel de uso e custo da ALIX"
+        >
+          <div className="mt-12">
+            <AlixTelemetryPanel onClose={() => setShowTelemetry(false)} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -179,16 +179,38 @@ export function AlixConfirmationBatchCard({ batch, onApplied, onCancelled }: Ali
   const [applying, setApplying] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Seleção por item para aprovação parcial. Padrão: todos os pendings
+  // marcados (preserva semântica "Aplicar tudo" ao primeiro clique).
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(batch.pendings.filter((p) => !p.status || p.status === 'pending').map((p) => p.id)),
+  )
 
   const isTerminal = batch.status === 'all_applied' || batch.status === 'cancelled'
+  const pendingItems = batch.pendings.filter((p) => !p.status || p.status === 'pending')
+  const allSelected = pendingItems.length > 0 && pendingItems.every((p) => selected.has(p.id))
+  const noneSelected = selected.size === 0
 
-  const applyAll = async () => {
+  const toggleItem = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  const toggleAll = () => {
+    if (allSelected) setSelected(new Set())
+    else setSelected(new Set(pendingItems.map((p) => p.id)))
+  }
+
+  const applySelected = async (only?: string[]) => {
     setApplying(true)
     setError(null)
     try {
+      const body = only && only.length ? { only } : {}
       const r = await apiFetch<{ success: boolean; data: { applied: unknown[]; failed: unknown[]; skipped: unknown[] }; error?: string }>(
         `/alix/confirmations/batch/${batch.batchId}/apply`,
-        { method: 'POST', body: JSON.stringify({}), headers: { 'content-type': 'application/json' } },
+        { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } },
       )
       if (!r.success) throw new Error(r.error || 'Falha')
       onApplied?.(batch.batchId)
@@ -198,6 +220,8 @@ export function AlixConfirmationBatchCard({ batch, onApplied, onCancelled }: Ali
       setApplying(false)
     }
   }
+  const applyAll = () => applySelected()
+  const applyOnlySelected = () => applySelected(Array.from(selected))
 
   const cancelAll = async () => {
     setCancelling(true)
@@ -243,20 +267,62 @@ export function AlixConfirmationBatchCard({ batch, onApplied, onCancelled }: Ali
         </div>
       </div>
 
+      {/* Toolbar de seleção — visível apenas quando há ações pendentes */}
+      {!isTerminal && pendingItems.length > 1 && batch.status !== 'applying' && (
+        <div className="flex items-center justify-between gap-2 mb-2 pl-6 pr-1">
+          <button
+            type="button"
+            onClick={toggleAll}
+            className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white"
+          >
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleAll}
+              className="accent-emerald-500"
+              aria-label={allSelected ? 'Desmarcar todos' : 'Selecionar todos'}
+            />
+            <span>{selected.size}/{pendingItems.length} selecionados</span>
+          </button>
+        </div>
+      )}
+
       <div className="space-y-2 mb-3">
-        {batch.pendings.map((p, idx) => (
-          <div key={p.id} className="flex items-start gap-2 text-sm">
-            <PendingStatusIcon status={p.status} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-baseline gap-2">
-                <span className="text-xs font-mono opacity-50">{idx + 1}.</span>
-                <span className="font-medium">{formatToolName(p.toolName)}</span>
+        {batch.pendings.map((p, idx) => {
+          const isPending = !p.status || p.status === 'pending'
+          const checked = selected.has(p.id)
+          return (
+            <label
+              key={p.id}
+              className={`flex items-start gap-2 text-sm rounded-lg p-1.5 -m-1.5 ${
+                isTerminal || !isPending ? '' : 'cursor-pointer hover:bg-white/[0.04]'
+              }`}
+            >
+              {/* Checkbox de seleção (só pra itens pendentes em batches não-terminais) */}
+              {!isTerminal && isPending ? (
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleItem(p.id)}
+                  disabled={applying || cancelling}
+                  className="mt-0.5 accent-emerald-500"
+                  aria-label={`Selecionar ${formatToolName(p.toolName)}`}
+                />
+              ) : (
+                <span className="w-4 h-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
+              )}
+              <PendingStatusIcon status={p.status} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xs font-mono opacity-50">{idx + 1}.</span>
+                  <span className="font-medium">{formatToolName(p.toolName)}</span>
+                </div>
+                <div className="text-xs opacity-70 truncate">{p.description}</div>
+                {p.error && <div className="text-xs text-red-400 mt-0.5">⚠ {p.error}</div>}
               </div>
-              <div className="text-xs opacity-70 truncate">{p.description}</div>
-              {p.error && <div className="text-xs text-red-400 mt-0.5">⚠ {p.error}</div>}
-            </div>
-          </div>
-        ))}
+            </label>
+          )
+        })}
       </div>
 
       {error && (
@@ -266,11 +332,21 @@ export function AlixConfirmationBatchCard({ batch, onApplied, onCancelled }: Ali
       )}
 
       {!isTerminal && batch.status !== 'applying' && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {pendingItems.length > 1 && !allSelected && !noneSelected && (
+            <button
+              onClick={applyOnlySelected}
+              disabled={applying || cancelling}
+              className="flex-1 min-w-[140px] px-3 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium flex items-center justify-center gap-2 transition"
+            >
+              {applying ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              Aplicar selecionados ({selected.size})
+            </button>
+          )}
           <button
             onClick={applyAll}
             disabled={applying || cancelling}
-            className="flex-1 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium flex items-center justify-center gap-2 transition"
+            className="flex-1 min-w-[120px] px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium flex items-center justify-center gap-2 transition"
           >
             {applying ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
             Aplicar tudo
