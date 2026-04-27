@@ -96,8 +96,10 @@ export default function AlixTelemetryPanel({ onClose }: { onClose?: () => void }
     setLoading(true)
     setErro(null)
     try {
-      const r = await apiFetch<{ success: boolean; data: TelemetryDashboard }>(`/alix/telemetry-dashboard?period=${period}`)
-      setData(r.data)
+      // apiFetch já desempacota o envelope { success, data } e devolve
+      // o `data` direto. Tipamos com TelemetryDashboard.
+      const r = await apiFetch<TelemetryDashboard>(`/alix/telemetry-dashboard?period=${period}`)
+      setData(r)
     } catch (e) {
       setErro((e as Error).message)
     } finally {
@@ -165,9 +167,9 @@ export default function AlixTelemetryPanel({ onClose }: { onClose?: () => void }
       {data && (
         <>
           {/* Alertas no topo */}
-          {data.alerts.length > 0 && (
+          {(data.alerts ?? []).length > 0 && (
             <ul className="mb-4 space-y-1.5">
-              {data.alerts.map((a, i) => (
+              {(data.alerts ?? []).map((a, i) => (
                 <li
                   key={i}
                   className={`flex items-start gap-2 text-[12px] rounded-lg px-3 py-2 ${
@@ -187,27 +189,27 @@ export default function AlixTelemetryPanel({ onClose }: { onClose?: () => void }
 
           {/* Rings de custo */}
           <div className="grid grid-cols-2 gap-3 mb-4">
-            <CostRing used={data.custoHoje} limit={data.limites.diario} label="Custo hoje" />
-            <CostRing used={data.custoMes} limit={data.limites.mensal} label="Custo do mês" />
+            <CostRing used={data.custoHoje ?? 0} limit={data.limites?.diario ?? 5} label="Custo hoje" />
+            <CostRing used={data.custoMes ?? 0} limit={data.limites?.mensal ?? 50} label="Custo do mês" />
           </div>
 
           {/* KPIs lineares */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-            <Stat label="Requests" value={String(data.totals.requests)} icon={Sparkles} />
-            <Stat label="Tokens IN" value={formatTokens(data.totals.inputTokens)} icon={DollarSign} />
-            <Stat label="Tokens OUT" value={formatTokens(data.totals.outputTokens)} icon={DollarSign} />
+            <Stat label="Requests" value={String(data.totals?.requests ?? 0)} icon={Sparkles} />
+            <Stat label="Tokens IN" value={formatTokens(data.totals?.inputTokens ?? 0)} icon={DollarSign} />
+            <Stat label="Tokens OUT" value={formatTokens(data.totals?.outputTokens ?? 0)} icon={DollarSign} />
             <Stat
               label="Cache hit"
-              value={formatPct(data.totals.cacheReadTokens, Math.max(1, data.totals.inputTokens))}
+              value={formatPct(data.totals?.cacheReadTokens ?? 0, Math.max(1, data.totals?.inputTokens ?? 1))}
               icon={Sparkles}
             />
           </div>
 
           {/* Latência */}
           <div className="grid grid-cols-3 gap-2 mb-4">
-            <Stat label="P50" value={`${data.latencia.p50}ms`} icon={Clock} accent="sage" />
-            <Stat label="P95" value={`${data.latencia.p95}ms`} icon={Clock} accent="sage" />
-            <Stat label="P99" value={`${data.latencia.p99}ms`} icon={Clock} accent="sage" />
+            <Stat label="P50" value={`${data.latencia?.p50 ?? 0}ms`} icon={Clock} accent="sage" />
+            <Stat label="P95" value={`${data.latencia?.p95 ?? 0}ms`} icon={Clock} accent="sage" />
+            <Stat label="P99" value={`${data.latencia?.p99 ?? 0}ms`} icon={Clock} accent="sage" />
           </div>
 
           {/* Top 5 tools */}
