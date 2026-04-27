@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
+import { InlineButton } from '../components/ui'
 
 // ── Types ────────────────────────────────────────────────────
 type TabId = 'perfil' | 'aparencia' | 'fontes' | 'preferencias' | 'acessos'
@@ -440,10 +441,9 @@ export default function Configuracoes() {
             </Field>
           </div>
           <div className="flex justify-end mt-6">
-            <button onClick={handleSavePerfil} className="btn-primary inline-flex items-center gap-2 text-sm px-5 py-2.5">
-              <Save className="w-4 h-4" />
+            <InlineButton variant="primary" size="md" icon={Save} onClick={handleSavePerfil}>
               Salvar Perfil
-            </button>
+            </InlineButton>
           </div>
         </div>
       )}
@@ -486,10 +486,15 @@ export default function Configuracoes() {
                   </p>
                 )}
               </div>
-              <button onClick={loadFontes} disabled={fontesLoading} className="btn-outline inline-flex items-center gap-2 text-xs px-3 py-2 disabled:opacity-50">
-                <RefreshCw className={`w-3.5 h-3.5 ${fontesLoading ? 'animate-spin' : ''}`} />
+              <InlineButton
+                variant="outline"
+                size="sm"
+                icon={RefreshCw}
+                onClick={loadFontes}
+                loading={fontesLoading}
+              >
                 Atualizar
-              </button>
+              </InlineButton>
             </div>
 
             {fontesLoading && !fontes && (
@@ -572,10 +577,9 @@ export default function Configuracoes() {
             </div>
 
             <div className="flex justify-end">
-              <button onClick={handleSavePrefs} className="btn-primary inline-flex items-center gap-2 text-sm px-5 py-2.5">
-                <Save className="w-4 h-4" />
+              <InlineButton variant="primary" size="md" icon={Save} onClick={handleSavePrefs}>
                 Salvar Preferências
-              </button>
+              </InlineButton>
             </div>
           </div>
         </div>
