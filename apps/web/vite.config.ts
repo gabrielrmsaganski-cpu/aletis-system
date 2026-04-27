@@ -94,6 +94,8 @@ export default defineConfig({
           'react-core': ['react', 'react-dom', 'react-router-dom'],
           'leaflet-vendor': ['leaflet', 'react-leaflet'],
           'icons-vendor': ['lucide-react'],
+          'charts-vendor': ['recharts'],
+          'export-vendor': ['jspdf', 'jspdf-autotable', 'xlsx'],
         },
       },
     },

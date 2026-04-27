@@ -10,8 +10,11 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/layout/Layout'
 import ErrorBoundary from './components/ErrorBoundary'
-import Dashboard from './pages/Dashboard'
-import CRM from './pages/CRM'
+
+// Todas as páginas lazy-loaded. Recharts/jspdf/leaflet ficam fora do
+// bundle inicial — Vite faz code-split automático por entrypoint lazy.
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const CRM = lazy(() => import('./pages/CRM'))
 
 // Heavy pages — lazy-loaded. Bundles pesados (Leaflet, Chart.js, markdown, etc)
 // só chegam ao cliente quando a rota correspondente é visitada.
