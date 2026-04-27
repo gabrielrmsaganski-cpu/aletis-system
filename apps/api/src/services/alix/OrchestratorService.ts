@@ -576,8 +576,18 @@ Data de hoje: ${hoje}`;
       console.warn('[Orchestrator] learnings falhou:', (err as Error).message);
     }
 
-    const messages: ClaudeMessage[] = session.messages
-      .filter(m => m.role !== 'system')
+    // Sliding window: só as N últimas mensagens vão pro Claude.
+    // Sem isso, sessões de 30+ trocas mandavam 100k+ tokens por chamada,
+    // crescimento linear ilimitado. Default: 30 mensagens (~15 trocas)
+    // — suficiente para coerência local mantendo custo controlado.
+    // O system prompt + memória persistente do cliente já carregam o
+    // contexto longo; a janela só limita o "scrollback" do chat.
+    const HISTORY_WINDOW = Number(process.env.ALIX_HISTORY_WINDOW) || 30;
+    const allTurns = session.messages.filter(m => m.role !== 'system');
+    const truncated = allTurns.length > HISTORY_WINDOW
+      ? allTurns.slice(-HISTORY_WINDOW)
+      : allTurns;
+    const messages: ClaudeMessage[] = truncated
       .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
     // Anexa documentos como blocos multimodais no último user turn.
