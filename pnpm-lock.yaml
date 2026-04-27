@@ -79,6 +79,9 @@ importers:
       docx:
         specifier: ^9.0.0
         version: 9.6.1
+      docxtemplater:
+        specifier: ^3.68.6
+        version: 3.68.6
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(pg@8.20.0)
@@ -109,6 +112,9 @@ importers:
       pg:
         specifier: ^8.20.0
         version: 8.20.0
+      pizzip:
+        specifier: ^3.2.0
+        version: 3.2.0
       puppeteer:
         specifier: ^24.2.0
         version: 24.41.0(typescript@5.9.3)
@@ -2594,6 +2600,10 @@ packages:
     resolution: {integrity: sha512-KRYzxepc14G/CEpEGc3Yn+JKaAeT63smlDr+vjB8jRfgTBBI9wRj/nkQEO+ucV8p8I9bfKLWp37uHgFrbntPvw==}
     engines: {node: '>=10.0.0'}
 
+  '@xmldom/xmldom@0.9.10':
+    resolution: {integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==}
+    engines: {node: '>=14.6'}
+
   abstract-logging@2.0.1:
     resolution: {integrity: sha512-2BjRTZxTPvheOvGbBslFSYOUkr+SjPtOnrLP33f+VIWLzezQpZcqVg7ja3L4dBXmzzgwT+a029jRx5PCi3JuiA==}
 
@@ -3228,6 +3238,10 @@ packages:
   docx@9.6.1:
     resolution: {integrity: sha512-ZJja9/KBUuFC109sCMzovoq2GR2wCG/AuxivjA+OHj/q0TEgJIm3S7yrlUxIy3B+bV8YDj/BiHfWyrRFmyWpDQ==}
     engines: {node: '>=10'}
+
+  docxtemplater@3.68.6:
+    resolution: {integrity: sha512-gpctSJS9680VYzYvc8g9ClqcvQl6P6EOeK3u32CsdZGy3mSqOgjLZm4D94ufIR0yN+yGp3EwTTnhV8GUJZ5pOw==}
+    engines: {node: '>=0.10'}
 
   dom-helpers@5.2.1:
     resolution: {integrity: sha512-nRCa7CK3VTrM2NmGkIy4cbK7IZlgBE/PYMn55rrXefr5xXDP0LdtfPnblFDoVdcAfslJ7or6iqAUnx0CCGIWQA==}
@@ -4593,6 +4607,9 @@ packages:
   pirates@4.0.7:
     resolution: {integrity: sha512-TfySrs/5nm8fQJDcBDuUng3VOUKsd7S+zqvbOTiGXHfxX4wK31ard+hoNuvkicM/2YFzlpDgABOevKSsB4G/FA==}
     engines: {node: '>= 6'}
+
+  pizzip@3.2.0:
+    resolution: {integrity: sha512-X4NPNICxCfIK8VYhF6wbksn81vTiziyLbvKuORVAmolvnUzl1A1xmz9DAWKxPRq9lZg84pJOOAMq3OE61bD8IQ==}
 
   possible-typed-array-names@1.1.0:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
@@ -8207,6 +8224,8 @@ snapshots:
 
   '@xmldom/xmldom@0.8.13': {}
 
+  '@xmldom/xmldom@0.9.10': {}
+
   abstract-logging@2.0.1: {}
 
   acorn-import-attributes@1.9.5(acorn@8.16.0):
@@ -8853,6 +8872,10 @@ snapshots:
       nanoid: 5.1.9
       xml: 1.0.1
       xml-js: 1.6.11
+
+  docxtemplater@3.68.6:
+    dependencies:
+      '@xmldom/xmldom': 0.9.10
 
   dom-helpers@5.2.1:
     dependencies:
@@ -10319,6 +10342,10 @@ snapshots:
       thread-stream: 4.0.0
 
   pirates@4.0.7: {}
+
+  pizzip@3.2.0:
+    dependencies:
+      pako: 2.1.0
 
   possible-typed-array-names@1.1.0: {}
 

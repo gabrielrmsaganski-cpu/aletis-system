@@ -22,6 +22,7 @@ import { buildCrmReadTools } from './tools/crm-read.js';
 import { buildAlixPowerTools } from './tools/alix-power.js';
 import { buildProactiveInsightsTools } from './tools/proactive-insights.js';
 import { buildAlertRulesTools } from './tools/alert-rules.js';
+import { buildContratosOficiaisTools } from './tools/contratos-oficiais.js';
 import { buildNewsTools } from './tools/news.js';
 import { buildCalendarioSafraTools } from './tools/calendario-safra.js';
 import { buildOnboardingTools } from './tools/onboarding.js';
@@ -299,6 +300,11 @@ Data de hoje: ${hoje}`;
     // Wave B1 — alertas de mercado por cliente (CRUD + ListAll).
     const ar = buildAlertRulesTools();
     for (const t of ar.tools) { tools.push(t); registry[t.name] = ar.registry[t.name]; }
+
+    // Wave Documentos — 10 contratos/anexos oficiais ALETIS preservando
+    // formatação. Tools: listar/preview/gerar contrato oficial.
+    const cof = buildContratosOficiaisTools();
+    for (const t of cof.tools) { tools.push(t); registry[t.name] = cof.registry[t.name]; }
 
     // Delegações
     const ctxBase = (): SubAgentContext => ({

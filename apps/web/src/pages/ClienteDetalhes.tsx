@@ -4,6 +4,7 @@ import { apiFetch } from '../hooks/useApi'
 import { InlineButton } from '../components/ui'
 import PatrimonioTab from '../components/patrimonio/PatrimonioTab'
 import AlixContextHint from '../components/alix/AlixContextHint'
+import ContratosOficiaisTab from '../components/contratos/ContratosOficiaisTab'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
 import { MapThumbnail } from '../components/MapThumbnail'
@@ -68,7 +69,7 @@ type Estagio =
   | 'prospeccao'
   | 'encerrado'
 
-type TabId = 'visao-geral' | 'dividas' | 'risco' | 'exposicao' | 'patrimonio' | 'visitas' | 'propostas' | 'documentos' | 'fluxo-caixa' | 'timeline' | 'portal-chat'
+type TabId = 'visao-geral' | 'dividas' | 'risco' | 'exposicao' | 'patrimonio' | 'visitas' | 'propostas' | 'documentos' | 'contratos-oficiais' | 'fluxo-caixa' | 'timeline' | 'portal-chat'
 
 interface Divida {
   id: string
@@ -741,6 +742,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'visitas', label: 'Visitas' },
   { id: 'propostas', label: 'Propostas' },
   { id: 'documentos', label: 'Documentos' },
+  { id: 'contratos-oficiais', label: 'Contratos' },
   { id: 'fluxo-caixa', label: 'Fluxo de Caixa' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'portal-chat', label: 'Chat Portal' },
@@ -2188,6 +2190,13 @@ export default function ClienteDetalhes() {
             área.
           </p>
         </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════
+           TAB: CONTRATOS OFICIAIS — 10 templates ALETIS
+           ════════════════════════════════════════════════════════ */}
+      {activeTab === 'contratos-oficiais' && id && (
+        <ContratosOficiaisTab clienteId={id} />
       )}
 
       {/* ════════════════════════════════════════════════════════
