@@ -416,7 +416,7 @@ export function InlineButton({
   type = 'button',
   className,
 }: {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline'
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'gold'
   icon?: React.ElementType
   loading?: boolean
   disabled?: boolean
@@ -433,6 +433,8 @@ export function InlineButton({
       'bg-aletis-bege dark:bg-white/5 text-aletis-grafite-escuro dark:text-white hover:bg-aletis-verde/10 font-medium',
     outline:
       'border border-aletis-verde/30 text-aletis-verde hover:bg-aletis-verde/10 font-medium',
+    gold:
+      'bg-aletis-gold text-aletis-verde hover:bg-aletis-gold-escuro hover:text-aletis-cream font-semibold shadow-brand-gold',
     ghost: 'text-aletis-grafite-medio dark:text-white/60 hover:bg-aletis-bege/60 dark:hover:bg-white/5',
     danger:
       'border border-red-300/60 dark:border-red-700/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 font-medium',

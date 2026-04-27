@@ -10,6 +10,7 @@
 import React, { useState, useMemo } from 'react'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
+import { InlineButton } from '../components/ui'
 import { exportPDF, exportExcel, nowStr, type ReportData } from '../utils/exportReports'
 import {
   BarChart,
@@ -402,14 +403,8 @@ function PortfolioContent({ onExport }: { onExport: (fmt: string) => void }) {
 
       {/* Export buttons */}
       <div className="flex gap-3">
-        <button onClick={() => onExport('PDF')} className="btn-primary flex items-center gap-2 text-sm">
-          <Download className="w-4 h-4" />
-          Exportar PDF
-        </button>
-        <button onClick={() => onExport('Excel')} className="btn-outline flex items-center gap-2 text-sm">
-          <Download className="w-4 h-4" />
-          Exportar Excel
-        </button>
+        <InlineButton variant="primary" size="sm" icon={Download} onClick={() => onExport('PDF')}>Exportar PDF</InlineButton>
+        <InlineButton variant="outline" size="sm" icon={Download} onClick={() => onExport('Excel')}>Exportar Excel</InlineButton>
       </div>
     </div>
   )
@@ -457,14 +452,8 @@ function RentabilidadeContent({ onExport }: { onExport: (fmt: string) => void })
       </div>
 
       <div className="flex gap-3">
-        <button onClick={() => onExport('PDF')} className="btn-primary flex items-center gap-2 text-sm">
-          <Download className="w-4 h-4" />
-          Exportar PDF
-        </button>
-        <button onClick={() => onExport('Excel')} className="btn-outline flex items-center gap-2 text-sm">
-          <Download className="w-4 h-4" />
-          Exportar Excel
-        </button>
+        <InlineButton variant="primary" size="sm" icon={Download} onClick={() => onExport('PDF')}>Exportar PDF</InlineButton>
+        <InlineButton variant="outline" size="sm" icon={Download} onClick={() => onExport('Excel')}>Exportar Excel</InlineButton>
       </div>
     </div>
   )
@@ -537,14 +526,8 @@ function PropostasContent({ onExport }: { onExport: (fmt: string) => void }) {
       </div>
 
       <div className="flex gap-3">
-        <button onClick={() => onExport('PDF')} className="btn-primary flex items-center gap-2 text-sm">
-          <Download className="w-4 h-4" />
-          Exportar PDF
-        </button>
-        <button onClick={() => onExport('Excel')} className="btn-outline flex items-center gap-2 text-sm">
-          <Download className="w-4 h-4" />
-          Exportar Excel
-        </button>
+        <InlineButton variant="primary" size="sm" icon={Download} onClick={() => onExport('PDF')}>Exportar PDF</InlineButton>
+        <InlineButton variant="outline" size="sm" icon={Download} onClick={() => onExport('Excel')}>Exportar Excel</InlineButton>
       </div>
     </div>
   )
@@ -597,14 +580,8 @@ function MercadoContent({ onExport }: { onExport: (fmt: string) => void }) {
       </div>
 
       <div className="flex gap-3">
-        <button onClick={() => onExport('PDF')} className="btn-primary flex items-center gap-2 text-sm">
-          <Download className="w-4 h-4" />
-          Exportar PDF
-        </button>
-        <button onClick={() => onExport('Excel')} className="btn-outline flex items-center gap-2 text-sm">
-          <Download className="w-4 h-4" />
-          Exportar Excel
-        </button>
+        <InlineButton variant="primary" size="sm" icon={Download} onClick={() => onExport('PDF')}>Exportar PDF</InlineButton>
+        <InlineButton variant="outline" size="sm" icon={Download} onClick={() => onExport('Excel')}>Exportar Excel</InlineButton>
       </div>
     </div>
   )
@@ -651,14 +628,8 @@ function FluxoCaixaContent({ onExport }: { onExport: (fmt: string) => void }) {
       </div>
 
       <div className="flex gap-3">
-        <button onClick={() => onExport('PDF')} className="btn-primary flex items-center gap-2 text-sm">
-          <Download className="w-4 h-4" />
-          Exportar PDF
-        </button>
-        <button onClick={() => onExport('Excel')} className="btn-outline flex items-center gap-2 text-sm">
-          <Download className="w-4 h-4" />
-          Exportar Excel
-        </button>
+        <InlineButton variant="primary" size="sm" icon={Download} onClick={() => onExport('PDF')}>Exportar PDF</InlineButton>
+        <InlineButton variant="outline" size="sm" icon={Download} onClick={() => onExport('Excel')}>Exportar Excel</InlineButton>
       </div>
     </div>
   )
@@ -755,14 +726,8 @@ function AuditoriaContent({ onExport }: { onExport: (fmt: string) => void }) {
       </div>
 
       <div className="flex gap-3">
-        <button onClick={() => onExport('PDF')} className="btn-primary flex items-center gap-2 text-sm">
-          <Download className="w-4 h-4" />
-          Exportar PDF
-        </button>
-        <button onClick={() => onExport('Excel')} className="btn-outline flex items-center gap-2 text-sm">
-          <Download className="w-4 h-4" />
-          Exportar Excel
-        </button>
+        <InlineButton variant="primary" size="sm" icon={Download} onClick={() => onExport('PDF')}>Exportar PDF</InlineButton>
+        <InlineButton variant="outline" size="sm" icon={Download} onClick={() => onExport('Excel')}>Exportar Excel</InlineButton>
       </div>
     </div>
   )

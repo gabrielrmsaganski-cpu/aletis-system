@@ -9,7 +9,7 @@
  */
 import React, { useState, useMemo } from 'react'
 import { useApi, apiFetch } from '../hooks/useApi'
-import { KpiTile, fmtNum } from '../components/ui'
+import { KpiTile, fmtNum, InlineButton } from '../components/ui'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
 import { exportCSV } from '../utils/exportReports'
@@ -426,7 +426,10 @@ export default function CRM() {
             </p>
           </div>
           <div className="flex items-center gap-2 self-start sm:self-auto">
-            <button
+            <InlineButton
+              variant="outline"
+              size="md"
+              icon={Download}
               onClick={() => {
                 if (filteredClientes.length === 0) {
                   showToast('Nenhum cliente para exportar', 'warning')
@@ -442,18 +445,17 @@ export default function CRM() {
                 exportCSV('clientes_aletis', colunas, linhas)
                 showToast(`${filteredClientes.length} cliente(s) exportado(s) em CSV`, 'success')
               }}
-              className="btn-outline inline-flex items-center gap-2"
             >
-              <Download className="w-4 h-4" />
               Exportar CSV
-            </button>
-            <button
+            </InlineButton>
+            <InlineButton
+              variant="primary"
+              size="md"
+              icon={Plus}
               onClick={() => setShowNovoCliente(true)}
-              className="btn-primary inline-flex items-center gap-2"
             >
-              <Plus className="w-4 h-4" />
               Novo Cliente
-            </button>
+            </InlineButton>
           </div>
         </div>
       </header>

@@ -37,6 +37,7 @@ import {
   type Moeda,
 } from '@aletis/shared-types'
 import { apiFetch } from '../hooks/useApi'
+import { InlineButton } from '../components/ui'
 
 // ─── helpers genéricos ─────────────────────────────────────
 
@@ -347,18 +348,20 @@ export default function ClienteDossie() {
               </span>
             )}
           </span>
-          <button onClick={() => setMostrarHistorico((v) => !v)} className="btn-outline inline-flex items-center gap-1.5 text-sm px-3 py-1.5">
-            <History className="w-3.5 h-3.5" />
+          <InlineButton
+            variant="outline"
+            size="sm"
+            icon={History}
+            onClick={() => setMostrarHistorico((v) => !v)}
+          >
             Histórico
-          </button>
-          <button onClick={exportarJson} className="btn-outline inline-flex items-center gap-1.5 text-sm px-3 py-1.5">
-            <Download className="w-3.5 h-3.5" />
+          </InlineButton>
+          <InlineButton variant="outline" size="sm" icon={Download} onClick={exportarJson}>
             Exportar JSON
-          </button>
-          <button onClick={salvarAgora} className="btn-gold inline-flex items-center gap-1.5 text-sm px-3 py-1.5">
-            <Save className="w-3.5 h-3.5" />
+          </InlineButton>
+          <InlineButton variant="gold" size="sm" icon={Save} onClick={salvarAgora}>
             Salvar agora
-          </button>
+          </InlineButton>
         </div>
       </div>
 

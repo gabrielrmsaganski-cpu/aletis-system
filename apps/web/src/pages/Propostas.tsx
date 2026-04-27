@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useApi, apiFetch } from '../hooks/useApi'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
-import { KpiTile, Chip, type ChipTone } from '../components/ui'
+import { KpiTile, Chip, InlineButton, type ChipTone } from '../components/ui'
 import {
   FileText,
   Plus,
@@ -536,10 +536,15 @@ export default function Propostas() {
               Gestão de propostas técnicas
             </p>
           </div>
-          <button onClick={handleCreateNew} className="btn-gold flex items-center gap-2 self-start sm:self-auto">
-            <Plus className="w-4 h-4" />
+          <InlineButton
+            variant="gold"
+            size="md"
+            icon={Plus}
+            onClick={handleCreateNew}
+            className="self-start sm:self-auto"
+          >
             Nova Proposta
-          </button>
+          </InlineButton>
         </div>
       </header>
 

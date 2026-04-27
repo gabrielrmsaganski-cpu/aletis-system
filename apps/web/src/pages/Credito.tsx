@@ -13,6 +13,7 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { useApiPost, apiFetch } from '../hooks/useApi'
+import { InlineButton } from '../components/ui'
 import CreditoPremium from './CreditoPremium'
 
 // ────────────────────────────────────────────────────────────
@@ -414,13 +415,15 @@ function CalculadoraCET() {
         />
       </div>
 
-      <button
+      <InlineButton
+        variant="primary"
+        size="md"
+        icon={Calculator}
         onClick={handleCalculate}
-        className="btn-primary flex items-center gap-2 mb-5"
+        className="mb-5"
       >
-        <Calculator className="w-4 h-4" />
         Calcular CET
-      </button>
+      </InlineButton>
 
       {displayResult && (
         <div className="space-y-4 animate-fade-in">
@@ -885,18 +888,13 @@ function SimuladorAmortizacao() {
       </div>
 
       <div className="flex items-center gap-3 mb-5">
-        <button
-          onClick={handleGenerate}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Table className="w-4 h-4" />
+        <InlineButton variant="primary" size="md" icon={Table} onClick={handleGenerate}>
           Gerar Tabela
-        </button>
+        </InlineButton>
         {showTable && displayTable.length > 0 && (
-          <button className="btn-outline flex items-center gap-2 text-sm px-4 py-2.5">
-            <Download className="w-4 h-4" />
+          <InlineButton variant="outline" size="md" icon={Download}>
             Exportar
-          </button>
+          </InlineButton>
         )}
       </div>
 
@@ -1149,13 +1147,15 @@ function SimuladorRenegociacao() {
         />
       </div>
 
-      <button
+      <InlineButton
+        variant="primary"
+        size="md"
+        icon={RefreshCw}
         onClick={handleSimulate}
-        className="btn-primary flex items-center gap-2 mb-5"
+        className="mb-5"
       >
-        <RefreshCw className="w-4 h-4" />
         Simular Renegociação
-      </button>
+      </InlineButton>
 
       {result && (
         <div className="space-y-5 animate-fade-in">

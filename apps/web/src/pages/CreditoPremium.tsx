@@ -16,6 +16,7 @@ import {
   Activity,
 } from 'lucide-react'
 import { apiFetch } from '../hooks/useApi'
+import { InlineButton } from '../components/ui'
 
 // ────────────────────────────────────────────────────────────
 // Formatters (shared style with Credito.tsx)
@@ -185,14 +186,16 @@ function Select({
 
 function RunButton({ loading, label }: { loading: boolean; label: string }) {
   return (
-    <button
+    <InlineButton
       type="submit"
-      disabled={loading}
-      className="btn-primary w-full text-sm flex items-center justify-center gap-2"
+      variant="primary"
+      size="md"
+      icon={BadgeCheck}
+      loading={loading}
+      className="w-full justify-center"
     >
-      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BadgeCheck className="w-4 h-4" />}
       {loading ? 'Calculando...' : label}
-    </button>
+    </InlineButton>
   )
 }
 

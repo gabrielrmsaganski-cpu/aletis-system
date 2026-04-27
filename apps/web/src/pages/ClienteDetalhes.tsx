@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { apiFetch } from '../hooks/useApi'
+import { InlineButton } from '../components/ui'
 import PatrimonioTab from '../components/patrimonio/PatrimonioTab'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
@@ -1261,10 +1262,9 @@ export default function ClienteDetalhes() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
             <HealthGauge value={cliente.saudeFinanceira} size={80} />
             <div className="flex flex-wrap gap-2">
-              <button onClick={handleGerarProposta} className="btn-gold inline-flex items-center gap-2 text-sm px-4 py-2.5">
-                <FileText className="w-4 h-4" />
+              <InlineButton variant="gold" size="md" icon={FileText} onClick={handleGerarProposta}>
                 Gerar Proposta
-              </button>
+              </InlineButton>
               <Link
                 to={`/clientes/${cliente.id}/dossie`}
                 className="btn-outline inline-flex items-center gap-2 text-sm px-4 py-2.5"
@@ -1273,14 +1273,12 @@ export default function ClienteDetalhes() {
                 <FileCheck className="w-4 h-4" />
                 Dossiê Agro
               </Link>
-              <button onClick={handleEnviarWhatsApp} className="btn-outline inline-flex items-center gap-2 text-sm px-4 py-2.5">
-                <MessageCircle className="w-4 h-4" />
+              <InlineButton variant="outline" size="md" icon={MessageCircle} onClick={handleEnviarWhatsApp}>
                 Enviar WhatsApp
-              </button>
-              <button onClick={handleEditarCliente} className="btn-outline inline-flex items-center gap-2 text-sm px-4 py-2.5">
-                <Edit3 className="w-4 h-4" />
+              </InlineButton>
+              <InlineButton variant="outline" size="md" icon={Edit3} onClick={handleEditarCliente}>
                 Editar
-              </button>
+              </InlineButton>
             </div>
           </div>
         </div>
@@ -2158,10 +2156,15 @@ export default function ClienteDetalhes() {
             As propostas geradas para este cliente serão exibidas aqui. Clique em "Gerar Proposta"
             para iniciar uma nova análise de reestruturação.
           </p>
-          <button onClick={handleGerarProposta} className="btn-gold mt-6 inline-flex items-center gap-2 text-sm">
-            <Send className="w-4 h-4" />
+          <InlineButton
+            variant="gold"
+            size="md"
+            icon={Send}
+            onClick={handleGerarProposta}
+            className="mt-6"
+          >
             Gerar Nova Proposta
-          </button>
+          </InlineButton>
         </div>
       )}
 
@@ -2724,12 +2727,13 @@ export default function ClienteDetalhes() {
               </p>
             </div>
             {!portalStatus && (
-              <button
+              <InlineButton
+                variant="primary"
+                size="sm"
                 onClick={() => navigate('/configuracoes?tab=acessos')}
-                className="btn-primary text-xs px-4 py-2"
               >
                 Criar acesso
-              </button>
+              </InlineButton>
             )}
           </div>
 
@@ -2809,13 +2813,15 @@ export default function ClienteDetalhes() {
                   className="input-field py-2.5 text-sm flex-1 resize-none"
                   maxLength={2000}
                 />
-                <button
+                <InlineButton
+                  variant="primary"
+                  size="md"
+                  loading={enviandoMsgPortal}
+                  disabled={!portalChatInput.trim() || !portalStatus}
                   onClick={handleEnviarMsgPortal}
-                  disabled={!portalChatInput.trim() || enviandoMsgPortal || !portalStatus}
-                  className="btn-primary px-4 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {enviandoMsgPortal ? '…' : 'Enviar'}
-                </button>
+                  Enviar
+                </InlineButton>
               </div>
             </div>
           </div>
