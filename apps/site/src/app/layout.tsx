@@ -1,9 +1,16 @@
 import type { Metadata, Viewport } from 'next'
+import dynamic from 'next/dynamic'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
-import { FloatingChat } from '@/components/layout/FloatingChat'
 import { siteConfig } from '@/lib/siteConfig'
 import './globals.css'
+
+// FloatingChat carrega só no cliente — economiza ~12kB do bundle SSR
+// e adia inicialização de 7 ícones lucide até depois do paint.
+const FloatingChat = dynamic(
+  () => import('@/components/layout/FloatingChat').then((m) => m.FloatingChat),
+  { ssr: false },
+)
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
@@ -73,9 +80,76 @@ export const viewport: Viewport = {
   initialScale: 1,
 }
 
+/**
+ * JSON-LD: Organization + ProfessionalService.
+ * Empurra ALETIS para conhecer-a-empresa do Google e enriquece preview
+ * em buscadores e LinkedIn. Deve ficar no <head> via <script> do tipo
+ * application/ld+json para crawlers.
+ */
+const ORGANIZATION_JSONLD = {
+  '@context': 'https://schema.org',
+  '@type': ['Organization', 'ProfessionalService'],
+  name: 'ALETIS Soluções',
+  alternateName: siteConfig.name,
+  description: siteConfig.longDescription,
+  url: siteConfig.url,
+  logo: `${siteConfig.url}/brand/logos/aletis-principal-cream.png`,
+  image: `${siteConfig.url}${siteConfig.ogImage}`,
+  email: siteConfig.contact.email,
+  telephone: siteConfig.contact.telefone,
+  address: {
+    '@type': 'PostalAddress',
+    addressLocality: 'Cascavel',
+    addressRegion: 'PR',
+    addressCountry: 'BR',
+  },
+  sameAs: [siteConfig.social.linkedin, siteConfig.social.instagram],
+  areaServed: { '@type': 'Country', name: 'Brasil' },
+  serviceType: [
+    'Consultoria Financeira',
+    'Reestruturação de Dívida Rural',
+    'Revisional Bancária',
+    'BPO Financeiro',
+    'Crédito Estruturado',
+    'Governança Corporativa',
+  ],
+  knowsAbout: [
+    'crédito rural',
+    'CPR',
+    'CCB',
+    'Funrural',
+    'Reforma Tributária',
+    'DSCR',
+    'Agronegócio',
+  ],
+  slogan: 'Verdade nos números. Prosperidade nos acordos.',
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
+      <head>
+        {/* Preload de fontes críticas — reduz FOUT no LCP */}
+        <link
+          rel="preload"
+          href="/fonts/chakra/ChakraPetch-SemiBold.ttf"
+          as="font"
+          type="font/ttf"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="preload"
+          href="/fonts/chakra/ChakraPetch-Regular.ttf"
+          as="font"
+          type="font/ttf"
+          crossOrigin="anonymous"
+        />
+        {/* JSON-LD Organization + ProfessionalService */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSONLD) }}
+        />
+      </head>
       <body className="min-h-screen antialiased">
         <a
           href="#conteudo"

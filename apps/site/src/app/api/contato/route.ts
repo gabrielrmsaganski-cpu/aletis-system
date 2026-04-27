@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server'
+import { writeFile, mkdir, readFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 
 type Payload = {
   nome?: string
@@ -14,6 +17,67 @@ type Payload = {
 }
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+
+/**
+ * Storage local de leads — fallback de produção quando não há
+ * webhook/CRM configurado. Append-only em JSONL para fácil parsing.
+ * Em produção (Vercel/edge), substituir por Resend/Postmark/webhook
+ * via env LEAD_WEBHOOK_URL ou LEAD_EMAIL_TO.
+ */
+const LEAD_DIR = process.env.LEAD_STORAGE_DIR || join(process.cwd(), 'storage', 'leads')
+
+async function persistLead(lead: Record<string, unknown>): Promise<{ ok: boolean; mode: string }> {
+  // 1. Webhook externo (CRM, Slack, etc.)
+  const webhook = process.env.LEAD_WEBHOOK_URL?.trim()
+  if (webhook) {
+    try {
+      const r = await fetch(webhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(lead),
+      })
+      if (r.ok) return { ok: true, mode: 'webhook' }
+    } catch (e) {
+      console.warn('[contato] webhook falhou, caindo para storage local:', e)
+    }
+  }
+
+  // 2. Resend (e-mail transacional via REST API simples)
+  const resendKey = process.env.RESEND_API_KEY?.trim()
+  const leadEmail = process.env.LEAD_EMAIL_TO?.trim()
+  if (resendKey && leadEmail) {
+    try {
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${resendKey}`,
+        },
+        body: JSON.stringify({
+          from: process.env.LEAD_EMAIL_FROM || 'leads@aletis.com.br',
+          to: leadEmail,
+          subject: `Novo lead — ${lead.nome ?? 'sem nome'} (${lead.segmento ?? 'sem segmento'})`,
+          html: `<pre style="font-family:monospace">${JSON.stringify(lead, null, 2)}</pre>`,
+        }),
+      })
+      if (r.ok) return { ok: true, mode: 'resend' }
+    } catch (e) {
+      console.warn('[contato] resend falhou, caindo para storage local:', e)
+    }
+  }
+
+  // 3. Storage local JSONL — sempre funciona
+  try {
+    if (!existsSync(LEAD_DIR)) await mkdir(LEAD_DIR, { recursive: true })
+    const file = join(LEAD_DIR, `${new Date().toISOString().slice(0, 7)}.jsonl`)
+    const existing = existsSync(file) ? await readFile(file, 'utf-8').catch(() => '') : ''
+    await writeFile(file, existing + JSON.stringify(lead) + '\n')
+    return { ok: true, mode: 'jsonl' }
+  } catch (e) {
+    console.error('[contato] storage local falhou:', e)
+    return { ok: false, mode: 'none' }
+  }
+}
 
 export async function POST(req: Request) {
   let body: Payload
@@ -42,20 +106,33 @@ export async function POST(req: Request) {
   }
 
   const receivedAt = new Date().toISOString()
-
-  // Intencionalmente sem persistência: endpoint pronto para integração
-  // futura com CRM interno da ALETIS ou serviço de e-mail transacional.
-  console.info('[contato] novo lead recebido', {
+  const lead = {
     nome,
     email,
+    telefone,
     segmento: body.segmento,
     interesse: body.interesse,
     cidade: body.cidade,
     uf: body.uf,
+    tamanho: body.tamanho,
+    mensagem: body.mensagem?.slice(0, 2000),
+    consent,
     receivedAt,
+    userAgent: req.headers.get('user-agent') || undefined,
+    referer: req.headers.get('referer') || undefined,
+  }
+
+  const out = await persistLead(lead)
+  console.info('[contato] novo lead persistido', {
+    nome, email, segmento: body.segmento, interesse: body.interesse,
+    receivedAt, persistido: out.mode,
   })
 
-  return NextResponse.json({ success: true, receivedAt }, { status: 200 })
+  return NextResponse.json({
+    success: true,
+    receivedAt,
+    persistido: out.mode,
+  }, { status: 200 })
 }
 
 export const dynamic = 'force-dynamic'
