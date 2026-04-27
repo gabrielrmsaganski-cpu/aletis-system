@@ -22,7 +22,8 @@
 // Log persistente em storage/alix-push/YYYY-MM-DD.jsonl.
 // ============================================================
 import { createHash } from 'crypto'
-import { appendFileSync, mkdirSync, existsSync } from 'fs'
+import { mkdirSync, existsSync } from 'fs'
+import { appendFile } from 'fs/promises'
 import { join } from 'path'
 import { getWhatsAppService } from '../../whatsapp/WhatsAppService.js'
 import type { Insight } from '../ProactiveService.js'
@@ -97,23 +98,20 @@ export class AlixPushChannel {
   }
 
   private logPush(result: PushResult, body: string, tag?: string): void {
-    try {
-      const day = new Date().toISOString().slice(0, 10)
-      const file = join(this.storageDir, `${day}.jsonl`)
-      const line = JSON.stringify({
-        ts: result.loggedAt,
-        tag: tag ?? 'adhoc',
-        destination: result.destination,
-        ok: result.ok,
-        messageId: result.messageId,
-        error: result.error,
-        skippedReason: result.skippedReason,
-        preview: body.slice(0, 180),
-      })
-      appendFileSync(file, line + '\n')
-    } catch {
-      /* logging é best-effort */
-    }
+    const day = new Date().toISOString().slice(0, 10)
+    const file = join(this.storageDir, `${day}.jsonl`)
+    const line = JSON.stringify({
+      ts: result.loggedAt,
+      tag: tag ?? 'adhoc',
+      destination: result.destination,
+      ok: result.ok,
+      messageId: result.messageId,
+      error: result.error,
+      skippedReason: result.skippedReason,
+      preview: body.slice(0, 180),
+    })
+    // append assíncrono — fire-and-forget, logging é best-effort
+    appendFile(file, line + '\n').catch(() => { /* swallow */ })
   }
 
   async send(params: { body: string; opts?: SendOpts }): Promise<PushResult> {

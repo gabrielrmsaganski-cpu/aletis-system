@@ -373,7 +373,7 @@ export const alixFeedback = pgTable(
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     sessionId: text('session_id'),
     messageId: text('message_id'),
-    rating: text('rating'), // 'positive'|'negative'|'neutral'
+    rating: text('rating'), // 'util'|'irrelevante'|'incorreto'|'off-tom' (FeedbackRating)
     motivo: text('motivo'),
     comentario: text('comentario'),
     payload: jsonb('payload').notNull(),

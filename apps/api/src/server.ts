@@ -52,15 +52,52 @@ function cryptoRandomId(): string {
 /** Probe for pino-pretty — optional dev dependency */
 function buildLoggerOptions(): FastifyServerOptions['logger'] {
   const level = process.env.LOG_LEVEL || 'info'
-  if (process.env.NODE_ENV === 'production') return { level }
+  // LGPD/segurança: redaciona campos sensíveis em qualquer log.
+  // `paths` aceita pino's bracket-notation e wildcards.
+  const redact = {
+    paths: [
+      'req.headers.authorization',
+      'req.headers.cookie',
+      'req.headers["x-api-key"]',
+      'req.headers["x-portal-token"]',
+      'res.headers["set-cookie"]',
+      '*.password',
+      '*.senha',
+      '*.senha_hash',
+      '*.token',
+      '*.tokenHash',
+      '*.token_hash',
+      '*.secret',
+      '*.apiKey',
+      '*.api_key',
+      '*.cpf',
+      '*.cnpj',
+      '*.email',
+      '*.celular',
+      '*.telefone',
+      '*.cardNumber',
+      '*.creditCard',
+      'body.password',
+      'body.senha',
+      'body.token',
+      'body.cpf',
+      'body.cnpj',
+      'body.email',
+      'authorization',
+    ],
+    censor: '[REDACTED]',
+    remove: false,
+  }
+  if (process.env.NODE_ENV === 'production') return { level, redact }
   try {
     require.resolve('pino-pretty')
     return {
       level,
+      redact,
       transport: { target: 'pino-pretty', options: { colorize: true, translateTime: 'HH:MM:ss' } },
     }
   } catch {
-    return { level }
+    return { level, redact }
   }
 }
 
@@ -277,11 +314,15 @@ async function buildApp() {
       const t = Date.now()
       try {
         const { getDb } = await import('./db/client.js')
+        const { sql } = await import('drizzle-orm')
         const db = getDb() as any
-        await db.execute({ sql: 'select 1', args: [] }).catch(async () => {
-          // drizzle .execute aceita sql template — fallback simples:
-          await (db as any).$client?.query?.('select 1')
-        })
+        // drizzle .execute precisa de sql tag — fallback no $client.query
+        try {
+          await db.execute(sql`select 1`)
+        } catch {
+          const pool = db?.$client ?? db?._?.session?.client
+          await pool?.query?.('select 1')
+        }
         checks.postgres = { ok: true, tookMs: Date.now() - t }
       } catch (err) {
         checks.postgres = { ok: false, detail: (err as Error).message, tookMs: Date.now() - t }

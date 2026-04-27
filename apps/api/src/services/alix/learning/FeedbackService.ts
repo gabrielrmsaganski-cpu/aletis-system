@@ -19,7 +19,8 @@
 //   - Futuro (Fase D): ranking de tools mais-úteis × menos-úteis
 //     baseado em feedback agregado.
 // ============================================================
-import { promises as fs, existsSync, mkdirSync, appendFileSync, readFileSync, readdirSync } from 'fs'
+import { promises as fs, existsSync, mkdirSync, readFileSync, readdirSync } from 'fs'
+import { appendFile } from 'fs/promises'
 import { join } from 'path'
 
 export type FeedbackRating = 'util' | 'irrelevante' | 'incorreto' | 'off-tom'
@@ -53,11 +54,10 @@ export class FeedbackService {
 
   record(entry: Omit<FeedbackEntry, 'ts'>): FeedbackEntry {
     const full: FeedbackEntry = { ts: new Date().toISOString(), ...entry }
-    try {
-      appendFileSync(this.fileFor(), JSON.stringify(full) + '\n')
-    } catch (err) {
-      console.warn('[FeedbackService] append falhou:', (err as Error).message)
-    }
+    // append assíncrono — não bloqueia o event loop em hot path
+    appendFile(this.fileFor(), JSON.stringify(full) + '\n').catch((err: Error) => {
+      console.warn('[FeedbackService] append falhou:', err.message)
+    })
 
     // Wave-PG-17: dual-write best-effort no Postgres
     void (async () => {

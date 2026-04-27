@@ -87,8 +87,44 @@ const UPLOAD_ALLOWED_MIMES = new Set([
   'text/plain', 'text/csv',
 ])
 
-/** Rate limit em memória — N tentativas por chave em janela. Janela rolante. */
+/**
+ * Rate limit em memória — N tentativas por chave em janela rolante.
+ *
+ * Bounded LRU: cap em RATE_LIMIT_MAX_KEYS para evitar memory leak por
+ * IPs únicos (ataque de exhaustion). Quando ultrapassa, evict 20% mais
+ * antigos. Pruna inativos (>10min) a cada `RATE_LIMIT_SWEEP_MS`.
+ *
+ * IMPORTANTE: este store é POR INSTÂNCIA. Em deploy multi-pod, atacante
+ * pula entre pods e burla o limite — para isso, mover para
+ * @fastify/rate-limit com Redis storage (issue futura, não-P0 enquanto
+ * deploy é single-instance).
+ */
 const RATE_LIMIT = new Map<string, number[]>()
+const RATE_LIMIT_MAX_KEYS = Number(process.env.PORTAL_RATE_LIMIT_MAX_KEYS) || 5000
+const RATE_LIMIT_KEY_TTL_MS = Number(process.env.PORTAL_RATE_LIMIT_KEY_TTL_MS) || 10 * 60_000
+const RATE_LIMIT_SWEEP_MS = Number(process.env.PORTAL_RATE_LIMIT_SWEEP_MS) || 60_000
+
+function rateLimitSweep(): void {
+  const now = Date.now()
+  const cutoff = now - RATE_LIMIT_KEY_TTL_MS
+  for (const [k, arr] of RATE_LIMIT.entries()) {
+    const fresh = arr.filter((t) => t > cutoff)
+    if (fresh.length === 0) RATE_LIMIT.delete(k)
+    else if (fresh.length !== arr.length) RATE_LIMIT.set(k, fresh)
+  }
+  // LRU evict se passou do cap (Map preserva ordem de inserção)
+  if (RATE_LIMIT.size > RATE_LIMIT_MAX_KEYS) {
+    const toEvict = Math.floor(RATE_LIMIT_MAX_KEYS * 0.2)
+    let i = 0
+    for (const k of RATE_LIMIT.keys()) {
+      RATE_LIMIT.delete(k)
+      if (++i >= toEvict) break
+    }
+  }
+}
+const rateLimitSweepTimer = setInterval(rateLimitSweep, RATE_LIMIT_SWEEP_MS)
+if (rateLimitSweepTimer.unref) rateLimitSweepTimer.unref()
+
 function rateLimitCheck(key: string, max: number, windowMs: number): boolean {
   const now = Date.now()
   const cutoff = now - windowMs

@@ -27,7 +27,8 @@ BEGIN
   END IF;
 END$$;
 
--- alix_feedback.rating (1..5)
+-- alix_feedback.rating (text: util | irrelevante | incorreto | off-tom)
+-- alinhado com FeedbackRating em services/alix/learning/FeedbackService.ts
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -35,7 +36,7 @@ BEGIN
     WHERE constraint_name = 'alix_feedback_rating_check'
   ) THEN
     ALTER TABLE "alix_feedback" ADD CONSTRAINT alix_feedback_rating_check
-      CHECK (rating BETWEEN 1 AND 5);
+      CHECK (rating IS NULL OR rating IN ('util','irrelevante','incorreto','off-tom'));
   END IF;
 END$$;
 

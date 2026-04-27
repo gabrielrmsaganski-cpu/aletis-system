@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
+import { writeFile, rename } from 'fs/promises'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 
@@ -309,13 +310,29 @@ export class EnrichmentQueue {
     }
   }
 
+  /**
+   * Cadeia serializada de saves — garante atomic write+rename sem bloquear
+   * o event loop. Se save() é chamado em sequência, cada operação espera
+   * a anterior terminar (mantém ordem) mas nenhuma bloqueia callsite.
+   */
+  private saveChain: Promise<void> = Promise.resolve()
+
   private save(): void {
     const payload: QueueFile = {
       version: 1,
       jobs: Array.from(this.jobs.values()),
     }
     const tmp = `${this.file}.tmp`
-    writeFileSync(tmp, JSON.stringify(payload))
-    renameSync(tmp, this.file)
+    const data = JSON.stringify(payload)
+    this.saveChain = this.saveChain
+      .catch(() => {/* engole erro anterior pra não pular saves seguintes */})
+      .then(async () => {
+        try {
+          await writeFile(tmp, data)
+          await rename(tmp, this.file)
+        } catch (err) {
+          console.warn('[EnrichmentQueue] save falhou:', (err as Error).message)
+        }
+      })
   }
 }

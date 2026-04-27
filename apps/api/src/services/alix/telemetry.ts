@@ -2,7 +2,8 @@
 // Alix Telemetry — JSONL append-only por sessão
 // ============================================================
 
-import { appendFileSync, mkdirSync } from 'fs';
+import { mkdirSync } from 'fs';
+import { appendFile } from 'fs/promises';
 import { join, dirname } from 'path';
 
 export interface TelemetryRecord {
@@ -43,14 +44,23 @@ export function telemetryPath(storageDir: string, sessionId: string): string {
   return join(storageDir, sessionId, 'telemetry.jsonl');
 }
 
+/**
+ * Fire-and-forget append. Mantém assinatura sync para preservar callsites,
+ * mas o I/O real acontece async sem bloquear o event loop.
+ * `mkdirSync` é mantido (sync) porque é praticamente instantâneo se o
+ * diretório já existe, e ainda precisa garantir o caminho antes do append.
+ */
 export function appendTelemetry(storageDir: string, rec: TelemetryRecord): void {
+  const path = telemetryPath(storageDir, rec.sessionId);
   try {
-    const path = telemetryPath(storageDir, rec.sessionId);
     mkdirSync(dirname(path), { recursive: true });
-    appendFileSync(path, JSON.stringify(rec) + '\n');
   } catch (err) {
-    console.warn('[telemetry] append falhou:', (err as Error).message);
+    console.warn('[telemetry] mkdir falhou:', (err as Error).message);
+    return;
   }
+  appendFile(path, JSON.stringify(rec) + '\n').catch((err: Error) => {
+    console.warn('[telemetry] append falhou:', err.message);
+  });
 }
 
 export interface TelemetryAggregate {
