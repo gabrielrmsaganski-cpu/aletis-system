@@ -110,7 +110,14 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
   // - attachments: IDs de documentos previamente enviados via /api/alix/documents/upload
   // - clienteId  : dispara auto-injeção da memória persistente do cliente
   // Returns the reply plus the full (updated) session
-  fastify.post('/api/alix/chat', async (
+  fastify.post('/api/alix/chat', {
+    config: {
+      // Rate limit dedicado: ALIX/Foundry custa $0.015–$0.075 por chamada;
+      // sem cap específico, abuso pode gerar centenas de USD em minutos.
+      // 30 req/min por IP é suficiente para uso interno legítimo.
+      rateLimit: { max: 30, timeWindow: '1 minute' },
+    },
+  }, async (
     request: FastifyRequest<{ Body: {
       sessionId?: string
       message?: string
@@ -181,7 +188,9 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
   // Implementação pragmática: roda o chat completo e faz stream por
   // chunking de palavras (latência similar à real, sem refatorar o
   // tool-loop do runClaude).
-  fastify.post('/api/alix/chat/stream', async (
+  fastify.post('/api/alix/chat/stream', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (
     request: FastifyRequest<{ Body: {
       sessionId?: string
       message?: string

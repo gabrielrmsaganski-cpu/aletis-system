@@ -486,7 +486,10 @@ Data de hoje: ${hoje}`;
       handler: async (i) => {
         try {
           const mem = getAlixMemoryService()
-          return { markdown: mem.render(String(i.clienteId)) }
+          // mem.render() é async — sem await retornava Promise<unknown>
+          // serializada como "[object Object]" no contexto Claude (bug histórico).
+          const markdown = await mem.render(String(i.clienteId))
+          return { markdown }
         } catch (err) {
           return { error: `memória falhou: ${(err as Error).message}` }
         }

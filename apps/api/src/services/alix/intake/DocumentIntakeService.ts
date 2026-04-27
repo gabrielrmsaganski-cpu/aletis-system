@@ -99,6 +99,16 @@ export class DocumentIntakeService {
       )
     }
 
+    // ── Cache de extração por SHA-256 do buffer ──
+    // Re-uploads do mesmo arquivo (consultor reenvia, cliente envia
+    // duas vezes) evitam re-rodar parser + LLM Vision. Reduz custo de
+    // Haiku Vision (~$0.0016/doc) e tempo de resposta.
+    const sha = (await import('crypto')).createHash('sha256').update(file.buffer).digest('hex')
+    const cached = await this.findBySha(sha, file.sessionId || 'anon')
+    if (cached) {
+      return cached
+    }
+
     const kind = detectKind(file.filename, file.mimetype)
     const parsed = await this.runParser(kind, file)
 
@@ -138,6 +148,7 @@ export class DocumentIntakeService {
       imageMediaType: parsed.imageMediaType,
       metadata: {
         ...(parsed.metadata ?? {}),
+        sha256: sha,
         ...(agroClass.tipo !== 'OUTRO' && agroClass.confianca >= 0.5
           ? {
               agroTipo: agroClass.tipo,
@@ -193,6 +204,35 @@ export class DocumentIntakeService {
       if (e?.code === 'ENOENT') return null
       throw err
     }
+  }
+
+  /**
+   * Procura no diretório da sessão um documento previamente ingerido
+   * com mesmo SHA-256 do buffer. Devolve o IngestedDocument cacheado
+   * ou null. Implementação: leitura linear do diretório, suficiente
+   * para volumes típicos por sessão (<200 arquivos).
+   */
+  private async findBySha(sha256: string, sessionId: string): Promise<IngestedDocument | null> {
+    const dir = this.sessionDir(sessionId)
+    let files: string[] = []
+    try {
+      files = await fs.readdir(dir)
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException
+      if (e?.code === 'ENOENT') return null
+      return null
+    }
+    for (const f of files) {
+      if (!f.endsWith('.json')) continue
+      try {
+        const raw = await fs.readFile(join(dir, f), 'utf-8')
+        const doc = JSON.parse(raw) as IngestedDocument
+        if (doc.metadata?.sha256 === sha256) return doc
+      } catch {
+        // ignore corrompido
+      }
+    }
+    return null
   }
 
   /**

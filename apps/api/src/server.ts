@@ -80,8 +80,60 @@ async function buildApp() {
   })
 
   // Eco do trace-id no response para o cliente correlacionar.
+  // Aproveita o mesmo hook para anexar security headers básicos
+  // (sem @fastify/helmet — implementação manual mínima cobrindo
+  // os 5 headers OWASP críticos).
+  const SECURITY_HEADERS = {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(self), interest-cohort=()',
+    // CSP em produção apenas (em dev o Vite injeta scripts inline / eval para HMR).
+    ...(process.env.NODE_ENV === 'production'
+      ? {
+          'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+          'Content-Security-Policy':
+            "default-src 'self'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+        }
+      : {}),
+  } as const
+
   fastify.addHook('onSend', async (request, reply) => {
     reply.header('x-trace-id', request.id)
+    for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
+      if (!reply.hasHeader(k)) reply.header(k, v)
+    }
+  })
+
+  // Proteção do /metrics: por padrão somente IPs locais (loopback +
+  // RFC1918 + tailscale). Override via env METRICS_TOKEN — quando setado,
+  // exige header Authorization: Bearer <token>.
+  const METRICS_TOKEN = process.env.METRICS_TOKEN?.trim()
+  function isPrivateIp(ip: string): boolean {
+    return (
+      ip === '127.0.0.1' ||
+      ip === '::1' ||
+      ip.startsWith('10.') ||
+      ip.startsWith('192.168.') ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip) ||
+      ip.startsWith('100.') /* tailscale CGNAT */
+    )
+  }
+  fastify.addHook('onRequest', async (request, reply) => {
+    if (request.url.split('?')[0] !== '/metrics') return
+    if (METRICS_TOKEN) {
+      const auth = request.headers.authorization || ''
+      const presented = auth.startsWith('Bearer ') ? auth.slice(7) : null
+      if (presented !== METRICS_TOKEN) {
+        return reply.code(401).send({ error: 'metrics: unauthorized' })
+      }
+      return
+    }
+    const ip = (request.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
+      || request.ip
+    if (!ip || !isPrivateIp(ip)) {
+      return reply.code(403).send({ error: 'metrics: forbidden' })
+    }
   })
 
   // --- CORS ---
