@@ -333,10 +333,10 @@ const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
   lead: { label: 'Lead', color: '#6B7280' },
   qualificacao: { label: 'Qualificação', color: '#3B82F6' },
   analise: { label: 'Análise', color: '#8B5CF6' },
-  proposta: { label: 'Proposta', color: '#C9A84C' },
+  proposta: { label: 'Proposta', color: '#cb9d52' },
   negociacao: { label: 'Negociação', color: '#E67E22' },
   acordo: { label: 'Acordo', color: '#27AE60' },
-  acompanhamento: { label: 'Acompanhamento', color: '#0F4C35' },
+  acompanhamento: { label: 'Acompanhamento', color: '#17251b' },
   concluido: { label: 'Concluído', color: '#1B6B4A' },
   // Aliases do backend (api/routes/clientes.ts usa outro vocabulário)
   prospeccao: { label: 'Prospecção', color: '#6B7280' },
@@ -671,7 +671,7 @@ function StatusBadge({ status }: { status: string }) {
     em_dia: { label: 'Em dia', bg: '#27AE6018', text: '#27AE60' },
     atrasada: { label: 'Atrasada', bg: '#C0392B18', text: '#C0392B' },
     renegociada: { label: 'Renegociada', bg: '#3B82F618', text: '#3B82F6' },
-    quitada: { label: 'Quitada', bg: '#0F4C3518', text: '#0F4C35' },
+    quitada: { label: 'Quitada', bg: '#17251b18', text: '#17251b' },
   }
   const cfg = map[status] || { label: status, bg: '#6B728018', text: '#6B7280' }
   return (
@@ -693,9 +693,9 @@ function TimelineIcon({ tipo }: { tipo: string }) {
     documento_recebido: { icon: FileCheck, color: '#8B5CF6' },
     reuniao: { icon: User, color: '#E67E22' },
     analise: { icon: Eye, color: '#6B7280' },
-    proposta_gerada: { icon: Send, color: '#C9A84C' },
+    proposta_gerada: { icon: Send, color: '#cb9d52' },
     pagamento: { icon: DollarSign, color: '#27AE60' },
-    acordo: { icon: Handshake, color: '#0F4C35' },
+    acordo: { icon: Handshake, color: '#17251b' },
   }
   const cfg = iconMap[tipo] || { icon: Calendar, color: '#6B7280' }
   const Icon = cfg.icon

@@ -32,6 +32,7 @@ const Financeiro = lazy(() => import('./pages/Financeiro'))
 const CusteioAgricola = lazy(() => import('./pages/CusteioAgricola'))
 const Ferramentas = lazy(() => import('./pages/Ferramentas'))
 const Fontes = lazy(() => import('./pages/Fontes'))
+const NotFound = lazy(() => import('./pages/NotFound'))
 
 function RouteFallback() {
   return (
@@ -82,7 +83,7 @@ export default function App() {
                 <Route path="/ferramentas" element={<Ferramentas />} />
                 <Route path="/fontes" element={<Fontes />} />
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
             </ErrorBoundary>

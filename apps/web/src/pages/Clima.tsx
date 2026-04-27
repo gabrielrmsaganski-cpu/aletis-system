@@ -918,8 +918,8 @@ export default function Clima() {
               <YAxis
                 yAxisId="temp"
                 orientation="left"
-                tick={{ fontSize: 10, fill: '#C9A84C' }}
-                label={{ value: 'Temp (C)', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#C9A84C' } }}
+                tick={{ fontSize: 10, fill: '#cb9d52' }}
+                label={{ value: 'Temp (C)', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#cb9d52' } }}
                 domain={[(dataMin: number) => Math.floor(dataMin - 2), (dataMax: number) => Math.ceil(dataMax + 2)]}
                 allowDecimals={false}
               />
@@ -933,7 +933,7 @@ export default function Clima() {
               <Tooltip
                 content={<ChartTooltip />}
                 wrapperStyle={{ outline: 'none' }}
-                cursor={{ fill: '#0F4C35', fillOpacity: 0.04 }}
+                cursor={{ fill: '#17251b', fillOpacity: 0.04 }}
               />
               <Legend
                 verticalAlign="top"
@@ -945,12 +945,12 @@ export default function Clima() {
                 type="monotone"
                 dataKey="tempMedia"
                 name="Temperatura"
-                stroke="#C9A84C"
-                fill="#C9A84C"
+                stroke="#cb9d52"
+                fill="#cb9d52"
                 fillOpacity={0.15}
                 strokeWidth={2}
                 dot={false}
-                activeDot={{ r: 4, stroke: '#C9A84C', strokeWidth: 2, fill: '#fff' }}
+                activeDot={{ r: 4, stroke: '#cb9d52', strokeWidth: 2, fill: '#fff' }}
                 connectNulls
                 isAnimationActive={false}
               />
@@ -977,7 +977,7 @@ export default function Clima() {
             const maxTemp = Math.max(...temps)
 
             return [
-              { label: 'Temp. Média', valor: `${avgTemp.toFixed(1)} C`, icon: Thermometer, color: '#C9A84C' },
+              { label: 'Temp. Média', valor: `${avgTemp.toFixed(1)} C`, icon: Thermometer, color: '#cb9d52' },
               { label: 'Temp. Máxima', valor: `${maxTemp.toFixed(1)} C`, icon: Sun, color: '#E67E22' },
               { label: 'Precip. Acum.', valor: `${totalPrecip.toFixed(1)} mm`, icon: CloudRain, color: '#3B82F6' },
               { label: 'Dias c/ Chuva', valor: `${diasChuva} dias`, icon: Droplets, color: '#2563EB' },
