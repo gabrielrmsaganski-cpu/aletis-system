@@ -46,6 +46,7 @@ import {
   PaperclipIcon as Paperclip,
 } from 'lucide-react'
 import BrandMark from '../components/ui/BrandMark'
+import { PortalErrorBoundary } from './portal/PortalErrorBoundary'
 
 /* ──────────────────────────────────────────────────────────────
  * Constantes / tipos
@@ -1870,7 +1871,17 @@ function KpiTile({ label, value, icon: Icon, accent }: {
 /* ──────────────────────────────────────────────────────────────
  * ROOT — handle URL params (?magic, ?reset) + sessão JWT
  * ──────────────────────────────────────────────────────────── */
+// Wrapper público com ErrorBoundary — captura crashes em qualquer
+// sub-componente do portal e oferece reload em vez de tela branca.
 export default function PortalCliente() {
+  return (
+    <PortalErrorBoundary>
+      <PortalClienteInner />
+    </PortalErrorBoundary>
+  )
+}
+
+function PortalClienteInner() {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY))
   const [cliente, setCliente] = useState<ClienteMe | null>(null)
   const [verificando, setVerificando] = useState<boolean>(true)

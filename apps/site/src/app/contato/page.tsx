@@ -87,6 +87,7 @@ export default function ContatoPage() {
                       </div>
                     </li>
 
+                    {siteConfig.contact.whatsapp && siteConfig.contact.telefone && (
                     <li className="flex items-start gap-3">
                       <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-aletis-dourado/40 bg-aletis-dourado/15 text-aletis-dourado">
                         <MessageCircle className="h-4 w-4" />
@@ -106,7 +107,9 @@ export default function ContatoPage() {
                         </p>
                       </div>
                     </li>
+                    )}
 
+                    {siteConfig.contact.telefone && (
                     <li className="flex items-start gap-3">
                       <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-aletis-dourado/40 bg-aletis-dourado/15 text-aletis-dourado">
                         <Phone className="h-4 w-4" />
@@ -114,7 +117,7 @@ export default function ContatoPage() {
                       <div>
                         <p className="text-[10px] uppercase tracking-widest2 text-aletis-dourado">Telefone</p>
                         <a
-                          href={`tel:+${siteConfig.contact.whatsapp}`}
+                          href={`tel:+${siteConfig.contact.whatsapp ?? ''}`}
                           className="mt-0.5 block font-display text-[15px] font-semibold hover:text-aletis-dourado"
                         >
                           {siteConfig.contact.telefone}
@@ -122,6 +125,7 @@ export default function ContatoPage() {
                         <p className="mt-1 text-[12px] text-white/60">Horário comercial</p>
                       </div>
                     </li>
+                    )}
                   </ul>
                 </div>
 

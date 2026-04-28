@@ -89,13 +89,15 @@ export function Footer() {
               <Mail className="h-4 w-4 text-aletis-gold" />
               {siteConfig.contact.email}
             </a>
-            <a
-              href={`tel:${siteConfig.contact.telefone.replace(/[^+\d]/g, '')}`}
-              className="group inline-flex items-center gap-3 transition hover:text-aletis-gold"
-            >
-              <Phone className="h-4 w-4 text-aletis-gold" />
-              {siteConfig.contact.telefone}
-            </a>
+            {siteConfig.contact.telefone && (
+              <a
+                href={`tel:${siteConfig.contact.telefone.replace(/[^+\d]/g, '')}`}
+                className="group inline-flex items-center gap-3 transition hover:text-aletis-gold"
+              >
+                <Phone className="h-4 w-4 text-aletis-gold" />
+                {siteConfig.contact.telefone}
+              </a>
+            )}
             <span className="inline-flex items-center gap-3">
               <MapPin className="h-4 w-4 text-aletis-gold" />
               {siteConfig.contact.endereco}
@@ -103,6 +105,7 @@ export function Footer() {
           </div>
 
           <div className="mt-8 flex gap-3">
+            {siteConfig.social.linkedin && (
             <a
               href={siteConfig.social.linkedin}
               aria-label="LinkedIn"
@@ -112,6 +115,8 @@ export function Footer() {
             >
               <Linkedin className="h-4 w-4" />
             </a>
+            )}
+            {siteConfig.social.instagram && (
             <a
               href={siteConfig.social.instagram}
               aria-label="Instagram"
@@ -121,6 +126,7 @@ export function Footer() {
             >
               <Instagram className="h-4 w-4" />
             </a>
+            )}
           </div>
         </div>
 

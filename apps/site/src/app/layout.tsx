@@ -96,14 +96,14 @@ const ORGANIZATION_JSONLD = {
   logo: `${siteConfig.url}/brand/logos/aletis-principal-cream.png`,
   image: `${siteConfig.url}${siteConfig.ogImage}`,
   email: siteConfig.contact.email,
-  telephone: siteConfig.contact.telefone,
+  ...(siteConfig.contact.telefone ? { telephone: siteConfig.contact.telefone } : {}),
   address: {
     '@type': 'PostalAddress',
-    addressLocality: 'Cascavel',
+    addressLocality: 'Curitiba',
     addressRegion: 'PR',
     addressCountry: 'BR',
   },
-  sameAs: [siteConfig.social.linkedin, siteConfig.social.instagram],
+  sameAs: [siteConfig.social.linkedin, siteConfig.social.instagram].filter(Boolean) as string[],
   areaServed: { '@type': 'Country', name: 'Brasil' },
   serviceType: [
     'Consultoria Financeira',

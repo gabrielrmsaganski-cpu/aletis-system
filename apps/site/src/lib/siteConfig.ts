@@ -14,17 +14,22 @@ export const siteConfig = {
   longDescription:
     'A ALETIS reúne quatro pilares — Agro, Corporate, Fomento e Gestão — em uma mesa técnica independente. Reestruturação de dívida rural, BPO financeiro, captação estruturada e governança corporativa, com metodologia proprietária e tecnologia sob medida.',
   url: 'https://aletis.com.br',
-  ogImage: '/og-aletis.png',
+  // OG image gerada dinamicamente em /opengraph-image.tsx (não há arquivo
+  // estático em /public — Next.js cuida disso pelo App Router).
+  ogImage: '/opengraph-image',
   locale: 'pt-BR',
   contact: {
     email: 'contato@aletis.com.br',
-    telefone: '+55 (45) 9 9999-0000',
-    whatsapp: '5545999990000',
-    endereco: 'Cascavel · Paraná · Brasil',
+    // Telefone/WhatsApp oficiais — preencher com números verificados
+    // antes de divulgação. Quando vazios, componentes ocultam os campos.
+    telefone: null as string | null,
+    whatsapp: null as string | null,
+    endereco: 'Curitiba · Paraná · Brasil',
   },
+  // Redes sociais opcionais — só renderizadas quando preenchidas.
   social: {
-    instagram: 'https://instagram.com/aletis.oficial',
-    linkedin: 'https://linkedin.com/company/aletis',
+    instagram: null as string | null,
+    linkedin: null as string | null,
   },
 } as const
 
@@ -32,7 +37,7 @@ export const nav = {
   primary: [
     { label: 'Sobre', href: '/sobre' },
     { label: 'Soluções', href: '/solucoes' },
-    { label: 'Para quem é', href: '/para-quem-e' },
+    { label: 'Cases', href: '/cases' },
     { label: 'Calculadoras', href: '/calculadoras' },
     { label: 'Insights', href: '/insights' },
     { label: 'Contato', href: '/contato' },
