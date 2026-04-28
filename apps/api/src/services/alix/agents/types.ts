@@ -15,6 +15,14 @@ export interface SubAgentContext {
   parentToolCalls: string[];
   /** Se HITL é requerido para ações de alto impacto. Default true. */
   hitl: boolean;
+  /**
+   * Trail key do AlixAuditTrailService onde as tools deste sub-agent
+   * devem ser registradas (compartilhado com o Orchestrator pai).
+   * Quando definido, BaseAgent.run propaga (toolName, params, result,
+   * latency) para o serviço de audit, prefixando toolName com o nome
+   * do agente para distinção.
+   */
+  auditTrailKey?: string;
 }
 
 export interface SubAgentArtifact {

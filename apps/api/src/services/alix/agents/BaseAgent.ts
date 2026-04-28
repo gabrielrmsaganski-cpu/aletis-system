@@ -10,6 +10,7 @@ import {
   MAX_DELEGATION_DEPTH,
   DelegationLoopError,
 } from './types.js';
+import { getAlixAuditTrailService } from '../AlixAuditTrailService.js';
 
 export abstract class BaseAgent implements SubAgent {
   abstract name: string;
@@ -46,8 +47,21 @@ export abstract class BaseAgent implements SubAgent {
       tools,
       toolRegistry: registry,
       ...(this.thinking ? { thinking: this.thinking } : {}),
-      onToolCall: (toolName, _input, out) => {
+      onToolCall: (toolName, input, out, latencyMs) => {
         toolCalls.push(toolName);
+        // Sub-agent audit propagation: registra cada tool no trail do
+        // Orchestrator pai (prefixa com nome do agente para distinção).
+        if (ctx.auditTrailKey) {
+          try {
+            getAlixAuditTrailService().recordToolCall(
+              ctx.auditTrailKey,
+              `${this.name}::${toolName}`,
+              input,
+              out,
+              latencyMs,
+            );
+          } catch { /* audit é best-effort */ }
+        }
         // Se a tool retornou um pending confirmation, captura o ID
         const meta = (out as { metadata?: { confirmationId?: string; pendingConfirmation?: boolean } } | undefined)?.metadata;
         if (meta?.pendingConfirmation && typeof meta.confirmationId === 'string') {

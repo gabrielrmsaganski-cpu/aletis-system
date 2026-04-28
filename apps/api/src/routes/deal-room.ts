@@ -42,6 +42,16 @@ export default async function dealRoomRoutes(fastify: FastifyInstance): Promise<
     },
   )
 
+  // Wave OS — Deal Room enriquecido com propostas globais (evita duplicação)
+  fastify.get<{ Params: { clienteId: string } }>(
+    '/api/deal-room/cliente/:clienteId/with-propostas',
+    async (req, reply) => {
+      const data = await getDealRoomService().listByClienteWithPropostas(req.params.clienteId)
+      const resumo = await getDealRoomService().resumoCliente(req.params.clienteId)
+      return reply.send({ success: true, data: { ...data, resumo } })
+    },
+  )
+
   // Detalhe de uma negociação
   fastify.get<{ Params: { id: string } }>('/api/deal-room/negociacoes/:id', async (req, reply) => {
     const n = await getDealRoomService().get(req.params.id)

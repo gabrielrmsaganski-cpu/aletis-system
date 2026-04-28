@@ -101,15 +101,45 @@ const TOOL_PROVENANCE: Record<string, { source: string; confidence: number }> = 
   abrir_negociacao: { source: 'DealRoomService (PG insert)', confidence: 0.99 },
   atualizar_negociacao: { source: 'DealRoomService (PG update + histórico append)', confidence: 0.99 },
   adicionar_nota_negociacao: { source: 'DealRoomService (histórico append)', confidence: 0.99 },
+  // Sub-agent delegate tools (Orchestrator → sub-agent)
+  delegate_deal_analyzer: { source: 'DealAnalyzerAgent (Opus 4.7 + thinking)', confidence: 0.93 },
+  delegate_web_researcher: { source: 'WebResearcherAgent (Tavily + Sonnet)', confidence: 0.85 },
+  delegate_crm_writer: { source: 'CRMWriterAgent (HITL via confirmation)', confidence: 0.95 },
+  delegate_doc_generator: { source: 'DocGeneratorAgent (PDF/DOCX templates)', confidence: 0.95 },
+  // Sub-agent tools (chamados por DealAnalyzer/WebResearcher/etc)
+  // Prefixos "DealAnalyzer::"/"WebResearcher::"/etc removidos antes do lookup.
+  listar_propostas_cliente: { source: 'PropostasService (PG)', confidence: 0.97 },
+  buscar_proposta: { source: 'PropostasService (PG)', confidence: 0.97 },
+  // outras chamadas sub-agentes herdam provenance pelo sufixo após "::"
+}
+
+/**
+ * Resolve provenance para tool name potencialmente prefixado por sub-agent
+ * (formato "DealAnalyzer::buscar_cliente"). Tenta primeiro o nome completo,
+ * depois o sufixo após "::".
+ */
+function provenanceForName(toolName: string): { source: string; confidence: number } {
+  const direct = TOOL_PROVENANCE[toolName]
+  if (direct) return direct
+  if (toolName.includes('::')) {
+    const [agent, suffix] = toolName.split('::', 2)
+    const sub = TOOL_PROVENANCE[suffix]
+    if (sub) {
+      // Marca a source com o agente para auditoria mantendo confidence
+      return {
+        source: `${sub.source} (via ${agent})`,
+        confidence: Math.max(0.7, sub.confidence - 0.05),
+      }
+    }
+  }
+  return {
+    source: 'Tool customizada (sem provenance registrada)',
+    confidence: 0.7,
+  }
 }
 
 function provenanceFor(toolName: string): { source: string; confidence: number } {
-  return (
-    TOOL_PROVENANCE[toolName] ?? {
-      source: 'Tool customizada (sem provenance registrada)',
-      confidence: 0.7,
-    }
-  )
+  return provenanceForName(toolName)
 }
 
 function summarizeResult(result: unknown): { summary: string; ok: boolean } {

@@ -71,6 +71,13 @@
       "when": 1777371742256,
       "tag": "0009_deal_room",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1777374400000,
+      "tag": "0010_negociacao_proposta_link",
+      "breakpoints": true
     }
   ]
 }

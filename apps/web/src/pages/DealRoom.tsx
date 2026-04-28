@@ -35,6 +35,20 @@ interface Negociacao {
   proximaData?: string
   observacoes?: string
   ultimaInteracao?: string
+  /** Wave OS — vínculo a uma proposta global */
+  propostaId?: string | null
+  proposta?: PropostaSummary | null
+}
+
+interface PropostaSummary {
+  id: string
+  titulo?: string | null
+  tipo?: string | null
+  status?: string | null
+  valorProposto?: string | null
+  pdfPath?: string | null
+  criadoEm?: string
+  atualizadoEm?: string
 }
 
 const STATUSES = [
@@ -64,13 +78,18 @@ export default function DealRoom() {
   const [showNew, setShowNew] = useState(searchParams.get('new') === '1')
   const [editing, setEditing] = useState<string | null>(searchParams.get('neg'))
 
+  const [propostasOrfas, setPropostasOrfas] = useState<PropostaSummary[]>([])
   const reload = () => {
     if (!clienteId) return
     setLoading(true)
-    apiFetch<{ negociacoes: Negociacao[]; resumo: any }>(`/api/deal-room/cliente/${clienteId}`)
+    // Wave OS — endpoint with-propostas correlaciona Deal Room ↔ proposta
+    apiFetch<{ negociacoes: Negociacao[]; propostasOrfas: PropostaSummary[]; resumo: any }>(
+      `/api/deal-room/cliente/${clienteId}/with-propostas`,
+    )
       .then((d) => {
         setList(d.negociacoes ?? [])
         setResumo(d.resumo ?? null)
+        setPropostasOrfas(d.propostasOrfas ?? [])
       })
       .catch((err) => setError(String(err?.message || err)))
       .finally(() => setLoading(false))
@@ -175,6 +194,46 @@ export default function DealRoom() {
             />
           ))}
         </div>
+      )}
+
+      {/* Wave OS — Propostas órfãs (não vinculadas a nenhuma negociação) */}
+      {propostasOrfas.length > 0 && (
+        <DSCard className="border-aletis-dourado/40 bg-aletis-dourado/5">
+          <div className="flex items-start gap-3 mb-2">
+            <div className="w-8 h-8 rounded-lg bg-aletis-dourado/20 flex items-center justify-center flex-shrink-0">
+              <Building2 className="w-4 h-4 text-aletis-dourado" />
+            </div>
+            <div>
+              <h3 className="text-sm font-display font-semibold text-aletis-grafite-escuro dark:text-white">
+                Propostas globais sem deal room ({propostasOrfas.length})
+              </h3>
+              <p className="text-xs font-body text-aletis-grafite-claro dark:text-white/60 mt-0.5">
+                Estas propostas existem em /propostas mas não estão vinculadas a uma negociação por credor —
+                considere criar um deal room ou linkar à negociação existente.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3">
+            {propostasOrfas.slice(0, 6).map((p) => (
+              <div key={p.id} className="rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-white/5 p-2.5 flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-display font-semibold text-aletis-grafite-escuro dark:text-white truncate">
+                    {p.titulo || `Proposta ${p.id.slice(0, 8)}`}
+                  </p>
+                  <p className="text-[11px] font-body text-aletis-grafite-claro dark:text-white/60 mt-0.5">
+                    {p.tipo} · {p.status} {p.valorProposto && `· ${fmtBRL(p.valorProposto)}`}
+                  </p>
+                </div>
+                <Link
+                  to={`/propostas?id=${p.id}`}
+                  className="text-[11px] font-body text-aletis-verde hover:underline whitespace-nowrap"
+                >
+                  abrir →
+                </Link>
+              </div>
+            ))}
+          </div>
+        </DSCard>
       )}
 
       {showNew && clienteId && (
@@ -435,6 +494,23 @@ function NegociacaoDetailModal({
               <p className="text-xs text-aletis-grafite-escuro dark:text-white/80 mt-1 italic">
                 {negociacao.observacoes}
               </p>
+            </div>
+          )}
+          {negociacao.proposta && (
+            <div className="rounded-lg border border-aletis-verde/40 bg-aletis-verde/5 dark:bg-aletis-verde/10 p-2.5">
+              <p className="text-[10px] font-body font-semibold uppercase text-aletis-verde">Proposta vinculada</p>
+              <p className="text-xs font-display font-semibold text-aletis-grafite-escuro dark:text-white mt-1">
+                {negociacao.proposta.titulo || negociacao.proposta.id.slice(0, 12)}
+              </p>
+              <p className="text-[11px] text-aletis-grafite-claro dark:text-white/60 mt-0.5">
+                {negociacao.proposta.tipo ?? '—'} · {negociacao.proposta.status ?? '—'}
+              </p>
+              <Link
+                to={`/propostas?id=${negociacao.proposta.id}`}
+                className="text-[11px] font-body text-aletis-verde hover:underline mt-1 inline-block"
+              >
+                abrir proposta →
+              </Link>
             </div>
           )}
         </div>

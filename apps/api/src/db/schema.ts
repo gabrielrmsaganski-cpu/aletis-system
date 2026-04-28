@@ -627,6 +627,8 @@ export const negociacaoCredor = pgTable(
     garantias: jsonb('garantias'),
     docsPendentes: jsonb('docs_pendentes'),
     historico: jsonb('historico'),
+    /** Wave OS — vínculo opcional para `proposta.id` (mesmo cliente). */
+    propostaId: text('proposta_id'),
     proximaData: timestamp('proxima_data', { withTimezone: true }),
     ultimaInteracao: timestamp('ultima_interacao', { withTimezone: true }),
     observacoes: text('observacoes'),

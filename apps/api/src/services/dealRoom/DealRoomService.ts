@@ -11,7 +11,7 @@
 import { randomUUID } from 'crypto'
 import { eq, desc } from 'drizzle-orm'
 import { getDb } from '../../db/client.js'
-import { negociacaoCredor, type NegociacaoCredor } from '../../db/schema.js'
+import { negociacaoCredor, proposta, type NegociacaoCredor, type Proposta } from '../../db/schema.js'
 
 export type NegociacaoStatus =
   | 'negociando'
@@ -55,6 +55,8 @@ export interface CriarNegociacaoInput {
   garantias?: string[]
   observacoes?: string
   proximaData?: string
+  /** Wave OS — vincular já na criação a uma proposta global. */
+  propostaId?: string
 }
 
 export interface AtualizarNegociacaoInput {
@@ -73,6 +75,8 @@ export interface AtualizarNegociacaoInput {
   appendHistorico?: HistoricoEntry
   /** Atualiza array completo de docs pendentes. */
   docsPendentes?: DocPendente[]
+  /** Wave OS — vincular esta negociação a uma proposta global. */
+  propostaId?: string | null
 }
 
 export class DealRoomService {
@@ -86,6 +90,32 @@ export class DealRoomService {
 
   async listByCliente(clienteId: string): Promise<NegociacaoCredor[]> {
     return this.list({ clienteId })
+  }
+
+  /**
+   * Wave OS — combinar Deal Room + propostas globais.
+   * Retorna negociações enriquecidas com a proposta vinculada (se houver),
+   * mais o conjunto de propostas do cliente que NÃO estão linkadas a
+   * nenhuma negociação (sugestões de vínculo).
+   */
+  async listByClienteWithPropostas(clienteId: string): Promise<{
+    negociacoes: Array<NegociacaoCredor & { proposta?: Proposta | null }>
+    propostasOrfas: Proposta[]
+  }> {
+    const db = getDb()
+    const [negs, props] = await Promise.all([
+      this.listByCliente(clienteId),
+      db.select().from(proposta).where(eq(proposta.clienteId, clienteId)).orderBy(desc(proposta.atualizadoEm)),
+    ])
+    const propMap = new Map(props.map((p) => [p.id, p]))
+    const linkedIds = new Set<string>()
+    const enriched = negs.map((n) => {
+      const linked = n.propostaId ? propMap.get(n.propostaId) ?? null : null
+      if (n.propostaId && linked) linkedIds.add(n.propostaId)
+      return { ...n, proposta: linked }
+    })
+    const propostasOrfas = props.filter((p) => !linkedIds.has(p.id))
+    return { negociacoes: enriched, propostasOrfas }
   }
 
   async get(id: string): Promise<NegociacaoCredor | null> {
@@ -125,6 +155,7 @@ export class DealRoomService {
       carenciaMeses: input.carenciaMeses ?? null,
       garantias: input.garantias ?? null,
       docsPendentes: [],
+      propostaId: input.propostaId ?? null,
       historico: historicoInicial,
       proximaData: input.proximaData ? new Date(input.proximaData) : null,
       ultimaInteracao: now,
@@ -156,6 +187,7 @@ export class DealRoomService {
     if (patch.observacoes !== undefined) updates.observacoes = patch.observacoes
     if (patch.proximaData !== undefined) updates.proximaData = patch.proximaData ? new Date(patch.proximaData) : null
     if (patch.docsPendentes !== undefined) updates.docsPendentes = patch.docsPendentes
+    if (patch.propostaId !== undefined) updates.propostaId = patch.propostaId
 
     if (patch.appendHistorico) {
       const hist = Array.isArray(existing.historico) ? [...(existing.historico as HistoricoEntry[])] : []

@@ -51,6 +51,8 @@ export interface OrchestratorOpts {
 }
 
 export class OrchestratorService {
+  /** Trail-key da resposta atual em construção; sub-agents propagam audit aqui. */
+  private currentAuditTrailKey: string | undefined;
   private dealAnalyzer: DealAnalyzerAgent;
   private webResearcher: WebResearcherAgent;
   private crmWriter: CRMWriterAgent;
@@ -315,12 +317,13 @@ Data de hoje: ${hoje}`;
     const cof = buildContratosOficiaisTools();
     for (const t of cof.tools) { tools.push(t); registry[t.name] = cof.registry[t.name]; }
 
-    // Delegações
+    // Delegações — passa trailKey p/ sub-agents propagarem audit
     const ctxBase = (): SubAgentContext => ({
       sessionId,
       orchestratorHistory: history.slice(-10),
       parentToolCalls: ['orchestrator'],
       hitl: true,
+      auditTrailKey: this.currentAuditTrailKey,
     });
 
     const runSubAgent = async (agent: SubAgent, goal: string, extra?: Partial<SubAgentContext>): Promise<SubAgentResult> => {
@@ -584,6 +587,7 @@ Data de hoje: ${hoje}`;
     const auditService = getAlixAuditTrailService(this.storageDir);
     const trailKey = `${session.id}:${assistantMessageId}`;
     auditService.startTrail(trailKey, session.id);
+    this.currentAuditTrailKey = trailKey;
 
     const { tools, registry } = this.buildTools(session.id, session.messages);
     let system = this.buildSystemPrompt();
@@ -735,6 +739,7 @@ Data de hoje: ${hoje}`;
 
     // Fecha o trail (gera totalLatency + persiste em jsonl)
     auditService.finishTrail(trailKey);
+    this.currentAuditTrailKey = undefined;
 
     return { reply: result.text, session };
   }
