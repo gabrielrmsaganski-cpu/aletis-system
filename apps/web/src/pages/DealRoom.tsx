@@ -84,7 +84,7 @@ export default function DealRoom() {
     setLoading(true)
     // Wave OS — endpoint with-propostas correlaciona Deal Room ↔ proposta
     apiFetch<{ negociacoes: Negociacao[]; propostasOrfas: PropostaSummary[]; resumo: any }>(
-      `/api/deal-room/cliente/${clienteId}/with-propostas`,
+      `/deal-room/cliente/${clienteId}/with-propostas`,
     )
       .then((d) => {
         setList(d.negociacoes ?? [])
@@ -344,7 +344,7 @@ function NewNegociacaoModal({
     if (!credor.trim()) return setError('credor é obrigatório')
     setSaving(true)
     try {
-      await apiFetch('/api/deal-room/negociacoes', {
+      await apiFetch('/deal-room/negociacoes', {
         method: 'POST',
         body: JSON.stringify({
           clienteId,
@@ -420,7 +420,7 @@ function NegociacaoDetailModal({
   async function changeStatus(newStatus: string) {
     setSaving(true)
     try {
-      await apiFetch(`/api/deal-room/negociacoes/${negociacao.id}`, {
+      await apiFetch(`/deal-room/negociacoes/${negociacao.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ status: newStatus }),
       })
@@ -435,7 +435,7 @@ function NegociacaoDetailModal({
     if (!nota.trim()) return
     setSaving(true)
     try {
-      await apiFetch(`/api/deal-room/negociacoes/${negociacao.id}/nota`, {
+      await apiFetch(`/deal-room/negociacoes/${negociacao.id}/nota`, {
         method: 'POST',
         body: JSON.stringify({ texto: nota.trim() }),
       })
@@ -448,7 +448,7 @@ function NegociacaoDetailModal({
 
   async function deletar() {
     if (!confirm('Excluir esta negociação? Histórico e contrapropostas serão perdidos.')) return
-    await apiFetch(`/api/deal-room/negociacoes/${negociacao.id}`, { method: 'DELETE' })
+    await apiFetch(`/deal-room/negociacoes/${negociacao.id}`, { method: 'DELETE' })
     onChange()
     onClose()
   }

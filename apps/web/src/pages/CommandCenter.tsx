@@ -107,9 +107,9 @@ export default function CommandCenter() {
     if (!id) return
     setLoading(true)
     Promise.allSettled([
-      apiFetch<Cliente>(`/api/clientes/${id}`),
-      apiFetch<{ negociacoes: Negociacao[]; resumo: any }>(`/api/deal-room/cliente/${id}`),
-      apiFetch<ContextHint>(`/api/alix/context-hint`, {
+      apiFetch<Cliente>(`/clientes/${id}`),
+      apiFetch<{ negociacoes: Negociacao[]; resumo: any }>(`/deal-room/cliente/${id}`),
+      apiFetch<ContextHint>(`/alix/context-hint`, {
         method: 'POST',
         body: JSON.stringify({ clienteId: id, tela: 'command-center' }),
       }),

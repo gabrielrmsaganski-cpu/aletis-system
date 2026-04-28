@@ -154,7 +154,7 @@ export interface DSTableColumn<T> {
   render?: (row: T) => ReactNode
 }
 
-export function DSTable<T extends { id?: string | number }>({
+export function DSTable<T>({
   columns,
   rows,
   emptyState,
@@ -191,7 +191,7 @@ export function DSTable<T extends { id?: string | number }>({
         </thead>
         <tbody className="divide-y divide-aletis-borda dark:divide-white/5">
           {rows.map((row, i) => {
-            const key = rowKey ? rowKey(row) : String(row.id ?? i)
+            const key = rowKey ? rowKey(row) : String((row as any)?.id ?? i)
             return (
               <tr
                 key={key}

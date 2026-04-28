@@ -66,8 +66,8 @@ export default function Negociacoes() {
   useEffect(() => {
     setLoading(true)
     Promise.allSettled([
-      apiFetch<Negociacao[]>('/api/deal-room/negociacoes'),
-      apiFetch<Cliente[]>('/api/clientes'),
+      apiFetch<Negociacao[]>('/deal-room/negociacoes'),
+      apiFetch<Cliente[]>('/clientes'),
     ]).then(([r1, r2]) => {
       if (r1.status === 'fulfilled') setList(r1.value ?? [])
       else setError(String((r1.reason as any)?.message ?? r1.reason))

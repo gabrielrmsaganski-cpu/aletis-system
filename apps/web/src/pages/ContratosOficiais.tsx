@@ -27,7 +27,7 @@ export default function ContratosOficiais() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   useEffect(() => {
-    apiFetch<ClienteListItem[]>('/api/clientes')
+    apiFetch<ClienteListItem[]>('/clientes')
       .then((d) => setClientes(d))
       .catch((err) => setError(String(err?.message || err)))
   }, [])

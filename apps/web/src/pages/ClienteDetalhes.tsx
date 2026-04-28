@@ -5,6 +5,8 @@ import { InlineButton } from '../components/ui'
 import PatrimonioTab from '../components/patrimonio/PatrimonioTab'
 import AlixContextHint from '../components/alix/AlixContextHint'
 import ContratosOficiaisTab from '../components/contratos/ContratosOficiaisTab'
+import ClientePropostasTab from '../components/cliente/ClientePropostasTab'
+import ClienteFluxoCaixaTab from '../components/cliente/ClienteFluxoCaixaTab'
 import { DSCard, DSStatCard, DSEmpty, DSButton } from '../components/ds'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
@@ -2145,30 +2147,10 @@ export default function ClienteDetalhes() {
       )}
 
       {/* ════════════════════════════════════════════════════════
-           TAB: PROPOSTAS (placeholder)
+           TAB: PROPOSTAS — lista real do cliente via /propostas?clienteId=X
            ════════════════════════════════════════════════════════ */}
-      {activeTab === 'propostas' && (
-        <div className="card-premium p-12 text-center animate-fade-in">
-          <div className="w-16 h-16 rounded-2xl bg-aletis-dourado/10 flex items-center justify-center mx-auto mb-4">
-            <FileText className="w-8 h-8 text-aletis-dourado" />
-          </div>
-          <h3 className="text-lg font-display font-semibold text-aletis-grafite-escuro mb-2">
-            Propostas de Reestruturação
-          </h3>
-          <p className="text-sm font-body text-aletis-grafite-claro max-w-md mx-auto">
-            As propostas geradas para este cliente serão exibidas aqui. Clique em "Gerar Proposta"
-            para iniciar uma nova análise de reestruturação.
-          </p>
-          <InlineButton
-            variant="gold"
-            size="md"
-            icon={Send}
-            onClick={handleGerarProposta}
-            className="mt-6"
-          >
-            Gerar Nova Proposta
-          </InlineButton>
-        </div>
+      {activeTab === 'propostas' && id && (
+        <ClientePropostasTab clienteId={id} onGerarProposta={handleGerarProposta} />
       )}
 
       {/* ════════════════════════════════════════════════════════
@@ -2199,15 +2181,8 @@ export default function ClienteDetalhes() {
       {/* ════════════════════════════════════════════════════════
            TAB: FLUXO DE CAIXA (placeholder)
            ════════════════════════════════════════════════════════ */}
-      {activeTab === 'fluxo-caixa' && (
-        <DSCard className="animate-fade-in">
-          <DSEmpty
-            icon={<TrendingUp className="w-6 h-6" />}
-            title="Fluxo de Caixa"
-            description="Projeção de receitas da safra versus obrigações financeiras. Em desenvolvimento."
-          />
-        </DSCard>
-      )}
+      {/* TAB: FLUXO DE CAIXA — projeção real do FinanceiroService */}
+      {activeTab === 'fluxo-caixa' && id && <ClienteFluxoCaixaTab clienteId={id} />}
 
       {/* ════════════════════════════════════════════════════════
            TAB: TIMELINE

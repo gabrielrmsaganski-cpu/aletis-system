@@ -34,7 +34,7 @@ export default function AlixContextHint({ clienteId, tela = 'cliente-detalhes' }
   useEffect(() => {
     let cancelled = false
     setError(null)
-    apiFetch<ContextHintData>('/api/alix/context-hint', {
+    apiFetch<ContextHintData>('/alix/context-hint', {
       method: 'POST',
       body: JSON.stringify({ clienteId, tela }),
     })

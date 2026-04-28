@@ -75,7 +75,7 @@ export default function ContratosOficiaisTab({ clienteId }: Props) {
   const [selected, setSelected] = useState<TemplateCard | null>(null)
 
   useEffect(() => {
-    apiFetch<TemplateCard[]>('/api/contratos/templates')
+    apiFetch<TemplateCard[]>('/contratos/templates')
       .then((d) => setTemplates(d))
       .catch((err) => setError(String(err?.message || err)))
   }, [])
@@ -193,7 +193,7 @@ function ContratoModal({
   useEffect(() => {
     const t = setTimeout(() => {
       setError(null)
-      apiFetch<PreviewResponse>(`/api/contratos/templates/${template.slug}/preview`, {
+      apiFetch<PreviewResponse>(`/contratos/templates/${template.slug}/preview`, {
         method: 'POST',
         body: JSON.stringify({
           clienteId,
