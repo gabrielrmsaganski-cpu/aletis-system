@@ -5,6 +5,7 @@ import { InlineButton } from '../components/ui'
 import PatrimonioTab from '../components/patrimonio/PatrimonioTab'
 import AlixContextHint from '../components/alix/AlixContextHint'
 import ContratosOficiaisTab from '../components/contratos/ContratosOficiaisTab'
+import { DSCard, DSStatCard, DSEmpty, DSButton } from '../components/ds'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
 import { MapThumbnail } from '../components/MapThumbnail'
@@ -1783,51 +1784,31 @@ export default function ClienteDetalhes() {
               </div>
             </div>
 
-            {/* Resumo Financeiro */}
-            <div className="card-premium p-5">
-              <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-9 h-9 rounded-lg bg-alerta/10 flex items-center justify-center">
-                  <Landmark className="w-4 h-4 text-alerta" />
-                </div>
-                <h3 className="text-base font-display font-semibold text-aletis-grafite-escuro">
-                  Resumo Financeiro
-                </h3>
-              </div>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between py-3 border-b border-aletis-borda/50">
-                  <div className="flex items-center gap-2">
-                    <TrendingDown className="w-4 h-4 text-alerta" />
-                    <span className="text-sm font-body text-aletis-grafite-medio">
-                      Total Dívida
-                    </span>
-                  </div>
-                  <span className="text-lg font-display font-bold text-alerta">
-                    {formatBRL(cliente.resumoFinanceiro.totalDivida)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-3 border-b border-aletis-borda/50">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-positivo" />
-                    <span className="text-sm font-body text-aletis-grafite-medio">
-                      Total Pago
-                    </span>
-                  </div>
-                  <span className="text-lg font-display font-bold text-positivo">
-                    {formatBRL(cliente.resumoFinanceiro.totalPago)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-3">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-ambar" />
-                    <span className="text-sm font-body text-aletis-grafite-medio">
-                      Pendente
-                    </span>
-                  </div>
-                  <span className="text-lg font-display font-bold text-ambar">
-                    {formatBRL(cliente.resumoFinanceiro.pendente)}
-                  </span>
-                </div>
-              </div>
+            {/* Resumo Financeiro — DS migration: 3 DSStatCards */}
+            <div className="grid grid-cols-1 gap-3">
+              <DSStatCard
+                label="Total Dívida"
+                value={formatBRL(cliente.resumoFinanceiro.totalDivida)}
+                icon={<TrendingDown className="w-4 h-4" />}
+                tone="negative"
+              />
+              <DSStatCard
+                label="Total Pago"
+                value={formatBRL(cliente.resumoFinanceiro.totalPago)}
+                hint={
+                  cliente.resumoFinanceiro.totalDivida > 0
+                    ? `${((cliente.resumoFinanceiro.totalPago / cliente.resumoFinanceiro.totalDivida) * 100).toFixed(1)}% recuperado`
+                    : undefined
+                }
+                icon={<CheckCircle2 className="w-4 h-4" />}
+                tone="positive"
+              />
+              <DSStatCard
+                label="Pendente"
+                value={formatBRL(cliente.resumoFinanceiro.pendente)}
+                icon={<AlertTriangle className="w-4 h-4" />}
+                tone="warning"
+              />
             </div>
           </div>
 
@@ -2054,43 +2035,41 @@ export default function ClienteDetalhes() {
             </div>
           </div>
 
-          {/* Summary Footer */}
-          <div className="card-premium p-4 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-6">
-              <div>
-                <p className="text-[11px] font-body text-aletis-grafite-claro uppercase tracking-wider">
-                  Total Original
-                </p>
-                <p className="text-lg font-display font-bold text-aletis-grafite-escuro">
-                  {formatBRL(cliente.dividas.reduce((s, d) => s + d.valorOriginal, 0))}
-                </p>
+          {/* Summary Footer — DS migration: 4 DSStatCards (com acréscimo %) */}
+          {(() => {
+            const totalOriginal = cliente.dividas.reduce((s, d) => s + d.valorOriginal, 0)
+            const totalAtualizado = cliente.dividas.reduce((s, d) => s + d.valorAtual, 0)
+            const acrescimo = totalAtualizado - totalOriginal
+            const acrescimoPct = totalOriginal > 0 ? (acrescimo / totalOriginal) * 100 : 0
+            return (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <DSStatCard
+                  label="Total Original"
+                  value={formatBRL(totalOriginal)}
+                  hint={`${cliente.dividas.length} contrato${cliente.dividas.length !== 1 ? 's' : ''}`}
+                  tone="neutral"
+                />
+                <DSStatCard
+                  label="Total Atualizado"
+                  value={formatBRL(totalAtualizado)}
+                  tone="negative"
+                  icon={<TrendingDown className="w-4 h-4" />}
+                />
+                <DSStatCard
+                  label="Acréscimo"
+                  value={`+${formatBRL(acrescimo)}`}
+                  hint={`${acrescimoPct.toFixed(1)}% sobre o original`}
+                  tone="warning"
+                />
+                <DSStatCard
+                  label="Renegociadas"
+                  value={cliente.dividas.filter((d) => d.status === 'renegociada' || d.status === 'quitada').length}
+                  hint={`de ${cliente.dividas.length} dívidas`}
+                  tone="info"
+                />
               </div>
-              <div>
-                <p className="text-[11px] font-body text-aletis-grafite-claro uppercase tracking-wider">
-                  Total Atualizado
-                </p>
-                <p className="text-lg font-display font-bold text-alerta">
-                  {formatBRL(cliente.dividas.reduce((s, d) => s + d.valorAtual, 0))}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] font-body text-aletis-grafite-claro uppercase tracking-wider">
-                  Acréscimo
-                </p>
-                <p className="text-lg font-display font-bold text-ambar">
-                  +
-                  {formatBRL(
-                    cliente.dividas.reduce((s, d) => s + d.valorAtual, 0) -
-                      cliente.dividas.reduce((s, d) => s + d.valorOriginal, 0)
-                  )}
-                </p>
-              </div>
-            </div>
-            <div className="text-sm font-body text-aletis-grafite-claro">
-              {cliente.dividas.length} contrato{cliente.dividas.length !== 1 ? 's' : ''} registrado
-              {cliente.dividas.length !== 1 ? 's' : ''}
-            </div>
-          </div>
+            )
+          })()}
 
           {/* Aging Buckets */}
           {cliente.dividas.some((d) => d.vencimento) && (
@@ -2193,21 +2172,21 @@ export default function ClienteDetalhes() {
       )}
 
       {/* ════════════════════════════════════════════════════════
-           TAB: DOCUMENTOS (placeholder)
+           TAB: DOCUMENTOS — empty state padronizado com DSEmpty
            ════════════════════════════════════════════════════════ */}
       {activeTab === 'documentos' && (
-        <div className="card-premium p-12 text-center animate-fade-in">
-          <div className="w-16 h-16 rounded-2xl bg-aletis-verde/10 flex items-center justify-center mx-auto mb-4">
-            <FileCheck className="w-8 h-8 text-aletis-verde" />
-          </div>
-          <h3 className="text-lg font-display font-semibold text-aletis-grafite-escuro mb-2">
-            Documentos do Cliente
-          </h3>
-          <p className="text-sm font-body text-aletis-grafite-claro max-w-md mx-auto">
-            Contratos, extratos, CCIR, ITR e demais documentos do cliente serão gerenciados nesta
-            área.
-          </p>
-        </div>
+        <DSCard className="animate-fade-in">
+          <DSEmpty
+            icon={<FileCheck className="w-6 h-6" />}
+            title="Documentos do Cliente"
+            description="Contratos, extratos, CCIR, ITR e demais documentos do cliente serão gerenciados nesta área. Para gerar contratos oficiais ALETIS, abra a aba Contratos."
+            cta={
+              <DSButton variant="secondary" onClick={() => setActiveTab('contratos-oficiais')}>
+                Ir para Contratos oficiais
+              </DSButton>
+            }
+          />
+        </DSCard>
       )}
 
       {/* ════════════════════════════════════════════════════════
@@ -2221,17 +2200,13 @@ export default function ClienteDetalhes() {
            TAB: FLUXO DE CAIXA (placeholder)
            ════════════════════════════════════════════════════════ */}
       {activeTab === 'fluxo-caixa' && (
-        <div className="card-premium p-12 text-center animate-fade-in">
-          <div className="w-16 h-16 rounded-2xl bg-positivo/10 flex items-center justify-center mx-auto mb-4">
-            <TrendingUp className="w-8 h-8 text-positivo" />
-          </div>
-          <h3 className="text-lg font-display font-semibold text-aletis-grafite-escuro mb-2">
-            Fluxo de Caixa
-          </h3>
-          <p className="text-sm font-body text-aletis-grafite-claro max-w-md mx-auto">
-            Projeção de receitas da safra versus obrigações financeiras. Em desenvolvimento.
-          </p>
-        </div>
+        <DSCard className="animate-fade-in">
+          <DSEmpty
+            icon={<TrendingUp className="w-6 h-6" />}
+            title="Fluxo de Caixa"
+            description="Projeção de receitas da safra versus obrigações financeiras. Em desenvolvimento."
+          />
+        </DSCard>
       )}
 
       {/* ════════════════════════════════════════════════════════

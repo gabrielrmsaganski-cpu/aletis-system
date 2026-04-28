@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react'
+import DeferredRender from '../components/DeferredRender'
 import {
   AreaChart,
   Area,
@@ -948,8 +949,14 @@ export default function Mercado() {
       {activeTab === 'safra' && (
         <>
           <SafraCalendarioSection />
-          <SafraPorEstadoSection />
-          <ExportacaoAgroSection />
+          {/* Deferred: SafraPorEstadoSection tem mapa pesado — só renderiza
+              quando entra na viewport, evitando travar o paint inicial */}
+          <DeferredRender minHeight={400}>
+            <SafraPorEstadoSection />
+          </DeferredRender>
+          <DeferredRender minHeight={300}>
+            <ExportacaoAgroSection />
+          </DeferredRender>
         </>
       )}
 
@@ -964,8 +971,8 @@ export default function Mercado() {
       {activeTab === 'combustiveis' && (
         <>
           <CombustiveisSection />
-          <EtanolParidadeSection />
-          <InsumosSection />
+          <DeferredRender minHeight={300}><EtanolParidadeSection /></DeferredRender>
+          <DeferredRender minHeight={300}><InsumosSection /></DeferredRender>
         </>
       )}
 
@@ -974,10 +981,14 @@ export default function Mercado() {
            ═══════════════════════════════════════════════════════ */}
       {activeTab === 'indicadores' && (
         <>
-          <MacroHistoricoSection apiIndicadores={apiIndicadores} />
-          <ExpectativasFocusSection />
-          <ICBrSection />
-          <SicorVolumeSection />
+          {/* MacroHistoricoSection é o mais pesado da página — line/area charts
+              de 6+ séries macro, fetch de séries longas. Defer para evitar bloqueio. */}
+          <DeferredRender minHeight={500}>
+            <MacroHistoricoSection apiIndicadores={apiIndicadores} />
+          </DeferredRender>
+          <DeferredRender minHeight={300}><ExpectativasFocusSection /></DeferredRender>
+          <DeferredRender minHeight={300}><ICBrSection /></DeferredRender>
+          <DeferredRender minHeight={300}><SicorVolumeSection /></DeferredRender>
         </>
       )}
 
@@ -986,8 +997,11 @@ export default function Mercado() {
            ═══════════════════════════════════════════════════════ */}
       {activeTab === 'riscos' && (
         <>
-          <IncendiosSection />
-          <RiscosComplementaresSection />
+          {/* IncendiosSection inicializa mapa Leaflet — caro. Defer. */}
+          <DeferredRender minHeight={500}>
+            <IncendiosSection />
+          </DeferredRender>
+          <DeferredRender minHeight={300}><RiscosComplementaresSection /></DeferredRender>
         </>
       )}
 
@@ -997,7 +1011,9 @@ export default function Mercado() {
       {activeTab === 'cambio' && (
         <>
           <CambioSection />
-          <CambioHistoricoSection />
+          <DeferredRender minHeight={400}>
+            <CambioHistoricoSection />
+          </DeferredRender>
         </>
       )}
 

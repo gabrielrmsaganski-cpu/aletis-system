@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import VirtualizedList from '../components/VirtualizedList'
 import {
   Target,
   Flame,
@@ -1028,18 +1029,27 @@ export default function Prospeccao() {
           </div>
         ) : (
           <div className="divide-y divide-aletis-borda dark:divide-white/5">
-            {leads.map((lead) => (
-              <LeadRow
-                key={lead.cpfCnpjClean}
-                lead={lead}
-                onOpen={() => setSelectedLead(lead)}
-                onEnrich={() => handleEnrich(lead.cpfCnpjClean)}
-                onExcluir={(motivo) => handleExcluir(lead.cpfCnpjClean, motivo)}
-                onRestaurar={() => handleRestaurar(lead.cpfCnpjClean)}
-                enriching={enriching === lead.cpfCnpjClean}
-                deleting={deleting === lead.cpfCnpjClean}
-              />
-            ))}
+            {/* Virtualização: lista renderiza inline até 50 items, depois usa
+                react-window com altura fixa para suportar centenas de leads
+                sem travar o browser. */}
+            <VirtualizedList
+              items={leads}
+              itemKey={(l) => l.cpfCnpjClean}
+              itemSize={120}
+              threshold={50}
+              height={Math.min(800, leads.length * 120)}
+              renderItem={(lead) => (
+                <LeadRow
+                  lead={lead}
+                  onOpen={() => setSelectedLead(lead)}
+                  onEnrich={() => handleEnrich(lead.cpfCnpjClean)}
+                  onExcluir={(motivo) => handleExcluir(lead.cpfCnpjClean, motivo)}
+                  onRestaurar={() => handleRestaurar(lead.cpfCnpjClean)}
+                  enriching={enriching === lead.cpfCnpjClean}
+                  deleting={deleting === lead.cpfCnpjClean}
+                />
+              )}
+            />
           </div>
         )}
 
