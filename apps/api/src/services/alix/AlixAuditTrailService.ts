@@ -95,6 +95,12 @@ const TOOL_PROVENANCE: Record<string, { source: string; confidence: number }> = 
   gerar_contrato_oficial: { source: 'docxtemplater + manifest + cliente do CRM', confidence: 0.97 },
   // Aprendizado
   learnings_recentes: { source: 'FeedbackService (alix-feedback/*.jsonl)', confidence: 0.95 },
+  // Deal Room Multi-Credor
+  listar_negociacoes_cliente: { source: 'DealRoomService (PG)', confidence: 0.99 },
+  resumo_negociacoes_cliente: { source: 'DealRoomService (PG agregado)', confidence: 0.99 },
+  abrir_negociacao: { source: 'DealRoomService (PG insert)', confidence: 0.99 },
+  atualizar_negociacao: { source: 'DealRoomService (PG update + histórico append)', confidence: 0.99 },
+  adicionar_nota_negociacao: { source: 'DealRoomService (histórico append)', confidence: 0.99 },
 }
 
 function provenanceFor(toolName: string): { source: string; confidence: number } {

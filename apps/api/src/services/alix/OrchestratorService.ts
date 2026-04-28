@@ -23,6 +23,7 @@ import { buildAlixPowerTools } from './tools/alix-power.js';
 import { buildProactiveInsightsTools } from './tools/proactive-insights.js';
 import { buildAlertRulesTools } from './tools/alert-rules.js';
 import { buildContratosOficiaisTools } from './tools/contratos-oficiais.js';
+import { buildDealRoomTools } from './tools/deal-room.js';
 import { buildNewsTools } from './tools/news.js';
 import { buildCalendarioSafraTools } from './tools/calendario-safra.js';
 import { buildOnboardingTools } from './tools/onboarding.js';
@@ -302,8 +303,15 @@ Data de hoje: ${hoje}`;
     const ar = buildAlertRulesTools();
     for (const t of ar.tools) { tools.push(t); registry[t.name] = ar.registry[t.name]; }
 
+    // Wave OS — Deal Room Multi-Credor (5 tools: listar, resumo, abrir,
+    // atualizar, adicionar nota). Permite ALIX gerenciar negociações
+    // por banco/credor via chat (com HITL via confirmation).
+    const dr = buildDealRoomTools();
+    for (const t of dr.tools) { tools.push(t); registry[t.name] = dr.registry[t.name]; }
+
     // Wave Documentos — 10 contratos/anexos oficiais ALETIS preservando
-    // formatação. Tools: listar/preview/gerar contrato oficial.
+    // formatação. Tools: listar/preview/gerar contrato oficial (com
+    // fuzzy resolver: aceita "NDA", "consultoria", "procuração", etc.).
     const cof = buildContratosOficiaisTools();
     for (const t of cof.tools) { tools.push(t); registry[t.name] = cof.registry[t.name]; }
 

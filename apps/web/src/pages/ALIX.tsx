@@ -37,6 +37,7 @@ import {
   Activity,
 } from 'lucide-react'
 import { apiFetch } from '../hooks/useApi'
+import AlixAuditPanel from '../components/alix/AlixAuditPanel'
 import { AlixConfirmationsPanel } from '../components/alix/AlixConfirmationBatch'
 import { SubagentIndicator, detectLastSubagent } from '../components/alix/SubagentIndicator'
 import AlixTelemetryPanel from '../components/alix/AlixTelemetryPanel'
@@ -54,6 +55,8 @@ interface ChatMessage {
   toolsUsed?: string[]
   intent?: string
   metadata?: Record<string, unknown>
+  /** ALIX Auditável — trail completo das tools usadas (source/confidence/latency) */
+  audit?: import('../components/alix/AlixAuditPanel').AuditTrail | null
 }
 
 interface ChatSession {
@@ -1040,6 +1043,7 @@ export default function ALIX() {
                     toolsUsed: Array.isArray((resp.reply as any).toolsUsed) ? (resp.reply as any).toolsUsed : undefined,
                     metadata: (resp.reply as any).metadata,
                     sources: Array.isArray((resp.reply as any).sources) ? (resp.reply as any).sources : undefined,
+                    audit: (resp as any).audit ?? null,
                   }
                 : {
                     id: `assistant-${Date.now()}`,
@@ -1535,6 +1539,8 @@ export default function ALIX() {
                         {renderContent(msg.content)}
                       </MessageErrorBoundary>
                     </div>
+                    {/* ALIX Auditável — trail expansível com source/confidence/latência */}
+                    {!isUser && msg.audit && <AlixAuditPanel audit={msg.audit} />}
                     {docs.length > 0 && (
                       <div className="mt-3 pt-2 border-t border-aletis-borda/40 flex flex-wrap gap-2">
                         {docs.map((d, i) => {

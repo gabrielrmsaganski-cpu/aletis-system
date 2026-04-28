@@ -33,6 +33,7 @@ import {
   Settings,
   Sparkles,
   Activity,
+  Building2,
 } from 'lucide-react'
 
 export type ToolCategory =
@@ -205,6 +206,18 @@ export const TOOL_CATALOG: ToolEntry[] = [
     route: '/contratos-oficiais',
     category: 'clientes',
     keywords: ['contratos', 'oficiais', 'documentos', 'anexo', 'nda', 'procuracao', 'termo', 'aceite', 'consultoria', 'diagnostico', 'assessoria', 'erp', 'docx', 'modelo', 'template'],
+    showInSidebar: true,
+  },
+  {
+    id: 'negociacoes',
+    title: 'Negociações',
+    tagline: 'Deal Room global multi-credor',
+    description:
+      'Visão consolidada de todas as negociações por banco/credor em todos os clientes. Status, contrapropostas, deadlines, valor em jogo, economia projetada — em uma única tela com filtros por status e busca por credor/cliente.',
+    icon: Building2,
+    route: '/negociacoes',
+    category: 'clientes',
+    keywords: ['negociacoes', 'deal', 'room', 'credor', 'banco', 'contraproposta', 'reestruturacao', 'divida', 'kanban'],
     showInSidebar: true,
   },
 
