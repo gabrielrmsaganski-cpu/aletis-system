@@ -18,6 +18,7 @@ import {
   LogOut,
   Settings,
 } from 'lucide-react'
+import { useDSTheme } from '../../hooks/useDSTheme'
 
 interface TickerItem {
   label: string
@@ -121,7 +122,8 @@ interface HeaderProps {
 }
 
 export default function Header({ onMobileMenuToggle, onOpenPalette }: HeaderProps) {
-  const [darkMode, setDarkMode] = useState(false)
+  const { mode, toggle: toggleDS } = useDSTheme()
+  const darkMode = mode === 'operational'
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const tickerData = useTickerData()
@@ -147,11 +149,10 @@ export default function Header({ onMobileMenuToggle, onOpenPalette }: HeaderProp
   }
 
   const toggleDarkMode = () => {
-    setDarkMode((prev) => {
-      const next = !prev
-      document.documentElement.classList.toggle('dark', next)
-      return next
-    })
+    // Delegado ao useDSTheme (persiste em localStorage + aplica .dark
+    // no <html>). Modos: "operational" (escuro/denso) | "documental"
+    // (claro/leitura).
+    toggleDS()
   }
 
   useEffect(() => {
@@ -244,8 +245,8 @@ export default function Header({ onMobileMenuToggle, onOpenPalette }: HeaderProp
           <button
             onClick={toggleDarkMode}
             className="p-2 rounded-lg text-aletis-verde-medio dark:text-aletis-sage hover:bg-aletis-cream dark:hover:bg-aletis-cream/10 transition-colors"
-            aria-label={darkMode ? 'Modo claro' : 'Modo escuro'}
-            title={darkMode ? 'Modo claro' : 'Modo escuro'}
+            aria-label={darkMode ? 'Modo documental (claro)' : 'Modo operacional (escuro)'}
+            title={darkMode ? 'Trocar para modo documental — leitura/contratos' : 'Trocar para modo operacional — comando/análise'}
           >
             {darkMode ? <Sun size={20} /> : <Moon size={20} />}
           </button>

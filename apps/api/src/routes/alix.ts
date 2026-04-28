@@ -159,6 +159,16 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
               toolsUsed: result.session.messages[result.session.messages.length - 1]?.toolsUsed,
             }
           : result.reply
+      // ALIX Auditável — anexa trail da resposta (tools usadas + source + confidence)
+      let audit: any = null
+      try {
+        const { getAlixAuditTrailService } = await import('../services/alix/AlixAuditTrailService.js')
+        const lastMsg = result.session.messages[result.session.messages.length - 1]
+        if (lastMsg?.id) {
+          audit = getAlixAuditTrailService().getTrail(`${result.session.id}:${lastMsg.id}`)
+        }
+      } catch { /* audit best-effort */ }
+
       return reply.status(200).send({
         success: true,
         data: {
@@ -172,6 +182,7 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
             messageCount: result.session.messages.length,
           },
           mode: multi ? 'multiagent' : 'legacy',
+          audit,
         },
       })
     } catch (err) {
@@ -630,6 +641,18 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
       return reply.status(500).send({ success: false, error: (err as Error).message })
     }
   })
+
+  // ── ALIX Auditável — leitura standalone do trail ────────
+  // GET /api/alix/audit/:sessionId/:messageId → trail completo
+  fastify.get<{ Params: { sessionId: string; messageId: string } }>(
+    '/api/alix/audit/:sessionId/:messageId',
+    async (req, reply) => {
+      const { getAlixAuditTrailService } = await import('../services/alix/AlixAuditTrailService.js')
+      const trail = getAlixAuditTrailService().getTrail(`${req.params.sessionId}:${req.params.messageId}`)
+      if (!trail) return reply.status(404).send({ success: false, error: 'trail expirado ou inexistente' })
+      return reply.send({ success: true, data: trail })
+    },
+  )
 
   // ── Wave B5 — SSE stream de insights ──────────────────
   // GET /api/alix/insights/stream — broadcast em tempo real a cada

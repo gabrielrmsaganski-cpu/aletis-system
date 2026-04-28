@@ -1,10 +1,12 @@
 // ============================================================
 // ALETIS — Export utilities for reports (PDF + Excel)
 // ============================================================
-
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
+// jsPDF / jspdf-autotable / xlsx ENTRAM POR DYNAMIC IMPORT
+// dentro de cada função → não bloam o bundle inicial. O Vite
+// já agrupa esses libs em 'export-vendor' (manualChunks), e
+// agora esse chunk só é baixado quando o user clica em
+// "Exportar PDF/Excel".
+// ============================================================
 
 // ── Brand colors ────────────────────────────────────────────
 const VERDE = '#0F4C35'
@@ -39,7 +41,12 @@ export const nowStr = (): string =>
   new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 
 // ── PDF Export ──────────────────────────────────────────────
-export function exportPDF(report: ReportData): void {
+export async function exportPDF(report: ReportData): Promise<void> {
+  const [{ jsPDF }, autoTableMod] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ])
+  const autoTable = (autoTableMod as any).default
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pageWidth = doc.internal.pageSize.getWidth()
   let y = 18
@@ -153,7 +160,8 @@ export function exportPDF(report: ReportData): void {
 }
 
 // ── Excel Export ────────────────────────────────────────────
-export function exportExcel(report: ReportData): void {
+export async function exportExcel(report: ReportData): Promise<void> {
+  const XLSX = await import('xlsx')
   const wb = XLSX.utils.book_new()
 
   const coverData: (string | number)[][] = [

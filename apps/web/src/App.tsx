@@ -23,6 +23,8 @@ const ClienteDossie = lazy(() => import('./pages/ClienteDossie'))
 const Propostas = lazy(() => import('./pages/Propostas'))
 const Contratos = lazy(() => import('./pages/Contratos'))
 const ContratosOficiais = lazy(() => import('./pages/ContratosOficiais'))
+const CommandCenter = lazy(() => import('./pages/CommandCenter'))
+const DealRoom = lazy(() => import('./pages/DealRoom'))
 const Mercado = lazy(() => import('./pages/Mercado'))
 const Credito = lazy(() => import('./pages/Credito'))
 const WhatsApp = lazy(() => import('./pages/WhatsApp'))
@@ -71,6 +73,8 @@ export default function App() {
                 <Route path="/crm" element={<CRM />} />
                 <Route path="/clientes/:id" element={<ClienteDetalhes />} />
                 <Route path="/clientes/:id/dossie" element={<ClienteDossie />} />
+                <Route path="/clientes/:id/command-center" element={<CommandCenter />} />
+                <Route path="/clientes/:id/deal-room" element={<DealRoom />} />
                 <Route path="/propostas" element={<Propostas />} />
                 <Route path="/contratos" element={<Contratos />} />
                 <Route path="/contratos-oficiais" element={<ContratosOficiais />} />

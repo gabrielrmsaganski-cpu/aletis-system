@@ -230,7 +230,7 @@ export interface ClaudeRunOpts {
   toolRegistry?: ClaudeToolRegistry;
   maxIterations?: number;
   temperature?: number;
-  onToolCall?: (name: string, input: Record<string, unknown>, result: unknown) => void;
+  onToolCall?: (name: string, input: Record<string, unknown>, result: unknown, latencyMs: number) => void;
   /** Extended thinking (Claude 4). Só use com Opus 4.7. */
   thinking?: { type: 'enabled'; budget_tokens: number };
 }
@@ -401,15 +401,19 @@ export async function runClaude(
         continue;
       }
       try {
+        const t0 = Date.now();
         const result = await Promise.resolve(entry.handler(block.input || {}));
+        const latencyMs = Date.now() - t0;
         const content = typeof result === 'string' ? result : JSON.stringify(result);
-        if (onToolCall) onToolCall(toolName, block.input || {}, result);
+        if (onToolCall) onToolCall(toolName, block.input || {}, result, latencyMs);
         toolResults.push({
           type: 'tool_result',
           tool_use_id: block.id,
           content: content.length > 16000 ? content.slice(0, 16000) + '\n...[truncado]' : content,
         });
       } catch (err) {
+        const errResult = { ok: false, error: (err as Error).message };
+        if (onToolCall) onToolCall(toolName, block.input || {}, errResult, 0);
         toolResults.push({
           type: 'tool_result',
           tool_use_id: block.id,

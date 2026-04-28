@@ -604,3 +604,41 @@ export type FinanceiroReceita = typeof financeiroReceita.$inferSelect
 export type FinanceiroDespesa = typeof financeiroDespesa.$inferSelect
 export type FinanceiroImposto = typeof financeiroImposto.$inferSelect
 export type FinanceiroLancamento = typeof financeiroLancamento.$inferSelect
+
+/* ─────────────────────────────────────────────────────────────
+ * 23. negociacao_credor — Deal Room Multi-Credor
+ *      Uma linha por negociação ativa (cliente × credor).
+ *      Histórico/contrapropostas/docs ficam em jsonb.
+ * ──────────────────────────────────────────────────────────── */
+export const negociacaoCredor = pgTable(
+  'negociacao_credor',
+  {
+    id: text('id').primaryKey(),
+    clienteId: text('cliente_id').notNull(),
+    credor: text('credor').notNull(),
+    status: text('status').notNull().default('negociando'), // CHECK aplicado em 0009
+    responsavel: text('responsavel'),
+    valorAtual: numeric('valor_atual', { precision: 18, scale: 2 }),
+    valorProposto: numeric('valor_proposto', { precision: 18, scale: 2 }),
+    taxaAtual: numeric('taxa_atual', { precision: 8, scale: 4 }),
+    taxaProposta: numeric('taxa_proposta', { precision: 8, scale: 4 }),
+    prazoMeses: integer('prazo_meses'),
+    carenciaMeses: integer('carencia_meses'),
+    garantias: jsonb('garantias'),
+    docsPendentes: jsonb('docs_pendentes'),
+    historico: jsonb('historico'),
+    proximaData: timestamp('proxima_data', { withTimezone: true }),
+    ultimaInteracao: timestamp('ultima_interacao', { withTimezone: true }),
+    observacoes: text('observacoes'),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    clienteIdx: index('negociacao_credor_cliente_idx').on(t.clienteId),
+    statusIdx: index('negociacao_credor_status_idx').on(t.status),
+    proximaDataIdx: index('negociacao_credor_proxima_data_idx').on(t.proximaData),
+  }),
+)
+
+export type NegociacaoCredor = typeof negociacaoCredor.$inferSelect
+export type NegociacaoCredorInsert = typeof negociacaoCredor.$inferInsert

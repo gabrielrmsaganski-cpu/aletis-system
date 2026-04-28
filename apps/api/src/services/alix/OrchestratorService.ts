@@ -41,6 +41,7 @@ import { getProactiveService } from './ProactiveService.js';
 import { getProspeccaoService } from '../prospeccao/ProspeccaoService.js';
 import { MarketBriefService } from '../MarketBriefService.js';
 import { getAlixMemoryService } from './memory/AlixMemoryService.js';
+import { getAlixAuditTrailService } from './AlixAuditTrailService.js';
 import { getDocumentIntakeService } from './intake/DocumentIntakeService.js';
 
 export interface OrchestratorOpts {
@@ -570,6 +571,12 @@ Data de hoje: ${hoje}`;
     }
     session.messages.push(userMsg);
 
+    // ALIX Auditável — abre trail antes de executar (id da resposta pré-gerado)
+    const assistantMessageId = randomUUID();
+    const auditService = getAlixAuditTrailService(this.storageDir);
+    const trailKey = `${session.id}:${assistantMessageId}`;
+    auditService.startTrail(trailKey, session.id);
+
     const { tools, registry } = this.buildTools(session.id, session.messages);
     let system = this.buildSystemPrompt();
 
@@ -680,9 +687,12 @@ Data de hoje: ${hoje}`;
       system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] as any,
       tools,
       toolRegistry: safeRegistry,
-      onToolCall: (n) => {
+      onToolCall: (n, params, result, latencyMs) => {
         toolsUsed.push(n);
         try { opts?.onToolCall?.(n); } catch { /* stream pode ter fechado */ }
+        try {
+          auditService.recordToolCall(trailKey, n, params, result, latencyMs);
+        } catch { /* audit é best-effort */ }
       },
     });
     const latencyMs = Date.now() - startedAt;
@@ -705,7 +715,7 @@ Data de hoje: ${hoje}`;
     appendTelemetry(this.storageDir, rec);
 
     const assistant: ChatMessage = {
-      id: randomUUID(),
+      id: assistantMessageId,
       role: 'assistant',
       content: result.text,
       timestamp: Date.now(),
@@ -714,6 +724,9 @@ Data de hoje: ${hoje}`;
     session.messages.push(assistant);
     session.updatedAt = Date.now();
     await this.saveSession(session);
+
+    // Fecha o trail (gera totalLatency + persiste em jsonl)
+    auditService.finishTrail(trailKey);
 
     return { reply: result.text, session };
   }

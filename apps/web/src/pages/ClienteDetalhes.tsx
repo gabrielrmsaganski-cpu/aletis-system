@@ -1219,6 +1219,24 @@ export default function ClienteDetalhes() {
         </Link>
       </div>
 
+      {/* Atalho cockpit — Command Center + Deal Room */}
+      {id && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          <Link
+            to={`/clientes/${id}/command-center`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-aletis-verde text-white text-xs font-body font-semibold hover:bg-aletis-verde-escuro transition-colors"
+          >
+            <Sparkles className="w-3.5 h-3.5" /> Command Center
+          </Link>
+          <Link
+            to={`/clientes/${id}/deal-room`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-aletis-borda text-aletis-grafite-escuro text-xs font-body font-semibold hover:bg-aletis-bege/40 transition-colors"
+          >
+            <Building2 className="w-3.5 h-3.5" /> Deal Room
+          </Link>
+        </div>
+      )}
+
       {/* Wave B4 — banner contextual ALIX (insights pendentes do cliente) */}
       {id && <AlixContextHint clienteId={id} tela="cliente-detalhes" />}
 
