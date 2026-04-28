@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import DeferredRender from '../components/DeferredRender'
+import { apiFetch, apiFetchFull } from '../hooks/useApi'
 import {
   AreaChart,
   Area,
@@ -526,16 +527,45 @@ export default function Mercado() {
 
   const activeComm = commodities.find((c) => c.id === selectedCommodity) || commodities[0]
 
-  // Generate 365 days of data for the selected commodity
+  // ── Histórico real de preços (CEPEA/CONAB via /mercado/commodities/X/historico) ──
+  // Fallback para mock random-walk se a API falhar (offline / cache stale).
+  const [priceHistoryReal, setPriceHistoryReal] = useState<{ date: string; price: number }[] | null>(null)
+  const [priceHistorySource, setPriceHistorySource] = useState<'api' | 'cache' | 'fallback' | 'mock' | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setPriceHistoryReal(null)
+    setPriceHistorySource(null)
+    apiFetch<{
+      historico?: Array<{ data: string; valor: number }>
+      fonteOrigem?: 'api' | 'cache' | 'fallback'
+    }>(`/mercado/commodities/${encodeURIComponent(activeComm.id)}/historico?dias=365`)
+      .then((r) => {
+        if (cancelled) return
+        const arr = (r?.historico ?? []).filter((p) => Number.isFinite(p.valor))
+        if (arr.length === 0) {
+          setPriceHistorySource('mock')
+          return
+        }
+        const fmt = arr.map((p) => ({
+          date: new Date(p.data).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+          price: Number(p.valor.toFixed(2)),
+        }))
+        setPriceHistoryReal(fmt)
+        setPriceHistorySource(r?.fonteOrigem ?? 'api')
+      })
+      .catch(() => {
+        if (!cancelled) setPriceHistorySource('mock')
+      })
+    return () => { cancelled = true }
+  }, [activeComm.id])
+
+  // Histórico final: usa real quando disponível; mock como fallback transparente
   const priceHistory = useMemo(
     () =>
-      generatePriceHistory(
-        activeComm.basePrice,
-        365,
-        activeComm.volatility,
-        activeComm.trend
-      ),
-    [activeComm.id]
+      priceHistoryReal ??
+      generatePriceHistory(activeComm.basePrice, 365, activeComm.volatility, activeComm.trend),
+    [priceHistoryReal, activeComm.id, activeComm.basePrice, activeComm.volatility, activeComm.trend],
   )
 
   return (
@@ -776,6 +806,29 @@ export default function Mercado() {
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-grafite-claro pointer-events-none" />
             </div>
           </div>
+
+          {/* Fonte do histórico — transparência sobre origem dos dados */}
+          {priceHistorySource && (
+            <div className="flex items-center gap-2 mb-2 text-[10px] font-body uppercase tracking-wider">
+              <span className="text-aletis-grafite-claro">Fonte:</span>
+              <span
+                className={`px-2 py-0.5 rounded-full font-semibold ${
+                  priceHistorySource === 'api'
+                    ? 'bg-positivo/15 text-positivo'
+                    : priceHistorySource === 'cache'
+                    ? 'bg-aletis-verde/10 text-aletis-verde'
+                    : priceHistorySource === 'fallback'
+                    ? 'bg-ambar/15 text-ambar-dark'
+                    : 'bg-aletis-borda/60 text-aletis-grafite-medio'
+                }`}
+              >
+                {priceHistorySource === 'api' && 'CEPEA/CONAB ao vivo'}
+                {priceHistorySource === 'cache' && 'CEPEA/CONAB cacheado'}
+                {priceHistorySource === 'fallback' && 'Snapshot fallback'}
+                {priceHistorySource === 'mock' && 'Simulação (API offline)'}
+              </span>
+            </div>
+          )}
 
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
@@ -1644,9 +1697,8 @@ function CambioSection() {
     const fetchCambio = async () => {
       setLoading(true)
       try {
-        const resp = await fetch('/api/mercado/cambio')
-        if (!resp.ok) throw new Error(`API câmbio indisponível (${resp.status})`)
-        const payload = await resp.json()
+        // apiFetchFull preserva envelope completo (precisamos do meta.fonteOrigem)
+        const payload = await apiFetchFull<{ data?: any[]; meta?: { fonteOrigem?: string } }>('/mercado/cambio')
         const arr = Array.isArray(payload?.data) ? payload.data : []
         const items: CambioItem[] = arr.map((d: any) => {
           const moeda: string = String(d.moeda || '')

@@ -7,11 +7,27 @@
  * e Auditoria/Compliance (LGPD). Cada relatorio renderiza graficos
  * (Recharts), KPIs e tabelas, com exportacao em PDF e Excel.
  */
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, createContext, useContext } from 'react'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
 import { InlineButton } from '../components/ui'
 import { exportPDF, exportExcel, nowStr, type ReportData } from '../utils/exportReports'
+import { useRelatoriosData } from '../hooks/useRelatoriosData'
+
+// Context que injeta dados REAIS no JSX dos sub-Content components.
+// Quando vazio (loading/falha), as constantes mock-fallback abaixo são usadas.
+interface RelatoriosCtxValue {
+  portfolioKpis?: typeof PORTFOLIO_KPIs_FALLBACK
+  clientesPorEstado?: typeof CLIENTES_POR_ESTADO_FALLBACK
+  clientesPorEstagio?: typeof CLIENTES_POR_ESTAGIO_FALLBACK
+  topClientes?: typeof TOP_CLIENTES_FALLBACK
+  rentabilidadeMensal?: typeof RENTABILIDADE_MENSAL_FALLBACK
+  fluxoMensal?: typeof FLUXO_MENSAL_FALLBACK
+  propostasKpis?: typeof PROPOSTAS_KPIS_FALLBACK
+  propostasStatus?: typeof PROPOSTAS_STATUS_FALLBACK
+  source?: 'api' | 'partial' | 'fallback' | 'loading'
+}
+const RelatoriosCtx = createContext<RelatoriosCtxValue>({})
 import {
   BarChart,
   Bar,
@@ -133,14 +149,14 @@ const REPORTS: ReportDef[] = [
 // Portfolio Report Data
 // ────────────────────────────────────────────────────────────
 
-const PORTFOLIO_KPIs = [
+const PORTFOLIO_KPIs_FALLBACK = [
   { label: 'Total Clientes', valor: 47, icon: Users, cor: '#0F4C35', corBg: 'bg-aletis-verde/10' },
   { label: 'Ativos', valor: 23, icon: CheckCircle2, cor: '#27AE60', corBg: 'bg-positivo/10' },
   { label: 'Inadimplentes', valor: 5, icon: AlertTriangle, cor: '#C0392B', corBg: 'bg-alerta/10' },
   { label: 'Em Acordo', valor: 12, icon: Briefcase, cor: '#C9A84C', corBg: 'bg-aletis-dourado/10' },
 ]
 
-const CLIENTES_POR_ESTADO = [
+const CLIENTES_POR_ESTADO_FALLBACK = [
   { estado: 'PR', clientes: 15 },
   { estado: 'MS', clientes: 10 },
   { estado: 'MT', clientes: 8 },
@@ -149,7 +165,7 @@ const CLIENTES_POR_ESTADO = [
   { estado: 'MG', clientes: 3 },
 ]
 
-const CLIENTES_POR_ESTAGIO = [
+const CLIENTES_POR_ESTAGIO_FALLBACK = [
   { name: 'Lead', value: 7, color: '#6B7280' },
   { name: 'Qualificação', value: 5, color: '#3B82F6' },
   { name: 'Análise', value: 8, color: '#8B5CF6' },
@@ -159,7 +175,7 @@ const CLIENTES_POR_ESTAGIO = [
   { name: 'Concluído', value: 5, color: '#0F4C35' },
 ]
 
-const TOP_CLIENTES = [
+const TOP_CLIENTES_FALLBACK = [
   { nome: 'Ailton Caeiro da Silva', cidade: 'Toledo/PR', divida: 2049802.53, estagio: 'Proposta', credor: 'Sicoob' },
   { nome: 'Paulo Luciano Machado', cidade: 'Dourados/MS', divida: 1876543.21, estagio: 'Negociação', credor: 'Banco do Brasil' },
   { nome: 'Fazenda Santa Rita Ltda', cidade: 'Sorriso/MT', divida: 1654321.00, estagio: 'Análise', credor: 'Cresol' },
@@ -176,7 +192,7 @@ const TOP_CLIENTES = [
 // Rentabilidade Data
 // ────────────────────────────────────────────────────────────
 
-const RENTABILIDADE_MENSAL = [
+const RENTABILIDADE_MENSAL_FALLBACK = [
   { mes: 'Nov/25', receita: 85000, custo: 32000, lucro: 53000 },
   { mes: 'Dez/25', receita: 92000, custo: 35000, lucro: 57000 },
   { mes: 'Jan/26', receita: 78000, custo: 30000, lucro: 48000 },
@@ -189,14 +205,14 @@ const RENTABILIDADE_MENSAL = [
 // Propostas Data
 // ────────────────────────────────────────────────────────────
 
-const PROPOSTAS_KPIS = [
+const PROPOSTAS_KPIS_FALLBACK = [
   { label: 'Propostas Enviadas', valor: '34', sub: 'últimos 90 dias' },
   { label: 'Taxa de Aceite', valor: '62%', sub: '21 de 34' },
   { label: 'Tempo Médio Resposta', valor: '12 dias', sub: 'mediana: 9 dias' },
   { label: 'Volume Total', valor: fmtBRLCompact(14_870_000), sub: 'em negociação' },
 ]
 
-const PROPOSTAS_STATUS = [
+const PROPOSTAS_STATUS_FALLBACK = [
   { name: 'Aceitas', value: 21, color: '#27AE60' },
   { name: 'Pendentes', value: 8, color: '#C9A84C' },
   { name: 'Rejeitadas', value: 5, color: '#C0392B' },
@@ -206,7 +222,7 @@ const PROPOSTAS_STATUS = [
 // Fluxo Caixa Data
 // ────────────────────────────────────────────────────────────
 
-const FLUXO_MENSAL = [
+const FLUXO_MENSAL_FALLBACK = [
   { mes: 'Jan/26', entrada: 245000, saida: 180000, saldo: 65000 },
   { mes: 'Fev/26', entrada: 312000, saida: 195000, saldo: 117000 },
   { mes: 'Mar/26', entrada: 287000, saida: 210000, saldo: 77000 },
@@ -264,6 +280,12 @@ function PieTooltip({ active, payload }: TooltipProps<ValueType, NameType>) {
 // ────────────────────────────────────────────────────────────
 
 function PortfolioContent({ onExport }: { onExport: (fmt: string) => void }) {
+  // Real data via Context, fallback para mock se API falhou
+  const ctx = useContext(RelatoriosCtx)
+  const PORTFOLIO_KPIs = ctx.portfolioKpis ?? PORTFOLIO_KPIs_FALLBACK
+  const CLIENTES_POR_ESTADO = ctx.clientesPorEstado ?? CLIENTES_POR_ESTADO_FALLBACK
+  const CLIENTES_POR_ESTAGIO = ctx.clientesPorEstagio ?? CLIENTES_POR_ESTAGIO_FALLBACK
+  const TOP_CLIENTES = ctx.topClientes ?? TOP_CLIENTES_FALLBACK
   return (
     <div className="space-y-6 animate-fade-in">
       {/* KPIs */}
@@ -411,9 +433,11 @@ function PortfolioContent({ onExport }: { onExport: (fmt: string) => void }) {
 }
 
 function RentabilidadeContent({ onExport }: { onExport: (fmt: string) => void }) {
+  const ctx = useContext(RelatoriosCtx)
+  const RENTABILIDADE_MENSAL = ctx.rentabilidadeMensal ?? RENTABILIDADE_MENSAL_FALLBACK
   const totalReceita = RENTABILIDADE_MENSAL.reduce((s, r) => s + r.receita, 0)
   const totalLucro = RENTABILIDADE_MENSAL.reduce((s, r) => s + r.lucro, 0)
-  const margemMedia = (totalLucro / totalReceita * 100)
+  const margemMedia = totalReceita > 0 ? (totalLucro / totalReceita * 100) : 0
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -460,6 +484,9 @@ function RentabilidadeContent({ onExport }: { onExport: (fmt: string) => void })
 }
 
 function PropostasContent({ onExport }: { onExport: (fmt: string) => void }) {
+  const ctx = useContext(RelatoriosCtx)
+  const PROPOSTAS_KPIS = ctx.propostasKpis ?? PROPOSTAS_KPIS_FALLBACK
+  const PROPOSTAS_STATUS = ctx.propostasStatus ?? PROPOSTAS_STATUS_FALLBACK
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -588,6 +615,8 @@ function MercadoContent({ onExport }: { onExport: (fmt: string) => void }) {
 }
 
 function FluxoCaixaContent({ onExport }: { onExport: (fmt: string) => void }) {
+  const ctx = useContext(RelatoriosCtx)
+  const FLUXO_MENSAL = ctx.fluxoMensal ?? FLUXO_MENSAL_FALLBACK
   const totalEntrada = FLUXO_MENSAL.reduce((s, r) => s + r.entrada, 0)
   const totalSaida = FLUXO_MENSAL.reduce((s, r) => s + r.saida, 0)
 
@@ -741,6 +770,43 @@ export default function Relatorios() {
   const [selectedReport, setSelectedReport] = useState<ReportId | null>(null)
   const { toasts, show: showToast, dismiss: dismissToast } = useToast()
 
+  // Dados REAIS via APIs agregadas — distribuídos via Context para os
+  // sub-Content components. Quando vazio (loading/falha), os Content's
+  // caem nas constantes mock no escopo do módulo.
+  const real = useRelatoriosData()
+  const ctxValue: RelatoriosCtxValue = useMemo(
+    () => ({
+      portfolioKpis:
+        real.portfolioKpis.length > 0
+          ? (real.portfolioKpis.map((k, i) => ({
+              label: k.label,
+              valor: k.valor,
+              icon: PORTFOLIO_KPIs_FALLBACK[i]?.icon ?? Users,
+              cor: PORTFOLIO_KPIs_FALLBACK[i]?.cor ?? '#0F4C35',
+              corBg: PORTFOLIO_KPIs_FALLBACK[i]?.corBg ?? 'bg-aletis-verde/10',
+            })) as typeof PORTFOLIO_KPIs_FALLBACK)
+          : undefined,
+      clientesPorEstado: real.clientesPorEstado.length > 0 ? real.clientesPorEstado : undefined,
+      clientesPorEstagio: real.clientesPorEstagio.length > 0 ? real.clientesPorEstagio : undefined,
+      topClientes: real.topClientes.length > 0 ? real.topClientes : undefined,
+      rentabilidadeMensal: real.rentabilidadeMensal.length > 0 ? real.rentabilidadeMensal : undefined,
+      fluxoMensal: real.fluxoMensal.length > 0 ? real.fluxoMensal : undefined,
+      propostasKpis: real.propostasKpis.length > 0 ? (real.propostasKpis as typeof PROPOSTAS_KPIS_FALLBACK) : undefined,
+      propostasStatus: real.propostasStatus.length > 0 ? real.propostasStatus : undefined,
+      source: real.source,
+    }),
+    [real],
+  )
+  // Locais para uso direto em buildReportData (PDF/Excel)
+  const PORTFOLIO_KPIs_LIVE = ctxValue.portfolioKpis ?? PORTFOLIO_KPIs_FALLBACK
+  const CLIENTES_POR_ESTADO_LIVE = ctxValue.clientesPorEstado ?? CLIENTES_POR_ESTADO_FALLBACK
+  const CLIENTES_POR_ESTAGIO_LIVE = ctxValue.clientesPorEstagio ?? CLIENTES_POR_ESTAGIO_FALLBACK
+  const TOP_CLIENTES_LIVE = ctxValue.topClientes ?? TOP_CLIENTES_FALLBACK
+  const RENTABILIDADE_MENSAL_LIVE = ctxValue.rentabilidadeMensal ?? RENTABILIDADE_MENSAL_FALLBACK
+  const FLUXO_MENSAL_LIVE = ctxValue.fluxoMensal ?? FLUXO_MENSAL_FALLBACK
+  const PROPOSTAS_KPIS_LIVE = ctxValue.propostasKpis ?? PROPOSTAS_KPIS_FALLBACK
+  const PROPOSTAS_STATUS_LIVE = ctxValue.propostasStatus ?? PROPOSTAS_STATUS_FALLBACK
+
   const buildReportData = (id: ReportId): ReportData => {
     const def = REPORTS.find(r => r.id === id)!
     const base = { titulo: def.titulo, subtitulo: def.descricao, gerado: nowStr() }
@@ -752,22 +818,22 @@ export default function Relatorios() {
         sections: [
           {
             tipo: 'kpis', titulo: 'Indicadores Principais',
-            kpis: PORTFOLIO_KPIs.map(k => ({ label: k.label, valor: k.valor })),
+            kpis: PORTFOLIO_KPIs_LIVE.map(k => ({ label: k.label, valor: k.valor })),
           },
           {
             tipo: 'tabela', titulo: 'Clientes por Estado',
             colunas: ['Estado', 'Qtd Clientes'],
-            linhas: CLIENTES_POR_ESTADO.map(c => [c.estado, c.clientes]),
+            linhas: CLIENTES_POR_ESTADO_LIVE.map(c => [c.estado, c.clientes]),
           },
           {
             tipo: 'tabela', titulo: 'Clientes por Estágio',
             colunas: ['Estágio', 'Qtd'],
-            linhas: CLIENTES_POR_ESTAGIO.map(c => [c.name, c.value]),
+            linhas: CLIENTES_POR_ESTAGIO_LIVE.map(c => [c.name, c.value]),
           },
           {
             tipo: 'tabela', titulo: 'Top 10 Clientes por Dívida',
             colunas: ['Cliente', 'Cidade/UF', 'Dívida', 'Estágio', 'Credor'],
-            linhas: TOP_CLIENTES.map(c => [c.nome, c.cidade, fmtBRL(c.divida), c.estagio, c.credor]),
+            linhas: TOP_CLIENTES_LIVE.map(c => [c.nome, c.cidade, fmtBRL(c.divida), c.estagio, c.credor]),
           },
         ],
       }
@@ -780,7 +846,7 @@ export default function Relatorios() {
           {
             tipo: 'tabela', titulo: 'Rentabilidade Mensal',
             colunas: ['Mês', 'Receita', 'Custo', 'Lucro'],
-            linhas: RENTABILIDADE_MENSAL.map(r => [r.mes, fmtBRL(r.receita), fmtBRL(r.custo), fmtBRL(r.lucro)]),
+            linhas: RENTABILIDADE_MENSAL_LIVE.map(r => [r.mes, fmtBRL(r.receita), fmtBRL(r.custo), fmtBRL(r.lucro)]),
           },
         ],
       }
@@ -792,12 +858,12 @@ export default function Relatorios() {
         sections: [
           {
             tipo: 'kpis', titulo: 'KPIs de Propostas',
-            kpis: PROPOSTAS_KPIS.map(k => ({ label: k.label, valor: `${k.valor} (${k.sub})` })),
+            kpis: PROPOSTAS_KPIS_LIVE.map(k => ({ label: k.label, valor: `${k.valor} (${k.sub})` })),
           },
           {
             tipo: 'tabela', titulo: 'Status das Propostas',
             colunas: ['Status', 'Quantidade'],
-            linhas: PROPOSTAS_STATUS.map(p => [p.name, p.value]),
+            linhas: PROPOSTAS_STATUS_LIVE.map(p => [p.name, p.value]),
           },
         ],
       }
@@ -822,7 +888,7 @@ export default function Relatorios() {
           {
             tipo: 'tabela', titulo: 'Fluxo de Caixa Mensal',
             colunas: ['Mês', 'Entrada', 'Saída', 'Saldo'],
-            linhas: FLUXO_MENSAL.map(f => [f.mes, fmtBRL(f.entrada), fmtBRL(f.saida), fmtBRL(f.saldo)]),
+            linhas: FLUXO_MENSAL_LIVE.map(f => [f.mes, fmtBRL(f.entrada), fmtBRL(f.saida), fmtBRL(f.saldo)]),
           },
         ],
       }
@@ -870,6 +936,7 @@ export default function Relatorios() {
   const selectedDef = REPORTS.find(r => r.id === selectedReport)
 
   return (
+    <RelatoriosCtx.Provider value={ctxValue}>
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -879,6 +946,10 @@ export default function Relatorios() {
           </h1>
           <p className="text-aletis-grafite-medio mt-1 font-body text-sm">
             Relatórios dinâmicos e exportação de dados do sistema ALETIS
+            {ctxValue.source === 'api' && <span className="ml-2 text-positivo">· dados ao vivo</span>}
+            {ctxValue.source === 'partial' && <span className="ml-2 text-ambar-dark">· dados parciais</span>}
+            {ctxValue.source === 'fallback' && <span className="ml-2 text-aletis-grafite-medio">· usando snapshot</span>}
+            {ctxValue.source === 'loading' && <span className="ml-2 text-aletis-grafite-medio">· carregando…</span>}
           </p>
         </div>
         {selectedReport && (
@@ -970,5 +1041,6 @@ export default function Relatorios() {
       {/* Toast notifications */}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
+    </RelatoriosCtx.Provider>
   )
 }

@@ -23,6 +23,7 @@ import {
   TrendingUp,
   XCircle,
 } from 'lucide-react'
+import { apiFetchFull } from '../hooks/useApi'
 
 interface FonteStatus {
   nome: string
@@ -104,12 +105,14 @@ export default function Fontes() {
     setLoading(true)
     setError(null)
     try {
+      // apiFetchFull mantém envelope { success, dados } intacto
+      // (rotas /fontes ainda usam shape custom em vez de .data padrão)
       const [r1, r2, r3] = await Promise.all([
-        fetch('/api/fontes/status').then((r) => r.json()),
-        fetch(`/api/fontes/uptime?horas=${horas}`).then((r) => r.json()),
-        fetch('/api/fontes/historico?limit=50').then((r) => r.json()),
+        apiFetchFull<{ success: boolean; dados?: StatusResp }>('/fontes/status'),
+        apiFetchFull<UptimeResp>(`/fontes/uptime?horas=${horas}`),
+        apiFetchFull<HistoricoResp>('/fontes/historico?limit=50'),
       ])
-      const sd = (r1?.dados as StatusResp | undefined)?.fontes ?? []
+      const sd = r1?.dados?.fontes ?? []
       setStatus(sd)
       setUptime(r2)
       setHistorico(r3)

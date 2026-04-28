@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { apiFetch } from './useApi';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -91,13 +92,12 @@ export function useMarketTicker(intervalMs: number = 15000): UseMarketTickerRetu
   // fresh data without needing `items` in its dependency array.
   const pricesRef = useRef<number[]>(items.map((i) => i.preco));
 
-  // Fetch real prices from API on mount
+  // Fetch real prices from API on mount (apiFetch já extrai .data)
   useEffect(() => {
-    fetch('/api/mercado/precos')
-      .then(r => r.json())
-      .then(json => {
-        if (json.success && Array.isArray(json.data)) {
-          const mapped: TickerItem[] = json.data.slice(0, 6).map((c: any, i: number) => ({
+    apiFetch<any[]>('/mercado/precos')
+      .then(precos => {
+        if (Array.isArray(precos)) {
+          const mapped: TickerItem[] = precos.slice(0, 6).map((c: any, i: number) => ({
             id: `tk_${i}`,
             commodity: c.cultura,
             unidade: c.unidade?.replace('/saca 60kg', '/sc').replace('/arroba', '/@') || 'R$',

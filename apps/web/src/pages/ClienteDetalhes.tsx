@@ -7,6 +7,7 @@ import AlixContextHint from '../components/alix/AlixContextHint'
 import ContratosOficiaisTab from '../components/contratos/ContratosOficiaisTab'
 import ClientePropostasTab from '../components/cliente/ClientePropostasTab'
 import ClienteFluxoCaixaTab from '../components/cliente/ClienteFluxoCaixaTab'
+import ClienteDocumentosTab from '../components/cliente/ClienteDocumentosTab'
 import { DSCard, DSStatCard, DSEmpty, DSButton } from '../components/ds'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
@@ -2153,23 +2154,8 @@ export default function ClienteDetalhes() {
         <ClientePropostasTab clienteId={id} onGerarProposta={handleGerarProposta} />
       )}
 
-      {/* ════════════════════════════════════════════════════════
-           TAB: DOCUMENTOS — empty state padronizado com DSEmpty
-           ════════════════════════════════════════════════════════ */}
-      {activeTab === 'documentos' && (
-        <DSCard className="animate-fade-in">
-          <DSEmpty
-            icon={<FileCheck className="w-6 h-6" />}
-            title="Documentos do Cliente"
-            description="Contratos, extratos, CCIR, ITR e demais documentos do cliente serão gerenciados nesta área. Para gerar contratos oficiais ALETIS, abra a aba Contratos."
-            cta={
-              <DSButton variant="secondary" onClick={() => setActiveTab('contratos-oficiais')}>
-                Ir para Contratos oficiais
-              </DSButton>
-            }
-          />
-        </DSCard>
-      )}
+      {/* TAB: DOCUMENTOS — cofre digital com upload + listagem reais */}
+      {activeTab === 'documentos' && id && <ClienteDocumentosTab clienteId={id} />}
 
       {/* ════════════════════════════════════════════════════════
            TAB: CONTRATOS OFICIAIS — 10 templates ALETIS

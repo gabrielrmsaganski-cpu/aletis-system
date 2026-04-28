@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
+import { apiFetch, apiFetchFull } from '../hooks/useApi'
 import { InlineButton } from '../components/ui'
 
 // ── Types ────────────────────────────────────────────────────
@@ -211,12 +212,11 @@ export default function Configuracoes() {
     document.documentElement.classList.toggle('dark', tema === 'escuro')
   }, [tema])
 
-  // Fetch fontes when tab opens
+  // Fetch fontes when tab opens (envelope { sucesso, dados })
   const loadFontes = async () => {
     setFontesLoading(true)
     try {
-      const res = await fetch('/api/fontes/status')
-      const json = await res.json()
+      const json = await apiFetchFull<{ dados?: FontesStatus; data?: FontesStatus }>('/fontes/status')
       const data: FontesStatus | undefined = json.dados || json.data
       if (data) setFontes(data)
     } catch (err) {
@@ -234,10 +234,8 @@ export default function Configuracoes() {
   const loadClientesPortal = async () => {
     setAcessosLoading(true)
     try {
-      const res = await fetch('/api/portal-admin/clientes')
-      const json = await res.json()
-      if (json.success) setClientesPortal(json.data as PortalClienteRow[])
-      else showToast(json.error || 'Falha ao carregar', 'warning')
+      const data = await apiFetch<PortalClienteRow[]>('/portal-admin/clientes')
+      setClientesPortal(data)
     } catch (err) {
       showToast(`Erro: ${(err as Error).message}`, 'warning')
     } finally {
@@ -252,23 +250,19 @@ export default function Configuracoes() {
   const criarOuResetarAcesso = async (cli: PortalClienteRow) => {
     setAcaoPendente(cli.id)
     try {
-      const res = await fetch(`/api/clientes/${cli.id}/portal-access`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      })
-      const json = await res.json()
-      if (!json.success) {
-        showToast(json.error || 'Falha ao criar acesso', 'error')
-        return
-      }
+      const data = await apiFetch<{ usuario: string; senhaTemporaria: string }>(
+        `/clientes/${cli.id}/portal-access`,
+        { method: 'POST', body: JSON.stringify({}) },
+      )
       setModalSenha({
         cliente: cli,
-        usuario: json.data.usuario,
-        senhaTemporaria: json.data.senhaTemporaria,
+        usuario: data.usuario,
+        senhaTemporaria: data.senhaTemporaria,
       })
       await loadClientesPortal()
       showToast(cli.portal ? 'Senha resetada' : 'Acesso criado', 'success')
+    } catch (err) {
+      showToast((err as Error).message || 'Falha ao criar acesso', 'error')
     } finally {
       setAcaoPendente(null)
     }
@@ -278,18 +272,14 @@ export default function Configuracoes() {
     if (!cli.portal) return
     setAcaoPendente(cli.id)
     try {
-      const res = await fetch(`/api/clientes/${cli.id}/portal-access`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ativo: !cli.portal.ativo }),
-      })
-      const json = await res.json()
-      if (!json.success) {
-        showToast(json.error || 'Falha', 'error')
-        return
-      }
+      const data = await apiFetch<{ ativo: boolean }>(
+        `/clientes/${cli.id}/portal-access`,
+        { method: 'PATCH', body: JSON.stringify({ ativo: !cli.portal.ativo }) },
+      )
       await loadClientesPortal()
-      showToast(json.data.ativo ? 'Acesso ativado' : 'Acesso desativado', 'success')
+      showToast(data.ativo ? 'Acesso ativado' : 'Acesso desativado', 'success')
+    } catch (err) {
+      showToast((err as Error).message || 'Falha', 'error')
     } finally {
       setAcaoPendente(null)
     }
@@ -300,14 +290,11 @@ export default function Configuracoes() {
     if (!window.confirm(`Revogar acesso de ${cli.nome}? O cliente precisará de nova senha.`)) return
     setAcaoPendente(cli.id)
     try {
-      const res = await fetch(`/api/clientes/${cli.id}/portal-access`, { method: 'DELETE' })
-      const json = await res.json()
-      if (!json.success) {
-        showToast(json.error || 'Falha', 'error')
-        return
-      }
+      await apiFetch(`/clientes/${cli.id}/portal-access`, { method: 'DELETE' })
       await loadClientesPortal()
       showToast('Acesso revogado', 'success')
+    } catch (err) {
+      showToast((err as Error).message || 'Falha', 'error')
     } finally {
       setAcaoPendente(null)
     }

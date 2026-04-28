@@ -19,6 +19,7 @@ import {
   Settings,
 } from 'lucide-react'
 import { useDSTheme } from '../../hooks/useDSTheme'
+import { apiFetch } from '../../hooks/useApi'
 
 interface TickerItem {
   label: string
@@ -46,13 +47,14 @@ function useTickerData(): TickerItem[] {
   const [items, setItems] = useState<TickerItem[]>(FALLBACK_TICKER)
 
   useEffect(() => {
+    // apiFetch já extrai .data e propaga erros tipados
     Promise.all([
-      fetch('/api/mercado/precos').then((r) => r.json()).catch(() => null),
-      fetch('/api/mercado/indicadores').then((r) => r.json()).catch(() => null),
-    ]).then(([precosRes, indRes]) => {
+      apiFetch<any[]>('/mercado/precos').catch(() => null),
+      apiFetch<any[]>('/mercado/indicadores').catch(() => null),
+    ]).then(([precos, indicadores]) => {
       const result: TickerItem[] = []
-      if (precosRes?.success && Array.isArray(precosRes.data)) {
-        for (const c of precosRes.data.slice(0, 4)) {
+      if (Array.isArray(precos)) {
+        for (const c of precos.slice(0, 4)) {
           const change = c.variacao24h ?? 0
           result.push({
             label: c.cultura,
@@ -62,11 +64,11 @@ function useTickerData(): TickerItem[] {
           })
         }
       }
-      if (indRes?.success && Array.isArray(indRes.data)) {
-        const dolar = indRes.data.find(
+      if (Array.isArray(indicadores)) {
+        const dolar = indicadores.find(
           (i: any) => i.sigla === 'PTAX' || i.sigla === 'USD/BRL' || i.nome?.includes('Dolar')
         )
-        const selic = indRes.data.find(
+        const selic = indicadores.find(
           (i: any) => i.sigla === 'SELIC' || i.nome?.includes('Selic')
         )
         if (dolar) {
