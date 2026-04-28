@@ -22,6 +22,7 @@ const ClienteDetalhes = lazy(() => import('./pages/ClienteDetalhes'))
 const ClienteDossie = lazy(() => import('./pages/ClienteDossie'))
 const Propostas = lazy(() => import('./pages/Propostas'))
 const Contratos = lazy(() => import('./pages/Contratos'))
+const ContratosOficiais = lazy(() => import('./pages/ContratosOficiais'))
 const Mercado = lazy(() => import('./pages/Mercado'))
 const Credito = lazy(() => import('./pages/Credito'))
 const WhatsApp = lazy(() => import('./pages/WhatsApp'))
@@ -72,6 +73,7 @@ export default function App() {
                 <Route path="/clientes/:id/dossie" element={<ClienteDossie />} />
                 <Route path="/propostas" element={<Propostas />} />
                 <Route path="/contratos" element={<Contratos />} />
+                <Route path="/contratos-oficiais" element={<ContratosOficiais />} />
                 <Route path="/mercado" element={<Mercado />} />
                 <Route path="/credito" element={<Credito />} />
                 <Route path="/whatsapp" element={<WhatsApp />} />

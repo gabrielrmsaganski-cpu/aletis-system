@@ -15,6 +15,7 @@ import {
   type RenderClienteData,
   type OutorganteEntry,
 } from '../../contratos/ContractTemplateService.js'
+import { resolveTemplateSlug } from '../../contratos/templateResolver.js'
 import { alixGetClientes } from '../../AlixService.js'
 import { cacheRender } from '../../../routes/contratos-templates.js'
 
@@ -64,9 +65,10 @@ export function buildContratosOficiaisTools(): { tools: ClaudeTool[]; registry: 
       return {
         templates: svc.listTemplates().map((t) => ({
           slug: t.slug,
-          title: t.title,
+          nome: t.title,                 // ← nome amigável
+          arquivo_original: t.originalFile, // ← nome do .docx oficial
           subtitle: t.subtitle,
-          category: t.category,
+          categoria: t.category,
           campos: t.placeholders.map((p) => ({
             name: p.name,
             label: p.label,
@@ -85,12 +87,14 @@ export function buildContratosOficiaisTools(): { tools: ClaudeTool[]; registry: 
     description:
       'Pré-visualiza COMO O CONTRATO VAI FICAR antes de gerar — retorna os valores que vão ' +
       'preencher cada campo + lista de campos OBRIGATÓRIOS faltando. Sempre chame isto ' +
-      'ANTES de gerar_contrato_oficial para validar que os dados do cliente estão completos.',
+      'ANTES de gerar_contrato_oficial para validar que os dados do cliente estão completos. ' +
+      'O parâmetro "templateSlug" aceita NOMES naturais ("anexo I consultoria", "NDA", ' +
+      '"procuração", "termo de aceite", "contrato base completo") além do slug exato.',
     input_schema: {
       type: 'object',
       properties: {
         clienteId: { type: 'string', description: 'ID do cliente no CRM' },
-        templateSlug: { type: 'string', description: 'Slug do template (de listar_contratos_oficiais)' },
+        templateSlug: { type: 'string', description: 'Slug OU nome natural do template (consultoria, NDA, procuração, termo de aceite, etc.)' },
         inputs: {
           type: 'object',
           description: 'Overrides para campos manuais (ex.: { contrato_numero: "107/2026", contrato_data: "27/04/2026" })',
@@ -109,9 +113,11 @@ export function buildContratosOficiaisTools(): { tools: ClaudeTool[]; registry: 
       const svc = getContractTemplateService()
       const cliente = loadCliente(String(input.clienteId))
       if (!cliente) return { ok: false, error: `Cliente ${input.clienteId} não encontrado` }
+      const resolved = resolveTemplateSlug(String(input.templateSlug))
+      if (!resolved.ok) return resolved
       try {
         const preview = svc.preview({
-          templateSlug: String(input.templateSlug),
+          templateSlug: resolved.slug,
           cliente,
           inputs: (input.inputs ?? undefined) as Record<string, string> | undefined,
           outorgantes: input.outorgantes as OutorganteEntry[] | undefined,
@@ -119,7 +125,9 @@ export function buildContratosOficiaisTools(): { tools: ClaudeTool[]; registry: 
         return {
           ok: true,
           slug: preview.template.slug,
-          title: preview.template.title,
+          nome: preview.template.title,
+          arquivo_original: preview.template.originalFile,
+          cliente_nome: cliente.nome,
           campos_preenchidos: preview.resolved,
           campos_faltando: preview.missing,
           pronto_para_gerar: preview.missing.length === 0,
@@ -136,12 +144,15 @@ export function buildContratosOficiaisTools(): { tools: ClaudeTool[]; registry: 
     description:
       'Gera o contrato oficial preenchido (.docx) preservando 100% da formatação, fontes e logos. ' +
       'Devolve uma URL de download (TTL 1h). Use APÓS preview_contrato_oficial confirmar pronto_para_gerar=true. ' +
-      'IMPORTANTE: SEMPRE confirme com Christian antes de gerar (HITL) o template e os campos.',
+      'O parâmetro "templateSlug" aceita NOMES naturais ("anexo I consultoria", "NDA", ' +
+      '"procuração", "termo de aceite", "contrato base completo") além do slug exato. ' +
+      'IMPORTANTE: SEMPRE confirme com Christian antes de gerar (HITL) o template e os campos. ' +
+      'Apresente o resultado com markdown clicável: [⬇ Baixar .docx](URL).',
     input_schema: {
       type: 'object',
       properties: {
         clienteId: { type: 'string' },
-        templateSlug: { type: 'string' },
+        templateSlug: { type: 'string', description: 'Slug OU nome natural do template' },
         inputs: { type: 'object', description: 'Overrides manuais' },
         outorgantes: { type: 'array', description: 'Para NDA/Procuração' },
       },
@@ -154,21 +165,31 @@ export function buildContratosOficiaisTools(): { tools: ClaudeTool[]; registry: 
       const svc = getContractTemplateService()
       const cliente = loadCliente(String(input.clienteId))
       if (!cliente) return { ok: false, error: `Cliente ${input.clienteId} não encontrado` }
+      const resolved = resolveTemplateSlug(String(input.templateSlug))
+      if (!resolved.ok) return resolved
       try {
         const result = svc.render({
-          templateSlug: String(input.templateSlug),
+          templateSlug: resolved.slug,
           cliente,
           inputs: (input.inputs ?? undefined) as Record<string, string> | undefined,
           outorgantes: input.outorgantes as OutorganteEntry[] | undefined,
         })
         const token = cacheRender(result.buffer, result.filename)
+        const downloadUrl = `/api/contratos/templates/cache/${token}`
         return {
           ok: true,
           slug: result.template.slug,
-          filename: result.filename,
-          downloadUrl: `/api/contratos/templates/cache/${token}`,
+          nome: result.template.title,
+          arquivo_original: result.template.originalFile,
+          arquivo_gerado: result.filename,
+          cliente_nome: cliente.nome,
+          downloadUrl,
+          markdownLink: `[⬇ Baixar ${result.template.title}](${downloadUrl})`,
           expiraEmMin: 60,
-          mensagem: `Contrato "${result.template.title}" gerado para ${cliente.nome}. Clique no link para baixar (válido por 1h).`,
+          mensagem:
+            `**${result.template.title}** gerado para **${cliente.nome}** ` +
+            `(arquivo original: ${result.template.originalFile}). ` +
+            `Clique para baixar — link válido por 1 hora.`,
         }
       } catch (err) {
         return { ok: false, error: (err as Error).message }

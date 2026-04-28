@@ -19,6 +19,7 @@ interface TemplateCard {
   title: string
   subtitle?: string
   category: 'contrato-base' | 'anexo-servico' | 'nda' | 'procuracao' | 'termo-aceite'
+  originalFile: string
   placeholders: PlaceholderMeta[]
 }
 
@@ -147,7 +148,10 @@ export default function ContratosOficiaisTab({ clienteId }: Props) {
                       {t.subtitle && (
                         <p className="text-xs font-body text-aletis-grafite-claro mt-0.5">{t.subtitle}</p>
                       )}
-                      <p className="text-[11px] font-body text-aletis-grafite-medio mt-1.5">
+                      <p className="text-[10px] font-mono text-aletis-grafite-medio/80 mt-1.5 truncate" title={t.originalFile}>
+                        {t.originalFile}
+                      </p>
+                      <p className="text-[11px] font-body text-aletis-grafite-medio mt-1">
                         {t.placeholders.length} campo{t.placeholders.length !== 1 ? 's' : ''} editáve
                         {t.placeholders.length !== 1 ? 'is' : 'l'}
                       </p>

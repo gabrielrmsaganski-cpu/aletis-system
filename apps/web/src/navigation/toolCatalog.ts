@@ -195,6 +195,18 @@ export const TOOL_CATALOG: ToolEntry[] = [
     keywords: ['contratos', 'cpr', 'confissao', 'divida', 'renegociacao', 'acordo', 'transacao', 'instrumento'],
     showInSidebar: true,
   },
+  {
+    id: 'contratos-oficiais',
+    title: 'Documentos oficiais',
+    tagline: '10 contratos padronizados ALETIS',
+    description:
+      'Geração dos 10 documentos oficiais ALETIS (Anexo 0 a Anexo VIII): contrato base, anexos de serviço, NDA, procuração, termo de aceite. Escolha o cliente, o sistema preenche os campos e gera o .docx preservando 100% da formatação original.',
+    icon: FileCheck,
+    route: '/contratos-oficiais',
+    category: 'clientes',
+    keywords: ['contratos', 'oficiais', 'documentos', 'anexo', 'nda', 'procuracao', 'termo', 'aceite', 'consultoria', 'diagnostico', 'assessoria', 'erp', 'docx', 'modelo', 'template'],
+    showInSidebar: true,
+  },
 
   // ─────────── AGRO ───────────
   {

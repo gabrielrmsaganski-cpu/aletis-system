@@ -3,6 +3,7 @@
 // ============================================================
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { getContractTemplateService, type RenderClienteData, type OutorganteEntry } from '../services/contratos/ContractTemplateService.js'
+import { resolveTemplateSlug } from '../services/contratos/templateResolver.js'
 import { alixGetClientes } from '../services/AlixService.js'
 import { randomBytes } from 'crypto'
 
@@ -81,6 +82,7 @@ export default async function contratosTemplatesRoutes(fastify: FastifyInstance)
       title: t.title,
       subtitle: t.subtitle,
       category: t.category,
+      originalFile: t.originalFile, // nome do .docx oficial original
       placeholders: t.placeholders.map((p) => ({
         name: p.name,
         label: p.label,
@@ -92,11 +94,26 @@ export default async function contratosTemplatesRoutes(fastify: FastifyInstance)
     return reply.send({ success: true, data: templates, total: templates.length })
   })
 
-  // Schema de um template específico (placeholders + meta)
+  // Helper: resolve slug literal OU nome natural ("NDA", "consultoria", etc.).
+  // Retorna { tpl, slug } ou null com mensagem.
+  const findTpl = (raw: string) => {
+    const svc = getContractTemplateService()
+    // tenta literal primeiro
+    const direct = svc.getTemplate(raw)
+    if (direct) return { tpl: direct, slug: direct.slug, fuzzy: false }
+    // fallback fuzzy
+    const r = resolveTemplateSlug(raw)
+    if (!r.ok) return null
+    const tpl = svc.getTemplate(r.slug)
+    if (!tpl) return null
+    return { tpl, slug: r.slug, fuzzy: true, matched: r.matched }
+  }
+
+  // Schema de um template específico (placeholders + meta) — aceita fuzzy
   fastify.get<{ Params: { slug: string } }>('/api/contratos/templates/:slug', async (req, reply) => {
-    const tpl = getContractTemplateService().getTemplate(req.params.slug)
-    if (!tpl) return reply.status(404).send({ success: false, error: 'Template não existe' })
-    return reply.send({ success: true, data: tpl })
+    const found = findTpl(req.params.slug)
+    if (!found) return reply.status(404).send({ success: false, error: 'Template não existe' })
+    return reply.send({ success: true, data: found.tpl, resolvedSlug: found.slug, fuzzyMatched: found.fuzzy ? found.matched : undefined })
   })
 
   // Preview: resolve os placeholders sem renderizar (para a UI mostrar
@@ -105,13 +122,13 @@ export default async function contratosTemplatesRoutes(fastify: FastifyInstance)
     '/api/contratos/templates/:slug/preview',
     async (req, reply) => {
       const svc = getContractTemplateService()
-      const tpl = svc.getTemplate(req.params.slug)
-      if (!tpl) return reply.status(404).send({ success: false, error: 'Template não existe' })
+      const found = findTpl(req.params.slug)
+      if (!found) return reply.status(404).send({ success: false, error: 'Template não existe' })
       const cliente = req.body?.cliente ?? (req.body?.clienteId ? loadCliente(req.body.clienteId) : null)
       if (!cliente) return reply.status(400).send({ success: false, error: 'Cliente não encontrado (forneça clienteId ou cliente)' })
       try {
         const preview = svc.preview({
-          templateSlug: req.params.slug,
+          templateSlug: found.slug,
           cliente,
           inputs: req.body?.inputs,
           outorgantes: req.body?.outorgantes,
@@ -121,8 +138,10 @@ export default async function contratosTemplatesRoutes(fastify: FastifyInstance)
           data: {
             slug: preview.template.slug,
             title: preview.template.title,
+            originalFile: preview.template.originalFile,
             resolved: preview.resolved,
             missing: preview.missing,
+            ...(found.fuzzy ? { fuzzyMatched: found.matched } : {}),
           },
         })
       } catch (err) {
@@ -137,13 +156,13 @@ export default async function contratosTemplatesRoutes(fastify: FastifyInstance)
     '/api/contratos/templates/:slug/render',
     async (req, reply) => {
       const svc = getContractTemplateService()
-      const tpl = svc.getTemplate(req.params.slug)
-      if (!tpl) return reply.status(404).send({ success: false, error: 'Template não existe' })
+      const found = findTpl(req.params.slug)
+      if (!found) return reply.status(404).send({ success: false, error: 'Template não existe' })
       const cliente = req.body?.cliente ?? (req.body?.clienteId ? loadCliente(req.body.clienteId) : null)
       if (!cliente) return reply.status(400).send({ success: false, error: 'Cliente não encontrado (forneça clienteId ou cliente)' })
       try {
         const result = svc.render({
-          templateSlug: req.params.slug,
+          templateSlug: found.slug,
           cliente,
           inputs: req.body?.inputs,
           outorgantes: req.body?.outorgantes,
@@ -153,7 +172,7 @@ export default async function contratosTemplatesRoutes(fastify: FastifyInstance)
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         )
         reply.header('Content-Disposition', `attachment; filename="${result.filename}"`)
-        reply.header('X-Template-Slug', tpl.slug)
+        reply.header('X-Template-Slug', found.tpl.slug)
         return reply.send(result.buffer)
       } catch (err) {
         return reply.status(400).send({ success: false, error: (err as Error).message })
