@@ -32,6 +32,7 @@
     "@aletis/shared-types": "workspace:*",
     "@anthropic-ai/sdk": "^0.90.0",
     "@azure/identity": "^4.13.1",
+    "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^10.0.2",
     "@fastify/jwt": "^9.0.2",
     "@fastify/multipart": "^9.0.3",
@@ -66,12 +67,14 @@
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "sharp": "^0.33.5",
     "unpdf": "1.4.0",
+    "web-push": "^3.6.7",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",
     "@types/node": "^22.10.1",
     "@types/pg": "^8.20.0",
+    "@types/web-push": "^3.6.4",
     "@vitest/coverage-v8": "^4.1.5",
     "drizzle-kit": "^0.31.10",
     "tsx": "^4.19.2",

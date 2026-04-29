@@ -44,721 +44,52 @@ import {
   CheckCheck,
   XCircle,
   PaperclipIcon as Paperclip,
+  Bell,
+  BellOff,
 } from 'lucide-react'
 import BrandMark from '../components/ui/BrandMark'
 import { PortalErrorBoundary } from './portal/PortalErrorBoundary'
+import { usePortalPush } from '../hooks/usePortalPush'
 
-/* ──────────────────────────────────────────────────────────────
- * Constantes / tipos
- * ──────────────────────────────────────────────────────────── */
-const TOKEN_KEY = 'aletis.portal.token'
-
-interface ClienteMe {
-  id: string
-  nome: string
-  cpfCnpj: string
-  cidade: string
-  uf: string
-  email: string
-  telefone: string
-  atividade: string
-  areaTotalHa: number
-  culturas: string[]
-  estagio: string
-  consultor: string
-  credor: string
-  dataCadastro: string
-  forcaTrocaSenha: boolean
-}
-
-interface ContratoDivida {
-  contrato: string
-  valorOriginal: number
-  valorAtualizado: number
-  vencimento: string
-  status: string
-  credor: string
-}
-
-interface ContratoPagamento {
-  data: string
-  valor: number
-  descricao: string
-  tipo: string
-}
-
-interface Contrato {
-  credor: string
-  valorTotalDivida: number
-  valorTotalPago: number
-  saldoEmAberto: number
-  economia: number
-  dividas: ContratoDivida[]
-  pagamentos: ContratoPagamento[]
-}
-
-interface StepperItem {
-  id: string
-  label: string
-  done: boolean
-  current: boolean
-}
-
-interface TimelineEventoDTO {
-  data: string
-  tipo: string
-  descricao: string
-  detalhes?: string
-}
-
-interface DocumentoDTO {
-  id: string
-  nome: string
-  data: string
-  tipo: 'proposta' | 'contrato' | 'comprovante'
-  url?: string
-  canView: boolean
-}
-
-interface MensagemDTO {
-  id: string
-  de: 'cliente' | 'consultor' | 'sistema'
-  autorNome: string
-  texto: string
-  criadoEm: string
-  lidaEm?: string
-}
-
-interface PulseDTO {
-  clienteId: string
-  nome: string
-  estagioAtual: { id: string; label: string; estagioRaw: string }
-  proximoPasso: string
-  pendencias: { total: number; pendentes: number; aguardandoRevisao: number }
-  mensagensNaoLidas: number
-  ultimaAtualizacao: string
-  healthScore: number
-  consultor: string | null
-  economiaEstimada: number
-}
-
-interface PendenciaDTO {
-  id: string
-  clienteId: string
-  titulo: string
-  descricao?: string
-  categoria: 'fiscal' | 'contrato' | 'identidade' | 'patrimonio' | 'agro' | 'outros'
-  obrigatorio: boolean
-  status: 'pendente' | 'enviado' | 'aprovado' | 'rejeitado'
-  uploadId?: string
-  solicitadoPor?: string
-  solicitadoEm: string
-  enviadoEm?: string
-  observacao?: string
-}
-
-interface UploadDTO {
-  id: string
-  clienteId: string
-  pendenciaId?: string
-  nomeOriginal: string
-  mime: string
-  tamanho: number
-  categoria?: string
-  enviadoPor: 'cliente' | 'consultor'
-  enviadoEm: string
-  url?: string
-}
-
-interface ParcelaDTO {
-  numero: number
-  vencimento: string
-  valor: number
-  status: 'futuro' | 'proximo' | 'pago' | 'atrasado'
-  pagoEm?: string
-}
-
-interface CronogramaDTO {
-  totalAberto: number
-  parcelaPadrao: number
-  totalParcelas: number
-  parcelas: ParcelaDTO[]
-}
-
-interface MemoriaBlocoDTO {
-  chave: 'origem' | 'descoberta' | 'plano' | 'pago'
-  titulo: string
-  valor: number
-  descricao: string
-}
-
-interface MemoriaSimplificadaDTO {
-  economia: number
-  original: number
-  atual: number
-  pago: number
-  blocos: MemoriaBlocoDTO[]
-}
-
-interface AuditoriaEventoDTO {
-  id: number
-  tipo: string
-  canal?: string
-  criadoEm: string
-  ip?: string
-  detalhes?: Record<string, unknown>
-}
-
-/* ──────────────────────────────────────────────────────────────
- * Helpers
- * ──────────────────────────────────────────────────────────── */
-const formatBRL = (value: number): string =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
-
-const formatBRLShort = (v: number): string => {
-  if (v >= 1e9) return `R$ ${(v / 1e9).toFixed(1)} bi`
-  if (v >= 1e6) return `R$ ${(v / 1e6).toFixed(1)} mi`
-  if (v >= 1e3) return `R$ ${(v / 1e3).toFixed(0)} mil`
-  return formatBRL(v)
-}
-
-function maskCPF(value: string): string {
-  const digits = value.replace(/\D/g, '').slice(0, 14)
-  if (digits.length <= 11) {
-    if (digits.length <= 3) return digits
-    if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`
-    if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`
-    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`
-  }
-  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`
-}
-
-function getGreeting(): string {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'Bom dia'
-  if (hour < 18) return 'Boa tarde'
-  return 'Boa noite'
-}
-
-function formatDateTime(iso: string): string {
-  try {
-    const d = new Date(iso)
-    return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-  } catch {
-    return iso
-  }
-}
-
-function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso)
-    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  } catch {
-    return iso
-  }
-}
-
-function relativeTime(iso: string): string {
-  try {
-    const then = new Date(iso).getTime()
-    const diff = Date.now() - then
-    const min = Math.floor(diff / 60_000)
-    if (min < 1) return 'agora há pouco'
-    if (min < 60) return `há ${min} min`
-    const h = Math.floor(min / 60)
-    if (h < 24) return `há ${h}h`
-    const d = Math.floor(h / 24)
-    if (d < 7) return `há ${d}d`
-    return formatDate(iso)
-  } catch {
-    return iso
-  }
-}
-
-function fmtBytes(n: number): string {
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)} MB`
-  if (n >= 1e3) return `${(n / 1e3).toFixed(0)} KB`
-  return `${n} B`
-}
-
-const CATEGORIA_LABEL: Record<PendenciaDTO['categoria'], string> = {
-  fiscal: 'Fiscal',
-  contrato: 'Contrato',
-  identidade: 'Identidade',
-  patrimonio: 'Patrimônio',
-  agro: 'Agro',
-  outros: 'Outros',
-}
-
-/** Wrapper de fetch autenticado. */
-async function apiCall<T = unknown>(
-  path: string,
-  init?: RequestInit & { token?: string | null }
-): Promise<{ ok: true; data: T } | { ok: false; error: string; status: number }> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(init?.headers as Record<string, string> | undefined),
-  }
-  if (init?.token) headers['Authorization'] = `Bearer ${init.token}`
-  try {
-    const resp = await fetch(path, { ...init, headers })
-    const json = await resp.json().catch(() => ({}))
-    if (!resp.ok) {
-      return {
-        ok: false,
-        status: resp.status,
-        error: (json as { error?: string }).error || `Erro ${resp.status}`,
-      }
-    }
-    return { ok: true, data: (json as { data: T }).data }
-  } catch (err) {
-    return {
-      ok: false,
-      status: 0,
-      error: err instanceof Error ? err.message : 'Falha de rede',
-    }
-  }
-}
-
-/* ──────────────────────────────────────────────────────────────
- * LOGIN — 3 modos: senha · magic link · esqueci senha
- * ──────────────────────────────────────────────────────────── */
-type LoginMode = 'senha' | 'magic' | 'forgot'
-
-function LoginScreen({
-  onLogin,
-}: {
-  onLogin: (token: string, cliente: ClienteMe) => void
-}) {
-  const [mode, setMode] = useState<LoginMode>('senha')
-  const [usuario, setUsuario] = useState('')
-  const [senha, setSenha] = useState('')
-  const [erro, setErro] = useState<string | null>(null)
-  const [info, setInfo] = useState<string | null>(null)
-  const [carregando, setCarregando] = useState(false)
-
-  const handleSubmitSenha = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErro(null); setInfo(null); setCarregando(true)
-    const resp = await apiCall<{ token: string; cliente: ClienteMe }>('/api/portal/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ usuario, senha }),
-    })
-    setCarregando(false)
-    if (!resp.ok) { setErro(resp.error); return }
-    localStorage.setItem(TOKEN_KEY, resp.data.token)
-    onLogin(resp.data.token, resp.data.cliente)
-  }
-
-  const handleSubmitMagic = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErro(null); setInfo(null); setCarregando(true)
-    await apiCall('/api/portal/auth/magic/request', {
-      method: 'POST',
-      body: JSON.stringify({ identificador: usuario }),
-    })
-    setCarregando(false)
-    setInfo('Pronto! Se a conta existir, enviamos um link de acesso por e-mail e/ou WhatsApp em alguns segundos. Verifique sua caixa de entrada.')
-  }
-
-  const handleSubmitForgot = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErro(null); setInfo(null); setCarregando(true)
-    await apiCall('/api/portal/auth/forgot', {
-      method: 'POST',
-      body: JSON.stringify({ identificador: usuario }),
-    })
-    setCarregando(false)
-    setInfo('Se a conta existir, enviamos um link para redefinir a senha. O link vale por 30 minutos.')
-  }
-
-  return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{
-        backgroundColor: '#080d09',
-        backgroundImage:
-          'linear-gradient(140deg, rgba(8,13,9,0.97) 0%, rgba(13,22,17,0.94) 45%, rgba(36,58,44,0.92) 100%), url(/brand/pattern/repetidor.png)',
-        backgroundSize: 'auto, 360px',
-        backgroundBlendMode: 'normal, soft-light',
-      }}
-    >
-      {/* glow ambiente */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 18% 18%, rgba(203,157,82,0.18) 0%, transparent 38%), radial-gradient(circle at 82% 70%, rgba(178,189,161,0.14) 0%, transparent 45%)',
-        }}
-      />
-
-      <div className="relative w-full max-w-md">
-        <div className="flex flex-col items-center mb-8">
-          <BrandMark variant="stacked" tone="cream" size={56} />
-          <p className="mt-4 font-display text-[10.5px] font-semibold uppercase tracking-[0.22em] text-aletis-gold">
-            Portal do Cliente
-          </p>
-        </div>
-
-        <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-brand-lg p-8 sm:p-10 border border-aletis-cream-escuro/60">
-          <div className="flex gap-1 p-1 mb-6 rounded-full bg-aletis-cream/70">
-            {([
-              { id: 'senha', label: 'Senha', icon: Lock },
-              { id: 'magic', label: 'Link mágico', icon: Sparkles },
-            ] as const).map((m) => {
-              const active = mode === m.id || (mode === 'forgot' && m.id === 'senha')
-              const Icon = m.icon
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => { setMode(m.id); setErro(null); setInfo(null) }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full font-display text-[11.5px] font-semibold uppercase tracking-wider transition ${
-                    active
-                      ? 'bg-aletis-verde text-aletis-cream shadow-brand-sm'
-                      : 'text-aletis-verde-medio hover:text-aletis-verde'
-                  }`}
-                >
-                  <Icon size={12} />
-                  {m.label}
-                </button>
-              )
-            })}
-          </div>
-
-          {mode === 'senha' && (
-            <form onSubmit={handleSubmitSenha} className="space-y-4">
-              <Field
-                icon={User}
-                label="E-mail, CPF/CNPJ ou usuário"
-                value={usuario}
-                onChange={setUsuario}
-                onChangeRaw={(raw) => /^[\d.\-/\s]*$/.test(raw) ? maskCPF(raw) : raw.trim().toLowerCase()}
-                placeholder="000.000.000-00 ou seu@email"
-                autoComplete="username"
-              />
-              <Field
-                icon={Lock}
-                type="password"
-                label="Senha"
-                value={senha}
-                onChange={setSenha}
-                placeholder="Sua senha"
-                autoComplete="current-password"
-                minLength={4}
-              />
-              {erro && <ErrorBanner message={erro} />}
-              {info && <InfoBanner message={info} />}
-              <button
-                type="submit"
-                disabled={carregando || !usuario || !senha}
-                className="btn-primary w-full py-4 text-base flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {carregando ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
-                {carregando ? 'Entrando…' : 'Entrar'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setMode('forgot'); setErro(null); setInfo(null) }}
-                className="w-full text-center text-[12.5px] font-body text-aletis-verde-medio hover:text-aletis-gold-escuro transition"
-              >
-                Esqueci minha senha
-              </button>
-            </form>
-          )}
-
-          {mode === 'magic' && (
-            <form onSubmit={handleSubmitMagic} className="space-y-4">
-              <p className="font-body text-[13px] leading-relaxed text-aletis-verde-medio">
-                Enviaremos um link de acesso direto para o seu e-mail e/ou WhatsApp. Sem senha, válido por 15 minutos.
-              </p>
-              <Field
-                icon={Mail}
-                label="E-mail, CPF/CNPJ ou telefone"
-                value={usuario}
-                onChange={setUsuario}
-                onChangeRaw={(raw) => /^[\d.\-/\s]*$/.test(raw) ? maskCPF(raw) : raw.trim().toLowerCase()}
-                placeholder="seu@email · 000.000.000-00"
-                autoComplete="username"
-              />
-              {erro && <ErrorBanner message={erro} />}
-              {info && <InfoBanner message={info} />}
-              <button
-                type="submit"
-                disabled={carregando || !usuario}
-                className="btn-primary w-full py-4 text-base flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {carregando ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                {carregando ? 'Enviando…' : 'Receber link de acesso'}
-              </button>
-            </form>
-          )}
-
-          {mode === 'forgot' && (
-            <form onSubmit={handleSubmitForgot} className="space-y-4">
-              <p className="font-body text-[13px] leading-relaxed text-aletis-verde-medio">
-                Informe seu e-mail ou CPF/CNPJ. Se você tiver uma conta, enviaremos um link para redefinir a senha.
-              </p>
-              <Field
-                icon={Mail}
-                label="E-mail ou CPF/CNPJ"
-                value={usuario}
-                onChange={setUsuario}
-                placeholder="seu@email"
-                autoComplete="username"
-              />
-              {erro && <ErrorBanner message={erro} />}
-              {info && <InfoBanner message={info} />}
-              <button
-                type="submit"
-                disabled={carregando || !usuario}
-                className="btn-primary w-full py-4 text-base flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {carregando ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
-                {carregando ? 'Enviando…' : 'Enviar link de redefinição'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setMode('senha'); setErro(null); setInfo(null) }}
-                className="w-full text-center text-[12.5px] font-body text-aletis-verde-medio hover:text-aletis-gold-escuro transition"
-              >
-                ← voltar para login com senha
-              </button>
-            </form>
-          )}
-
-          <div className="flex items-center justify-center gap-2 mt-6 text-[11.5px] text-aletis-verde-medio font-body">
-            <Shield className="w-3.5 h-3.5 text-aletis-gold-escuro" />
-            Acesso seguro · scrypt + JWT · trilha de auditoria
-          </div>
-        </div>
-
-        <p className="text-center mt-8 text-aletis-cream/55 font-body text-sm italic">
-          "Verdade nos números. Prosperidade nos acordos."
-        </p>
-      </div>
-    </div>
-  )
-}
-
-function Field({
-  icon: Icon, label, value, onChange, onChangeRaw, type = 'text', placeholder, autoComplete, minLength,
-}: {
-  icon: React.ElementType
-  label: string
-  value: string
-  onChange: (v: string) => void
-  onChangeRaw?: (raw: string) => string
-  type?: 'text' | 'password' | 'email'
-  placeholder?: string
-  autoComplete?: string
-  minLength?: number
-}) {
-  return (
-    <div>
-      <label className="block text-[12.5px] font-display font-semibold uppercase tracking-wider text-aletis-verde-medio mb-1.5">
-        {label}
-      </label>
-      <div className="relative">
-        <Icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-verde-medio" />
-        <input
-          type={type}
-          value={value}
-          onChange={(e) => onChange(onChangeRaw ? onChangeRaw(e.target.value) : e.target.value)}
-          placeholder={placeholder}
-          className="w-full pl-11 pr-3 py-3 rounded-xl border border-aletis-borda bg-white text-aletis-verde placeholder:text-aletis-verde-claro focus:outline-none focus:ring-2 focus:ring-aletis-gold/35 focus:border-aletis-gold transition-all text-base"
-          autoComplete={autoComplete}
-          required
-          minLength={minLength}
-        />
-      </div>
-    </div>
-  )
-}
-
-function ErrorBanner({ message }: { message: string }) {
-  return (
-    <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700">
-      <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-      <p className="text-sm font-body">{message}</p>
-    </div>
-  )
-}
-
-function InfoBanner({ message }: { message: string }) {
-  return (
-    <div className="flex items-start gap-2 p-3 rounded-xl bg-aletis-sage/20 border border-aletis-sage/40 text-aletis-verde">
-      <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-aletis-verde-medio" />
-      <p className="text-sm font-body">{message}</p>
-    </div>
-  )
-}
-
-/* ──────────────────────────────────────────────────────────────
- * RESET DE SENHA (via ?reset=TOKEN)
- * ──────────────────────────────────────────────────────────── */
-function ResetSenhaScreen({
-  token,
-  onConcluido,
-}: {
-  token: string
-  onConcluido: () => void
-}) {
-  const [novaSenha, setNovaSenha] = useState('')
-  const [confirma, setConfirma] = useState('')
-  const [erro, setErro] = useState<string | null>(null)
-  const [sucesso, setSucesso] = useState(false)
-  const [carregando, setCarregando] = useState(false)
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErro(null)
-    if (novaSenha.length < 8) { setErro('Senha precisa ter ao menos 8 caracteres'); return }
-    if (novaSenha !== confirma) { setErro('As senhas não conferem'); return }
-    setCarregando(true)
-    const resp = await apiCall('/api/portal/auth/reset', {
-      method: 'POST',
-      body: JSON.stringify({ token, novaSenha }),
-    })
-    setCarregando(false)
-    if (!resp.ok) { setErro(resp.error); return }
-    setSucesso(true)
-    setTimeout(onConcluido, 2_000)
-  }
-
-  return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{
-        backgroundColor: '#080d09',
-        backgroundImage:
-          'linear-gradient(140deg, rgba(8,13,9,0.97), rgba(13,22,17,0.94) 50%, rgba(36,58,44,0.92)), url(/brand/pattern/repetidor.png)',
-        backgroundSize: 'auto, 360px',
-        backgroundBlendMode: 'normal, soft-light',
-      }}
-    >
-      <div className="w-full max-w-md">
-        <div className="flex flex-col items-center mb-8">
-          <BrandMark variant="stacked" tone="cream" size={48} />
-        </div>
-        <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-brand-lg p-8 border border-aletis-cream-escuro/60">
-          {sucesso ? (
-            <div className="text-center py-6">
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-aletis-sage/30 mb-4">
-                <CheckCircle2 className="w-7 h-7 text-aletis-verde" />
-              </div>
-              <h2 className="font-display text-xl font-bold text-aletis-verde">Senha atualizada</h2>
-              <p className="mt-2 font-body text-sm text-aletis-verde-medio">Você já pode entrar com sua nova senha.</p>
-            </div>
-          ) : (
-            <>
-              <h2 className="font-display text-xl font-bold text-aletis-verde mb-1">Nova senha</h2>
-              <p className="font-body text-[13px] text-aletis-verde-medio mb-5">
-                Escolha uma senha com ao menos 8 caracteres. Recomendamos misturar letras e números.
-              </p>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <Field
-                  icon={Lock}
-                  type="password"
-                  label="Nova senha"
-                  value={novaSenha}
-                  onChange={setNovaSenha}
-                  placeholder="••••••••"
-                  minLength={8}
-                />
-                <Field
-                  icon={Lock}
-                  type="password"
-                  label="Confirmar senha"
-                  value={confirma}
-                  onChange={setConfirma}
-                  placeholder="••••••••"
-                  minLength={8}
-                />
-                {erro && <ErrorBanner message={erro} />}
-                <button type="submit" disabled={carregando || !novaSenha || !confirma} className="btn-primary w-full py-4 disabled:opacity-60">
-                  {carregando ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-                  {carregando ? 'Salvando…' : 'Salvar nova senha'}
-                </button>
-              </form>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ──────────────────────────────────────────────────────────────
- * TROCAR SENHA (modal autenticado)
- * ──────────────────────────────────────────────────────────── */
-function TrocarSenhaModal({
-  token,
-  obrigatorio,
-  onClose,
-  onTrocou,
-}: {
-  token: string
-  obrigatorio: boolean
-  onClose: () => void
-  onTrocou: () => void
-}) {
-  const [senhaAtual, setSenhaAtual] = useState('')
-  const [novaSenha, setNovaSenha] = useState('')
-  const [confirma, setConfirma] = useState('')
-  const [erro, setErro] = useState<string | null>(null)
-  const [carregando, setCarregando] = useState(false)
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErro(null)
-    if (novaSenha.length < 8) { setErro('Nova senha precisa ter ao menos 8 caracteres'); return }
-    if (novaSenha !== confirma) { setErro('Confirmação não confere'); return }
-    setCarregando(true)
-    const resp = await apiCall('/api/portal/auth/trocar-senha', {
-      method: 'POST',
-      token,
-      body: JSON.stringify({ senhaAtual, novaSenha }),
-    })
-    setCarregando(false)
-    if (!resp.ok) { setErro(resp.error); return }
-    onTrocou()
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-aletis-verde-escuro/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md bg-white rounded-3xl p-7 shadow-brand-lg border border-aletis-cream-escuro/60">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-display text-lg font-bold text-aletis-verde">Trocar senha</h2>
-          {!obrigatorio && (
-            <button
-              onClick={onClose}
-              aria-label="Fechar modal"
-              className="text-aletis-verde-medio hover:text-aletis-verde p-1.5 rounded-lg"
-            >
-              <XCircle size={20} />
-            </button>
-          )}
-        </div>
-        {obrigatorio && (
-          <div className="mb-4 p-3 rounded-xl bg-aletis-gold/10 border border-aletis-gold/40 text-aletis-gold-escuro text-[12.5px] font-body">
-            Por segurança, você precisa cadastrar uma senha pessoal antes de continuar.
-          </div>
-        )}
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <Field icon={Lock} type="password" label={obrigatorio ? 'Senha temporária' : 'Senha atual'} value={senhaAtual} onChange={setSenhaAtual} placeholder="••••••••" minLength={4} />
-          <Field icon={Lock} type="password" label="Nova senha" value={novaSenha} onChange={setNovaSenha} placeholder="mínimo 8 caracteres" minLength={8} />
-          <Field icon={Lock} type="password" label="Confirmar nova senha" value={confirma} onChange={setConfirma} placeholder="repita a senha" minLength={8} />
-          {erro && <ErrorBanner message={erro} />}
-          <button type="submit" disabled={carregando} className="btn-primary w-full py-3 mt-2">
-            {carregando ? 'Salvando…' : 'Salvar nova senha'}
-          </button>
-        </form>
-      </div>
-    </div>
-  )
-}
+import {
+  TOKEN_KEY,
+  CATEGORIA_LABEL,
+  type ClienteMe,
+  type Contrato,
+  type StepperItem,
+  type TimelineEventoDTO,
+  type DocumentoDTO,
+  type MensagemDTO,
+  type PulseDTO,
+  type PendenciaDTO,
+  type UploadDTO,
+  type CronogramaDTO,
+  type MemoriaSimplificadaDTO,
+  type AuditoriaEventoDTO,
+  type HonorariosProjecaoDTO,
+  type BreakdownCredorDTO,
+} from './portal/types'
+import {
+  formatBRL,
+  formatBRLShort,
+  formatDateTime,
+  formatDate,
+  relativeTime,
+  fmtBytes,
+  apiCall,
+  getGreeting,
+} from './portal/utils'
+import {
+  LoginScreen,
+  ResetSenhaScreen,
+  TrocarSenhaModal,
+  ErrorBanner,
+} from './portal/Auth'
+import { CofreDigital } from './portal/Cofre'
+import { PendenciasInbox, UploadEspontaneo } from './portal/Pendencias'
+import { EconomiaHero } from './portal/EconomiaHero'
+import { HonorariosCard } from './portal/HonorariosCard'
+import { AlixPortalChat } from './portal/AlixPortalChat'
 
 /* ──────────────────────────────────────────────────────────────
  * STEPPER
@@ -926,222 +257,6 @@ function PulseStat({
 /* ──────────────────────────────────────────────────────────────
  * INBOX DE PENDÊNCIAS
  * ──────────────────────────────────────────────────────────── */
-function PendenciasInbox({ token, pendencias, onChange }: {
-  token: string
-  pendencias: PendenciaDTO[]
-  onChange: () => Promise<void>
-}) {
-  const [enviando, setEnviando] = useState<string | null>(null)
-  const [erro, setErro] = useState<string | null>(null)
-
-  if (pendencias.length === 0) {
-    return (
-      <div className="card-premium p-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-aletis-sage/30 flex items-center justify-center">
-            <CheckCheck className="w-5 h-5 text-aletis-verde" />
-          </div>
-          <div>
-            <p className="font-display text-base font-bold text-aletis-verde">Nenhum documento pendente</p>
-            <p className="font-body text-[13px] text-aletis-verde-medio">Quando seu consultor pedir um documento, ele aparece aqui.</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  async function handleArquivo(p: PendenciaDTO, file: File) {
-    setEnviando(p.id); setErro(null)
-    const buf = await file.arrayBuffer()
-    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
-    const resp = await apiCall<UploadDTO>('/api/portal/upload', {
-      method: 'POST',
-      token,
-      body: JSON.stringify({
-        nome: file.name,
-        mime: file.type || 'application/octet-stream',
-        conteudoBase64: b64,
-        pendenciaId: p.id,
-        categoria: p.categoria,
-      }),
-    })
-    setEnviando(null)
-    if (!resp.ok) { setErro(resp.error); return }
-    await onChange()
-  }
-
-  return (
-    <div className="card-premium p-6">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-aletis-gold/15 border border-aletis-gold/40 flex items-center justify-center">
-            <Inbox className="w-5 h-5 text-aletis-gold-escuro" />
-          </div>
-          <div>
-            <p className="font-display text-base font-bold text-aletis-verde">Documentos pendentes</p>
-            <p className="font-body text-[12.5px] text-aletis-verde-medio">
-              {pendencias.filter((p) => p.status === 'pendente').length} aguardando · envie pelo botão de cada item
-            </p>
-          </div>
-        </div>
-      </div>
-      {erro && <div className="mb-3"><ErrorBanner message={erro} /></div>}
-      <ul className="space-y-2">
-        {pendencias.map((p) => {
-          const podeEnviar = p.status === 'pendente' || p.status === 'rejeitado'
-          const inputId = `up-${p.id}`
-          return (
-            <li
-              key={p.id}
-              className={`rounded-xl border px-4 py-3 transition ${
-                p.status === 'aprovado' ? 'border-aletis-sage/45 bg-aletis-sage/15' :
-                p.status === 'rejeitado' ? 'border-red-200 bg-red-50' :
-                p.status === 'enviado' ? 'border-aletis-gold/30 bg-aletis-gold/5' :
-                'border-aletis-cream-escuro bg-aletis-cream-papel'
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <PendenciaIcon status={p.status} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <p className="font-display font-bold text-[14px] text-aletis-verde">{p.titulo}</p>
-                    <span className="font-display text-[9.5px] uppercase tracking-widest text-aletis-verde-medio bg-white/60 border border-aletis-cream-escuro/60 px-2 py-0.5 rounded-full">
-                      {CATEGORIA_LABEL[p.categoria]}
-                    </span>
-                    {p.obrigatorio && (
-                      <span className="font-display text-[9.5px] uppercase tracking-widest text-aletis-gold-escuro">obrigatório</span>
-                    )}
-                  </div>
-                  {p.descricao && (
-                    <p className="mt-1 font-body text-[12.5px] leading-snug text-aletis-verde-medio">
-                      {p.descricao}
-                    </p>
-                  )}
-                  {p.observacao && p.status === 'rejeitado' && (
-                    <p className="mt-1 font-body text-[12.5px] text-red-700">
-                      <strong>Devolução:</strong> {p.observacao}
-                    </p>
-                  )}
-                  {p.solicitadoPor && (
-                    <p className="mt-1 font-body text-[11px] text-aletis-verde-claro">
-                      Solicitado por {p.solicitadoPor} · {relativeTime(p.solicitadoEm)}
-                    </p>
-                  )}
-                </div>
-                <div className="flex-shrink-0">
-                  {podeEnviar ? (
-                    <>
-                      <input
-                        id={inputId}
-                        type="file"
-                        className="sr-only"
-                        accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.xlsx,.xls,.docx,.doc,.csv,.txt"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0]; if (f) handleArquivo(p, f)
-                        }}
-                      />
-                      <label
-                        htmlFor={inputId}
-                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-display text-[11px] font-semibold uppercase tracking-wider cursor-pointer transition ${
-                          enviando === p.id
-                            ? 'bg-aletis-cream text-aletis-verde-medio'
-                            : 'bg-aletis-verde text-aletis-cream hover:bg-aletis-verde-medio'
-                        }`}
-                      >
-                        {enviando === p.id ? <Loader2 size={12} className="animate-spin" /> : <UploadIcon size={12} />}
-                        {enviando === p.id ? 'enviando…' : 'enviar'}
-                      </label>
-                    </>
-                  ) : (
-                    <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 font-display text-[11px] font-semibold uppercase tracking-wider ${
-                      p.status === 'aprovado' ? 'bg-aletis-verde text-aletis-cream' :
-                      p.status === 'enviado' ? 'bg-aletis-gold/20 text-aletis-gold-escuro' :
-                      'bg-aletis-cream text-aletis-verde-medio'
-                    }`}>
-                      {p.status === 'aprovado' ? <CheckCheck size={12} /> : p.status === 'enviado' ? <Clock size={12} /> : <CheckCircle2 size={12} />}
-                      {p.status}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </li>
-          )
-        })}
-      </ul>
-    </div>
-  )
-}
-
-function PendenciaIcon({ status }: { status: PendenciaDTO['status'] }) {
-  if (status === 'aprovado') return <CheckCheck className="w-5 h-5 mt-0.5 text-aletis-verde-medio flex-shrink-0" />
-  if (status === 'enviado') return <Clock className="w-5 h-5 mt-0.5 text-aletis-gold-escuro flex-shrink-0" />
-  if (status === 'rejeitado') return <AlertCircle className="w-5 h-5 mt-0.5 text-red-600 flex-shrink-0" />
-  return <Circle className="w-5 h-5 mt-0.5 text-aletis-verde-medio flex-shrink-0" />
-}
-
-/* ──────────────────────────────────────────────────────────────
- * COFRE DIGITAL — uploads enviados
- * ──────────────────────────────────────────────────────────── */
-function CofreDigital({ uploads, token }: { uploads: UploadDTO[]; token: string }) {
-  if (uploads.length === 0) {
-    return (
-      <div className="card-premium p-6 text-center">
-        <Vault className="w-8 h-8 mx-auto text-aletis-verde-medio mb-2" />
-        <p className="font-body text-[13px] text-aletis-verde-medio">Seu cofre digital está vazio. Documentos que você enviar aparecerão aqui.</p>
-      </div>
-    )
-  }
-  return (
-    <div className="card-premium p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-xl bg-aletis-sage/25 border border-aletis-sage/40 flex items-center justify-center">
-          <Vault className="w-5 h-5 text-aletis-verde" />
-        </div>
-        <div>
-          <p className="font-display text-base font-bold text-aletis-verde">Meu cofre digital</p>
-          <p className="font-body text-[12.5px] text-aletis-verde-medio">{uploads.length} arquivo(s) enviado(s)</p>
-        </div>
-      </div>
-      <ul className="divide-y divide-aletis-cream-escuro/50">
-        {uploads.map((u) => (
-          <li key={u.id} className="py-2.5 flex items-center gap-3">
-            <Paperclip size={14} className="text-aletis-gold-escuro flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="font-body text-sm font-medium text-aletis-verde truncate">{u.nomeOriginal}</p>
-              <p className="font-body text-[11px] text-aletis-verde-medio">
-                {fmtBytes(u.tamanho)} · {relativeTime(u.enviadoEm)} {u.categoria ? `· ${u.categoria}` : ''}
-              </p>
-            </div>
-            {u.url && (
-              <a
-                href={u.url + (token ? `?t=${encodeURIComponent(token)}` : '')}
-                target="_blank"
-                rel="noreferrer"
-                onClick={async (e) => {
-                  // Auth via header não funciona em <a>. Para download autenticado,
-                  // baixamos via fetch + blob:
-                  e.preventDefault()
-                  const r = await fetch(u.url!, { headers: { Authorization: `Bearer ${token}` } })
-                  if (!r.ok) return
-                  const blob = await r.blob()
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url; a.download = u.nomeOriginal
-                  a.click()
-                  setTimeout(() => URL.revokeObjectURL(url), 2_000)
-                }}
-                className="text-aletis-verde-medio hover:text-aletis-gold-escuro transition"
-              >
-                <Download size={16} />
-              </a>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
 /* ──────────────────────────────────────────────────────────────
  * CRONOGRAMA DE PAGAMENTOS
  * ──────────────────────────────────────────────────────────── */
@@ -1366,74 +481,9 @@ function AuditoriaTimeline({ eventos, token }: { eventos: AuditoriaEventoDTO[]; 
 /* ──────────────────────────────────────────────────────────────
  * UPLOAD ESPONTÂNEO — botão drag-drop
  * ──────────────────────────────────────────────────────────── */
-function UploadEspontaneo({ token, onUploaded }: { token: string; onUploaded: () => Promise<void> }) {
-  const [drag, setDrag] = useState(false)
-  const [enviando, setEnviando] = useState(false)
-  const [erro, setErro] = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  async function handleFiles(files: FileList | null) {
-    if (!files || files.length === 0) return
-    setEnviando(true); setErro(null)
-    for (const f of Array.from(files)) {
-      const buf = await f.arrayBuffer()
-      const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
-      const r = await apiCall('/api/portal/upload', {
-        method: 'POST',
-        token,
-        body: JSON.stringify({ nome: f.name, mime: f.type, conteudoBase64: b64 }),
-      })
-      if (!r.ok) { setErro(r.error); break }
-    }
-    setEnviando(false)
-    await onUploaded()
-  }
-
-  return (
-    <div
-      onDragOver={(e) => { e.preventDefault(); setDrag(true) }}
-      onDragLeave={() => setDrag(false)}
-      onDrop={(e) => { e.preventDefault(); setDrag(false); handleFiles(e.dataTransfer.files) }}
-      className={`rounded-2xl border-2 border-dashed p-6 text-center transition ${
-        drag ? 'border-aletis-gold bg-aletis-gold/5' : 'border-aletis-cream-escuro bg-aletis-cream-papel'
-      }`}
-    >
-      <UploadIcon className="w-7 h-7 mx-auto text-aletis-verde-medio mb-2" />
-      <p className="font-display text-sm font-bold text-aletis-verde">
-        Enviar um documento ao seu consultor
-      </p>
-      <p className="mt-1 font-body text-[12.5px] text-aletis-verde-medio">
-        Arraste arquivos aqui ou
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="ml-1 text-aletis-gold-escuro font-semibold hover:underline"
-        >
-          clique para escolher
-        </button>
-        . PDF, foto ou planilha · até 25MB cada.
-      </p>
-      <input
-        ref={inputRef}
-        type="file"
-        multiple
-        className="sr-only"
-        accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.xlsx,.xls,.docx,.doc,.csv,.txt"
-        onChange={(e) => handleFiles(e.target.files)}
-      />
-      {enviando && (
-        <p className="mt-3 inline-flex items-center gap-1.5 font-body text-[12.5px] text-aletis-verde-medio">
-          <Loader2 size={12} className="animate-spin" /> Enviando…
-        </p>
-      )}
-      {erro && <p className="mt-3 font-body text-[12.5px] text-red-700">{erro}</p>}
-    </div>
-  )
-}
-
 /* ──────────────────────────────────────────────────────────────
  * DASHBOARD
- * ──────────────────────────────────────────────────────────── */
+ * ────────────────────────────────────────────────────────────── */
 function ClientDashboard({
   token,
   cliente,
@@ -1455,20 +505,30 @@ function ClientDashboard({
   const [memoria, setMemoria] = useState<MemoriaSimplificadaDTO | null>(null)
   const [auditoria, setAuditoria] = useState<AuditoriaEventoDTO[]>([])
   const [mensagens, setMensagens] = useState<MensagemDTO[]>([])
+  const [honorarios, setHonorarios] = useState<HonorariosProjecaoDTO | null>(null)
+  const [breakdownCredor, setBreakdownCredor] = useState<BreakdownCredorDTO[]>([])
   const [chatInput, setChatInput] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [showTrocarSenha, setShowTrocarSenha] = useState(cliente.forcaTrocaSenha)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const pendenciasRef = useRef<HTMLDivElement>(null)
   const chatRef = useRef<HTMLDivElement>(null)
+  const push = usePortalPush({ token })
 
   const fetchTudo = useCallback(async () => {
-    const [pl, c, s, t, d, p, u, cr, me, au, m] = await Promise.all([
-      apiCall<PulseDTO>('/api/portal/pulse', { token }),
-      apiCall<Contrato>('/api/portal/contrato', { token }),
-      apiCall<StepperItem[]>('/api/portal/stepper', { token }),
-      apiCall<TimelineEventoDTO[]>('/api/portal/timeline', { token }),
-      apiCall<DocumentoDTO[]>('/api/portal/documentos', { token }),
+    // Endpoint agregado faz a maioria do trabalho numa chamada só.
+    // Os 4 que sobram são endpoints com side-effect ou específicos
+    // (uploads binários, mensagens com mark-as-read, auditoria LGPD).
+    const [agg, p, u, cr, me, au, m] = await Promise.all([
+      apiCall<{
+        pulse: PulseDTO | null
+        contrato: Contrato | null
+        stepper: StepperItem[]
+        timeline: TimelineEventoDTO[]
+        documentos: DocumentoDTO[]
+        honorarios: HonorariosProjecaoDTO | null
+        breakdownCredor: BreakdownCredorDTO[]
+      }>('/api/portal/dashboard', { token }),
       apiCall<PendenciaDTO[]>('/api/portal/pendencias', { token }),
       apiCall<UploadDTO[]>('/api/portal/uploads', { token }),
       apiCall<CronogramaDTO>('/api/portal/cronograma', { token }),
@@ -1476,11 +536,15 @@ function ClientDashboard({
       apiCall<AuditoriaEventoDTO[]>('/api/portal/auditoria', { token }),
       apiCall<MensagemDTO[]>('/api/portal/mensagens', { token }),
     ])
-    if (pl.ok) setPulse(pl.data)
-    if (c.ok) setContrato(c.data)
-    if (s.ok) setStepper(s.data)
-    if (t.ok) setTimeline(t.data)
-    if (d.ok) setDocumentos(d.data)
+    if (agg.ok) {
+      setPulse(agg.data.pulse)
+      setContrato(agg.data.contrato)
+      setStepper(agg.data.stepper)
+      setTimeline(agg.data.timeline)
+      setDocumentos(agg.data.documentos)
+      setHonorarios(agg.data.honorarios)
+      setBreakdownCredor(agg.data.breakdownCredor)
+    }
     if (p.ok) setPendencias(p.data)
     if (u.ok) setUploads(u.data)
     if (cr.ok) setCronograma(cr.data)
@@ -1501,15 +565,14 @@ function ClientDashboard({
   }, [token])
 
   // Stream de mensagens via SSE — em tempo real (substitui polling).
+  // Auth via cookie HttpOnly setado no login (withCredentials: true).
   // Fallback gracios para polling se SSE falhar.
   useEffect(() => {
     if (typeof EventSource === 'undefined') return
-    // EventSource não suporta headers customizados — passamos token na URL.
-    // Em produção, validar token via cookie HTTP-only seria mais seguro.
-    const url = `/api/portal/mensagens/stream?_t=${encodeURIComponent(token)}`
+    const url = `/api/portal/mensagens/stream`
     let es: EventSource | null = null
     try {
-      es = new EventSource(url, { withCredentials: false })
+      es = new EventSource(url, { withCredentials: true })
       es.addEventListener('snapshot', (ev: MessageEvent) => {
         try { setMensagens(JSON.parse(ev.data) as MensagemDTO[]) } catch { /* ignore */ }
       })
@@ -1611,7 +674,8 @@ function ClientDashboard({
         </div>
       </nav>
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-8">
+       <div className="space-y-6 min-w-0">
         {/* Cabeçalho de saudação */}
         <header>
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-aletis-verde tracking-tight">
@@ -1636,15 +700,10 @@ function ClientDashboard({
         {/* Stepper */}
         {stepper.length > 0 && <NegotiationProgress steps={stepper} />}
 
-        {/* Resumo financeiro */}
+        {/* Hero cinemático de economia (substitui o resumo financeiro plano) */}
         {contrato && (
           <section>
-            <SectionTitle icon={DollarSign} title="Resumo financeiro" />
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <KpiTile label="Dívida original" value={formatBRL(contrato.valorTotalDivida)} icon={DollarSign} />
-              <KpiTile label="Saldo em aberto" value={formatBRL(contrato.saldoEmAberto)} icon={TrendingDown} accent="sage" />
-              <KpiTile label="Você economizou" value={formatBRL(contrato.economia)} icon={Sparkles} accent="gold" />
-            </div>
+            <EconomiaHero contrato={contrato} breakdownCredor={breakdownCredor} />
             {contrato.dividas.length > 0 && (
               <div className="card-premium mt-4 overflow-hidden">
                 <div className="px-4 py-3 border-b border-aletis-cream-escuro/60 bg-aletis-cream-papel">
@@ -1672,6 +731,11 @@ function ClientDashboard({
             )}
           </section>
         )}
+
+        {/* Honorários ALETIS — quanto o cliente paga pela consultoria */}
+        <section>
+          <HonorariosCard honorarios={honorarios} />
+        </section>
 
         {/* Cronograma de pagamentos */}
         {cronograma && cronograma.parcelas.length > 0 && (
@@ -1810,6 +874,158 @@ function ClientDashboard({
           ALETIS · Verdade nos números, prosperidade nos acordos. ·{' '}
           <a href="/portal-cliente" className="hover:text-aletis-gold-escuro">Portal do Cliente</a>
         </footer>
+       </div>
+
+       {/* Sidebar fixa desktop — KPIs essenciais + atalhos rápidos */}
+       <aside className="hidden lg:block">
+         <div className="sticky top-24 space-y-3">
+           {contrato && (
+             <div className="card-premium p-4">
+               <p className="font-display text-[10px] font-semibold uppercase tracking-widest2 text-aletis-verde-medio">
+                 Saldo em aberto
+               </p>
+               <p className="mt-1 font-display text-2xl font-bold text-aletis-verde tabular-nums">
+                 {formatBRL(contrato.saldoEmAberto)}
+               </p>
+               {contrato.economia > 0 && (
+                 <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-body text-aletis-gold-escuro">
+                   <Sparkles className="w-3 h-3" /> Você economizou {formatBRL(contrato.economia)}
+                 </p>
+               )}
+             </div>
+           )}
+
+           {cronograma && cronograma.parcelas.find((p) => p.status === 'proximo') && (() => {
+             const px = cronograma.parcelas.find((p) => p.status === 'proximo')!
+             return (
+               <div className="card-premium p-4 border-l-4 border-aletis-gold">
+                 <p className="font-display text-[10px] font-semibold uppercase tracking-widest2 text-aletis-verde-medio">
+                   Próxima parcela
+                 </p>
+                 <p className="mt-1 font-display text-lg font-bold text-aletis-verde tabular-nums">
+                   {formatBRL(px.valor)}
+                 </p>
+                 <p className="font-body text-[12px] text-aletis-verde-medio">
+                   Vencimento {formatDate(px.vencimento)}
+                 </p>
+               </div>
+             )
+           })()}
+
+           {pendencias.filter((p) => p.status === 'pendente').length > 0 && (
+             <button
+               type="button"
+               onClick={() => pendenciasRef.current?.scrollIntoView({ behavior: 'smooth' })}
+               className="card-premium w-full p-4 text-left border-l-4 border-amber-500 hover:bg-aletis-cream/50 transition"
+             >
+               <p className="font-display text-[10px] font-semibold uppercase tracking-widest2 text-amber-700">
+                 Pendências
+               </p>
+               <p className="mt-1 font-display text-2xl font-bold text-aletis-verde tabular-nums">
+                 {pendencias.filter((p) => p.status === 'pendente').length}
+               </p>
+               <p className="font-body text-[12px] text-aletis-verde-medio">
+                 documento{pendencias.filter((p) => p.status === 'pendente').length !== 1 ? 's' : ''} aguardando você
+               </p>
+             </button>
+           )}
+
+           {naoLidas > 0 && (
+             <button
+               type="button"
+               onClick={() => chatRef.current?.scrollIntoView({ behavior: 'smooth' })}
+               className="card-premium w-full p-4 text-left border-l-4 border-aletis-verde hover:bg-aletis-cream/50 transition"
+             >
+               <p className="font-display text-[10px] font-semibold uppercase tracking-widest2 text-aletis-verde">
+                 Mensagens novas
+               </p>
+               <p className="mt-1 font-display text-2xl font-bold text-aletis-verde tabular-nums">
+                 {naoLidas}
+               </p>
+               <p className="font-body text-[12px] text-aletis-verde-medio">
+                 do seu consultor
+               </p>
+             </button>
+           )}
+
+           {push.state !== 'unsupported' && (
+             <div className="card-premium p-4">
+               <p className="font-display text-[10px] font-semibold uppercase tracking-widest2 text-aletis-verde-medio mb-2">
+                 Notificações
+               </p>
+               {push.state === 'subscribed' ? (
+                 <button
+                   type="button"
+                   onClick={push.unsubscribe}
+                   className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-aletis-cream-escuro bg-aletis-cream/40 px-3 py-2 font-body text-[12.5px] font-semibold text-aletis-verde hover:bg-aletis-cream"
+                 >
+                   <BellOff size={13} /> Push ativo · desativar
+                 </button>
+               ) : push.state === 'denied' ? (
+                 <p className="font-body text-[12px] text-aletis-verde-medio leading-snug">
+                   Bloqueado pelo navegador. Libere nas configurações do site para receber avisos.
+                 </p>
+               ) : (
+                 <>
+                   <button
+                     type="button"
+                     onClick={push.subscribe}
+                     disabled={push.state === 'pending'}
+                     className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-aletis-verde px-3 py-2 font-body text-[12.5px] font-semibold text-white hover:bg-aletis-verde-escuro disabled:opacity-60"
+                   >
+                     {push.state === 'pending' ? (
+                       <><Loader2 size={13} className="animate-spin" /> Ativando…</>
+                     ) : (
+                       <><Bell size={13} /> Ativar notificações</>
+                     )}
+                   </button>
+                   <p className="mt-2 font-body text-[11px] text-aletis-verde-medio leading-snug">
+                     Receba avisos quando o consultor responder, mesmo com o portal fechado.
+                   </p>
+                 </>
+               )}
+               {push.errorMsg && (
+                 <p className="mt-2 font-body text-[11px] text-red-700">{push.errorMsg}</p>
+               )}
+             </div>
+           )}
+
+           <div className="card-premium p-4">
+             <p className="font-display text-[10px] font-semibold uppercase tracking-widest2 text-aletis-verde-medio mb-2">
+               Atalhos
+             </p>
+             <ul className="space-y-1 font-body text-[13px]">
+               <li>
+                 <button
+                   type="button"
+                   onClick={() => pendenciasRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                   className="w-full text-left text-aletis-verde-medio hover:text-aletis-gold-escuro transition"
+                 >
+                   → Pendências
+                 </button>
+               </li>
+               <li>
+                 <button
+                   type="button"
+                   onClick={() => chatRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                   className="w-full text-left text-aletis-verde-medio hover:text-aletis-gold-escuro transition"
+                 >
+                   → Conversa com consultor
+                 </button>
+               </li>
+               <li>
+                 <button
+                   type="button"
+                   onClick={() => setShowTrocarSenha(true)}
+                   className="w-full text-left text-aletis-verde-medio hover:text-aletis-gold-escuro transition"
+                 >
+                   → Trocar senha
+                 </button>
+               </li>
+             </ul>
+           </div>
+         </div>
+       </aside>
       </div>
 
       {showTrocarSenha && (
@@ -1978,14 +1194,17 @@ function PortalClienteInner() {
   }
 
   return (
-    <ClientDashboard
-      token={token}
-      cliente={cliente}
-      onRefreshCliente={refreshCliente}
-      onLogout={() => {
-        localStorage.removeItem(TOKEN_KEY)
-        setToken(null); setCliente(null)
-      }}
-    />
+    <>
+      <ClientDashboard
+        token={token}
+        cliente={cliente}
+        onRefreshCliente={refreshCliente}
+        onLogout={() => {
+          localStorage.removeItem(TOKEN_KEY)
+          setToken(null); setCliente(null)
+        }}
+      />
+      <AlixPortalChat cliente={cliente} token={token} />
+    </>
   )
 }

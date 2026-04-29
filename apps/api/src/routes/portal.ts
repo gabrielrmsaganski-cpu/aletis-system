@@ -31,6 +31,21 @@ import {
   enviarBoasVindas,
 } from '../services/PortalNotificationService.js'
 import {
+  getVapidPublicKey,
+  enviarPush,
+  type PushSubscriptionRecord,
+} from '../services/PushService.js'
+import {
+  projetarHonorarios,
+} from '../services/HonorariosService.js'
+import {
+  chatPortalAlix,
+  criarSessaoPortal,
+  listarSessoesPortal,
+  obterSessaoPortal,
+  deletarSessaoPortal,
+} from '../services/PortalAlixService.js'
+import {
   listarPendencias,
   criarPendencia,
   atualizarPendencia,
@@ -180,6 +195,10 @@ function localizarClienteParaAuth(input: string) {
 }
 
 /** Computa pulse: estado consolidado do caso para o Hero do cliente. */
+function monthsBetween(a: Date, b: Date): number {
+  return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth())
+}
+
 function computarPulse(clienteId: string) {
   const c = clientes.get(clienteId)
   if (!c) return null
@@ -238,16 +257,27 @@ function computarPulse(clienteId: string) {
 
 /** Middleware: garante JWT válido e anexa clienteId + cliente ao request.
  *
- *  Aceita o JWT via Authorization: Bearer (padrão) ou via query string
- *  `?_t=` (necessário para EventSource/SSE, que não suporta headers
- *  customizados). O token na URL fica visível em logs do servidor; mitigar
- *  via TLS + log scrubber em produção. */
+ *  Aceita o JWT via:
+ *    1. Authorization: Bearer (padrão para fetch/XHR)
+ *    2. Cookie HttpOnly `portal_token` (preferido para SSE — EventSource
+ *       envia cookies automaticamente com withCredentials)
+ *    3. Query string `?_t=` (fallback legado; mantido para compatibilidade
+ *       até clientes antigos atualizarem)
+ *
+ *  A ordem importa: Bearer wins. Cookie só atua quando o header não veio
+ *  (caso típico do EventSource). */
 async function autenticarPortal(request: FastifyRequest, reply: FastifyReply) {
-  // Se Authorization ausente mas _t query presente, sintetiza o header.
   if (!request.headers.authorization) {
-    const tok = (request.query as { _t?: string } | undefined)?._t
-    if (tok) {
-      ;(request.headers as Record<string, string>).authorization = `Bearer ${tok}`
+    // 1. Tenta cookie HttpOnly primeiro (mais seguro que query string).
+    const cookieTok = (request as FastifyRequest & { cookies?: Record<string, string> }).cookies?.portal_token
+    if (cookieTok) {
+      ;(request.headers as Record<string, string>).authorization = `Bearer ${cookieTok}`
+    } else {
+      // 2. Fallback legado para `?_t=`.
+      const tok = (request.query as { _t?: string } | undefined)?._t
+      if (tok) {
+        ;(request.headers as Record<string, string>).authorization = `Bearer ${tok}`
+      }
     }
   }
   try {
@@ -512,6 +542,17 @@ export default async function (fastify: FastifyInstance) {
       }
       const token = fastify.jwt.sign(payload)
 
+      // Cookie HttpOnly espelhando o token: SSE/EventSource não pode
+      // setar Authorization, então a alternativa segura é cookie. O JSON
+      // ainda inclui o token p/ compatibilidade com fetch existente.
+      reply.setCookie('portal_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 12 * 60 * 60, // 12h — alinhado com expiresIn do JWT
+      })
+
       return {
         success: true,
         data: {
@@ -520,6 +561,188 @@ export default async function (fastify: FastifyInstance) {
         },
       }
     }
+  )
+
+  /* ── POST /api/portal/auth/logout ───────────────────────────────────── */
+  fastify.post('/api/portal/auth/logout', async (_request, reply) => {
+    reply.clearCookie('portal_token', { path: '/' })
+    return { success: true }
+  })
+
+  /* ──────────────────────────────────────────────────────────────────────
+   *  ALIX no Portal — chat restrito ao caso do cliente logado
+   * ────────────────────────────────────────────────────────────────────── */
+
+  /* ── GET /api/portal/alix/sessions ──────────────────────────────────── */
+  fastify.get(
+    '/api/portal/alix/sessions',
+    { preHandler: autenticarPortal },
+    async (req: FastifyRequest) => {
+      const clienteId = (req as unknown as { clienteId: string }).clienteId
+      const sessoes = listarSessoesPortal(clienteId).map((s) => ({
+        id: s.id,
+        titulo: s.titulo,
+        criadoEm: s.criadoEm,
+        atualizadoEm: s.atualizadoEm,
+        totalMensagens: s.messages.length,
+      }))
+      return { success: true, data: sessoes }
+    },
+  )
+
+  /* ── POST /api/portal/alix/sessions ─────────────────────────────────── */
+  fastify.post(
+    '/api/portal/alix/sessions',
+    { preHandler: autenticarPortal },
+    async (req: FastifyRequest) => {
+      const clienteId = (req as unknown as { clienteId: string }).clienteId
+      const body = req.body as { titulo?: string } | undefined
+      const s = criarSessaoPortal(clienteId, body?.titulo)
+      return { success: true, data: { id: s.id, titulo: s.titulo, criadoEm: s.criadoEm } }
+    },
+  )
+
+  /* ── GET /api/portal/alix/sessions/:id ──────────────────────────────── */
+  fastify.get(
+    '/api/portal/alix/sessions/:id',
+    { preHandler: autenticarPortal },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      const clienteId = (req as unknown as { clienteId: string }).clienteId
+      const { id } = req.params as { id: string }
+      const s = obterSessaoPortal(id, clienteId)
+      if (!s) return reply.status(404).send({ success: false, error: 'Sessão não encontrada' })
+      return { success: true, data: s }
+    },
+  )
+
+  /* ── DELETE /api/portal/alix/sessions/:id ───────────────────────────── */
+  fastify.delete(
+    '/api/portal/alix/sessions/:id',
+    { preHandler: autenticarPortal },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      const clienteId = (req as unknown as { clienteId: string }).clienteId
+      const { id } = req.params as { id: string }
+      const ok = deletarSessaoPortal(id, clienteId)
+      if (!ok) return reply.status(404).send({ success: false, error: 'Sessão não encontrada' })
+      return { success: true }
+    },
+  )
+
+  /* ── POST /api/portal/alix/stream (SSE) ─────────────────────────────── */
+  fastify.post(
+    '/api/portal/alix/stream',
+    { preHandler: autenticarPortal },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      const clienteId = (req as unknown as { clienteId: string }).clienteId
+      const { sessionId, message } = (req.body ?? {}) as { sessionId?: string; message?: string }
+      if (!message || typeof message !== 'string' || message.trim().length === 0) {
+        return reply.status(400).send({ success: false, error: 'Campo "message" é obrigatório' })
+      }
+      // Rate limit simples por cliente: 30/min
+      if (!rateLimitCheck(`alix:${clienteId}`, 30, 60_000)) {
+        return reply.status(429).send({ success: false, error: 'Muitas mensagens. Aguarde 1 minuto.' })
+      }
+
+      reply.raw.setHeader('Content-Type', 'text/event-stream')
+      reply.raw.setHeader('Cache-Control', 'no-cache, no-transform')
+      reply.raw.setHeader('Connection', 'keep-alive')
+      reply.raw.setHeader('X-Accel-Buffering', 'no')
+      reply.raw.flushHeaders?.()
+
+      const send = (event: string, payload: unknown) => {
+        reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`)
+      }
+
+      send('start', { sessionId, ts: Date.now() })
+      const heartbeat = setInterval(() => send('ping', { ts: Date.now() }), 10_000)
+
+      try {
+        send('thinking', { text: 'analisando seu caso…' })
+        const { session, reply: replyMsg } = await chatPortalAlix({
+          clienteId,
+          sessionId,
+          message: message.trim(),
+          onToken: (chunk) => {
+            try { send('token', { text: chunk }) } catch { /* stream fechado */ }
+          },
+        })
+        send('done', {
+          reply: replyMsg,
+          sessionId: session.id,
+          titulo: session.titulo,
+        })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Erro desconhecido'
+        req.log.error({ err }, '[Portal/ALIX] stream error')
+        send('error', { error: msg })
+      } finally {
+        clearInterval(heartbeat)
+        reply.raw.end()
+      }
+    },
+  )
+
+  /* ──────────────────────────────────────────────────────────────────────
+   *  Web Push notifications (PWA)
+   * ────────────────────────────────────────────────────────────────────── */
+
+  /* ── GET /api/portal/push/vapid-public-key ──────────────────────────── */
+  fastify.get('/api/portal/push/vapid-public-key', async () => {
+    return { success: true, data: { publicKey: getVapidPublicKey() } }
+  })
+
+  /* ── POST /api/portal/push/subscribe ────────────────────────────────── */
+  fastify.post(
+    '/api/portal/push/subscribe',
+    { preHandler: autenticarPortal },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      const clienteId = (req as unknown as { clienteId: string }).clienteId
+      const cliente = clientes.get(clienteId)
+      if (!cliente || !cliente.portalAcesso) {
+        return reply.status(404).send({ success: false, error: 'Cliente não encontrado' })
+      }
+      const body = req.body as Partial<{
+        endpoint: string
+        keys: { p256dh: string; auth: string }
+      }>
+      if (!body?.endpoint || !body.keys?.p256dh || !body.keys?.auth) {
+        return reply.status(400).send({ success: false, error: 'Subscription inválida' })
+      }
+      const sub: PushSubscriptionRecord = {
+        endpoint: body.endpoint,
+        keys: body.keys,
+        ua: req.headers['user-agent'] as string | undefined,
+        criadoEm: new Date().toISOString(),
+      }
+      const existentes = cliente.portalAcesso.pushSubscriptions ?? []
+      // Dedup por endpoint — mesmo browser pode re-subscrever após limpar storage.
+      cliente.portalAcesso.pushSubscriptions = [
+        ...existentes.filter((s) => s.endpoint !== sub.endpoint),
+        sub,
+      ]
+      return { success: true }
+    },
+  )
+
+  /* ── POST /api/portal/push/unsubscribe ──────────────────────────────── */
+  fastify.post(
+    '/api/portal/push/unsubscribe',
+    { preHandler: autenticarPortal },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      const clienteId = (req as unknown as { clienteId: string }).clienteId
+      const cliente = clientes.get(clienteId)
+      if (!cliente || !cliente.portalAcesso) {
+        return reply.status(404).send({ success: false, error: 'Cliente não encontrado' })
+      }
+      const body = req.body as Partial<{ endpoint: string }>
+      if (!body?.endpoint) {
+        return reply.status(400).send({ success: false, error: 'endpoint obrigatório' })
+      }
+      cliente.portalAcesso.pushSubscriptions = (
+        cliente.portalAcesso.pushSubscriptions ?? []
+      ).filter((s) => s.endpoint !== body.endpoint)
+      return { success: true }
+    },
   )
 
   /* ── GET /api/portal/auth/me ────────────────────────────────────────── */
@@ -792,6 +1015,122 @@ export default async function (fastify: FastifyInstance) {
       })
     }
     return { success: true, data: { totalAberto, parcelas, parcelaPadrao: valorParcela, totalParcelas: N } }
+  })
+
+  /* ── GET /api/portal/honorarios ──────────────────────────────────────
+   * Projeção dos honorários ALETIS para o cliente: modelo, parcelas,
+   * próxima cobrança, êxito estimado em cima da economia atual. */
+  fastify.get('/api/portal/honorarios', { preHandler: autenticarPortal }, async (req) => {
+    const clienteId = (req as unknown as { clienteId: string }).clienteId
+    const c = clientes.get(clienteId)
+    if (!c) return { success: false, error: 'Cliente não encontrado' }
+    if (!c.honorarios) {
+      return { success: true, data: null }
+    }
+    const economia = c.dividas.reduce(
+      (a, d) => a + Math.max(0, d.valorOriginal - d.valorAtualizado),
+      0,
+    )
+    const saldoEmAberto = Math.max(0, c.valorTotalDivida - c.valorTotalPago)
+    const projecao = projetarHonorarios(c.honorarios, {
+      economia,
+      saldoEmAberto,
+      valorTotalDivida: c.valorTotalDivida,
+      valorTotalPago: c.valorTotalPago,
+    })
+    return { success: true, data: projecao }
+  })
+
+  /* ── GET /api/portal/dashboard ───────────────────────────────────────
+   * Endpoint agregado: substitui ~11 chamadas em paralelo por uma só.
+   * Inclui também séries (economiaSerie), breakdown por credor e marcos
+   * relevantes da timeline. Cliente passa a ter um payload coeso para o
+   * hero cinemático sem disparar waterfall. */
+  fastify.get('/api/portal/dashboard', { preHandler: autenticarPortal }, async (req) => {
+    const clienteId = (req as unknown as { clienteId: string }).clienteId
+    const c = clientes.get(clienteId)
+    if (!c) return { success: false, error: 'Cliente não encontrado' }
+
+    const pulse = computarPulse(clienteId)
+    const contrato = projetarContrato(clienteId)
+    const stepper = projetarStepper(clienteId)
+    const timeline = projetarTimeline(clienteId)
+    const documentos = projetarDocumentos(clienteId)
+
+    // Breakdown por credor
+    const porCredor = new Map<string, { credor: string; original: number; atual: number; economia: number; pct: number }>()
+    for (const d of c.dividas) {
+      const k = d.credor || c.credor || '—'
+      const cur = porCredor.get(k) ?? { credor: k, original: 0, atual: 0, economia: 0, pct: 0 }
+      cur.original += d.valorOriginal
+      cur.atual += d.valorAtualizado
+      cur.economia += Math.max(0, d.valorOriginal - d.valorAtualizado)
+      porCredor.set(k, cur)
+    }
+    const breakdownCredor = Array.from(porCredor.values())
+      .map((b) => ({
+        ...b,
+        pct: b.original > 0 ? Math.round((b.economia / b.original) * 1000) / 10 : 0,
+      }))
+      .sort((a, b) => b.economia - a.economia)
+
+    // Série temporal (12 meses): ramp linear até a economia atual.
+    const economiaTotal = breakdownCredor.reduce((a, x) => a + x.economia, 0)
+    const inicio = new Date(c.dataCadastro)
+    const hoje = new Date()
+    const meses = Math.max(2, Math.min(24, monthsBetween(inicio, hoje) + 1))
+    const economiaSerie: Array<{ mes: string; economia: number; pago: number }> = []
+    for (let i = 0; i < meses; i++) {
+      const d = new Date(inicio)
+      d.setMonth(d.getMonth() + i)
+      const ratio = (i + 1) / meses
+      economiaSerie.push({
+        mes: d.toISOString().slice(0, 7), // YYYY-MM
+        economia: Math.round(economiaTotal * ratio * 100) / 100,
+        pago: Math.round(c.valorTotalPago * ratio * 100) / 100,
+      })
+    }
+
+    // Marcos da negociação extraídos da timeline
+    const marcosTipos = new Set([
+      'assinatura_acordo',
+      'redução_credor',
+      'reducao_credor',
+      'proposta_aceita',
+      'pagamento_marco',
+      'documento_assinado',
+      'inicio_negociacao',
+    ])
+    const marcosNegociacao = (c.timeline ?? [])
+      .filter((t) => marcosTipos.has(t.tipo) || (t.descricao ?? '').match(/economia|acordo|reduç/i))
+      .slice(-8)
+      .map((t) => ({ data: t.data, tipo: t.tipo, descricao: t.descricao }))
+
+    // Honorários (opcional)
+    let honorarios: ReturnType<typeof projetarHonorarios> | null = null
+    if (c.honorarios) {
+      honorarios = projetarHonorarios(c.honorarios, {
+        economia: economiaTotal,
+        saldoEmAberto: Math.max(0, c.valorTotalDivida - c.valorTotalPago),
+        valorTotalDivida: c.valorTotalDivida,
+        valorTotalPago: c.valorTotalPago,
+      })
+    }
+
+    return {
+      success: true,
+      data: {
+        pulse,
+        contrato,
+        stepper,
+        timeline,
+        documentos,
+        honorarios,
+        economiaSerie,
+        breakdownCredor,
+        marcosNegociacao,
+      },
+    }
   })
 
   /* ── GET /api/portal/memoria-simplificada ────────────────────────────

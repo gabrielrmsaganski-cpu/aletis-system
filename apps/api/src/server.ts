@@ -6,6 +6,7 @@ initOtel()
 
 import Fastify, { FastifyServerOptions } from 'fastify'
 import cors from '@fastify/cors'
+import cookie from '@fastify/cookie'
 import jwt from '@fastify/jwt'
 import multipart from '@fastify/multipart'
 import rateLimit from '@fastify/rate-limit'
@@ -238,6 +239,14 @@ async function buildApp() {
   await fastify.register(jwt, {
     secret: jwtSecret || 'aletis-portal-dev-secret-change-me-in-prod',
     sign: { expiresIn: '12h' },
+  })
+
+  // Cookie HttpOnly para SSE — permite EventSource autenticado sem expor
+  // o JWT no querystring (que vaza em logs/proxies). O frontend usa
+  // withCredentials no EventSource e Authorization Bearer no resto.
+  await fastify.register(cookie, {
+    secret: jwtSecret || 'aletis-portal-dev-secret-change-me-in-prod',
+    parseOptions: {},
   })
 
   // --- Multipart (uploads de NF, comprovantes, OFX, etc) ---

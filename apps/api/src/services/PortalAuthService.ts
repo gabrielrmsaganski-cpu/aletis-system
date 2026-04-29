@@ -10,6 +10,7 @@
  * (`portalAcesso`) em memória, coerente com o padrão atual do backend.
  */
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
+import type { PushSubscriptionRecord } from './PushService.js'
 
 /** Parâmetros scrypt: N=16384 (2^14), r=8, p=1 — padrão recomendado. */
 const SCRYPT_KEYLEN = 64
@@ -31,6 +32,8 @@ export interface PortalAcesso {
   ultimoLoginEm?: string
   /** Se true, cliente precisa trocar senha no próximo login. */
   forcaTrocaSenha: boolean
+  /** Web Push subscriptions ativas (1 por dispositivo/browser). */
+  pushSubscriptions?: PushSubscriptionRecord[]
 }
 
 /** Payload do JWT emitido. */

@@ -123,6 +123,7 @@ coverage/
 playwright-report/
 test-results/
 .playwright-mcp/
+.playwright-cli/
 
 # Asset master files (Adobe Illustrator + PDF do manual de identidade)
 # As fontes/PNGs já estão exportadas em apps/web/public/brand e public/fonts

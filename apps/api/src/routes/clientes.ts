@@ -17,6 +17,12 @@ import {
   type PortalAcesso,
 } from '../services/PortalAuthService.js'
 import {
+  gerarParcelasIniciais,
+  novoIdParcela,
+  type HonorariosCliente,
+  type HonorarioParcela,
+} from '../services/HonorariosService.js'
+import {
   getAutoCalcOrchestrator,
   buildSraiInput,
   buildAbsInput,
@@ -315,6 +321,8 @@ interface Cliente {
   portalAcesso?: PortalAcesso
   /** Histórico de mensagens do Portal do Cliente (cliente ↔ consultor). */
   portalMensagens?: PortalMensagem[]
+  /** Modelo de honorários ALETIS contratado + parcelas geradas/registradas. */
+  honorarios?: HonorariosCliente
   /**
    * Snapshot das análises automáticas (SRAI + ABS + dívidas + projeções +
    * margem). Materializado pelo `AutoCalcOrchestrator` após enriquecimento e
@@ -1837,6 +1845,26 @@ export default async function (fastify: FastifyInstance) {
         criadoEm: new Date().toISOString(),
       }
       cliente.portalMensagens = [...(cliente.portalMensagens ?? []), msg]
+
+      // Push notification — best-effort, não bloqueia a resposta. Subs
+      // expiradas (410) são removidas automaticamente.
+      const subs = cliente.portalAcesso?.pushSubscriptions ?? []
+      if (subs.length > 0) {
+        const { enviarPush } = await import('../services/PushService.js')
+        enviarPush(subs, {
+          title: `Mensagem de ${msg.autorNome}`,
+          body: texto.length > 120 ? `${texto.slice(0, 117)}…` : texto,
+          url: '/portal-cliente?tab=chat',
+          tag: `chat-${cliente.id}`,
+        }).then(({ expiradas }) => {
+          if (expiradas.length > 0 && cliente.portalAcesso) {
+            cliente.portalAcesso.pushSubscriptions = (
+              cliente.portalAcesso.pushSubscriptions ?? []
+            ).filter((s) => !expiradas.includes(s.endpoint))
+          }
+        }).catch(() => { /* swallow — log já feito no service */ })
+      }
+
       return reply.status(201).send({ success: true, data: msg })
     }
   )
@@ -1861,5 +1889,90 @@ export default async function (fastify: FastifyInstance) {
       }
       return { success: true, data: { marcadas } }
     }
+  )
+
+  /* ── Honorários ──────────────────────────────────────────────────────
+   * Consultor define modelo, registra parcelas e marca pagamentos.
+   * O Portal só lê via /api/portal/honorarios (com auth de cliente). */
+
+  /** Define ou atualiza o modelo de honorários do cliente. Se `gerar=true`,
+   *  pré-popula parcelas iniciais (fixo + mensalidades). */
+  fastify.put(
+    '/api/clientes/:id/honorarios',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string }
+      const cliente = clientes.get(id)
+      if (!cliente) { reply.status(404); return { success: false, error: 'Cliente não encontrado' } }
+      const body = request.body as Partial<HonorariosCliente> & { gerar?: boolean } | undefined
+      if (!body || !body.modelo) {
+        reply.status(400); return { success: false, error: 'Campo "modelo" é obrigatório' }
+      }
+      const inicio = body.vigencia?.inicio ?? new Date().toISOString().slice(0, 10)
+      const baseHonorarios = {
+        modelo: body.modelo,
+        descricao: body.descricao,
+        honorarioFixo: body.honorarioFixo,
+        mensalidade: body.mensalidade,
+        mesesRetainer: body.mesesRetainer,
+        percentualExito: body.percentualExito,
+        baseCalculoExito: body.baseCalculoExito,
+        pisoExito: body.pisoExito,
+        tetoExito: body.tetoExito,
+        vigencia: { inicio, fim: body.vigencia?.fim },
+      }
+      const parcelasExistentes = cliente.honorarios?.parcelas ?? []
+      const novas = body.gerar ? gerarParcelasIniciais(baseHonorarios) : []
+      cliente.honorarios = {
+        ...baseHonorarios,
+        parcelas: [...parcelasExistentes, ...novas],
+        atualizadoEm: new Date().toISOString(),
+      }
+      return { success: true, data: cliente.honorarios }
+    },
+  )
+
+  /** Adiciona parcela avulsa (ex: success fee disparado após renegociação). */
+  fastify.post(
+    '/api/clientes/:id/honorarios/parcela',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string }
+      const cliente = clientes.get(id)
+      if (!cliente?.honorarios) { reply.status(404); return { success: false, error: 'Cliente sem honorários definidos' } }
+      const body = request.body as Partial<HonorarioParcela> | undefined
+      if (!body?.tipo || typeof body.valor !== 'number' || !body.vencimento) {
+        reply.status(400); return { success: false, error: 'tipo, valor e vencimento são obrigatórios' }
+      }
+      const parcela: HonorarioParcela = {
+        id: novoIdParcela(),
+        tipo: body.tipo,
+        valor: body.valor,
+        vencimento: body.vencimento,
+        status: body.status ?? 'aberto',
+        descricao: body.descricao,
+        observacao: body.observacao,
+      }
+      cliente.honorarios.parcelas = [...cliente.honorarios.parcelas, parcela]
+      cliente.honorarios.atualizadoEm = new Date().toISOString()
+      return reply.status(201).send({ success: true, data: parcela })
+    },
+  )
+
+  /** Marca parcela como paga. */
+  fastify.patch(
+    '/api/clientes/:id/honorarios/parcela/:parcelaId/pagar',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id, parcelaId } = request.params as { id: string; parcelaId: string }
+      const cliente = clientes.get(id)
+      if (!cliente?.honorarios) { reply.status(404); return { success: false, error: 'Cliente sem honorários' } }
+      const body = request.body as Partial<{ pagoEm: string; meioPagamento: string; observacao: string }> | undefined
+      const parcela = cliente.honorarios.parcelas.find((p) => p.id === parcelaId)
+      if (!parcela) { reply.status(404); return { success: false, error: 'Parcela não encontrada' } }
+      parcela.status = 'pago'
+      parcela.pagoEm = body?.pagoEm ?? new Date().toISOString()
+      parcela.meioPagamento = body?.meioPagamento
+      parcela.observacao = body?.observacao ?? parcela.observacao
+      cliente.honorarios.atualizadoEm = new Date().toISOString()
+      return { success: true, data: parcela }
+    },
   )
 }
