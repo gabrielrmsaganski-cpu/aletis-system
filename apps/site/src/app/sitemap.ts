@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next'
 import { siteConfig } from '@/lib/siteConfig'
 import { insights } from '@/lib/insights'
+import { flattenTree } from '@/components/educacao/eduTree'
 
 const STATIC_ROUTES = [
   { path: '', priority: 1.0, changeFrequency: 'weekly' as const },
@@ -36,5 +37,23 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.7,
   }))
 
-  return [...staticEntries, ...insightEntries]
+  // Educação — todas as rotas derivadas do eduTree (mapa + 7 hubs + 24 sub-tópicos)
+  const eduEntries: MetadataRoute.Sitemap = flattenTree().map((node) => {
+    // hub = /educacao/<x> (2 segmentos após raiz); subtópico = mais profundo
+    const segs = node.href.split('/').filter(Boolean)
+    const isHub = segs.length === 2
+    return {
+      url: `${base}${node.href}`,
+      lastModified: now,
+      changeFrequency: 'monthly' as const,
+      priority: isHub ? 0.85 : 0.75,
+    }
+  })
+
+  return [
+    ...staticEntries,
+    { url: `${base}/educacao`, lastModified: now, changeFrequency: 'monthly', priority: 0.95 },
+    ...eduEntries,
+    ...insightEntries,
+  ]
 }

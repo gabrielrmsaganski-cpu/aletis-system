@@ -38,6 +38,7 @@ export const nav = {
     { label: 'Sobre', href: '/sobre' },
     { label: 'Soluções', href: '/solucoes' },
     { label: 'Cases', href: '/cases' },
+    { label: 'Educação', href: '/educacao' },
     { label: 'Calculadoras', href: '/calculadoras' },
     { label: 'Insights', href: '/insights' },
     { label: 'Contato', href: '/contato' },
@@ -66,6 +67,15 @@ export const nav = {
       { label: 'Política de Privacidade', href: '/politica-privacidade' },
       { label: 'Termos de Uso', href: '/politica-privacidade#termos' },
       { label: 'LGPD', href: '/politica-privacidade#lgpd' },
+    ],
+    educacao: [
+      { label: 'Mapa da Educação', href: '/educacao' },
+      { label: 'Crédito Rural', href: '/educacao/credito-rural' },
+      { label: 'Programas oficiais', href: '/educacao/programas' },
+      { label: 'Instrumentos do agro', href: '/educacao/instrumentos' },
+      { label: 'Renegociação', href: '/educacao/renegociacao' },
+      { label: 'Direitos do produtor', href: '/educacao/direitos' },
+      { label: 'Anatomia do contrato', href: '/educacao/contrato' },
     ],
   },
 } as const
