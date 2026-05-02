@@ -199,7 +199,7 @@ export function AlixPortalChat({ cliente, token }: Props) {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          aria-label="Abrir chat com ALIX"
+          aria-label="Abrir chat com Aletéia"
           className="fixed bottom-5 right-5 z-40 group flex items-center gap-2.5 rounded-full bg-aletis-verde shadow-2xl shadow-aletis-verde/40 hover:shadow-aletis-gold/40 transition-all px-4 py-3 hover:scale-105 active:scale-95"
         >
           <span className="relative flex h-7 w-7 items-center justify-center rounded-full bg-aletis-gold text-aletis-verde">
@@ -210,7 +210,7 @@ export function AlixPortalChat({ cliente, token }: Props) {
             </span>
           </span>
           <span className="font-display text-[12px] font-bold uppercase tracking-wider text-aletis-cream pr-1">
-            Falar com ALIX
+            Falar com Aletéia
           </span>
         </button>
       )}
@@ -226,7 +226,7 @@ export function AlixPortalChat({ cliente, token }: Props) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-display text-[13px] font-bold text-white leading-none">
-                  ALIX no seu caso
+                  Aletéia no seu caso
                 </p>
                 <p className="font-body text-[11px] text-aletis-cream/75 mt-0.5">
                   Inteligência ALETIS · responde só sobre você
@@ -328,7 +328,7 @@ export function AlixPortalChat({ cliente, token }: Props) {
                 </button>
               </form>
               <p className="mt-2 font-body text-[10px] text-aletis-verde-medio leading-snug">
-                ALIX responde com base nos dados do seu caso. Para decisões sensíveis (assinar, aceitar valores), confirme com {cliente.consultor || 'seu consultor'}.
+                Aletéia responde com base nos dados do seu caso. Para decisões sensíveis (assinar, aceitar valores), confirme com {cliente.consultor || 'seu consultor'}.
               </p>
             </div>
           </div>

@@ -115,7 +115,7 @@ export default function NegociacaoSection({ data }: Props) {
           </h2>
           <p className="text-xs font-body text-aletis-grafite-medio mt-0.5">
             Propostas, negociações com credores, demandas de crédito e contratos oficiais.
-            Use a barra de comandos acima para <strong>Simular renegociação</strong>, <strong>Stress test</strong>, <strong>Marketplace</strong> e <strong>Narrativa ALIX</strong>.
+            Use a barra de comandos acima para <strong>Simular renegociação</strong>, <strong>Stress test</strong>, <strong>Marketplace</strong> e <strong>Narrativa Aletéia</strong>.
           </p>
         </div>
       </header>

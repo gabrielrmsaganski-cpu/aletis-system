@@ -1061,7 +1061,7 @@ export default function ALIX() {
       setMessages((prev) => [...prev, {
         id: `err-${Date.now()}`,
         role: 'assistant',
-        content: `Erro ao contatar ALIX: ${(err as Error).message}. Tenta de novo?`,
+        content: `Erro ao contatar Aletéia: ${(err as Error).message}. Tenta de novo?`,
         timestamp: Date.now(),
       }])
     } finally {
@@ -1145,7 +1145,7 @@ export default function ALIX() {
         <div className="absolute inset-0 z-50 bg-aletis-verde/10 backdrop-blur-sm border-2 border-dashed border-aletis-verde rounded-2xl flex items-center justify-center pointer-events-none">
           <div className="bg-white rounded-2xl shadow-xl px-8 py-6 flex items-center gap-3">
             <Paperclip className="w-6 h-6 text-aletis-verde" />
-            <div className="text-base font-semibold text-aletis-grafite-escuro">Solte os arquivos pra enviar à Alix</div>
+            <div className="text-base font-semibold text-aletis-grafite-escuro">Solte os arquivos pra enviar à Aletéia</div>
           </div>
         </div>
       )}
@@ -1288,9 +1288,9 @@ export default function ALIX() {
               <Sparkles className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-display font-bold text-aletis-grafite-escuro leading-tight">ALIX</h1>
+              <h1 className="text-3xl font-display font-bold text-aletis-grafite-escuro leading-tight">Aletéia</h1>
               <p className="text-aletis-grafite-medio text-sm font-body">
-                Agente de Leitura e Inteligência Estratégica
+                Agente de Leitura e Inteligência Estratégica da ALETIS
               </p>
             </div>
           </div>
@@ -1375,7 +1375,7 @@ export default function ALIX() {
             {/* Telemetria visual — abre overlay com custo/tokens/latência/tools */}
             <button
               onClick={() => setShowTelemetry(true)}
-              aria-label="Abrir painel de uso e custo da ALIX"
+              aria-label="Abrir painel de uso e custo da Aletéia"
               className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white border border-aletis-borda text-aletis-grafite-claro hover:text-aletis-grafite-escuro transition-colors"
               title="Uso, custo, latência e top tools (60s polling)"
             >
@@ -1474,10 +1474,10 @@ export default function ALIX() {
                     <div className="w-5 h-5 rounded-full bg-aletis-dourado flex items-center justify-center">
                       <Bot className="w-3 h-3 text-white" />
                     </div>
-                    <span className="text-xs font-semibold text-aletis-dourado">ALIX</span>
+                    <span className="text-xs font-semibold text-aletis-dourado">ALETÉIA</span>
                   </div>
                   <div className="text-sm leading-relaxed font-body">
-                    {greetingByTime()} Christian. ALIX aqui — pergunta em linguagem natural, anexa PDF/XLSX/imagem, escolhe cliente ativo pra eu puxar a memória dele e gerar propostas/pareceres/fluxos de caixa reais com um pedido só.
+                    {greetingByTime()} Christian. Aletéia aqui — pergunta em linguagem natural, anexa PDF/XLSX/imagem, escolhe cliente ativo pra eu puxar a memória dele e gerar propostas/pareceres/fluxos de caixa reais com um pedido só.
                   </div>
                 </div>
               </div>
@@ -1502,7 +1502,7 @@ export default function ALIX() {
                           <div className="w-5 h-5 rounded-full bg-aletis-dourado flex items-center justify-center">
                             <Bot className="w-3 h-3 text-white" />
                           </div>
-                          <span className="text-xs font-semibold text-aletis-dourado">ALIX</span>
+                          <span className="text-xs font-semibold text-aletis-dourado">ALETÉIA</span>
                           {msg.intent && (
                             <span className="text-[10px] text-aletis-grafite-claro font-mono">• {msg.intent}</span>
                           )}
@@ -1591,7 +1591,7 @@ export default function ALIX() {
                     <div className="w-5 h-5 rounded-full bg-aletis-dourado flex items-center justify-center">
                       <Bot className="w-3 h-3 text-white" />
                     </div>
-                    <span className="text-xs font-semibold text-aletis-dourado">ALIX</span>
+                    <span className="text-xs font-semibold text-aletis-dourado">ALETÉIA</span>
                   </div>
                   <div className="flex gap-1 py-1">
                     <span className="w-2 h-2 rounded-full bg-aletis-grafite-claro animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -1668,7 +1668,7 @@ export default function ALIX() {
                 disabled={isTyping}
                 placeholder={attachments.length > 0 ? 'Pergunta sobre os arquivos…' : 'Pergunta em linguagem natural…'}
                 className="input-field flex-1 disabled:opacity-60"
-                aria-label="Mensagem para ALIX"
+                aria-label="Mensagem para Aletéia"
               />
               <button
                 onClick={() => handleSend()}
@@ -1710,7 +1710,7 @@ export default function ALIX() {
           onKeyDown={(e) => { if (e.key === 'Escape') setShowTelemetry(false) }}
           role="dialog"
           aria-modal="true"
-          aria-label="Painel de uso e custo da ALIX"
+          aria-label="Painel de uso e custo da Aletéia"
         >
           <div className="mt-12">
             <AlixTelemetryPanel onClose={() => setShowTelemetry(false)} />

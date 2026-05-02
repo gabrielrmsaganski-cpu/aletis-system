@@ -125,7 +125,7 @@ export default function AlixTelemetryPanel({ onClose }: { onClose?: () => void }
             <Activity className="w-4 h-4 text-aletis-gold" />
           </div>
           <div>
-            <p className="font-display text-base font-bold tracking-wide">Uso & custo da ALIX</p>
+            <p className="font-display text-base font-bold tracking-wide">Uso & custo da Aletéia</p>
             <p className="font-body text-[11.5px] text-aletis-sage">
               Atualizado {data ? new Date(data.geradoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—'}
             </p>

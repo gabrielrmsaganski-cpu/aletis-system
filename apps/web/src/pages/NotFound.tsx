@@ -15,7 +15,7 @@ export default function NotFound() {
     { label: 'Dashboard', href: '/dashboard', nota: 'visão geral do escritório' },
     { label: 'CRM', href: '/crm', nota: 'lista de clientes ativos' },
     { label: 'Prospecção', href: '/prospeccao', nota: 'OODA — leads qualificados' },
-    { label: 'ALIX', href: '/ia', nota: 'assistente IA' },
+    { label: 'Aletéia', href: '/ia', nota: 'assistente IA' },
   ]
 
   return (

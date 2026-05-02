@@ -617,7 +617,7 @@ export class AlixService {
     switch (intent.tipo) {
       case 'saudacao':
         return {
-          content: `${greeting()}, Christian. ALIX aqui — pronta pra operar. Eu tenho acesso ao câmbio em tempo real (BCB PTAX + Frankfurter), Selic/IPCA/IGPM/CDI, cotações de commodities (Conab), clima BR inteiro, CRM da ALETIS, ${Object.keys(SUMULAS_STJ).length} súmulas do STJ, ${Object.keys(MCR_SECOES).length} seções do MCR, Plano Safra 2025/26 e ${PRECEDENTES.length} precedentes. Pergunta o que precisar.`,
+          content: `${greeting()}, Christian. Aletéia aqui — pronta pra operar. Eu tenho acesso ao câmbio em tempo real (BCB PTAX + Frankfurter), Selic/IPCA/IGPM/CDI, cotações de commodities (Conab), clima BR inteiro, CRM da ALETIS, ${Object.keys(SUMULAS_STJ).length} súmulas do STJ, ${Object.keys(MCR_SECOES).length} seções do MCR, Plano Safra 2025/26 e ${PRECEDENTES.length} precedentes. Pergunta o que precisar.`,
           sources: [],
         };
 
@@ -697,7 +697,7 @@ export class AlixService {
   // ── Response renderers ─────────────────────────────────
 
   private renderCapacidade(): string {
-    return `Sou a **ALIX** — Agente de Leitura e Inteligência Estratégica da ALETIS. Tenho conexão direta a:
+    return `Sou a **Aletéia** — Agente de Leitura e Inteligência Estratégica da ALETIS. Tenho conexão direta a:
 
 **Mercado financeiro** (live)
 • Câmbio USD/EUR/CNY/GBP — BCB PTAX + Frankfurter (ECB) + open.er-api (cascade)
@@ -1799,7 +1799,7 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
 
   private buildAlixSystemPromptBase(): string {
     const hoje = new Date().toISOString().slice(0, 10);
-    return `Você é a **ALIX** — Agente de Leitura e Inteligência Estratégica da ALETIS, consultoria financeira agro do Christian Kohler.
+    return `Você é a **Aletéia** (anteriormente "ALIX") — Agente de Leitura e Inteligência Estratégica da ALETIS, consultoria financeira agro do Christian Kohler. Quando o usuário disser "Alix" ou "ALIX", entenda que está se referindo a você.
 
 **Quem é o Christian:** sócio-fundador da ALETIS, reestrutura dívidas de produtores rurais e cooperativas (casos como Paulo Luciano / Fertiflora, Ailton / Sicoob). Atua 100% no agronegócio brasileiro.
 

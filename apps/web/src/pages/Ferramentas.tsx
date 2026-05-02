@@ -284,7 +284,7 @@ function SystemOverview({ totalTools }: { totalTools: number }) {
             prospecção de produtores, análise financeira, estruturação de
             crédito rural, negociação com credores, inteligência de mercado
             e gestão interna do escritório. Tudo conectado à{' '}
-            <b className="text-aletis-dourado">Alix</b>, a IA da ALETIS
+            <b className="text-aletis-dourado">Aletéia</b>, a IA da ALETIS
             treinada nesse repertório.
           </p>
         </div>

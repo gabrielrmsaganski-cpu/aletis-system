@@ -139,7 +139,7 @@ const contacts: Contact[] = [
   {
     id: 7,
     name: 'Ricardo Silva',
-    lastMessage: '\uD83C\uDFA4 Alix enviou um áudio',
+    lastMessage: '\uD83C\uDFA4 Aletéia enviou um áudio',
     time: 'agora',
     unread: 1,
     avatar: 'RS',
@@ -441,7 +441,7 @@ const chatData: Record<number, ChatMessage[]> = {
       id: 2,
       from: 'consultant',
       senderLabel: 'Alix',
-      text: 'Boa tarde Ricardo! Aqui é a Alix, assistente da ALETIS. Pra te ajudar melhor, como posso te chamar?',
+      text: 'Boa tarde Ricardo! Aqui é a Aletéia, assistente da ALETIS. Pra te ajudar melhor, como posso te chamar?',
       time: '13:48',
       read: true,
     },
@@ -456,7 +456,7 @@ const chatData: Record<number, ChatMessage[]> = {
       id: 4,
       from: 'consultant',
       senderLabel: 'Alix',
-      text: '\u00C1udio enviado pela Alix',
+      text: '\u00C1udio enviado pela Aletéia',
       time: '13:50',
       read: false,
       type: 'audio',
@@ -753,7 +753,7 @@ export default function WhatsApp() {
                             <div className="flex items-center gap-1 mb-1">
                               <Sparkles className="w-3 h-3 text-aletis-verde" />
                               <span className="text-[10px] font-semibold text-aletis-verde uppercase tracking-wide">
-                                Alix · IA
+                                Aletéia · IA
                               </span>
                             </div>
                           )}

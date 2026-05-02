@@ -158,7 +158,7 @@ export default function QuickActionsBar({ urlId, cliente, apiId, onReload }: Pro
               tooltip="Simula queda de preço/rendimento"
             />
             <ActionBtn
-              label="Narrativa ALIX"
+              label="Narrativa Aletéia"
               icon={Bot}
               tone="ai"
               onClick={() => setShowNarr(true)}

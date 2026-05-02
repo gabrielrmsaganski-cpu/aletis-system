@@ -64,7 +64,7 @@ export default function NarrativaModal({ grupoId, onClose }: Props) {
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-aletis-verde" />
             <div>
-              <p className="text-[10px] font-mono text-aletis-verde uppercase font-semibold">🤖 ALIX · Narrativa LLM</p>
+              <p className="text-[10px] font-mono text-aletis-verde uppercase font-semibold">🤖 ALETÉIA · Narrativa LLM</p>
               <h2 className="text-base font-display font-semibold text-aletis-grafite-escuro">Análise textual do diagnóstico</h2>
             </div>
           </div>

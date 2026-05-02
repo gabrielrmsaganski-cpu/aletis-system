@@ -1455,7 +1455,7 @@ function SimpleListV2({ grupoId, endpoint, titulo, emoji }: { grupoId: string; e
       </h3>
       {items.length === 0 ? (
         <div className="rounded-lg border border-dashed border-aletis-grafite-claro/30 p-6 text-center bg-aletis-cream/20">
-          <p className="text-xs text-aletis-grafite-claro">Nenhum registro. Adicione via API/ALIX ou aguarde wave 2 para editor inline.</p>
+          <p className="text-xs text-aletis-grafite-claro">Nenhum registro. Adicione via API/Aletéia ou aguarde wave 2 para editor inline.</p>
         </div>
       ) : (
         <pre className="text-[10px] font-mono bg-aletis-cream/30 rounded-lg p-3 overflow-x-auto max-h-96">{JSON.stringify(items, null, 2)}</pre>
@@ -1577,7 +1577,7 @@ function SimpleListSection({ grupoId, type, emoji, titulo }: { grupoId: string; 
       </h3>
       {items.length === 0 ? (
         <p className="text-xs text-aletis-grafite-claro text-center py-6">
-          Nenhum registro. Em breve: editor inline. Por ora use a API ou ALIX (gestao_financeira_*).
+          Nenhum registro. Em breve: editor inline. Por ora use a API ou Aletéia (gestao_financeira_*).
         </p>
       ) : (
         <pre className="text-[10px] font-mono bg-aletis-cream/30 rounded-lg p-3 overflow-x-auto">{JSON.stringify(items, null, 2)}</pre>

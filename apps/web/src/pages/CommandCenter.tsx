@@ -440,11 +440,11 @@ export default function CommandCenter() {
             <div className="flex items-center gap-2 mb-2">
               <Activity className="w-4 h-4 text-aletis-verde" />
               <h2 className="text-sm font-display font-semibold text-aletis-grafite-escuro dark:text-white">
-                ALIX
+                Aletéia
               </h2>
             </div>
             <p className="text-xs font-body text-aletis-grafite-claro dark:text-white/60 mb-3">
-              Toda resposta do ALIX deste cliente leva auditoria de fontes e confiança.
+              Toda resposta da Aletéia deste cliente leva auditoria de fontes e confiança.
             </p>
             <DSButton
               variant="secondary"
@@ -452,7 +452,7 @@ export default function CommandCenter() {
               className="w-full"
               onClick={() => navigate(`/alix?cliente=${id}`)}
             >
-              Abrir conversa com ALIX <ChevronRight className="w-3 h-3" />
+              Abrir conversa com Aletéia <ChevronRight className="w-3 h-3" />
             </DSButton>
           </DSCard>
         </div>

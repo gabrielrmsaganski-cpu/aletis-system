@@ -83,7 +83,7 @@ export const CATEGORIES: CategoryMeta[] = [
   {
     id: 'comunicacao',
     label: 'Comunicação & IA',
-    subtitle: 'WhatsApp e a assistente Alix',
+    subtitle: 'WhatsApp e a assistente Aletéia',
     accentClass: 'bg-aletis-verde/10 text-aletis-verde-medio',
   },
   {
@@ -327,14 +327,14 @@ export const TOOL_CATALOG: ToolEntry[] = [
   },
   {
     id: 'alix',
-    title: 'Alix',
-    tagline: 'Assistente IA com ~69 ferramentas',
+    title: 'Aletéia',
+    tagline: 'Assistente IA com ~80 ferramentas',
     description:
-      'Agente IA da ALETIS (Claude Sonnet 4.6) com acesso a dossiê, custeio, contabilidade Lambda, fiscal, relatórios, simuladores CBS-IBS/Funrural/Desenrola, BSC Agro, SICOR Bacen, RAG BM25, upload multimodal e geração real de PDF/DOCX/XLSX.',
+      'Aletéia, agente IA da ALETIS (Claude Sonnet 4.6) com acesso a dossiê, custeio, contabilidade Lambda, fiscal, relatórios, simuladores CBS-IBS/Funrural/Desenrola, BSC Agro, SICOR Bacen, RAG BM25, upload multimodal, calculadoras agro nativas (Dupont/Fleuriet/FARMS/Preço) e geração real de PDF/DOCX/XLSX.',
     icon: Bot,
     route: '/ia',
     category: 'comunicacao',
-    keywords: ['alix', 'ia', 'ai', 'assistente', 'chat', 'claude', 'inteligencia artificial', 'agente'],
+    keywords: ['aletéia', 'aleteia', 'aletheia', 'alix', 'ia', 'ai', 'assistente', 'chat', 'claude', 'inteligencia artificial', 'agente'],
     showInSidebar: true,
     shortcut: 'g a',
     badge: 'ia',
