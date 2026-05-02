@@ -139,3 +139,7 @@ apps/site/storage/
 
 # Backups gerados localmente
 backups/
+
+# Staging area de fontes pre-canonização. Os 25 docs canônicos do Processo
+# de Assessoria TEX vivem em documentos/processo-assessoria/originais/.
+documentos2/
