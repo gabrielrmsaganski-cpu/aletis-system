@@ -35,6 +35,7 @@ import {
   Activity,
   Building2,
   Briefcase,
+  MapPin,
 } from 'lucide-react'
 
 export type ToolCategory =
@@ -161,6 +162,18 @@ export const TOOL_CATALOG: ToolEntry[] = [
     showInSidebar: true,
   },
   {
+    id: 'prospeccao-mapa',
+    title: 'Mapa de Prospecção',
+    tagline: 'Leads PGFN distribuídos por UF',
+    description:
+      'Visão geográfica dos leads — markers coloridos por score (quente/morno/frio), camadas de mapa e satélite, filtros por UF / tipo / dívida mínima. Quando o lead não tem lat/lng explícita, o ponto cai no centróide da UF.',
+    icon: MapPin,
+    route: '/prospeccao/mapa',
+    category: 'clientes',
+    keywords: ['mapa', 'geografia', 'leads', 'prospeccao', 'uf', 'pin', 'leaflet'],
+    showInSidebar: false,
+  },
+  {
     id: 'crm',
     title: 'CRM',
     tagline: 'Gestão de clientes e estágios',
@@ -246,6 +259,31 @@ export const TOOL_CATALOG: ToolEntry[] = [
     category: 'agro',
     keywords: ['credito', 'credito rural', 'pronaf', 'pronamp', 'mcr', 'taxa', 'parcela', 'simulador'],
     showInSidebar: true,
+  },
+  {
+    id: 'calculadoras-agro',
+    title: 'Calculadoras Agro',
+    tagline: 'Dupont/Fleuriet, Preço de Venda, FARMS Viabilidade',
+    description:
+      'Reimplementação nativa das planilhas legadas (R.OP.001 / sistema agro). Diagnóstico financeiro Dupont 5-fatores + tipologia Fleuriet, formação de preço de venda 3.0 (4 modelos de markup) e viabilidade agrícola por cultura (FARMS) com sensibilidade ao preço e ao rendimento.',
+    icon: Wheat,
+    route: '/ferramentas/calculadoras-agro',
+    category: 'agro',
+    keywords: [
+      'calculadora',
+      'dupont',
+      'fleuriet',
+      'roe',
+      'roic',
+      'preco',
+      'venda',
+      'markup',
+      'farms',
+      'viabilidade',
+      'safra',
+      'sensibilidade',
+    ],
+    showInSidebar: false,
   },
 
   // ─────────── MERCADO ───────────

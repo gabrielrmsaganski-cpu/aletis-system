@@ -36,11 +36,14 @@ const Relatorios = lazy(() => import('./pages/Relatorios'))
 const Configuracoes = lazy(() => import('./pages/Configuracoes'))
 const ALIX = lazy(() => import('./pages/ALIX'))
 const Prospeccao = lazy(() => import('./pages/Prospeccao'))
+const ProspeccaoMapa = lazy(() => import('./pages/ProspeccaoMapa'))
 const Financeiro = lazy(() => import('./pages/Financeiro'))
 const CarteiraConsultor = lazy(() => import('./pages/CarteiraConsultor'))
 const CusteioAgricola = lazy(() => import('./pages/CusteioAgricola'))
 const Ferramentas = lazy(() => import('./pages/Ferramentas'))
+const CalculadorasAgro = lazy(() => import('./pages/CalculadorasAgro'))
 const Fontes = lazy(() => import('./pages/Fontes'))
+const ManualMarca = lazy(() => import('./pages/ManualMarca'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
 function RouteFallback() {
@@ -88,6 +91,7 @@ export default function App() {
                 <Route path="/whatsapp" element={<WhatsApp />} />
                 <Route path="/ia" element={<ALIX />} />
                 <Route path="/prospeccao" element={<Prospeccao />} />
+                <Route path="/prospeccao/mapa" element={<ProspeccaoMapa />} />
                 <Route path="/financeiro" element={<Financeiro />} />
                 <Route path="/carteira" element={<CarteiraConsultor />} />
                 <Route path="/custeio" element={<CusteioAgricola />} />
@@ -95,7 +99,9 @@ export default function App() {
                 <Route path="/relatorios" element={<Relatorios />} />
                 <Route path="/clima" element={<Clima />} />
                 <Route path="/configuracoes" element={<Configuracoes />} />
+                <Route path="/configuracoes/marca" element={<ManualMarca />} />
                 <Route path="/ferramentas" element={<Ferramentas />} />
+                <Route path="/ferramentas/calculadoras-agro" element={<CalculadorasAgro />} />
                 <Route path="/fontes" element={<Fontes />} />
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="*" element={<NotFound />} />

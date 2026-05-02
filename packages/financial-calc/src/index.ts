@@ -41,6 +41,11 @@ export * from './recalculo.js';
 export * from './projecao.js';
 export * from './taxas.js';
 
+// ── Calculadoras Agro (Wave SUPERPOWER) ────────────────────
+// Reimplementação nativa de planilhas em /ALETIS2/novos/sistema agro/
+// Dupont/Fleuriet, Formação de Preço de Venda, FARMS Viabilidade.
+export * from './agro/index.js';
+
 // ── Compatibilidade retroativa (API Wave 2) ────────────────
 // A `simularAmortizacao` antiga e seus tipos são mantidos como re-export
 // para não quebrar consumidores. Novos callers devem usar `simular()`.

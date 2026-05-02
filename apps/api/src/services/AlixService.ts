@@ -27,6 +27,9 @@ import {
   networkDays,
   FERIADOS_NACIONAIS,
   taxaNominalParaEfetiva,
+  calcularDupontFleuriet,
+  calcularFarms,
+  calcularPrecoVenda,
   type ParametrosOperacao,
   type SistemaAmortizacao,
   type Periodicidade,
@@ -2530,6 +2533,85 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
         ),
       },
 
+      // ── SUPERPOWER Wave 2 — Calculadoras Agro nativas ─────
+      {
+        spec: {
+          name: 'diagnostico_dupont_fleuriet',
+          description:
+            'Diagnóstico financeiro completo: decomposição Dupont (3 e 5 fatores) + tipologia dinâmica Fleuriet (CDG/NCG/T) + liquidez + endividamento. Reimplementa o arquivo "Formula Dupont e Fleuriet.xlsx".',
+          input_schema: {
+            type: 'object',
+            properties: {
+              dre: {
+                type: 'object',
+                description: 'DRE: receitaLiquida, cogs, despesasOperacionais, despesasFinanceiras, impostoDeRenda (campos obrigatórios) e receitasFinanceiras, outrasReceitas/Despesas (opcionais).',
+              },
+              bp: {
+                type: 'object',
+                description: 'Balanço Patrimonial: caixaEDisponibilidades, contasAReceber, estoques, ativoNaoCirculante, fornecedores, emprestimosCurtoPrazo, emprestimosLongoPrazo, patrimonioLiquido (obrigatórios) + extras opcionais.',
+              },
+            },
+            required: ['dre', 'bp'],
+          },
+        },
+        handler: (i) => this.calcDupontFleuriet(i.dre as Record<string, unknown>, i.bp as Record<string, unknown>),
+      },
+      {
+        spec: {
+          name: 'farms_viabilidade_safra',
+          description:
+            'Calcula viabilidade econômica de uma safra (cultura específica): receita, custo total (com financeiro e oportunidade), margem, ponto de equilíbrio, sensibilidade ao preço/rendimento e veredito viável/marginal/inviável. Reimplementa "Calculadora FARMS v6.xlsm".',
+          input_schema: {
+            type: 'object',
+            properties: {
+              cultura: {
+                type: 'string',
+                enum: ['soja', 'milho', 'arroz', 'trigo', 'cafe', 'algodao', 'outra'],
+              },
+              areaHa: { type: 'number', description: 'Área em hectares.' },
+              rendimentoScHa: { type: 'number', description: 'Produtividade média em sacas por hectare.' },
+              precoRSporSc: { type: 'number', description: 'Preço de venda esperado em R$/saca.' },
+              custosPorHa: {
+                type: 'object',
+                description: 'Custos por categoria por hectare: sementes, defensivos, fertilizantes, mecanizacao, maoDeObra, arrendamento, irrigacao, outros.',
+              },
+              custosFixosTotais: { type: 'number', description: 'Custos fixos totais da safra (R$).' },
+              taxaJurosSafraAA: { type: 'number', description: 'Taxa de juros do custeio em decimal a.a. (ex: 0.10 = 10%).' },
+              capitalProprioPct: { type: 'number', description: 'Parcela financiada com capital próprio (0..1).' },
+              custoCapitalProprioAA: { type: 'number', description: 'Custo de oportunidade do capital próprio (decimal a.a.).' },
+              duracaoSafraDias: { type: 'number', description: 'Duração do ciclo em dias (default 240).' },
+            },
+            required: ['cultura', 'areaHa', 'rendimentoScHa', 'precoRSporSc', 'custosPorHa'],
+          },
+        },
+        handler: (i) => this.calcFarmsViabilidade(i as Record<string, unknown>),
+      },
+      {
+        spec: {
+          name: 'formacao_preco_venda',
+          description:
+            'Forma o preço de venda usando 4 modelos: mark-up divisor (clássico), mark-up multiplicador, margem de contribuição alvo ou margem líquida alvo. Reimplementa "Formação do Preço de Venda 3.0.xlsx".',
+          input_schema: {
+            type: 'object',
+            properties: {
+              custoUnitario: { type: 'number' },
+              qtd: { type: 'number', description: 'Padrão 1.' },
+              impostosSobreVenda: { type: 'number', description: 'Decimal: 0.18 = 18%.' },
+              comissoes: { type: 'number' },
+              fretesEDespesasVendaVar: { type: 'number' },
+              despesasFixasUnit: { type: 'number' },
+              margemAlvo: { type: 'number' },
+              modelo: {
+                type: 'string',
+                enum: ['markup-divisor', 'markup-multiplicador', 'margem-contribuicao', 'margem-liquida'],
+              },
+            },
+            required: ['custoUnitario', 'impostosSobreVenda', 'comissoes', 'fretesEDespesasVendaVar', 'despesasFixasUnit', 'margemAlvo'],
+          },
+        },
+        handler: (i) => this.calcFormacaoPreco(i as Record<string, unknown>),
+      },
+
       // ── Wave 7b — Simuladores regulatórios 2026 ──────────
       {
         spec: {
@@ -3329,6 +3411,76 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
   }
 
   // ── Plano Simples de Custeio Agrícola 2026 ──────────────
+
+  // ── SUPERPOWER Wave 2 — Calculadoras Agro nativas ───────
+  private calcDupontFleuriet(
+    dre: Record<string, unknown>,
+    bp: Record<string, unknown>,
+  ): { content: string; sources: string[]; toolsUsed: string[]; metadata?: Record<string, unknown> } {
+    try {
+      const r = calcularDupontFleuriet(dre as never, bp as never);
+      const lines: string[] = [];
+      lines.push(`**Diagnóstico Dupont/Fleuriet**`);
+      lines.push(`- ROE: ${(r.dupont.roe * 100).toFixed(2)}% (Margem ${(r.dupont.margemLiquida * 100).toFixed(2)}% × Giro ${r.dupont.giroDoAtivo.toFixed(2)}× × Alavanc ${r.dupont.alavancagem.toFixed(2)}×)`);
+      lines.push(`- ROA ${(r.dupont.roa * 100).toFixed(2)}% · EBIT ${fmtBRL(r.dupont.ebit)}`);
+      lines.push(`- **Fleuriet** tipo ${r.fleuriet.tipo}: ${r.fleuriet.diagnostico}`);
+      lines.push(`- NCG ${fmtBRL(r.fleuriet.necessidadeCapitalGiro)} · CDG ${fmtBRL(r.fleuriet.capitalGiro)} · T ${fmtBRL(r.fleuriet.tesouraria)}`);
+      lines.push(`- Liquidez corrente ${r.liquidez.corrente.toFixed(2)} · Endividamento ${(r.endividamento.geral * 100).toFixed(1)}% · Cobertura juros ${r.endividamento.coberturaJuros.toFixed(2)}×`);
+      return {
+        content: lines.join('\n'),
+        sources: ['@aletis/financial-calc/agro'],
+        toolsUsed: ['financial-calc.calcularDupontFleuriet'],
+        metadata: { result: r },
+      };
+    } catch (err) {
+      return { content: `Erro no diagnóstico: ${(err as Error).message}`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private calcFarmsViabilidade(
+    input: Record<string, unknown>,
+  ): { content: string; sources: string[]; toolsUsed: string[]; metadata?: Record<string, unknown> } {
+    try {
+      const r = calcularFarms(input as never);
+      const lines: string[] = [];
+      lines.push(`**FARMS — Viabilidade ${r.cultura} (${r.area} ha)**`);
+      lines.push(`- Receita: ${fmtBRL(r.receitaBruta)} · Custo: ${fmtBRL(r.custoTotal)} (${fmtBRL(r.custoTotalPorHa)}/ha)`);
+      lines.push(`- Margem: ${fmtBRL(r.margemBruta)} (${(r.margemBrutaPct * 100).toFixed(1)}%) → **${r.veredicto.toUpperCase()}**`);
+      lines.push(`- Equilíbrio: ${r.pontoEquilibrioScHa.toFixed(2)} sc/ha · ou R$ ${r.pontoEquilibrioPrecoSc.toFixed(2)}/sc`);
+      lines.push(`- Sensibilidade: preço −10% → ${fmtBRL(r.sensibilidade.precoMenos10)} · +10% → ${fmtBRL(r.sensibilidade.precoMais10)}`);
+      return {
+        content: lines.join('\n'),
+        sources: ['@aletis/financial-calc/agro'],
+        toolsUsed: ['financial-calc.calcularFarms'],
+        metadata: { result: r },
+      };
+    } catch (err) {
+      return { content: `Erro FARMS: ${(err as Error).message}`, sources: [], toolsUsed: [] };
+    }
+  }
+
+  private calcFormacaoPreco(
+    input: Record<string, unknown>,
+  ): { content: string; sources: string[]; toolsUsed: string[]; metadata?: Record<string, unknown> } {
+    try {
+      const r = calcularPrecoVenda(input as never);
+      const lines: string[] = [];
+      lines.push(`**Formação de Preço de Venda**`);
+      lines.push(`- Preço: ${fmtBRL(r.precoVenda)} · Mark-up: ${r.markupPct.toFixed(2)}% sobre o custo`);
+      lines.push(`- Margem líquida unitária: ${fmtBRL(r.margemLiquidaUnit)} · MC unit: ${fmtBRL(r.margemContribuicaoUnit)}`);
+      if (r.pontoEquilibrioUnitQtd > 0) {
+        lines.push(`- Ponto de equilíbrio: ${r.pontoEquilibrioUnitQtd.toFixed(2)} unidades · ${fmtBRL(r.pontoEquilibrioUnitMonet)} de receita`);
+      }
+      return {
+        content: lines.join('\n'),
+        sources: ['@aletis/financial-calc/agro'],
+        toolsUsed: ['financial-calc.calcularPrecoVenda'],
+        metadata: { result: r },
+      };
+    } catch (err) {
+      return { content: `Erro Preço: ${(err as Error).message}`, sources: [], toolsUsed: [] };
+    }
+  }
 
   private fmtPlanoLinha(p: PlanoCusteio): string {
     const total = p.orcamento.reduce((acc, it) => acc + (it.valorTotal || 0), 0);
