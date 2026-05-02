@@ -18,7 +18,8 @@ const CRM = lazy(() => import('./pages/CRM'))
 
 // Heavy pages — lazy-loaded. Bundles pesados (Leaflet, Chart.js, markdown, etc)
 // só chegam ao cliente quando a rota correspondente é visitada.
-const ClienteDetalhes = lazy(() => import('./pages/ClienteDetalhes'))
+const ClienteWorkspace = lazy(() => import('./pages/ClienteWorkspace'))
+const ClienteDetalhesLegacy = lazy(() => import('./pages/ClienteDetalhes'))
 const ClienteDossie = lazy(() => import('./pages/ClienteDossie'))
 const Propostas = lazy(() => import('./pages/Propostas'))
 const Contratos = lazy(() => import('./pages/Contratos'))
@@ -36,6 +37,7 @@ const Configuracoes = lazy(() => import('./pages/Configuracoes'))
 const ALIX = lazy(() => import('./pages/ALIX'))
 const Prospeccao = lazy(() => import('./pages/Prospeccao'))
 const Financeiro = lazy(() => import('./pages/Financeiro'))
+const CarteiraConsultor = lazy(() => import('./pages/CarteiraConsultor'))
 const CusteioAgricola = lazy(() => import('./pages/CusteioAgricola'))
 const Ferramentas = lazy(() => import('./pages/Ferramentas'))
 const Fontes = lazy(() => import('./pages/Fontes'))
@@ -72,7 +74,8 @@ export default function App() {
               <Routes>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/crm" element={<CRM />} />
-                <Route path="/clientes/:id" element={<ClienteDetalhes />} />
+                <Route path="/clientes/:id" element={<ClienteWorkspace />} />
+                <Route path="/clientes/:id/legacy" element={<ClienteDetalhesLegacy />} />
                 <Route path="/clientes/:id/dossie" element={<ClienteDossie />} />
                 <Route path="/clientes/:id/command-center" element={<CommandCenter />} />
                 <Route path="/clientes/:id/deal-room" element={<DealRoom />} />
@@ -86,6 +89,7 @@ export default function App() {
                 <Route path="/ia" element={<ALIX />} />
                 <Route path="/prospeccao" element={<Prospeccao />} />
                 <Route path="/financeiro" element={<Financeiro />} />
+                <Route path="/carteira" element={<CarteiraConsultor />} />
                 <Route path="/custeio" element={<CusteioAgricola />} />
                 <Route path="/custeio/:id" element={<CusteioAgricola />} />
                 <Route path="/relatorios" element={<Relatorios />} />
