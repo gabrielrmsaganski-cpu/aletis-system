@@ -23,6 +23,7 @@ import {
   index,
   boolean,
 } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 
 /* ─────────────────────────────────────────────────────────────
  * 1. cliente — fonte de verdade do CRM
@@ -641,6 +642,544 @@ export const negociacaoCredor = pgTable(
     proximaDataIdx: index('negociacao_credor_proxima_data_idx').on(t.proximaData),
   }),
 )
+
+
+/* ─────────────────────────────────────────────────────────────
+ * 24. processo_checklist — estado de checklists interativos
+ *      por cliente × template (R.OP.003/004/005/009).
+ *      Itens em jsonb: { itemId: { marcado, observacao, anexoId, atualizadoEm } }.
+ * ──────────────────────────────────────────────────────────── */
+export const processoChecklist = pgTable(
+  'processo_checklist',
+  {
+    clienteId: text('cliente_id').notNull(),
+    templateSlug: text('template_slug').notNull(),
+    responsavel: text('responsavel'),
+    itens: jsonb('itens').notNull().default(sql`'{}'::jsonb`),
+    status: text('status').notNull().default('em_andamento'), // CHECK em 0011
+    totalItens: integer('total_itens').notNull().default(0),
+    itensConcluidos: integer('itens_concluidos').notNull().default(0),
+    iniciadoEm: timestamp('iniciado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+    concluidoEm: timestamp('concluido_em', { withTimezone: true }),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.clienteId, t.templateSlug] }),
+    clienteIdx: index('processo_checklist_cliente_idx').on(t.clienteId),
+    statusIdx: index('processo_checklist_status_idx').on(t.status),
+  }),
+)
+
+export type ProcessoChecklist = typeof processoChecklist.$inferSelect
+export type ProcessoChecklistInsert = typeof processoChecklist.$inferInsert
+
+/* ─────────────────────────────────────────────────────────────
+ * 25. processo_render — auditoria de renderizações de templates
+ *      do Processo de Assessoria.
+ * ──────────────────────────────────────────────────────────── */
+export const processoRender = pgTable(
+  'processo_render',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    clienteId: text('cliente_id').notNull(),
+    templateSlug: text('template_slug').notNull(),
+    templateCodigo: text('template_codigo').notNull(),
+    formato: text('formato').notNull(),
+    filename: text('filename').notNull(),
+    bytes: integer('bytes').notNull(),
+    inputs: jsonb('inputs'),
+    resolved: jsonb('resolved'),
+    ator: text('ator'),
+    traceId: text('trace_id'),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    clienteIdx: index('processo_render_cliente_idx').on(t.clienteId),
+    templateIdx: index('processo_render_template_idx').on(t.templateSlug),
+    criadoEmIdx: index('processo_render_criado_em_idx').on(t.criadoEm),
+  }),
+)
+
+
+/* ─────────────────────────────────────────────────────────────
+ * 26-33. GESTÃO FINANCEIRA — sistema nativo da R.OP.001 v2.0
+ * Reimplementa as 28 sheets / 12000 fórmulas como módulo TS.
+ * ──────────────────────────────────────────────────────────── */
+
+export const gfGrupo = pgTable(
+  'gf_grupo',
+  {
+    id: text('id').primaryKey(),
+    clienteId: text('cliente_id').notNull(),
+    nomeGrupo: text('nome_grupo').notNull(),
+    dataBase: text('data_base').notNull(),
+    historico: text('historico'),
+    observacoes: text('observacoes'),
+    consultorId: text('consultor_id'),
+    consultorNome: text('consultor_nome'),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    clienteIdx: index('gf_grupo_cliente_idx').on(t.clienteId),
+    consultorIdx: index('gf_grupo_consultor_idx').on(t.consultorId),
+  }),
+)
+
+export const gfMembro = pgTable(
+  'gf_membro',
+  {
+    id: text('id').primaryKey(),
+    grupoId: text('grupo_id').notNull(),
+    nome: text('nome').notNull(),
+    cpfCnpj: text('cpf_cnpj'),
+    tipoRelacao: text('tipo_relacao'),
+    atuaAtividade: boolean('atua_atividade').notNull().default(true),
+    ordem: integer('ordem').notNull().default(0),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ grupoIdx: index('gf_membro_grupo_idx').on(t.grupoId) }),
+)
+
+export const gfCulturaSafra = pgTable(
+  'gf_cultura_safra',
+  {
+    id: text('id').primaryKey(),
+    grupoId: text('grupo_id').notNull(),
+    cultura: text('cultura').notNull(),
+    safra: text('safra').notNull(),
+    cenario: text('cenario').notNull().default('planejado'),
+    ordem: integer('ordem').notNull().default(0),
+    areaPropriaHa: numeric('area_propria_ha', { precision: 12, scale: 4 }),
+    areaArrendadaHa: numeric('area_arrendada_ha', { precision: 12, scale: 4 }),
+    rendimentoScHa: numeric('rendimento_sc_ha', { precision: 12, scale: 4 }),
+    precoMedioRs: numeric('preco_medio_rs', { precision: 14, scale: 4 }),
+    custoUnitarioInsumosRs: numeric('custo_unitario_insumos_rs', { precision: 14, scale: 4 }),
+    arrendamentoBaseScHa: numeric('arrendamento_base_sc_ha', { precision: 12, scale: 4 }),
+    unidade: text('unidade').notNull().default('sc'),
+    observacoes: text('observacoes'),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    grupoSafraIdx: index('gf_cultura_grupo_safra_idx').on(t.grupoId, t.safra),
+    grupoCenarioIdx: index('gf_cultura_grupo_cenario_idx').on(t.grupoId, t.cenario),
+  }),
+)
+
+export const gfCustoSafra = pgTable(
+  'gf_custo_safra',
+  {
+    id: text('id').primaryKey(),
+    grupoId: text('grupo_id').notNull(),
+    safra: text('safra').notNull(),
+    tipo: text('tipo').notNull(),
+    descricao: text('descricao').notNull(),
+    cultura: text('cultura'),
+    valorAnual: numeric('valor_anual', { precision: 16, scale: 4 }),
+    valorMensal: numeric('valor_mensal', { precision: 16, scale: 4 }),
+    ordem: integer('ordem').notNull().default(0),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ grupoSafraIdx: index('gf_custo_grupo_safra_idx').on(t.grupoId, t.safra) }),
+)
+
+export const gfDemanda = pgTable(
+  'gf_demanda',
+  {
+    id: text('id').primaryKey(),
+    grupoId: text('grupo_id').notNull(),
+    numero: integer('numero'),
+    data: text('data'),
+    tomador: text('tomador'),
+    credor: text('credor'),
+    finalidade: text('finalidade'),
+    modalidade: text('modalidade'),
+    valor: numeric('valor', { precision: 16, scale: 2 }),
+    garantias: text('garantias'),
+    prazo: text('prazo'),
+    parecerTex: text('parecer_tex'),
+    estrategia: text('estrategia'),
+    enviadoEm: text('enviado_em'),
+    retornoEm: text('retorno_em'),
+    acoes: text('acoes'),
+    status: text('status').notNull().default('em_analise'),
+    faturamentoObtido: numeric('faturamento_obtido', { precision: 16, scale: 2 }),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    grupoIdx: index('gf_demanda_grupo_idx').on(t.grupoId),
+    statusIdx: index('gf_demanda_status_idx').on(t.status),
+  }),
+)
+
+export const gfContratoDivida = pgTable(
+  'gf_contrato_divida',
+  {
+    id: text('id').primaryKey(),
+    grupoId: text('grupo_id').notNull(),
+    credor: text('credor').notNull(),
+    emitente: text('emitente'),
+    garantiaVinculada: text('garantia_vinculada'),
+    outrasGarantias: text('outras_garantias'),
+    contrato: text('contrato'),
+    valorLiberado: numeric('valor_liberado', { precision: 16, scale: 2 }),
+    valorFinanciado: numeric('valor_financiado', { precision: 16, scale: 2 }),
+    parcelaCapitalAmortizar: numeric('parcela_capital_amortizar', { precision: 16, scale: 2 }),
+    valorParcelaFixa: numeric('valor_parcela_fixa', { precision: 16, scale: 2 }),
+    periodicidade: text('periodicidade'),
+    metodoCalculo: text('metodo_calculo').notNull().default('PRICE'),
+    enquadramento: text('enquadramento'),
+    finalidade: text('finalidade'),
+    prazoParcelas: integer('prazo_parcelas'),
+    dataContratacao: text('data_contratacao'),
+    primeiraParcela: text('primeira_parcela'),
+    ultimaParcela: text('ultima_parcela'),
+    parcelasPagas: integer('parcelas_pagas').notNull().default(0),
+    inadimplente: boolean('inadimplente').notNull().default(false),
+    taxaNominalAa: numeric('taxa_nominal_aa', { precision: 8, scale: 4 }),
+    cetAnual: numeric('cet_anual', { precision: 8, scale: 4 }),
+    indexador: text('indexador'),
+    pctIndexador: numeric('pct_indexador', { precision: 8, scale: 4 }),
+    variacaoCambial: boolean('variacao_cambial').notNull().default(false),
+    origemInfo: text('origem_info'),
+    ultimaAtualizacao: text('ultima_atualizacao'),
+    valorPresente: numeric('valor_presente', { precision: 16, scale: 2 }),
+    valorPresenteAtualizado: numeric('valor_presente_atualizado', { precision: 16, scale: 2 }),
+    observacoes: text('observacoes'),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    grupoIdx: index('gf_contrato_grupo_idx').on(t.grupoId),
+    credorIdx: index('gf_contrato_credor_idx').on(t.credor),
+  }),
+)
+
+export const gfAtivoFazenda = pgTable(
+  'gf_ativo_fazenda',
+  {
+    id: text('id').primaryKey(),
+    grupoId: text('grupo_id').notNull(),
+    fazenda: text('fazenda').notNull(),
+    proprietario: text('proprietario'),
+    matricula: text('matricula'),
+    cidade: text('cidade'),
+    estado: varchar('estado', { length: 2 }),
+    areaTotalHa: numeric('area_total_ha', { precision: 12, scale: 4 }),
+    areaConsolidadaHa: numeric('area_consolidada_ha', { precision: 12, scale: 4 }),
+    areaPlantioHa: numeric('area_plantio_ha', { precision: 12, scale: 4 }),
+    areaIrrigadaHa: numeric('area_irrigada_ha', { precision: 12, scale: 4 }),
+    areaPastagemHa: numeric('area_pastagem_ha', { precision: 12, scale: 4 }),
+    areaReservaHa: numeric('area_reserva_ha', { precision: 12, scale: 4 }),
+    outrosUsosHa: numeric('outros_usos_ha', { precision: 12, scale: 4 }),
+    arrendadaTerceirosHa: numeric('arrendada_terceiros_ha', { precision: 12, scale: 4 }),
+    valorHaMercado: numeric('valor_ha_mercado', { precision: 16, scale: 2 }),
+    valorHaForcado: numeric('valor_ha_forcado', { precision: 16, scale: 2 }),
+    nrCcir: text('nr_ccir'),
+    nrItr: text('nr_itr'),
+    inscricaoEstadual: text('inscricao_estadual'),
+    nrCar: text('nr_car'),
+    possuiGeo: boolean('possui_geo').notNull().default(false),
+    observacoes: text('observacoes'),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ grupoIdx: index('gf_fazenda_grupo_idx').on(t.grupoId) }),
+)
+
+export const gfSnapshotCalculo = pgTable(
+  'gf_snapshot_calculo',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    grupoId: text('grupo_id').notNull(),
+    tipo: text('tipo').notNull(),
+    payload: jsonb('payload').notNull(),
+    calculadoEm: timestamp('calculado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    grupoIdx: index('gf_snapshot_grupo_idx').on(t.grupoId),
+    tipoIdx: index('gf_snapshot_tipo_idx').on(t.tipo),
+    calcIdx: index('gf_snapshot_calc_idx').on(t.calculadoEm),
+  }),
+)
+
+
+/* ─────────────────────────────────────────────────────────────
+ * 34-38. GESTÃO FINANCEIRA V2 — extensões da R.OP.001 v2.0
+ * (ativos não-fazenda, passivos consolidados, garantias LTV,
+ * premissas versionáveis, insights automáticos)
+ * ──────────────────────────────────────────────────────────── */
+
+export const gfAtivoOutro = pgTable(
+  'gf_ativo_outro',
+  {
+    id: text('id').primaryKey(),
+    grupoId: text('grupo_id').notNull(),
+    tipo: text('tipo').notNull(), // 'produto'|'contrato'|'financeiro'|'maquina'|'outro'
+    descricao: text('descricao').notNull(),
+    produto: text('produto'),
+    estadoUf: varchar('estado_uf', { length: 2 }),
+    safra: text('safra'),
+    unidade: text('unidade'),
+    quantidade: numeric('quantidade', { precision: 16, scale: 4 }),
+    precoUnitario: numeric('preco_unitario', { precision: 16, scale: 4 }),
+    valorTotal: numeric('valor_total', { precision: 16, scale: 2 }),
+    dataRecebimento: text('data_recebimento'),
+    vaiParaFc: boolean('vai_para_fc').notNull().default(true),
+    observacoes: text('observacoes'),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ grupoIdx: index('gf_ativo_outro_grupo_idx').on(t.grupoId, t.tipo) }),
+)
+
+export const gfPassivoOutro = pgTable(
+  'gf_passivo_outro',
+  {
+    id: text('id').primaryKey(),
+    grupoId: text('grupo_id').notNull(),
+    tipo: text('tipo').notNull(),
+    credor: text('credor'),
+    descricao: text('descricao').notNull(),
+    finalidade: text('finalidade'),
+    valor: numeric('valor', { precision: 16, scale: 2 }).notNull().default('0'),
+    vencimento: text('vencimento'),
+    dataReferencia: text('data_referencia'),
+    status: text('status').notNull().default('a_vencer'),
+    taxaJurosAa: numeric('taxa_juros_aa', { precision: 8, scale: 4 }),
+    formaPagamento: text('forma_pagamento'),
+    variacaoCambial: boolean('variacao_cambial').notNull().default(false),
+    observacoes: text('observacoes'),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    grupoIdx: index('gf_passivo_outro_grupo_idx').on(t.grupoId, t.tipo),
+    statusIdx: index('gf_passivo_outro_status_idx').on(t.status),
+  }),
+)
+
+export const gfGarantia = pgTable(
+  'gf_garantia',
+  {
+    id: text('id').primaryKey(),
+    grupoId: text('grupo_id').notNull(),
+    tipo: text('tipo').notNull(),
+    descricao: text('descricao').notNull(),
+    fazendaId: text('fazenda_id'),
+    matricula: text('matricula'),
+    areaHa: numeric('area_ha', { precision: 12, scale: 4 }),
+    valorMercado: numeric('valor_mercado', { precision: 16, scale: 2 }),
+    valorForcado: numeric('valor_forcado', { precision: 16, scale: 2 }),
+    contratoVinculado: text('contrato_vinculado'),
+    baixasAditivos: text('baixas_aditivos'),
+    registrosAverbacoes: text('registros_averbacoes'),
+    observacoes: text('observacoes'),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    grupoIdx: index('gf_garantia_grupo_idx').on(t.grupoId),
+    fazendaIdx: index('gf_garantia_fazenda_idx').on(t.fazendaId),
+  }),
+)
+
+export const gfPremissa = pgTable(
+  'gf_premissa',
+  {
+    id: text('id').primaryKey(),
+    grupoId: text('grupo_id').notNull(),
+    chave: text('chave').notNull(),
+    rotulo: text('rotulo').notNull(),
+    valor: numeric('valor', { precision: 16, scale: 6 }).notNull(),
+    unidade: text('unidade'),
+    vigencia: text('vigencia'),
+    fonte: text('fonte'),
+    observacoes: text('observacoes'),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    grupoIdx: index('gf_premissa_grupo_idx').on(t.grupoId),
+    chaveIdx: index('gf_premissa_chave_idx').on(t.grupoId, t.chave),
+  }),
+)
+
+export const gfInsight = pgTable(
+  'gf_insight',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    grupoId: text('grupo_id').notNull(),
+    severidade: text('severidade').notNull(),
+    categoria: text('categoria').notNull(),
+    titulo: text('titulo').notNull(),
+    mensagem: text('mensagem').notNull(),
+    metricas: jsonb('metricas'),
+    recomendacao: text('recomendacao'),
+    calculadoEm: timestamp('calculado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    grupoIdx: index('gf_insight_grupo_idx').on(t.grupoId, t.calculadoEm),
+    severidadeIdx: index('gf_insight_severidade_idx').on(t.severidade),
+  }),
+)
+
+
+/* ─────────────────────────────────────────────────────────────
+ * 39-41. Wave F — Kanban SLA + Webhook NF-e
+ * ──────────────────────────────────────────────────────────── */
+
+export const gfEtapaSla = pgTable(
+  'gf_etapa_sla',
+  {
+    id: text('id').primaryKey(),
+    grupoId: text('grupo_id').notNull(),
+    etapaCodigo: text('etapa_codigo').notNull(),
+    etapaOrdem: integer('etapa_ordem').notNull(),
+    tarefa: text('tarefa').notNull(),
+    prazoDias: integer('prazo_dias').notNull(),
+    status: text('status').notNull().default('pendente'),
+    responsavel: text('responsavel'),
+    iniciadaEm: text('iniciada_em'),
+    concluidaEm: text('concluida_em'),
+    observacoes: text('observacoes'),
+    bloqueioMotivo: text('bloqueio_motivo'),
+    ordem: integer('ordem').notNull().default(0),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    grupoIdx: index('gf_etapa_sla_grupo_idx').on(t.grupoId, t.etapaOrdem),
+    statusIdx: index('gf_etapa_sla_status_idx').on(t.status),
+  }),
+)
+
+export const gfNfeRecebida = pgTable(
+  'gf_nfe_recebida',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    grupoId: text('grupo_id'),
+    cnpjEmitente: text('cnpj_emitente'),
+    numeroNfe: text('numero_nfe'),
+    serie: text('serie'),
+    dataEmissao: text('data_emissao'),
+    valorTotal: numeric('valor_total', { precision: 16, scale: 2 }),
+    produtosCount: integer('produtos_count'),
+    culturaPrincipal: text('cultura_principal'),
+    payload: jsonb('payload').notNull(),
+    processada: boolean('processada').notNull().default(false),
+    status: text('status').notNull().default('recebida'),
+    erro: text('erro'),
+    recebidaEm: timestamp('recebida_em', { withTimezone: true }).defaultNow().notNull(),
+    processadaEm: timestamp('processada_em', { withTimezone: true }),
+  },
+  (t) => ({
+    grupoIdx: index('gf_nfe_recebida_grupo_idx').on(t.grupoId),
+    emitenteIdx: index('gf_nfe_recebida_emitente_idx').on(t.cnpjEmitente),
+    statusIdx: index('gf_nfe_recebida_status_idx').on(t.status),
+  }),
+)
+
+
+/* ─────────────────────────────────────────────────────────────
+ * 42-44. Wave G — Marketplace + Changelog + Comentários
+ * ──────────────────────────────────────────────────────────── */
+
+export const gfTemplateMarketplace = pgTable(
+  'gf_template_marketplace',
+  {
+    id: text('id').primaryKey(),
+    slug: text('slug').notNull().unique(),
+    rotulo: text('rotulo').notNull(),
+    descricao: text('descricao'),
+    categoria: text('categoria').notNull(),
+    emoji: text('emoji'),
+    visibilidade: text('visibilidade').notNull().default('private'),
+    autorConsultorId: text('autor_consultor_id'),
+    autorNome: text('autor_nome'),
+    payload: jsonb('payload').notNull(),
+    contadores: jsonb('contadores').notNull().default(sql`'{}'::jsonb`),
+    usoCount: integer('uso_count').notNull().default(0),
+    isOficial: boolean('is_oficial').notNull().default(false),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    visibilidadeIdx: index('gf_template_visibilidade_idx').on(t.visibilidade),
+    consultorIdx: index('gf_template_consultor_idx').on(t.autorConsultorId),
+    categoriaIdx: index('gf_template_categoria_idx').on(t.categoria),
+  }),
+)
+
+export const gfChangelog = pgTable(
+  'gf_changelog',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    grupoId: text('grupo_id').notNull(),
+    entidade: text('entidade').notNull(),
+    entidadeId: text('entidade_id'),
+    acao: text('acao').notNull(),
+    diff: jsonb('diff'),
+    ator: text('ator'),
+    atorNome: text('ator_nome'),
+    origem: text('origem'),
+    traceId: text('trace_id'),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    grupoIdx: index('gf_changelog_grupo_idx').on(t.grupoId, t.criadoEm),
+    entidadeIdx: index('gf_changelog_entidade_idx').on(t.entidade, t.entidadeId),
+  }),
+)
+
+export const gfComentario = pgTable(
+  'gf_comentario',
+  {
+    id: text('id').primaryKey(),
+    grupoId: text('grupo_id').notNull(),
+    entidade: text('entidade').notNull(),
+    entidadeId: text('entidade_id'),
+    conteudo: text('conteudo').notNull(),
+    autor: text('autor'),
+    autorNome: text('autor_nome'),
+    parentId: text('parent_id'),
+    resolvido: boolean('resolvido').notNull().default(false),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    grupoIdx: index('gf_comentario_grupo_idx').on(t.grupoId),
+    entidadeIdx: index('gf_comentario_entidade_idx').on(t.entidade, t.entidadeId),
+    parentIdx: index('gf_comentario_parent_idx').on(t.parentId),
+  }),
+)
+
+export type GfTemplateMarketplace = typeof gfTemplateMarketplace.$inferSelect
+export type GfChangelog = typeof gfChangelog.$inferSelect
+export type GfComentario = typeof gfComentario.$inferSelect
+
+export type GfEtapaSla = typeof gfEtapaSla.$inferSelect
+export type GfNfeRecebida = typeof gfNfeRecebida.$inferSelect
+
+export type GfAtivoOutro = typeof gfAtivoOutro.$inferSelect
+export type GfPassivoOutro = typeof gfPassivoOutro.$inferSelect
+export type GfGarantia = typeof gfGarantia.$inferSelect
+export type GfPremissa = typeof gfPremissa.$inferSelect
+export type GfInsight = typeof gfInsight.$inferSelect
+
+export type GfGrupo = typeof gfGrupo.$inferSelect
+export type GfMembro = typeof gfMembro.$inferSelect
+export type GfCulturaSafra = typeof gfCulturaSafra.$inferSelect
+export type GfCustoSafra = typeof gfCustoSafra.$inferSelect
+export type GfDemanda = typeof gfDemanda.$inferSelect
+export type GfContratoDivida = typeof gfContratoDivida.$inferSelect
+export type GfAtivoFazenda = typeof gfAtivoFazenda.$inferSelect
+export type GfSnapshotCalculo = typeof gfSnapshotCalculo.$inferSelect
+
+export type ProcessoRender = typeof processoRender.$inferSelect
+export type ProcessoRenderInsert = typeof processoRender.$inferInsert
 
 export type NegociacaoCredor = typeof negociacaoCredor.$inferSelect
 export type NegociacaoCredorInsert = typeof negociacaoCredor.$inferInsert

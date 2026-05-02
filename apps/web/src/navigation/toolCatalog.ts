@@ -34,6 +34,7 @@ import {
   Sparkles,
   Activity,
   Building2,
+  Briefcase,
 } from 'lucide-react'
 
 export type ToolCategory =
@@ -302,6 +303,18 @@ export const TOOL_CATALOG: ToolEntry[] = [
   },
 
   // ─────────── GESTÃO ───────────
+  {
+    id: 'carteira-consultor',
+    title: 'Carteira do consultor',
+    tagline: 'Visão multi-grupo · rankings e saúde',
+    description:
+      'Painel consolidado da carteira do consultor: KPIs agregados (receita, EBITDA, dívida), rankings (melhor margem, mais alavancado, maior receita), distribuição saudável/atenção/crítico e tabela de todos os grupos com drill-down direto para o R.OP.001 v2.0.',
+    icon: Briefcase,
+    route: '/carteira',
+    category: 'gestao',
+    keywords: ['carteira', 'consultor', 'multi grupo', 'ranking', 'saude financeira', 'gestao financeira', 'r.op.001', 'ebitda', 'margem'],
+    showInSidebar: true,
+  },
   {
     id: 'financeiro',
     title: 'Financeiro',

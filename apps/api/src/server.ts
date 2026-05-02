@@ -484,6 +484,16 @@ async function start(): Promise<void> {
       }
     }
 
+    // Cron diário Gestão Financeira — recálculo + alertas de variação
+    if ((process.env.GF_CRON_ENABLED ?? 'true').toLowerCase() !== 'false') {
+      try {
+        const { startCronGestaoFinanceira } = await import('./services/gestao-financeira/CronGestaoFinanceira.js')
+        startCronGestaoFinanceira()
+      } catch (err) {
+        console.warn('[server] CronGestaoFinanceira não iniciou:', (err as Error).message)
+      }
+    }
+
     // Sondagem periódica das fontes de dados — primeira após 15s,
     // repetição a cada 10 minutos. Isso mantém o dashboard "Fontes"
     // com status atualizados em vez de "Desconhecido".

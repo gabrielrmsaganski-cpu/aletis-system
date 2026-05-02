@@ -5,6 +5,9 @@ import { InlineButton } from '../components/ui'
 import PatrimonioTab from '../components/patrimonio/PatrimonioTab'
 import AlixContextHint from '../components/alix/AlixContextHint'
 import ContratosOficiaisTab from '../components/contratos/ContratosOficiaisTab'
+import { lazy as _lazy, Suspense as _Suspense } from 'react'
+const ProcessoAssessoriaTab = _lazy(() => import('../components/processo/ProcessoAssessoriaTab'))
+const GestaoFinanceiraTab = _lazy(() => import('../components/gestao-financeira/GestaoFinanceiraTab'))
 import ClientePropostasTab from '../components/cliente/ClientePropostasTab'
 import ClienteFluxoCaixaTab from '../components/cliente/ClienteFluxoCaixaTab'
 import ClienteDocumentosTab from '../components/cliente/ClienteDocumentosTab'
@@ -73,7 +76,7 @@ type Estagio =
   | 'prospeccao'
   | 'encerrado'
 
-type TabId = 'visao-geral' | 'dividas' | 'risco' | 'exposicao' | 'patrimonio' | 'visitas' | 'propostas' | 'documentos' | 'contratos-oficiais' | 'fluxo-caixa' | 'timeline' | 'portal-chat'
+type TabId = 'visao-geral' | 'dividas' | 'risco' | 'exposicao' | 'patrimonio' | 'visitas' | 'propostas' | 'documentos' | 'contratos-oficiais' | 'processo-tex' | 'gestao-financeira' | 'fluxo-caixa' | 'timeline' | 'portal-chat'
 
 interface Divida {
   id: string
@@ -747,6 +750,8 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'propostas', label: 'Propostas' },
   { id: 'documentos', label: 'Documentos' },
   { id: 'contratos-oficiais', label: 'Contratos' },
+  { id: 'processo-tex', label: 'Processo TEX' },
+  { id: 'gestao-financeira', label: 'Gestão Financeira' },
   { id: 'fluxo-caixa', label: 'Fluxo de Caixa' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'portal-chat', label: 'Chat Portal' },
@@ -2162,6 +2167,29 @@ export default function ClienteDetalhes() {
            ════════════════════════════════════════════════════════ */}
       {activeTab === 'contratos-oficiais' && id && (
         <ContratosOficiaisTab clienteId={id} />
+      )}
+
+      {/* ════════════════════════════════════════════════════════
+           TAB: PROCESSO TEX — 25 documentos do Processo de
+           Assessoria TEX CAPITAL (POL/POP/IT/R.OP/R.CM/R.GQ).
+           Inclui checklists interativos persistidos no PG.
+           ════════════════════════════════════════════════════════ */}
+      {activeTab === 'processo-tex' && id && (
+        <_Suspense fallback={<div className="card-premium p-12 text-center"><div className="animate-pulse text-aletis-grafite-claro">Carregando processo de assessoria…</div></div>}>
+          <ProcessoAssessoriaTab clienteId={id} clienteNome={cliente?.nome} />
+        </_Suspense>
+      )}
+
+      {/* ════════════════════════════════════════════════════════
+           TAB: GESTÃO FINANCEIRA — sistema R.OP.001 v2.0 nativo
+           28 sheets / 12000 fórmulas reimplementadas em TypeScript.
+           Sub-tabs: Cadastro · Safras · Custos · Endividamento ·
+                     Demandas · Fazendas · Dashboard
+           ════════════════════════════════════════════════════════ */}
+      {activeTab === 'gestao-financeira' && id && (
+        <_Suspense fallback={<div className="card-premium p-12 text-center"><div className="animate-pulse text-aletis-grafite-claro">Carregando gestão financeira…</div></div>}>
+          <GestaoFinanceiraTab clienteId={id} clienteNome={cliente?.nome} />
+        </_Suspense>
       )}
 
       {/* ════════════════════════════════════════════════════════

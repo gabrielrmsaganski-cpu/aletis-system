@@ -78,6 +78,41 @@
       "when": 1777374400000,
       "tag": "0010_negociacao_proposta_link",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1778042400000,
+      "tag": "0011_processo_assessoria",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1778050000000,
+      "tag": "0012_gestao_financeira",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1778060000000,
+      "tag": "0013_gestao_financeira_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1778070000000,
+      "tag": "0014_gestao_financeira_wave_f",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1778080000000,
+      "tag": "0015_gestao_financeira_wave_g",
+      "breakpoints": true
     }
   ]
 }

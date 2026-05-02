@@ -23,6 +23,8 @@ import { buildAlixPowerTools } from './tools/alix-power.js';
 import { buildProactiveInsightsTools } from './tools/proactive-insights.js';
 import { buildAlertRulesTools } from './tools/alert-rules.js';
 import { buildContratosOficiaisTools } from './tools/contratos-oficiais.js';
+import { buildProcessoAssessoriaTools } from './tools/processo-assessoria.js';
+import { buildGestaoFinanceiraTools } from './tools/gestao-financeira.js';
 import { buildDealRoomTools } from './tools/deal-room.js';
 import { buildNewsTools } from './tools/news.js';
 import { buildCalendarioSafraTools } from './tools/calendario-safra.js';
@@ -316,6 +318,20 @@ Data de hoje: ${hoje}`;
     // fuzzy resolver: aceita "NDA", "consultoria", "procuração", etc.).
     const cof = buildContratosOficiaisTools();
     for (const t of cof.tools) { tools.push(t); registry[t.name] = cof.registry[t.name]; }
+
+    // Wave Processo de Assessoria — 25 documentos oficiais TEX CAPITAL
+    // (checklists, contratos, planilhas financeiras/operacionais,
+    // gerenciadores, políticas, POPs, ITs, relatórios, registros).
+    // Tools: listar / preview / gerar / listar_checklists / atualizar_item.
+    const pa = buildProcessoAssessoriaTools();
+    for (const t of pa.tools) { tools.push(t); registry[t.name] = pa.registry[t.name]; }
+
+    // Wave Gestão Financeira — sistema R.OP.001 v2.0 nativo
+    // (28 sheets, 12k fórmulas reimplementadas em TS).
+    // Tools: autoimport_grupo_gf, dashboard_gf, listar_insights_gf,
+    //   simular_renegociacao_gf, stress_test_gf, explicar_indicador_gf, etc.
+    const gf = buildGestaoFinanceiraTools();
+    for (const t of gf.tools) { tools.push(t); registry[t.name] = gf.registry[t.name]; }
 
     // Delegações — passa trailKey p/ sub-agents propagarem audit
     const ctxBase = (): SubAgentContext => ({
