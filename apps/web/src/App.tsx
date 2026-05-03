@@ -19,12 +19,10 @@ const CRM = lazy(() => import('./pages/CRM'))
 // Heavy pages — lazy-loaded. Bundles pesados (Leaflet, Chart.js, markdown, etc)
 // só chegam ao cliente quando a rota correspondente é visitada.
 const ClienteWorkspace = lazy(() => import('./pages/ClienteWorkspace'))
-const ClienteDetalhesLegacy = lazy(() => import('./pages/ClienteDetalhes'))
 const ClienteDossie = lazy(() => import('./pages/ClienteDossie'))
 const Propostas = lazy(() => import('./pages/Propostas'))
 const Contratos = lazy(() => import('./pages/Contratos'))
 const ContratosOficiais = lazy(() => import('./pages/ContratosOficiais'))
-const CommandCenter = lazy(() => import('./pages/CommandCenter'))
 const DealRoom = lazy(() => import('./pages/DealRoom'))
 const Negociacoes = lazy(() => import('./pages/Negociacoes'))
 const Mercado = lazy(() => import('./pages/Mercado'))
@@ -78,10 +76,11 @@ export default function App() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/crm" element={<CRM />} />
                 <Route path="/clientes/:id" element={<ClienteWorkspace />} />
-                <Route path="/clientes/:id/legacy" element={<ClienteDetalhesLegacy />} />
                 <Route path="/clientes/:id/dossie" element={<ClienteDossie />} />
-                <Route path="/clientes/:id/command-center" element={<CommandCenter />} />
                 <Route path="/clientes/:id/deal-room" element={<DealRoom />} />
+                {/* Rotas legadas redirecionadas — manter URLs antigas válidas. */}
+                <Route path="/clientes/:id/command-center" element={<Navigate to="../" replace />} />
+                <Route path="/clientes/:id/legacy" element={<Navigate to="../" replace />} />
                 <Route path="/negociacoes" element={<Negociacoes />} />
                 <Route path="/propostas" element={<Propostas />} />
                 <Route path="/contratos" element={<Contratos />} />

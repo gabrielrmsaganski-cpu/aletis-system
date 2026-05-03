@@ -90,17 +90,10 @@ export default function WorkspaceShell({ urlId }: Props) {
   return (
     <div className="min-h-screen bg-aletis-bege/30 animate-fade-in">
       {/* Breadcrumb minimal */}
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3">
         <Link to="/crm" className="inline-flex items-center gap-1.5 text-xs font-body text-aletis-grafite-claro hover:text-aletis-verde transition-colors">
           <ArrowLeft className="w-3.5 h-3.5" />
           CRM
-        </Link>
-        <Link
-          to={`/clientes/${urlId}/legacy`}
-          className="text-[10px] font-mono text-aletis-grafite-claro/50 hover:text-aletis-grafite-claro transition-colors"
-          title="Versão antiga (14 abas)"
-        >
-          versão clássica →
         </Link>
       </div>
 

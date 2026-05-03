@@ -185,11 +185,6 @@
   .card {
     @apply bg-white rounded-2xl border border-aletis-borda shadow-brand-sm hover:shadow-brand transition-all duration-300;
   }
-  .card-cream {
-    @apply rounded-2xl border border-aletis-cream-escuro/70 shadow-brand-sm hover:shadow-brand transition-all duration-300;
-    background:
-      linear-gradient(180deg, #f7f4ea 0%, #ede9d9 100%);
-  }
   .card-premium {
     @apply relative bg-white rounded-2xl border border-aletis-borda/70
       shadow-brand-sm hover:shadow-brand-lg
@@ -205,29 +200,11 @@
   .card-premium:hover::before {
     @apply opacity-100;
   }
-  .card-dark {
-    background:
-      linear-gradient(140deg, #17251b 0%, #1f2f25 60%, #243a2c 100%);
-    @apply rounded-2xl border border-aletis-sage/15 text-aletis-cream
-      shadow-brand-lg;
-  }
-
-  /* Surfaces para hero/KPI sobre fundos verdes */
-  .surface-dark {
-    @apply bg-white/[0.05] border-aletis-sage/15 backdrop-blur;
-  }
-  .surface-dark-hover {
-    @apply hover:bg-white/[0.09] hover:border-aletis-sage/30 transition-colors;
-  }
 
   /* ---- Tipografia utilitária ---- */
   .eyebrow {
     @apply text-[10.5px] font-display font-semibold uppercase
       tracking-[0.18em] text-aletis-gold-escuro;
-  }
-  .eyebrow-light {
-    @apply text-[10.5px] font-display font-semibold uppercase
-      tracking-[0.18em] text-aletis-gold;
   }
   .section-chip {
     @apply inline-flex items-center gap-1.5 rounded-full
@@ -242,24 +219,6 @@
       uppercase tracking-[0.16em] text-aletis-gold-escuro;
   }
 
-  /* ---- KPI ---- */
-  .kpi-card {
-    @apply relative overflow-hidden rounded-2xl
-      border border-aletis-borda/70
-      bg-gradient-to-br from-white to-aletis-cream/60
-      p-5 shadow-brand-sm transition-all duration-300
-      hover:shadow-brand hover:border-aletis-gold/40;
-  }
-  .kpi-card::after {
-    content: "";
-    @apply pointer-events-none absolute inset-x-0 bottom-0 h-[3px]
-      bg-gradient-to-r from-transparent via-aletis-gold/0 to-transparent
-      transition-all duration-300;
-  }
-  .kpi-card:hover::after {
-    @apply via-aletis-gold/70;
-  }
-
   /* ---- Buttons ---- */
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2
@@ -268,15 +227,6 @@
       font-display font-semibold uppercase tracking-wider text-[12.5px]
       hover:bg-aletis-verde-medio
       shadow-brand hover:shadow-brand-lg
-      transition-all duration-200 active:scale-[0.98];
-  }
-  .btn-gold {
-    @apply inline-flex items-center justify-center gap-2
-      bg-aletis-gold text-aletis-verde
-      px-5 py-2.5 rounded-xl
-      font-display font-semibold uppercase tracking-wider text-[12.5px]
-      hover:bg-aletis-gold-escuro hover:text-aletis-cream
-      shadow-brand-gold
       transition-all duration-200 active:scale-[0.98];
   }
   .btn-outline {
@@ -319,16 +269,8 @@
     @apply badge bg-aletis-gold/15 text-aletis-gold-escuro
       border border-aletis-gold/40;
   }
-  .badge-sage {
-    @apply badge bg-aletis-sage/30 text-aletis-verde
-      border border-aletis-sage/50;
-  }
   .badge-vermelho {
     @apply badge bg-alerta/10 text-alerta border border-alerta/25;
-  }
-  .badge-ambar {
-    @apply badge bg-aletis-gold/15 text-aletis-gold-escuro
-      border border-aletis-gold/35;
   }
 
   /* ---- Sidebar ---- */
@@ -342,22 +284,6 @@
   .sidebar-link.active {
     @apply bg-aletis-sage/15 text-aletis-cream;
     box-shadow: inset 3px 0 0 0 var(--aletis-gold);
-  }
-
-  /* ---- Pattern overlay (repetidor) ---- */
-  .bg-aletis-repetidor {
-    background-image: url('/brand/pattern/repetidor.png');
-    background-size: 320px;
-    background-repeat: repeat;
-    background-blend-mode: soft-light;
-  }
-  .bg-aletis-repetidor-soft {
-    background-color: var(--aletis-verde-dark);
-    background-image: url('/brand/pattern/repetidor.png');
-    background-size: 320px;
-    background-repeat: repeat;
-    background-blend-mode: overlay;
-    background-position: center;
   }
 
   /* ---- Scrollbar ---- */
@@ -392,9 +318,6 @@
 }
 @keyframes fillGauge {
   from { stroke-dashoffset: 283; }
-}
-.skeleton {
-  @apply animate-pulse bg-aletis-sage/25 rounded;
 }
 
 /* Respeito a preferências de motion */
