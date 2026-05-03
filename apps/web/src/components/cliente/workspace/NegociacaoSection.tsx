@@ -197,6 +197,15 @@ function DealKpi({ label, count, accent }: { label: string; count: number | stri
   )
 }
 
+const KANBAN_STATUSES: Array<{ id: string; label: string; tone: 'good' | 'warn' | 'bad' | 'info' | 'neutral' }> = [
+  { id: 'negociando', label: 'Negociando', tone: 'info' },
+  { id: 'contraproposta', label: 'Contraproposta', tone: 'warn' },
+  { id: 'aguardando_doc', label: 'Aguardando doc', tone: 'warn' },
+  { id: 'aprovado', label: 'Aprovado', tone: 'good' },
+  { id: 'recusado', label: 'Recusado', tone: 'bad' },
+  { id: 'encerrado', label: 'Encerrado', tone: 'neutral' },
+]
+
 function NegociacoesEmbed({ list, loading, clienteId }: { list: Negociacao[]; loading: boolean; clienteId: string }) {
   if (loading) return <Sk />
   if (list.length === 0) {
@@ -208,15 +217,76 @@ function NegociacoesEmbed({ list, loading, clienteId }: { list: Negociacao[]; lo
           to={`/clientes/${clienteId}/deal-room`}
           className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700"
         >
-          <Building2 className="w-3.5 h-3.5" /> Abrir Deal Room
+          <Building2 className="w-3.5 h-3.5" /> Abrir Deal Room para criar
         </Link>
       </div>
     )
   }
+
+  // Agrupa por status no estilo Kanban
+  const grouped = KANBAN_STATUSES.map((s) => ({
+    ...s,
+    items: list.filter((n) => n.status === s.id),
+  })).filter((c) => c.items.length > 0 || c.id === 'negociando' || c.id === 'aprovado')
+
   return (
-    <div className="card-premium p-4">
-      <h3 className="text-sm font-display font-semibold mb-3">{list.length} negociação(ões)</h3>
-      <ul className="space-y-1.5">
+    <div className="space-y-3">
+      {/* Kanban embedado — visão rápida por status */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+        {grouped.map((col) => {
+          const toneCls =
+            col.tone === 'good' ? 'border-t-emerald-500' :
+            col.tone === 'warn' ? 'border-t-amber-500' :
+            col.tone === 'bad' ? 'border-t-red-500' :
+            col.tone === 'info' ? 'border-t-blue-500' :
+            'border-t-aletis-grafite-claro/30'
+          return (
+            <div key={col.id} className={`card-premium p-2 border-t-4 ${toneCls} min-h-[160px]`}>
+              <div className="flex items-baseline justify-between mb-2">
+                <h4 className="text-[10px] font-display font-bold uppercase tracking-wider text-aletis-grafite-escuro">
+                  {col.label}
+                </h4>
+                <span className="text-[10px] font-mono text-aletis-grafite-claro">{col.items.length}</span>
+              </div>
+              <div className="space-y-1.5">
+                {col.items.length === 0 ? (
+                  <p className="text-[10px] text-aletis-grafite-claro italic text-center py-3">vazia</p>
+                ) : col.items.slice(0, 5).map((n) => (
+                  <Link
+                    key={n.id}
+                    to={`/clientes/${clienteId}/deal-room?neg=${n.id}`}
+                    className="block rounded-md bg-aletis-bege/40 hover:bg-aletis-bege/60 px-2 py-1.5 transition-colors"
+                  >
+                    <p className="text-[11px] font-semibold text-aletis-grafite-escuro truncate">{n.credor ?? '—'}</p>
+                    {n.valor != null && <p className="text-[10px] text-aletis-grafite-claro tabular-nums">{fmtBRLCompact(n.valor)}</p>}
+                  </Link>
+                ))}
+                {col.items.length > 5 && (
+                  <Link
+                    to={`/clientes/${clienteId}/deal-room`}
+                    className="block text-[10px] text-aletis-verde hover:underline text-center"
+                  >
+                    +{col.items.length - 5} →
+                  </Link>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Tabela completa abaixo */}
+      <div className="card-premium p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-display font-semibold">{list.length} negociação(ões) detalhadas</h3>
+          <Link
+            to={`/clientes/${clienteId}/deal-room`}
+            className="text-[10px] text-aletis-verde hover:underline inline-flex items-center gap-1"
+          >
+            <Building2 className="w-3 h-3" /> Deal Room completo
+          </Link>
+        </div>
+        <ul className="space-y-1.5">
         {list.map((n) => (
           <li key={n.id} className="flex items-baseline gap-2 px-2 py-1.5 rounded hover:bg-aletis-bege/30 text-xs">
             <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider flex-shrink-0 ${
@@ -233,7 +303,8 @@ function NegociacoesEmbed({ list, loading, clienteId }: { list: Negociacao[]; lo
             {n.criadoEm && <span className="text-[10px] text-aletis-grafite-claro flex-shrink-0">{fmtData(n.criadoEm)}</span>}
           </li>
         ))}
-      </ul>
+        </ul>
+      </div>
     </div>
   )
 }

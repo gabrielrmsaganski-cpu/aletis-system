@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '../../hooks/useApi'
 import { Trophy, TrendingUp, TrendingDown, Target } from 'lucide-react'
+import { Skeleton as UISkeleton, SkeletonList } from '../ui'
 
 interface Kpi {
   metrica: string
@@ -159,10 +160,8 @@ function Bar({ label, pct, cor, valor }: { label: string; pct: number; cor: stri
 function Skeleton() {
   return (
     <div className="space-y-3">
-      <div className="h-16 rounded-xl bg-gray-100 animate-pulse" />
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="h-32 rounded-xl bg-gray-100 animate-pulse" />
-      ))}
+      <UISkeleton className="h-16 rounded-xl" />
+      <SkeletonList count={4} itemHeight="h-32" />
     </div>
   )
 }

@@ -5,6 +5,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { apiFetch } from '../../hooks/useApi'
 import { Store, Plus, Download, Trash2, X, Loader2, Star, Sparkles } from 'lucide-react'
+import { Skeleton as UISkeleton } from '../ui'
 
 interface Template {
   id: string
@@ -447,7 +448,7 @@ function Skeleton() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
       {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="h-32 rounded-xl bg-gray-100 animate-pulse" />
+        <UISkeleton key={i} className="h-32 rounded-xl" />
       ))}
     </div>
   )

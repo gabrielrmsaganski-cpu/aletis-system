@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '../../hooks/useApi'
 import { Briefcase, Trophy, AlertTriangle, TrendingUp, RotateCw } from 'lucide-react'
+import { Skeleton as UISkeleton, SkeletonKpiGrid } from '../ui'
 
 interface Grupo {
   grupoId: string
@@ -223,10 +224,17 @@ function RankingCard({ label, grupo, metrica, tone, onClick }: { label: string; 
   )
 }
 
+// StatusBadge canônico (components/ui/StatusBadge) — wrapper para mapear
+// 'saudavel'/'atencao'/'critico' → tone good/warn/bad com prefix.
+import UIStatusBadge from '../ui/StatusBadge'
+
 function StatusBadge({ status }: { status: 'saudavel' | 'atencao' | 'critico' }) {
-  const cls = status === 'saudavel' ? 'bg-aletis-verde/15 text-aletis-verde' : status === 'atencao' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-700'
-  const label = status === 'saudavel' ? '✓ saudável' : status === 'atencao' ? '⚠ atenção' : '🔴 crítico'
-  return <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${cls}`}>{label}</span>
+  const map = {
+    saudavel: { label: 'saudável', tone: 'good' as const, prefix: '✓' },
+    atencao: { label: 'atenção', tone: 'warn' as const, prefix: '⚠' },
+    critico: { label: 'crítico', tone: 'bad' as const, prefix: '🔴' },
+  }[status]
+  return <UIStatusBadge label={map.label} tone={map.tone} prefix={map.prefix} />
 }
 
 function fmtBRL(v: number | null | undefined): string {
@@ -237,11 +245,9 @@ function fmtBRL(v: number | null | undefined): string {
 function Skeleton() {
   return (
     <div className="space-y-3">
-      <div className="h-40 rounded-xl bg-gray-100 animate-pulse" />
-      <div className="grid grid-cols-2 gap-2">
-        {[1, 2, 3, 4].map((i) => <div key={i} className="h-24 rounded-xl bg-gray-100 animate-pulse" />)}
-      </div>
-      <div className="h-64 rounded-xl bg-gray-100 animate-pulse" />
+      <UISkeleton className="h-40 rounded-xl" />
+      <SkeletonKpiGrid count={4} />
+      <UISkeleton className="h-64 rounded-xl" />
     </div>
   )
 }

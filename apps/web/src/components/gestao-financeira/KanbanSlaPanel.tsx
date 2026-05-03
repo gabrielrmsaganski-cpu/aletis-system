@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '../../hooks/useApi'
 import { Clock, CheckCircle2, AlertTriangle, Pause, Play, RotateCw } from 'lucide-react'
+import { Skeleton as UISkeleton } from '../ui'
 
 interface Etapa {
   id: string
@@ -238,10 +239,10 @@ function EtapaCard({ etapa, onPatch }: { etapa: Etapa; onPatch: (p: Partial<Etap
 function Skeleton() {
   return (
     <div className="space-y-3">
-      <div className="h-20 rounded-xl bg-gray-100 animate-pulse" />
+      <UISkeleton className="h-20 rounded-xl" />
       <div className="grid grid-cols-7 gap-2">
         {[1, 2, 3, 4, 5, 6, 7].map((i) => (
-          <div key={i} className="h-48 rounded-xl bg-gray-100 animate-pulse" />
+          <UISkeleton key={i} className="h-48 rounded-xl" />
         ))}
       </div>
     </div>

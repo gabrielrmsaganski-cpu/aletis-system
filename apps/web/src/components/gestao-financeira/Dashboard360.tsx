@@ -8,6 +8,7 @@ import {
   BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
+import { Skeleton as UISkeleton, SkeletonKpiGrid } from '../ui'
 import {
   AlertTriangle, AlertCircle, Info, TrendingUp, TrendingDown,
   RefreshCw, Loader2, CheckCircle2,
@@ -516,15 +517,11 @@ function Empty({ msg }: { msg: string }) {
 function Skeleton() {
   return (
     <div className="space-y-3">
-      <div className="h-12 bg-gray-100 rounded-lg animate-pulse" />
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-          <div key={i} className="h-20 bg-gray-100 rounded-lg animate-pulse" />
-        ))}
-      </div>
+      <UISkeleton className="h-12 rounded-lg" />
+      <SkeletonKpiGrid count={8} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-64 bg-gray-100 rounded-lg animate-pulse" />
+          <UISkeleton key={i} className="h-64 rounded-lg" />
         ))}
       </div>
     </div>

@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '../../hooks/useApi'
 import { Plus, Edit3, Trash2, History, RotateCw } from 'lucide-react'
+import { Skeleton as UISkeleton, SkeletonList } from '../ui'
 
 interface Changelog {
   id: number
@@ -178,10 +179,8 @@ function ChangelogItem({ change }: { change: Changelog }) {
 function Skeleton() {
   return (
     <div className="space-y-3">
-      <div className="h-20 rounded-xl bg-gray-100 animate-pulse" />
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="h-16 rounded-xl bg-gray-100 animate-pulse" />
-      ))}
+      <UISkeleton className="h-20 rounded-xl" />
+      <SkeletonList count={4} itemHeight="h-16" />
     </div>
   )
 }

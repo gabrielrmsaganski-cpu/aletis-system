@@ -4,6 +4,7 @@
 // municipal, tags, notas internas, visitas técnicas, patrimônio.
 // ============================================================
 import { useState, lazy, Suspense } from 'react'
+import { Link } from 'react-router-dom'
 import { apiFetch } from '../../../hooks/useApi'
 import { MapThumbnail } from '../../MapThumbnail'
 import {
@@ -21,6 +22,8 @@ import {
   ChevronDown,
   ChevronRight,
   X,
+  FileSearch,
+  ExternalLink,
 } from 'lucide-react'
 import type { UseClienteDataReturn } from './useClienteData'
 import { fmtData, fmtBRL } from './utils'
@@ -37,6 +40,30 @@ export default function IdentidadeSection({ data }: Props) {
 
   return (
     <div className="space-y-3 animate-fade-in">
+      {/* CTA pro Dossiê Agro Canônico (Daycoval/CAR/IBGE expandido) */}
+      <Link
+        to={`/clientes/${cliente.id}/dossie`}
+        className="card-premium block px-4 py-3 hover:bg-aletis-bege/40 transition-colors group"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center flex-shrink-0">
+            <FileSearch className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-mono text-blue-700 uppercase font-semibold tracking-wider">
+              📋 Dossiê Agro canônico
+            </p>
+            <h3 className="text-sm font-display font-semibold text-aletis-grafite-escuro">
+              Ver dossiê detalhado (padrão Daycoval 2025)
+            </h3>
+            <p className="text-[11px] text-aletis-grafite-medio">
+              Grupo econômico, fornecedores, propriedades rurais, frota agrícola, dívidas bancárias detalhadas, contas e relações comerciais — 13 seções colapsáveis.
+            </p>
+          </div>
+          <ExternalLink className="w-4 h-4 text-aletis-grafite-claro group-hover:text-aletis-verde flex-shrink-0" />
+        </div>
+      </Link>
+
       {/* Linha 1: Dados Pessoais + Localização + Propriedade */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <DadosPessoaisCard cliente={cliente} />
