@@ -5,9 +5,13 @@
 // que precise saber quem é o consultor logado. Substitui hardcodes
 // "Christian Kohler" / "CK" espalhados pela UI.
 //
-// Estratégia atual: lê do localStorage `aletis:user` (se existir),
-// fallback para o consultor demo. Quando o backend tiver login real,
-// trocar `loadUserFromStorage()` por chamada de /me.
+// Boot strategy:
+//   1. Cache local (localStorage 'aletis:user') para evitar flash
+//   2. Fetch /api/auth/me em paralelo — quando responder, atualiza
+//   3. Fallback para FALLBACK_USER se ambos falharem
+//
+// O backend retorna do JWT (quando login real estiver implementado)
+// ou de env vars CONSULTOR_*.
 // ============================================================
 import {
   createContext,
@@ -17,6 +21,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { apiFetch } from '../hooks/useApi'
 
 export interface AuthUser {
   /** ID estável (usado em comentários, changelog, audit). */
@@ -95,6 +100,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     window.addEventListener('storage', handler)
     return () => window.removeEventListener('storage', handler)
+  }, [])
+
+  // Boot: tenta /api/auth/me (backend é a fonte de verdade)
+  useEffect(() => {
+    let cancelled = false
+    apiFetch<Partial<AuthUser>>('/auth/me')
+      .then((data) => {
+        if (cancelled || !data?.nome) return
+        const next: AuthUser = {
+          ...FALLBACK_USER,
+          ...data,
+          iniciais: data.iniciais ?? deriveIniciais(data.nome),
+          primeiroNome: data.primeiroNome ?? data.nome.split(' ')[0],
+        }
+        setUserState(next)
+        try {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+        } catch {}
+      })
+      .catch(() => {
+        // backend offline / sem auth — segue com cache local
+      })
+    return () => { cancelled = true }
   }, [])
 
   const value = useMemo<AuthContextValue>(
