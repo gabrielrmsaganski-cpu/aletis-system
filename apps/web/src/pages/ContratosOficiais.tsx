@@ -9,16 +9,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { apiFetch } from '../hooks/useApi'
 import ContratosOficiaisTab from '../components/contratos/ContratosOficiaisTab'
 import { Search, User, FileText } from 'lucide-react'
-
-interface ClienteListItem {
-  id: string
-  nome: string
-  cidade?: string
-  uf?: string
-  cpfCnpj?: string
-  estagio?: string
-  consultor?: string
-}
+import type { ClienteListItem } from '../types/cliente'
 
 export default function ContratosOficiais() {
   const [clientes, setClientes] = useState<ClienteListItem[] | null>(null)

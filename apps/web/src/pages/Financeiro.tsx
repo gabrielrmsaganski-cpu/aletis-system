@@ -2018,23 +2018,12 @@ function MiniStat({ label, value, icon: Icon, color }: { label: string; value: s
   return <KpiCard label={label} value={value} icon={Icon} color={color} />
 }
 
+// Re-export do canônico (components/ui/StatusBadge) com inferStatusTone
+// que cobre os labels deste arquivo (recebida/paga/emitida/pendente/etc).
+import UIStatusBadge from '../components/ui/StatusBadge'
+
 function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    recebida: 'bg-emerald-100 text-emerald-700',
-    paga: 'bg-emerald-100 text-emerald-700',
-    pago: 'bg-emerald-100 text-emerald-700',
-    emitida: 'bg-amber-100 text-amber-700',
-    pendente: 'bg-amber-100 text-amber-700',
-    a_pagar: 'bg-amber-100 text-amber-700',
-    atrasada: 'bg-rose-100 text-rose-700',
-    atrasado: 'bg-rose-100 text-rose-700',
-    cancelada: 'bg-gray-100 text-gray-500 line-through',
-  }
-  return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${map[status] ?? 'bg-gray-100 text-gray-600'}`}>
-      {status.replace('_', ' ')}
-    </span>
-  )
+  return <UIStatusBadge label={status} />
 }
 
 function Field({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {

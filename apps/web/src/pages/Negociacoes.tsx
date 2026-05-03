@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { apiFetch } from '../hooks/useApi'
+import type { ClienteSummary as Cliente } from '../types/cliente'
 import { DSCard, DSStatCard, DSEmpty, DSTable, DSBadge, DSButton } from '../components/ds'
 import {
   Building2,
@@ -30,11 +31,6 @@ interface Negociacao {
   prazoMeses?: number
   proximaData?: string
   ultimaInteracao?: string
-}
-
-interface Cliente {
-  id: string
-  nome: string
 }
 
 const STATUSES = ['todos', 'negociando', 'contraproposta', 'aguardando_doc', 'aprovado', 'recusado', 'encerrado', 'suspenso']

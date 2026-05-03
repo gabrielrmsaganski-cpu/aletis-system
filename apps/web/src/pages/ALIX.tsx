@@ -92,10 +92,7 @@ interface AttachmentChip {
   error?: string
 }
 
-interface ClienteLite {
-  id: string
-  nome: string
-}
+import type { ClienteSummary as ClienteLite } from '../types/cliente'
 
 interface BriefingDestaque {
   titulo: string
