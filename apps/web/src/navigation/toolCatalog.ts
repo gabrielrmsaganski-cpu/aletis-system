@@ -40,11 +40,11 @@ import {
 
 export type ToolCategory =
   | 'principal'
-  | 'clientes'
-  | 'agro'
+  | 'funil'
+  | 'deal'
+  | 'operacao'
   | 'mercado'
-  | 'comunicacao'
-  | 'gestao'
+  | 'sistema'
 
 export interface CategoryMeta {
   id: ToolCategory
@@ -55,41 +55,46 @@ export interface CategoryMeta {
   accentClass: string
 }
 
+/**
+ * Categorias da Sidebar — ordem semântica do workflow do consultor.
+ * Cada uma mapeia a um momento real do dia: começar → captar → fechar →
+ * operar → entender o mercado → administrar.
+ */
 export const CATEGORIES: CategoryMeta[] = [
   {
     id: 'principal',
     label: 'Começar',
-    subtitle: 'Atalhos do dia a dia',
+    subtitle: 'Dashboard, IA e catálogo',
     accentClass: 'bg-aletis-dourado/15 text-aletis-dourado-escuro',
   },
   {
-    id: 'clientes',
-    label: 'Clientes',
-    subtitle: 'Prospecção, CRM, propostas e contratos',
+    id: 'funil',
+    label: 'Funil',
+    subtitle: 'Prospecção e CRM',
     accentClass: 'bg-aletis-verde/10 text-aletis-verde',
   },
   {
-    id: 'agro',
+    id: 'deal',
+    label: 'Deal flow',
+    subtitle: 'Propostas, negociações, contratos',
+    accentClass: 'bg-emerald-100 text-emerald-700',
+  },
+  {
+    id: 'operacao',
     label: 'Operação agro',
-    subtitle: 'Custeio agrícola e crédito rural',
-    accentClass: 'bg-aletis-verde/10 text-aletis-verde',
+    subtitle: 'Carteira, custeio, crédito, calculadoras',
+    accentClass: 'bg-amber-100 text-amber-800',
   },
   {
     id: 'mercado',
     label: 'Inteligência',
-    subtitle: 'Mercado, clima e análise de cenários',
-    accentClass: 'bg-aletis-dourado/10 text-aletis-dourado-escuro',
+    subtitle: 'Mercado, clima, fontes',
+    accentClass: 'bg-sky-100 text-sky-700',
   },
   {
-    id: 'comunicacao',
-    label: 'Comunicação & IA',
-    subtitle: 'WhatsApp e a assistente Aletéia',
-    accentClass: 'bg-aletis-verde/10 text-aletis-verde-medio',
-  },
-  {
-    id: 'gestao',
-    label: 'Gestão',
-    subtitle: 'Financeiro interno, relatórios e configurações',
+    id: 'sistema',
+    label: 'Sistema',
+    subtitle: 'Financeiro interno, relatórios, configurações',
     accentClass: 'bg-aletis-grafite-medio/10 text-aletis-grafite-escuro',
   },
 ]
@@ -157,7 +162,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Pipeline de prospecção com mapa interativo de imóveis rurais, filtros por UF/município/área, enriquecimento de leads via SICAR/IBGE/CAR e insights gerados por IA para priorização.',
     icon: Target,
     route: '/prospeccao',
-    category: 'clientes',
+    category: 'funil',
     keywords: ['prospeccao', 'leads', 'funil', 'sicar', 'imoveis', 'car', 'novo cliente', 'potencial'],
     showInSidebar: true,
   },
@@ -169,7 +174,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Visão geográfica dos leads — markers coloridos por score (quente/morno/frio), camadas de mapa e satélite, filtros por UF / tipo / dívida mínima. Quando o lead não tem lat/lng explícita, o ponto cai no centróide da UF.',
     icon: MapPin,
     route: '/prospeccao/mapa',
-    category: 'clientes',
+    category: 'funil',
     keywords: ['mapa', 'geografia', 'leads', 'prospeccao', 'uf', 'pin', 'leaflet'],
     showInSidebar: false,
   },
@@ -181,7 +186,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Base de clientes em visualização Lista ou Kanban por estágio de negociação (lead → análise → proposta → fechamento). Registra dívidas, credores, histórico de contato e documentos.',
     icon: Users,
     route: '/crm',
-    category: 'clientes',
+    category: 'funil',
     keywords: ['crm', 'clientes', 'kanban', 'lista', 'estagios', 'pipeline', 'contatos'],
     showInSidebar: true,
     shortcut: 'g c',
@@ -194,7 +199,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Construtor de propostas de reestruturação: Price, SAC, carência, parcelas balão. Cada proposta tem status (rascunho → enviada → aceita → recusada) e gera PDF pronto pro cliente.',
     icon: FileText,
     route: '/propostas',
-    category: 'clientes',
+    category: 'deal',
     keywords: ['propostas', 'proposta', 'pdf', 'price', 'sac', 'carencia', 'reestruturacao', 'renegociacao'],
     showInSidebar: true,
   },
@@ -206,7 +211,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Seis tipos de instrumento: CPR Financeira, CPR Física, Confissão de Dívida, Termo de Renegociação, Acordo Extrajudicial e Transação. Geração, assinatura e rastreamento de execução.',
     icon: FileCheck,
     route: '/contratos',
-    category: 'clientes',
+    category: 'deal',
     keywords: ['contratos', 'cpr', 'confissao', 'divida', 'renegociacao', 'acordo', 'transacao', 'instrumento'],
     showInSidebar: true,
   },
@@ -218,7 +223,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Geração dos 10 documentos oficiais ALETIS (Anexo 0 a Anexo VIII): contrato base, anexos de serviço, NDA, procuração, termo de aceite. Escolha o cliente, o sistema preenche os campos e gera o .docx preservando 100% da formatação original.',
     icon: FileCheck,
     route: '/contratos-oficiais',
-    category: 'clientes',
+    category: 'deal',
     keywords: ['contratos', 'oficiais', 'documentos', 'anexo', 'nda', 'procuracao', 'termo', 'aceite', 'consultoria', 'diagnostico', 'assessoria', 'erp', 'docx', 'modelo', 'template'],
     showInSidebar: true,
   },
@@ -230,7 +235,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Visão consolidada de todas as negociações por banco/credor em todos os clientes. Status, contrapropostas, deadlines, valor em jogo, economia projetada — em uma única tela com filtros por status e busca por credor/cliente.',
     icon: Building2,
     route: '/negociacoes',
-    category: 'clientes',
+    category: 'deal',
     keywords: ['negociacoes', 'deal', 'room', 'credor', 'banco', 'contraproposta', 'reestruturacao', 'divida', 'kanban'],
     showInSidebar: true,
   },
@@ -244,7 +249,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Simulador de custeio agrícola completo em 7 abas (Proponente, Imóvel, Glebas, Orçamento, Cronograma, Comercialização, Avalistas). Calcula VPL, TIR, payback e margem; auto-save a cada 1,5s; exporta PDF no padrão BB/Sicoob.',
     icon: Wheat,
     route: '/custeio',
-    category: 'agro',
+    category: 'operacao',
     keywords: ['custeio', 'agricola', 'vpl', 'tir', 'payback', 'margem', 'plano', 'safra', 'pronamp'],
     showInSidebar: true,
   },
@@ -256,7 +261,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Calculadora verificada no servidor: entrada dos parâmetros de uma linha de crédito rural (Pronaf, Pronamp, Investimento, Custeio) e retorno de taxa efetiva, parcelas, sistema de amortização e análise de aderência ao MCR do Bacen.',
     icon: CreditCard,
     route: '/credito',
-    category: 'agro',
+    category: 'operacao',
     keywords: ['credito', 'credito rural', 'pronaf', 'pronamp', 'mcr', 'taxa', 'parcela', 'simulador'],
     showInSidebar: true,
   },
@@ -268,7 +273,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Reimplementação nativa das planilhas legadas (R.OP.001 / sistema agro). Diagnóstico financeiro Dupont 5-fatores + tipologia Fleuriet, formação de preço de venda 3.0 (4 modelos de markup) e viabilidade agrícola por cultura (FARMS) com sensibilidade ao preço e ao rendimento.',
     icon: Wheat,
     route: '/ferramentas/calculadoras-agro',
-    category: 'agro',
+    category: 'operacao',
     keywords: [
       'calculadora',
       'dupont',
@@ -321,7 +326,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Central integrada de WhatsApp — mensagens, áudios com player, indicadores de leitura, templates aprovados e histórico por cliente. Faz ponte com o CRM automaticamente.',
     icon: MessageCircle,
     route: '/whatsapp',
-    category: 'comunicacao',
+    category: 'deal',
     keywords: ['whatsapp', 'mensagens', 'audio', 'templates', 'conversa', 'chat'],
     showInSidebar: true,
   },
@@ -333,7 +338,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Aletéia, agente IA da ALETIS (Claude Sonnet 4.6) com acesso a dossiê, custeio, contabilidade Lambda, fiscal, relatórios, simuladores CBS-IBS/Funrural/Desenrola, BSC Agro, SICOR Bacen, RAG BM25, upload multimodal, calculadoras agro nativas (Dupont/Fleuriet/FARMS/Preço) e geração real de PDF/DOCX/XLSX.',
     icon: Bot,
     route: '/ia',
-    category: 'comunicacao',
+    category: 'principal',
     keywords: ['aletéia', 'aleteia', 'aletheia', 'alix', 'ia', 'ai', 'assistente', 'chat', 'claude', 'inteligencia artificial', 'agente'],
     showInSidebar: true,
     shortcut: 'g a',
@@ -349,7 +354,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Painel consolidado da carteira do consultor: KPIs agregados (receita, EBITDA, dívida), rankings (melhor margem, mais alavancado, maior receita), distribuição saudável/atenção/crítico e tabela de todos os grupos com drill-down direto para o R.OP.001 v2.0.',
     icon: Briefcase,
     route: '/carteira',
-    category: 'gestao',
+    category: 'operacao',
     keywords: ['carteira', 'consultor', 'multi grupo', 'ranking', 'saude financeira', 'gestao financeira', 'r.op.001', 'ebitda', 'margem'],
     showInSidebar: true,
   },
@@ -361,7 +366,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Gestão financeira interna do escritório em 7 abas: Receitas, Despesas, Impostos (DAS/INSS/ISS), Extratos, Fluxo de caixa, Fechamento mensal e Anexos. Todos os lançamentos persistidos em JSON local.',
     icon: DollarSign,
     route: '/financeiro',
-    category: 'gestao',
+    category: 'sistema',
     keywords: ['financeiro', 'caixa', 'receitas', 'despesas', 'das', 'impostos', 'fechamento', 'extrato'],
     showInSidebar: true,
   },
@@ -373,7 +378,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Seis famílias de relatório: Portfolio (carteira), Rentabilidade, Performance, Inteligência de mercado, Fluxo de caixa e LGPD/Compliance. Exportação em PDF com identidade visual ALETIS.',
     icon: BarChart3,
     route: '/relatorios',
-    category: 'gestao',
+    category: 'sistema',
     keywords: ['relatorios', 'portfolio', 'rentabilidade', 'performance', 'lgpd', 'compliance', 'pdf'],
     showInSidebar: true,
   },
@@ -385,7 +390,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Configuração do perfil do consultor, dados da empresa, contador vinculado, permissões por usuário e integrações externas (CEPEA, Bacen, Sicor, WhatsApp Cloud API, Azure Foundry).',
     icon: Settings,
     route: '/configuracoes',
-    category: 'gestao',
+    category: 'sistema',
     keywords: ['configuracoes', 'settings', 'perfil', 'empresa', 'contador', 'permissoes', 'integracoes'],
     showInSidebar: true,
   },
@@ -397,7 +402,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
       'Painel de saúde das 36 fontes oficiais (BCB, CEPEA, CONAB, INMET, IBGE, ANP, NASA, etc.) com status atual, latência, uptime % nas últimas 24h/7d, timeline de transições e último erro. Telemetria persistida em Postgres via audit_log.',
     icon: Activity,
     route: '/fontes',
-    category: 'gestao',
+    category: 'mercado',
     keywords: ['fontes', 'sla', 'uptime', 'monitoramento', 'observability', 'health', 'integracoes', 'apis'],
     showInSidebar: true,
   },
