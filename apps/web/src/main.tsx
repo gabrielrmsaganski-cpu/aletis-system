@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import PwaUpdater from './components/PwaUpdater'
+import { AuthProvider } from './contexts/AuthContext'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -13,8 +14,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         v7_relativeSplatPath: true,
       }}
     >
-      <App />
-      <PwaUpdater />
+      <AuthProvider>
+        <App />
+        <PwaUpdater />
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>
 )

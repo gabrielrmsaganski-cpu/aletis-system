@@ -16,6 +16,7 @@ import {
   TOOL_CATALOG,
   type ToolEntry,
 } from '../../navigation/toolCatalog'
+import { useAuth } from '../../contexts/AuthContext'
 
 interface SidebarProps {
   collapsed: boolean
@@ -34,6 +35,7 @@ export default function Sidebar({
 }: SidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
+  const { user, logout: doLogout } = useAuth()
 
   const grouped = useMemo(() => {
     return CATEGORIES.map((cat) => ({
@@ -50,8 +52,8 @@ export default function Sidebar({
   }
 
   const handleLogout = () => {
-    localStorage.clear()
     sessionStorage.clear()
+    doLogout()
     navigate('/')
   }
 
@@ -201,16 +203,16 @@ export default function Sidebar({
             aria-hidden="true"
           >
             <span className="text-aletis-gold font-display text-xs font-semibold tracking-wide">
-              CK
+              {user.iniciais}
             </span>
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <p className="font-body text-aletis-cream text-sm font-bold truncate">
-                Christian Kohler
+                {user.nome}
               </p>
               <p className="font-body text-aletis-sage/80 text-[11px] truncate">
-                Consultor sênior
+                {user.cargo}
               </p>
             </div>
           )}

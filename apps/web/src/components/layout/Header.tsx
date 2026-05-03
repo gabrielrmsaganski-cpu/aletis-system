@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { useDSTheme } from '../../hooks/useDSTheme'
 import { apiFetch } from '../../hooks/useApi'
+import { useAuth } from '../../contexts/AuthContext'
 
 interface TickerItem {
   label: string
@@ -130,6 +131,7 @@ export default function Header({ onMobileMenuToggle, onOpenPalette }: HeaderProp
   const userMenuRef = useRef<HTMLDivElement>(null)
   const tickerData = useTickerData()
   const navigate = useNavigate()
+  const { user, logout: doLogout } = useAuth()
 
   const goTo = (path: string) => {
     setUserMenuOpen(false)
@@ -142,11 +144,11 @@ export default function Header({ onMobileMenuToggle, onOpenPalette }: HeaderProp
     if (!ok) return
     try {
       localStorage.removeItem('aletis:session')
-      localStorage.removeItem('aletis:user')
       sessionStorage.clear()
     } catch {
       /* ignore */
     }
+    doLogout()
     navigate('/portal-cliente')
   }
 
@@ -265,11 +267,11 @@ export default function Header({ onMobileMenuToggle, onOpenPalette }: HeaderProp
             >
               <div className="w-8 h-8 rounded-full bg-aletis-sage/30 dark:bg-aletis-gold/25 border border-aletis-sage/50 dark:border-aletis-gold/40 flex items-center justify-center">
                 <span className="text-aletis-verde dark:text-aletis-gold text-xs font-display font-semibold tracking-wide">
-                  CK
+                  {user.iniciais}
                 </span>
               </div>
               <span className="hidden sm:block font-body text-sm font-bold text-aletis-verde dark:text-aletis-cream max-w-[120px] truncate">
-                Christian
+                {user.primeiroNome}
               </span>
               <ChevronDown
                 size={14}
@@ -293,10 +295,10 @@ export default function Header({ onMobileMenuToggle, onOpenPalette }: HeaderProp
               >
                 <div className="px-4 py-3 border-b border-aletis-borda dark:border-aletis-sage/15">
                   <p className="font-display text-sm font-bold tracking-wide text-aletis-verde dark:text-aletis-cream">
-                    Christian Kohler
+                    {user.nome}
                   </p>
                   <p className="font-body text-xs text-aletis-verde-medio dark:text-aletis-sage">
-                    Consultor sênior
+                    {user.cargo}
                   </p>
                 </div>
                 <button
