@@ -3,20 +3,24 @@
 // ============================================================
 import type { FastifyInstance } from 'fastify'
 import { getDealRoomService, type NegociacaoStatus } from '../services/dealRoom/DealRoomService.js'
+import { resolveInternalSession } from '../lib/internal-auth.js'
+
+const createRequests = new Map<string, { id: string; createdAt: number }>()
 
 interface CreateBody {
   clienteId: string
   credor: string
   responsavel?: string
-  valorAtual?: number
-  valorProposto?: number
-  taxaAtual?: number
-  taxaProposta?: number
+  valorAtual?: number | string
+  valorProposto?: number | string
+  taxaAtual?: number | string
+  taxaProposta?: number | string
   prazoMeses?: number
   carenciaMeses?: number
   garantias?: string[]
   observacoes?: string
   proximaData?: string
+  propostaId?: string
 }
 
 export default async function dealRoomRoutes(fastify: FastifyInstance): Promise<void> {
@@ -31,6 +35,23 @@ export default async function dealRoomRoutes(fastify: FastifyInstance): Promise<
       return reply.send({ success: true, data: list, total: list.length })
     },
   )
+
+  fastify.get('/api/deal-room/resumo', async (_req, reply) => {
+    const list = await getDealRoomService().list()
+    const porStatus: Record<string, number> = {}
+    let valorEmNegociacao = 0
+    let economiaProjetada = 0
+    let proximoDeadline: { credor: string; data: string } | null = null
+    for (const n of list) {
+      porStatus[n.status] = (porStatus[n.status] ?? 0) + 1
+      if (['negociando', 'contraproposta', 'aguardando_doc'].includes(n.status)) {
+        valorEmNegociacao += Number(n.valorAtual ?? 0)
+        economiaProjetada += Math.max(0, Number(n.valorAtual ?? 0) - Number(n.valorProposto ?? 0))
+        if (n.proximaData && (!proximoDeadline || n.proximaData < new Date(proximoDeadline.data))) proximoDeadline = { credor: n.credor, data: n.proximaData.toISOString() }
+      }
+    }
+    return reply.send({ success: true, data: { total: list.length, porStatus, valorEmNegociacao: valorEmNegociacao.toFixed(2), economiaProjetada: economiaProjetada.toFixed(2), proximoDeadline } })
+  })
 
   // Listar por cliente
   fastify.get<{ Params: { clienteId: string } }>(
@@ -59,6 +80,13 @@ export default async function dealRoomRoutes(fastify: FastifyInstance): Promise<
     return reply.send({ success: true, data: n })
   })
 
+  fastify.post('/api/deal-room/backfill-propostas', async (req, reply) => {
+    const actor = resolveInternalSession(fastify, req)
+    const { reconcilePropostasComNegociacoes } = await import('./propostas.js')
+    const result = await reconcilePropostasComNegociacoes()
+    return reply.send({ success: true, data: result, ator: actor?.id ?? 'sistema' })
+  })
+
   // Criar
   fastify.post<{ Body: CreateBody }>('/api/deal-room/negociacoes', async (req, reply) => {
     try {
@@ -66,7 +94,17 @@ export default async function dealRoomRoutes(fastify: FastifyInstance): Promise<
       if (!b?.clienteId || !b?.credor) {
         return reply.status(400).send({ success: false, error: 'clienteId e credor são obrigatórios' })
       }
-      const n = await getDealRoomService().create(b)
+      const actor = resolveInternalSession(fastify, req)
+      const idempotencyKey = String(req.headers['idempotency-key'] ?? '').trim()
+      if (idempotencyKey) {
+        const prior = createRequests.get(idempotencyKey)
+        if (prior && Date.now() - prior.createdAt < 10 * 60_000) {
+          const existing = await getDealRoomService().get(prior.id)
+          if (existing) return reply.status(200).send({ success: true, data: existing, idempotent: true })
+        }
+      }
+      const n = await getDealRoomService().create({ ...b, usuarioId: actor?.id, usuarioNome: actor?.nome })
+      if (idempotencyKey) createRequests.set(idempotencyKey, { id: n.id, createdAt: Date.now() })
       return reply.status(201).send({ success: true, data: n })
     } catch (err) {
       return reply.status(400).send({ success: false, error: (err as Error).message })
@@ -74,11 +112,12 @@ export default async function dealRoomRoutes(fastify: FastifyInstance): Promise<
   })
 
   // Atualizar
-  fastify.patch<{ Params: { id: string }; Body: any }>(
+  fastify.patch<{ Params: { id: string }; Body: Record<string, unknown> }>(
     '/api/deal-room/negociacoes/:id',
     async (req, reply) => {
       try {
-        const updated = await getDealRoomService().update(req.params.id, req.body || {})
+        const actor = resolveInternalSession(fastify, req)
+        const updated = await getDealRoomService().update(req.params.id, { ...(req.body || {}), usuarioId: actor?.id, usuarioNome: actor?.nome })
         if (!updated) return reply.status(404).send({ success: false, error: 'Negociação não encontrada' })
         return reply.send({ success: true, data: updated })
       } catch (err) {
@@ -97,8 +136,10 @@ export default async function dealRoomRoutes(fastify: FastifyInstance): Promise<
         const updated = await getDealRoomService().update(req.params.id, {
           appendHistorico: {
             ts: new Date().toISOString(),
-            tipo: (req.body?.tipo as any) ?? 'nota',
+            tipo: req.body?.tipo === 'reuniao' || req.body?.tipo === 'contraproposta' ? req.body.tipo : 'nota',
             texto: texto.slice(0, 2000),
+            usuarioId: resolveInternalSession(fastify, req)?.id,
+            usuarioNome: resolveInternalSession(fastify, req)?.nome,
           },
         })
         if (!updated) return reply.status(404).send({ success: false, error: 'Negociação não encontrada' })
@@ -119,5 +160,4 @@ export default async function dealRoomRoutes(fastify: FastifyInstance): Promise<
     },
   )
 
-  console.log('[DealRoom] Rotas registradas: GET/POST/PATCH/DELETE /api/deal-room/negociacoes, GET /api/deal-room/cliente/:id')
 }

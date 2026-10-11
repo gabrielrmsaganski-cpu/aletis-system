@@ -36,39 +36,7 @@ export interface SicorAgregado {
   atualizadoEm: string;
 }
 
-// ── Fallback (CY 2025 estimates — directional only) ─────────
-
-const FALLBACK_AGREGADO: Omit<SicorAgregado, 'fonte' | 'atualizadoEm'> = {
-  periodo: 'ultimos 12 meses',
-  totalContratos: 2_845_000,
-  valorTotal: 460_000_000_000,
-  valorMedio: 161_722,
-  areaTotal: 85_000_000,
-  topProdutos: [
-    { produto: 'Soja', valor: 145_000_000_000, participacao: 31.5 },
-    { produto: 'Milho', valor: 92_000_000_000, participacao: 20.0 },
-    { produto: 'Cana-de-acucar', valor: 54_000_000_000, participacao: 11.7 },
-    { produto: 'Cafe', valor: 38_000_000_000, participacao: 8.3 },
-    { produto: 'Bovinocultura', valor: 62_000_000_000, participacao: 13.5 },
-    { produto: 'Algodao', valor: 18_000_000_000, participacao: 3.9 },
-    { produto: 'Outros', valor: 51_000_000_000, participacao: 11.1 },
-  ],
-  topUFs: [
-    { uf: 'MT', valor: 92_000_000_000, contratos: 186_000 },
-    { uf: 'PR', valor: 68_000_000_000, contratos: 310_000 },
-    { uf: 'RS', valor: 61_000_000_000, contratos: 290_000 },
-    { uf: 'SP', valor: 54_000_000_000, contratos: 225_000 },
-    { uf: 'GO', valor: 48_000_000_000, contratos: 165_000 },
-    { uf: 'MS', valor: 38_000_000_000, contratos: 145_000 },
-    { uf: 'MG', valor: 35_000_000_000, contratos: 280_000 },
-  ],
-  porFinalidade: [
-    { finalidade: 'Custeio', valor: 245_000_000_000, participacao: 53.3 },
-    { finalidade: 'Investimento', valor: 112_000_000_000, participacao: 24.3 },
-    { finalidade: 'Comercialização', valor: 68_000_000_000, participacao: 14.8 },
-    { finalidade: 'Industrialização', valor: 35_000_000_000, participacao: 7.6 },
-  ],
-};
+// Falha de coleta não produz referências nem séries artificiais no fluxo operacional.
 
 // ── Service Class ───────────────────────────────────────────
 
@@ -128,11 +96,7 @@ export class SicorService {
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       console.warn(`[SICOR] Agregado falhou: ${msg}`);
       this.dsm.updateSourceStatus('bcb_sicor', 'degraded', Date.now() - start, msg);
-      return {
-        ...FALLBACK_AGREGADO,
-        fonte: 'fallback',
-        atualizadoEm: new Date().toISOString(),
-      };
+      throw new Error('SICOR indisponível: não há observações verificadas para esta consulta.', { cause: error });
     }
   }
 
@@ -181,21 +145,8 @@ export class SicorService {
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       console.warn(`[SICOR] Serie mensal falhou: ${msg}`);
 
-      // Synthesize a plausible series based on fallback totals
-      const serie = [];
-      const base = FALLBACK_AGREGADO.valorTotal / 12;
-      const now = new Date();
-      for (let i = meses - 1; i >= 0; i--) {
-        const d = new Date(now);
-        d.setMonth(d.getMonth() - i);
-        const season = 1 + 0.15 * Math.sin((d.getMonth() / 12) * 2 * Math.PI); // peak at harvest/planting
-        const trend = 1 + (meses - i) * 0.005;
-        serie.push({
-          mes: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-          valor: Math.round(base * season * trend),
-        });
-      }
-      return { serie, fonte: 'fallback', atualizadoEm: new Date().toISOString() };
+      this.dsm.updateSourceStatus('bcb_sicor', 'degraded', Date.now() - start, msg);
+      throw new Error('SICOR indisponível: não há série mensal verificada para esta consulta.', { cause: error });
     }
   }
 

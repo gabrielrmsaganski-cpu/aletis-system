@@ -127,7 +127,7 @@ export default function ClienteFluxoCaixaTab({ clienteId }: Props) {
     <div className="space-y-4 animate-fade-in">
       {/* Toggle horizonte */}
       <div className="flex items-center gap-2 text-xs">
-        <span className="text-aletis-grafite-claro dark:text-white/60">Horizonte:</span>
+        <span className="text-muted-foreground dark:text-white/60">Horizonte:</span>
         {[30, 60, 90, 180].map((dias) => (
           <button
             key={dias}
@@ -136,7 +136,7 @@ export default function ClienteFluxoCaixaTab({ clienteId }: Props) {
             className={`px-2.5 py-1 rounded-full font-semibold transition-colors ${
               horizonte === dias
                 ? 'bg-aletis-verde text-white'
-                : 'bg-aletis-borda/60 text-aletis-grafite-escuro hover:bg-aletis-bege dark:bg-white/10 dark:text-white/80'
+                : 'bg-aletis-borda/60 text-foreground hover:bg-aletis-bege dark:bg-white/10 dark:text-white/80'
             }`}
           >
             {dias}d
@@ -196,7 +196,7 @@ export default function ClienteFluxoCaixaTab({ clienteId }: Props) {
 
       {/* Chart */}
       <DSCard>
-        <h3 className="text-sm font-display font-semibold text-aletis-grafite-escuro dark:text-white mb-3">
+        <h3 className="text-sm font-display font-semibold text-foreground dark:text-white mb-3">
           Saldo projetado semanal
         </h3>
         <div className="h-64">
@@ -204,8 +204,8 @@ export default function ClienteFluxoCaixaTab({ clienteId }: Props) {
             <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
               <defs>
                 <linearGradient id="saldoFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#0F4C35" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#0F4C35" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#17251b" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#17251b" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
@@ -219,7 +219,7 @@ export default function ClienteFluxoCaixaTab({ clienteId }: Props) {
               <Area
                 type="monotone"
                 dataKey="saldo"
-                stroke="#0F4C35"
+                stroke="#17251b"
                 fill="url(#saldoFill)"
                 strokeWidth={2}
               />
@@ -237,7 +237,7 @@ export default function ClienteFluxoCaixaTab({ clienteId }: Props) {
             { key: 'entradas', label: 'Entradas', align: 'right', render: (w) => <span className="font-mono text-positivo">{fmtBRL(w.entradas)}</span> },
             { key: 'saidas', label: 'Saídas', align: 'right', render: (w) => <span className="font-mono text-red-600">{fmtBRL(w.saidas)}</span> },
             { key: 'resultado', label: 'Resultado', align: 'right', render: (w) => <span className={`font-mono ${w.resultado >= 0 ? 'text-positivo' : 'text-red-600'}`}>{fmtBRL(w.resultado)}</span> },
-            { key: 'saldo', label: 'Saldo final', align: 'right', render: (w) => <span className={`font-mono font-semibold ${w.saldoFinal >= 0 ? 'text-aletis-grafite-escuro dark:text-white' : 'text-red-600'}`}>{fmtBRL(w.saldoFinal)}</span> },
+            { key: 'saldo', label: 'Saldo final', align: 'right', render: (w) => <span className={`font-mono font-semibold ${w.saldoFinal >= 0 ? 'text-foreground dark:text-white' : 'text-red-600'}`}>{fmtBRL(w.saldoFinal)}</span> },
             { key: 'alerta', label: '', align: 'right', render: (w) => w.alertaNegativo ? <DSBadge tone="negative">⚠</DSBadge> : null },
           ]}
           rows={data.semanas}

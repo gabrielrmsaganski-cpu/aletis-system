@@ -1,845 +1,836 @@
-/**
- * WhatsApp (Central de Mensagens)
- *
- * Interface de conversas com clientes integrada ao WhatsApp.
- * Contem lista de contatos, painel de chat com bolhas (texto,
- * audio com playback real), indicadores de leitura, rotulo
- * especial para mensagens da IA Alix e acoes de chamada/video.
- * Dados mockados (contacts + chatData) substituidos quando o
- * backend WhatsApp Business estiver conectado.
- */
-import React, { useState, useRef, useEffect } from 'react'
+import PageHeader from '../components/ui/PageHeader'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Bot,
+  CalendarCheck2,
+  CalendarDays,
+  CheckCircle2,
+  ExternalLink,
+  FileCheck2,
+  FileText,
+  Headphones,
+  MessageCircle,
+  QrCode,
+  RefreshCw,
   Search,
   Send,
-  Paperclip,
-  Smile,
-  Mic,
-  MoreVertical,
-  Phone,
-  Video,
-  ArrowLeft,
-  Check,
-  CheckCheck,
-  MessageCircle,
-  Play,
-  Pause,
-  Sparkles,
+  ShieldCheck,
+  UserRound,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { apiFetch } from '../hooks/useApi'
 
-// ────────────────────────────────────────────────────────────
-// Audio Bubble (real playback with progress)
-// ────────────────────────────────────────────────────────────
-function AudioBubble({ url, fallbackDuration }: { url?: string; fallbackDuration?: string }) {
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const [playing, setPlaying] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [duration, setDuration] = useState(0)
-  const [currentTime, setCurrentTime] = useState(0)
+type EvolutionConnectionStatus = 'disconnected' | 'connecting' | 'qr_available' | 'connected' | 'degraded' | 'error'
 
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio) return
-    const onTime = () => {
-      setCurrentTime(audio.currentTime)
-      if (audio.duration > 0) setProgress((audio.currentTime / audio.duration) * 100)
-    }
-    const onLoaded = () => setDuration(audio.duration || 0)
-    const onEnded = () => {
-      setPlaying(false)
-      setProgress(0)
-      setCurrentTime(0)
-    }
-    audio.addEventListener('timeupdate', onTime)
-    audio.addEventListener('loadedmetadata', onLoaded)
-    audio.addEventListener('ended', onEnded)
-    return () => {
-      audio.removeEventListener('timeupdate', onTime)
-      audio.removeEventListener('loadedmetadata', onLoaded)
-      audio.removeEventListener('ended', onEnded)
-    }
-  }, [url])
-
-  const toggle = () => {
-    const audio = audioRef.current
-    if (!audio || !url) return
-    if (playing) {
-      audio.pause()
-      setPlaying(false)
-    } else {
-      audio.play().then(() => setPlaying(true)).catch(() => setPlaying(false))
-    }
-  }
-
-  const fmt = (s: number) => {
-    if (!isFinite(s) || s < 0) return '0:00'
-    const m = Math.floor(s / 60)
-    const sec = Math.floor(s % 60)
-    return `${m}:${sec.toString().padStart(2, '0')}`
-  }
-
-  const label = playing || currentTime > 0
-    ? `${fmt(currentTime)} / ${fmt(duration)}`
-    : (duration ? fmt(duration) : fallbackDuration || '0:00')
-
-  return (
-    <div className="flex items-center gap-3 min-w-[220px]">
-      {url && <audio ref={audioRef} src={url} preload="metadata" />}
-      <button
-        onClick={toggle}
-        disabled={!url}
-        className="w-9 h-9 rounded-full bg-aletis-verde flex items-center justify-center flex-shrink-0 hover:bg-aletis-verde-escuro transition-colors disabled:opacity-50"
-        aria-label={playing ? 'Pausar áudio' : 'Reproduzir áudio'}
-      >
-        {playing ? <Pause className="w-4 h-4 text-white" /> : <Play className="w-4 h-4 text-white ml-0.5" />}
-      </button>
-      <div className="flex-1">
-        <div className="h-1.5 bg-aletis-grafite-claro/20 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-aletis-verde rounded-full transition-all"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        <p className="text-[11px] font-body text-aletis-grafite-claro mt-1">{label}</p>
-      </div>
-    </div>
-  )
+interface StatusData {
+  provider: string
+  evolution?: { configurado: boolean; baseUrl?: string; instance?: string; webhookUrl?: string; status?: EvolutionConnectionStatus; reachable?: boolean; checkedAt?: string }
+  whatsapp?: { configurado: boolean }
+  speech?: { configurado: boolean; regiao?: string; voz?: string }
+  calendar?: { configurado: boolean; dryRun: boolean; consultor: string; timezone: string }
+  storage?: { provider: string; dir: string }
+  documentosObrigatorios?: Array<{ key: string; label: string }>
 }
 
-// ────────────────────────────────────────────────────────────
-// Types
-// ────────────────────────────────────────────────────────────
-interface ChatMessage {
-  id: number
-  from: 'client' | 'consultant'
+interface EvolutionConnectData {
+  pairingCode?: unknown
+  code?: string
+  base64?: string
+  count?: number
+}
+
+interface Conversation {
+  id: string
+  clienteId?: string | null
+  telefone: string
+  nomeContato?: string | null
+  atendimentoModo: string
+  aiEnabled?: boolean
+  status: string
+  etapa: string
+  crmStatus?: string | null
+  currentState?: string | null
+  elegibilidadeStatus: string
+  eligibilityScore?: number
+  assignedUserId?: string | null
+  takeoverReason?: string | null
+  prioridade: string
+  ultimaMensagemEm?: string | null
+  totalMensagens?: number
+  documentosPendentes?: number
+  ultimaMensagem?: string | null
+  resumo?: string | null
+}
+
+interface Message {
+  id: string
+  direction: string
+  type: string
+  status: string
+  text?: string | null
+  transcription?: string | null
+  mediaFilename?: string | null
+  timestamp: string
+}
+
+interface DocumentItem {
+  id: string
+  filename: string
+  categoria: string
+  status: string
+  resumoIa?: string | null
+  criadoEm?: string | null
+}
+
+interface ChecklistItem {
+  key: string
+  label: string
+  status: 'recebido' | 'pendente' | string
+}
+
+interface Bundle {
+  conversation: Conversation
+  messages: Message[]
+  documents: DocumentItem[]
+  eligibility: Array<Record<string, unknown>>
+  calendarEvents: Array<Record<string, unknown>>
+  checklist: ChecklistItem[]
+}
+
+const statusLabel: Record<string, string> = {
+  aberta: 'Aberta',
+  aguardando_cliente: 'Aguardando cliente',
+  aguardando_consultor: 'Aguardando consultor',
+  reuniao_agendada: 'Reuniao agendada',
+  encerrada: 'Encerrada',
+}
+
+interface ManualSendAttempt {
+  conversationId: string
   text: string
-  time: string
-  read?: boolean
-  type?: 'text' | 'audio' | 'image'
-  audioDuration?: string
-  audioUrl?: string
-  senderLabel?: string
+  idempotencyKey: string
 }
 
-interface Contact {
-  id: number
-  name: string
-  lastMessage: string
-  time: string
-  unread: number
-  avatar: string
-  online?: boolean
-  isTyping?: boolean
+interface ManualSendState {
+  activeId?: string | null
+  drafts: Record<string, string>
+  attempts: ManualSendAttempt[]
 }
 
-// ────────────────────────────────────────────────────────────
-// Contacts Data
-// ────────────────────────────────────────────────────────────
-const contacts: Contact[] = [
-  {
-    id: 7,
-    name: 'Ricardo Silva',
-    lastMessage: '\uD83C\uDFA4 Aletéia enviou um áudio',
-    time: 'agora',
-    unread: 1,
-    avatar: 'RS',
-    online: true,
-  },
-  {
-    id: 1,
-    name: 'Ailton Caeiro',
-    lastMessage: 'Boa tarde Christian, recebi a proposta...',
-    time: '14:32',
-    unread: 2,
-    avatar: 'AC',
-    online: true,
-  },
-  {
-    id: 2,
-    name: 'Paulo Luciano',
-    lastMessage: 'O boleto do sinal já foi pago',
-    time: '11:45',
-    unread: 0,
-    avatar: 'PL',
-    online: true,
-  },
-  {
-    id: 3,
-    name: 'Maria Santos',
-    lastMessage: 'Quando posso agendar a reunião?',
-    time: '09:20',
-    unread: 1,
-    avatar: 'MS',
-    online: false,
-  },
-  {
-    id: 4,
-    name: 'João Silva',
-    lastMessage: 'Vim por indicação do Paulo...',
-    time: 'Ontem',
-    unread: 3,
-    avatar: 'JS',
-    online: false,
-  },
-  {
-    id: 5,
-    name: 'Carlos Oliveira',
-    lastMessage: 'Obrigado pelo atendimento!',
-    time: 'Ontem',
-    unread: 0,
-    avatar: 'CO',
-    online: false,
-  },
-  {
-    id: 6,
-    name: 'Ana Ferreira',
-    lastMessage: '\uD83C\uDFA4 Mensagem de voz (0:42)',
-    time: 'Seg',
-    unread: 1,
-    avatar: 'AF',
-    online: false,
-  },
-]
+const MANUAL_SEND_STORAGE = 'aletis:whatsapp:manual-send:v1'
 
-// ────────────────────────────────────────────────────────────
-// Chat Messages per Contact
-// ────────────────────────────────────────────────────────────
-const chatData: Record<number, ChatMessage[]> = {
-  1: [
-    {
-      id: 1,
-      from: 'consultant',
-      text: 'Boa tarde Ailton! Tudo bem? Acabamos de finalizar a análise completa do seu caso junto ao Sicoob.',
-      time: '13:15',
-      read: true,
-    },
-    {
-      id: 2,
-      from: 'consultant',
-      text: 'Preparamos uma proposta de dação em pagamento no valor de R$ 2.049.802,53. Vou enviar o documento completo aqui.',
-      time: '13:16',
-      read: true,
-    },
-    {
-      id: 3,
-      from: 'consultant',
-      text: 'A proposta inclui a memória de cálculo detalhada e os termos da negociação. Qualquer dúvida, estou à disposição.',
-      time: '13:18',
-      read: true,
-    },
-    {
-      id: 4,
-      from: 'client',
-      text: 'Boa tarde Christian! Obrigado, estava ansioso por essa resposta.',
-      time: '14:02',
-      read: true,
-    },
-    {
-      id: 5,
-      from: 'client',
-      text: 'Recebi o documento. Estou analisando com calma aqui. Mas já quero dizer que achei os valores muito justos.',
-      time: '14:10',
-      read: true,
-    },
-    {
-      id: 6,
-      from: 'consultant',
-      text: 'Fico feliz em ouvir isso! Trabalhamos bastante para chegar no melhor cenário possível pra você. O recálculo removeu os juros compostos indevidos e aplicou a taxa correta do contrato original.',
-      time: '14:15',
-      read: true,
-    },
-    {
-      id: 7,
-      from: 'client',
-      text: 'Boa tarde Christian, recebi a proposta e estou revisando com meu contador. A princípio concordo com os termos.',
-      time: '14:30',
-      read: false,
-    },
-    {
-      id: 8,
-      from: 'client',
-      text: 'Uma pergunta: o prazo para aceite é de quantos dias?',
-      time: '14:32',
-      read: false,
-    },
-  ],
-  2: [
-    {
-      id: 1,
-      from: 'consultant',
-      text: 'Bom dia Paulo! Como vai? Quero te informar que a proposta para a Fertiflora foi enviada com sucesso.',
-      time: '09:00',
-      read: true,
-    },
-    {
-      id: 2,
-      from: 'client',
-      text: 'Bom dia Christian! Ótima notícia! Quanto tempo para ter resposta?',
-      time: '09:15',
-      read: true,
-    },
-    {
-      id: 3,
-      from: 'consultant',
-      text: 'O prazo usual da Fertiflora é de 5 a 7 dias úteis. Mas vou acompanhar de perto e te dou retorno assim que tiver novidades.',
-      time: '09:18',
-      read: true,
-    },
-    {
-      id: 4,
-      from: 'client',
-      text: 'Perfeito. Enquanto isso, já fiz o pagamento do sinal conforme combinado.',
-      time: '11:30',
-      read: true,
-    },
-    {
-      id: 5,
-      from: 'client',
-      text: 'O boleto do sinal já foi pago',
-      time: '11:45',
-      read: true,
-    },
-    {
-      id: 6,
-      from: 'consultant',
-      text: 'Excelente Paulo! Já confirmei o recebimento aqui no sistema. Muito obrigado pela agilidade!',
-      time: '11:50',
-      read: true,
-    },
-    {
-      id: 7,
-      from: 'consultant',
-      text: 'O comprovante já está disponível no seu portal do cliente também, caso precise acessar.',
-      time: '11:51',
-      read: true,
-    },
-  ],
-  3: [
-    {
-      id: 1,
-      from: 'client',
-      text: 'Boa tarde! Gostaria de saber como está o andamento do meu processo.',
-      time: '08:30',
-      read: true,
-    },
-    {
-      id: 2,
-      from: 'consultant',
-      text: 'Boa tarde Maria! Seu acordo com o Banco do Brasil foi formalizado com sucesso. As parcelas estão todas programadas.',
-      time: '08:45',
-      read: true,
-    },
-    {
-      id: 3,
-      from: 'client',
-      text: 'Que bom! E sobre aquela reunião que comentei semana passada?',
-      time: '09:10',
-      read: true,
-    },
-    {
-      id: 4,
-      from: 'client',
-      text: 'Quando posso agendar a reunião?',
-      time: '09:20',
-      read: false,
-    },
-  ],
-  4: [
-    {
-      id: 1,
-      from: 'client',
-      text: 'Boa tarde! Meu nome é João Silva, sou produtor de soja em Uberaba/MG.',
-      time: '16:00',
-      read: true,
-    },
-    {
-      id: 2,
-      from: 'client',
-      text: 'Vim por indicação do Paulo Luciano. Ele falou muito bem do trabalho de vocês.',
-      time: '16:01',
-      read: false,
-    },
-    {
-      id: 3,
-      from: 'client',
-      text: 'Tenho uma dívida com o Bradesco que está me preocupando. Podem me ajudar?',
-      time: '16:02',
-      read: false,
-    },
-    {
-      id: 4,
-      from: 'client',
-      text: 'O valor é de aproximadamente R$ 185 mil. Preciso renegociar urgente.',
-      time: '16:05',
-      read: false,
-    },
-  ],
-  5: [
-    {
-      id: 1,
-      from: 'consultant',
-      text: 'Carlos, parabéns! Seu acordo foi concluído com sucesso. Todas as 12 parcelas estão programadas.',
-      time: '10:00',
-      read: true,
-    },
-    {
-      id: 2,
-      from: 'client',
-      text: 'Obrigado pelo atendimento!',
-      time: '10:30',
-      read: true,
-    },
-    {
-      id: 3,
-      from: 'client',
-      text: 'Vocês foram excelentes. Vou indicar para outros produtores da região.',
-      time: '10:31',
-      read: true,
-    },
-    {
-      id: 4,
-      from: 'consultant',
-      text: 'Agradecemos muito a confiança Carlos! Conte sempre conosco. Qualquer necessidade futura é só entrar em contato.',
-      time: '10:35',
-      read: true,
-    },
-  ],
-  6: [
-    {
-      id: 1,
-      from: 'client',
-      text: 'Olá, boa tarde!',
-      time: '14:00',
-      read: true,
-    },
-    {
-      id: 2,
-      from: 'client',
-      text: '',
-      time: '14:05',
-      read: false,
-      type: 'audio',
-      audioDuration: '0:42',
-    },
-    {
-      id: 3,
-      from: 'consultant',
-      text: 'Olá Ana! Recebi seu áudio. Vou analisar o que você descreveu e retorno em breve com mais informações sobre o processo.',
-      time: '14:20',
-      read: true,
-    },
-  ],
-  7: [
-    {
-      id: 1,
-      from: 'client',
-      text: 'oi',
-      time: '13:48',
-      read: true,
-    },
-    {
-      id: 2,
-      from: 'consultant',
-      senderLabel: 'Alix',
-      text: 'Boa tarde Ricardo! Aqui é a Aletéia, assistente da ALETIS. Pra te ajudar melhor, como posso te chamar?',
-      time: '13:48',
-      read: true,
-    },
-    {
-      id: 3,
-      from: 'client',
-      text: 'Ricardo Silva, de Cascavel PR. Tenho uma dívida de 1.2 milhão no Banco do Brasil e tô preocupado.',
-      time: '13:49',
-      read: true,
-    },
-    {
-      id: 4,
-      from: 'consultant',
-      senderLabel: 'Alix',
-      text: '\u00C1udio enviado pela Aletéia',
-      time: '13:50',
-      read: false,
-      type: 'audio',
-      audioDuration: '0:31',
-      audioUrl: '/alix-demo-ricardo.ogg',
-    },
-    {
-      id: 5,
-      from: 'consultant',
-      senderLabel: 'Alix',
-      text: 'Vou acionar o Christian agora. Enquanto isso, se tiver o contrato em PDF me manda por aqui.',
-      time: '13:50',
-      read: false,
-    },
-  ],
+/** Repetir a mesma tentativa conserva sua identidade até o envio ser confirmado. */
+export function resolveManualSendAttempt(attempts: ManualSendAttempt[], conversationId: string, text: string, newKey: () => string): ManualSendAttempt {
+  const normalized = text.trim()
+  return attempts.find((attempt) => attempt.conversationId === conversationId && attempt.text === normalized)
+    || { conversationId, text: normalized, idempotencyKey: newKey() }
 }
 
-// ────────────────────────────────────────────────────────────
-// MAIN COMPONENT
-// ────────────────────────────────────────────────────────────
+export function confirmedManualSend(status?: string): boolean {
+  return ['sent', 'delivered', 'read'].includes(status || '')
+}
+
+function readManualSendState(): ManualSendState {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(MANUAL_SEND_STORAGE) || '{}') as Partial<ManualSendState>
+    const drafts = Object.fromEntries(Object.entries(value.drafts || {}).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+    const attempts = Array.isArray(value.attempts) ? value.attempts.filter((attempt) =>
+      attempt && typeof attempt.conversationId === 'string' && typeof attempt.text === 'string' && typeof attempt.idempotencyKey === 'string' && attempt.idempotencyKey.trim().length > 0,
+    ) : []
+    return { activeId: typeof value.activeId === 'string' ? value.activeId : null, drafts, attempts }
+  } catch { return { drafts: {}, attempts: [] } }
+}
+
+const messageStatusLabel: Record<string, string> = {
+  received: 'Recebida', recebido: 'Recebida', pending: 'Aguardando confirmação', queued: 'Na fila', sending: 'Enviando',
+  sent: 'Enviada', delivered: 'Entregue', read: 'Lida', failed: 'Falha no envio', uncertain: 'Envio sem confirmação',
+  dry_run: 'Simulação · não enviada', cancelled: 'Cancelada',
+}
+
+function fmtDate(value?: string | null): string {
+  if (!value) return 'Sem data'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(d)
+}
+
+function initials(name?: string | null, phone?: string): string {
+  const source = name || phone || 'WA'
+  return source
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join('') || 'WA'
+}
+
+function StatusPill({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+      ok ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'
+    }`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${ok ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+      {label}
+    </span>
+  )
+}
+
+const evolutionStatusMeta: Record<EvolutionConnectionStatus, { label: string; cls: string }> = {
+  disconnected: { label: 'WhatsApp desconectado', cls: 'bg-slate-100 text-slate-700' },
+  connecting: { label: 'WhatsApp conectando', cls: 'bg-sky-50 text-sky-700' },
+  qr_available: { label: 'QR disponível', cls: 'bg-amber-50 text-amber-800' },
+  connected: { label: 'WhatsApp conectado', cls: 'bg-emerald-50 text-emerald-700' },
+  degraded: { label: 'WhatsApp degradado', cls: 'bg-amber-50 text-amber-800' },
+  error: { label: 'Falha na conexão', cls: 'bg-red-50 text-red-700' },
+}
+
+function EvolutionStatusPill({ status }: { status: EvolutionConnectionStatus }) {
+  const meta = evolutionStatusMeta[status]
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${meta.cls}`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+      {meta.label}
+    </span>
+  )
+}
+
 export default function WhatsApp() {
-  const [selectedContact, setSelectedContact] = useState<number>(7)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [messageInput, setMessageInput] = useState('')
-  const [messages, setMessages] = useState<Record<number, ChatMessage[]>>(chatData)
-  const [showMobileChat, setShowMobileChat] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [initialManualState] = useState(readManualSendState)
+  const [status, setStatus] = useState<StatusData | null>(null)
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [bundle, setBundle] = useState<Bundle | null>(null)
+  const [activeId, setActiveId] = useState<string | null>(initialManualState.activeId || null)
+  const [search, setSearch] = useState('')
+  const [draft, setDraft] = useState(initialManualState.activeId ? initialManualState.drafts[initialManualState.activeId] || '' : '')
+  const [qrData, setQrData] = useState<EvolutionConnectData | null>(null)
+  const [connectionBusy, setConnectionBusy] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const activeIdRef = useRef<string | null>(activeId)
+  const sendingRef = useRef(false)
+  const manualStateRef = useRef<ManualSendState>(initialManualState)
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  function saveManualState(next: ManualSendState): boolean {
+    manualStateRef.current = next
+    try { sessionStorage.setItem(MANUAL_SEND_STORAGE, JSON.stringify(next)); return true } catch { return false }
+  }
+
+  function selectConversation(id: string | null) {
+    if (id !== activeIdRef.current) {
+      setBundle(null)
+      setDraft(id ? manualStateRef.current!.drafts[id] || '' : '')
+    }
+    activeIdRef.current = id
+    setActiveId(id)
+    if (manualStateRef.current.activeId !== id) saveManualState({ ...manualStateRef.current, activeId: id })
+  }
+
+  function updateDraft(text: string) {
+    setDraft(text)
+    const id = activeIdRef.current
+    if (id) saveManualState({ ...manualStateRef.current!, drafts: { ...manualStateRef.current!.drafts, [id]: text } })
+  }
+
+  const activeConversation = (bundle?.conversation.id === activeId ? bundle.conversation : null) || conversations.find((c) => c.id === activeId) || null
+
+  async function loadAll(nextActiveId?: string | null) {
+    setLoading(true)
+    setError(null)
+    try {
+      const [st, conv] = await Promise.all([
+        apiFetch<StatusData>('/whatsapp/status'),
+        apiFetch<{ conversations: Conversation[]; total: number }>(`/whatsapp/conversations?search=${encodeURIComponent(search)}`),
+      ])
+      setStatus(st)
+      setConversations(conv.conversations)
+      const chosen = nextActiveId || activeIdRef.current || conv.conversations[0]?.id || null
+      selectConversation(chosen)
+      if (chosen) {
+        const detail = await apiFetch<Bundle>(`/whatsapp/conversations/${encodeURIComponent(chosen)}`)
+        if (activeIdRef.current === chosen) setBundle(detail)
+      } else {
+        setBundle(null)
+      }
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function openConversation(id: string) {
+    selectConversation(id)
+    setError(null)
+    try {
+      const detail = await apiFetch<Bundle>(`/whatsapp/conversations/${encodeURIComponent(id)}`)
+      if (activeIdRef.current === id) setBundle(detail)
+    } catch (err) {
+      if (activeIdRef.current === id) setError((err as Error).message)
+    }
+  }
+
+  async function setMode(mode: 'handoff' | 'ai') {
+    if (!activeId) return
+    setBusy(true)
+    try {
+      await apiFetch(`/whatsapp/conversations/${encodeURIComponent(activeId)}/${mode}`, { method: 'POST' })
+      await openConversation(activeId)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function sendMessage() {
+    if (!activeId || !draft.trim() || busy || sendingRef.current) return
+    const conversationId = activeId
+    const text = draft.trim()
+    const previous = manualStateRef.current!
+    const attempt = resolveManualSendAttempt(previous.attempts, conversationId, text, () => crypto.randomUUID())
+    const attempts = previous.attempts.some((item) => item.idempotencyKey === attempt.idempotencyKey)
+      ? previous.attempts : [...previous.attempts, attempt]
+    if (!saveManualState({ ...previous, drafts: { ...previous.drafts, [conversationId]: draft }, attempts })) {
+      setError('Não foi possível guardar esta tentativa. Mantenha a conversa aberta e tente novamente.')
+      return
+    }
+    sendingRef.current = true
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await apiFetch<Message>(`/whatsapp/conversations/${encodeURIComponent(conversationId)}/send`, {
+        method: 'POST',
+        body: JSON.stringify({ text, idempotencyKey: attempt.idempotencyKey }),
+      })
+      if (!confirmedManualSend(result?.status)) throw new Error('O envio ainda não foi confirmado. Confira o histórico da conversa.')
+      const current = manualStateRef.current!
+      const drafts = { ...current.drafts }
+      if (drafts[conversationId]?.trim() === text) drafts[conversationId] = ''
+      saveManualState({ ...current, drafts, attempts: current.attempts.filter((item) => item.idempotencyKey !== attempt.idempotencyKey) })
+      if (activeIdRef.current === conversationId) {
+        setDraft(drafts[conversationId] || '')
+        await openConversation(conversationId)
+      }
+    } catch (err) {
+      if (activeIdRef.current === conversationId) {
+        setError((err as Error).message)
+        void apiFetch<Bundle>(`/whatsapp/conversations/${encodeURIComponent(conversationId)}`)
+          .then((detail) => { if (activeIdRef.current === conversationId) setBundle(detail) })
+          .catch(() => { /* O erro original e o rascunho continuam visíveis. */ })
+      }
+    } finally {
+      sendingRef.current = false
+      setBusy(false)
+    }
+  }
+
+  async function resendDocumentChecklist() {
+    if (!activeId) return
+    setBusy(true)
+    setError(null)
+    try {
+      await apiFetch(`/whatsapp/conversations/${encodeURIComponent(activeId)}/documents/checklist`, { method: 'POST' })
+      await openConversation(activeId)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function connectInstance() {
+    const instance = status?.evolution?.instance || 'aletis-principal'
+    setConnectionBusy(true)
+    setError(null)
+    try {
+      const data = await apiFetch<EvolutionConnectData>(`/whatsapp/evolution/instances/${encodeURIComponent(instance)}/connect`, {
+        method: 'POST',
+      })
+      setQrData(data)
+      await loadAll(activeId)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setConnectionBusy(false)
+    }
+  }
+
+  async function configureWebhook() {
+    setConnectionBusy(true)
+    setError(null)
+    try {
+      await apiFetch('/whatsapp/evolution/webhook/set', {
+        method: 'POST',
+        body: JSON.stringify({ instance: status?.evolution?.instance || 'aletis-principal' }),
+      })
+      await loadAll(activeId)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setConnectionBusy(false)
+    }
   }
 
   useEffect(() => {
-    scrollToBottom()
-  }, [selectedContact, messages])
+    loadAll()
+    const timer = window.setInterval(() => loadAll(activeId), 30_000)
+    return () => window.clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  const filteredContacts = contacts.filter((c) =>
-    c.name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const metrics = useMemo(() => {
+    const humanas = conversations.filter((c) => c.atendimentoModo === 'humano').length
+    const agendadas = conversations.filter((c) => c.status === 'reuniao_agendada').length
+    const pendDocs = conversations.reduce((sum, c) => sum + Number(c.documentosPendentes || 0), 0)
+    const elegiveis = conversations.filter((c) => ['Elegível', 'Reunião oferecida', 'Reunião agendada'].includes(c.crmStatus || '')).length
+    return { humanas, agendadas, pendDocs, elegiveis }
+  }, [conversations])
 
-  const currentContact = contacts.find((c) => c.id === selectedContact)
-  const currentMessages = messages[selectedContact] || []
-
-  const handleSendMessage = () => {
-    if (!messageInput.trim()) return
-
-    const now = new Date()
-    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now
-      .getMinutes()
-      .toString()
-      .padStart(2, '0')}`
-
-    const newMsg: ChatMessage = {
-      id: Date.now(),
-      from: 'consultant',
-      text: messageInput,
-      time: timeStr,
-      read: false,
-    }
-
-    setMessages((prev) => ({
-      ...prev,
-      [selectedContact]: [...(prev[selectedContact] || []), newMsg],
-    }))
-    setMessageInput('')
-  }
-
-  const handleSelectContact = (id: number) => {
-    setSelectedContact(id)
-    setShowMobileChat(true)
-  }
-
-  const handleBackToContacts = () => {
-    setShowMobileChat(false)
-  }
+  const checklist = bundle?.checklist || status?.documentosObrigatorios?.map((d) => ({ ...d, status: 'pendente' })) || []
+  const qrSrc = qrData?.base64
+    ? qrData.base64.startsWith('data:') ? qrData.base64 : `data:image/png;base64,${qrData.base64}`
+    : null
+  const evolutionStatus = status?.evolution?.status ?? (status?.evolution?.configurado ? 'degraded' : 'disconnected')
+  const calendarReady = Boolean(status?.calendar?.configurado) || Boolean(status?.calendar?.dryRun)
+  const emptyState = evolutionStatus === 'connected'
+    ? {
+        title: 'Aguardando a primeira conversa',
+        detail: 'A instância está conectada. Assim que chegar a primeira mensagem pelo webhook, a conversa aparece aqui com IA, checklist, documentos e agenda.',
+      }
+    : {
+        title: 'Conexão WhatsApp pendente',
+        detail: 'Conecte a instância, gere o QR se necessário e configure o webhook para começar a receber conversas.',
+      }
 
   return (
-    <div className="flex flex-col">
-      {/* ── Page Header ─────────────────────────────────────── */}
-      <header className="mb-6">
-        <h1 className="text-3xl lg:text-4xl font-display font-bold text-aletis-grafite-escuro tracking-tight">
-          WhatsApp
-        </h1>
-        <p className="text-aletis-grafite-claro font-body mt-1 text-sm">
-          Central de mensagens e comunicação com clientes
-        </p>
-      </header>
+    <div className="min-h-[calc(100vh-88px)] text-foreground">
+      <div className="mx-auto flex max-w-[1680px] flex-col gap-4">
+        <PageHeader title="WhatsApp" description="Conversas, agenda e documentos do atendimento." eyebrow={<> <p className="text-xs font-semibold uppercase tracking-[0.14em] text-foreground">Central WhatsApp IA</p> </>} actions={<> <div className="flex flex-wrap items-center gap-2">
+            <EvolutionStatusPill status={evolutionStatus} />
+            <StatusPill ok={Boolean(status?.speech?.configurado)} label={status?.speech?.configurado ? 'Audio ativo' : 'Audio pendente'} />
+            <StatusPill ok={calendarReady} label={status?.calendar?.dryRun ? 'Agenda em teste' : status?.calendar?.configurado ? 'Agenda conectada' : 'Agenda pendente'} />
+            <button
+              onClick={() => loadAll(activeId)}
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-card px-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Atualizar
+            </button>
+          </div> </>} />
 
-      {/* ── Chat Interface ──────────────────────────────────── */}
-      {/* Altura calcula descontando ticker (32) + header (~64) + padding (~64) + page header (~80) ≈ 240px */}
-      <div className="card-premium overflow-hidden h-[calc(100vh-240px)] min-h-[500px]">
-        <div className="flex h-full">
-          {/* ── Left Panel: Contact List ───────────────────── */}
-          <div
-            className={`
-              w-full md:w-[380px] lg:w-[400px] flex-shrink-0 border-r border-aletis-borda flex flex-col
-              ${showMobileChat ? 'hidden md:flex' : 'flex'}
-            `}
-          >
-            {/* Contact list header */}
-            <div className="px-4 py-3 border-b border-aletis-borda bg-white/50">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-aletis-verde flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">CK</span>
-                  </div>
-                  <span className="text-sm font-body font-semibold text-aletis-grafite-escuro">
-                    Christian Kohler
-                  </span>
-                </div>
-                <button className="p-2 rounded-lg text-aletis-grafite-claro hover:bg-aletis-bege transition-colors">
-                  <MoreVertical className="w-4 h-4" />
-                </button>
-              </div>
+        {error && (
+          <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-grafite-claro" />
-                <input
-                  type="text"
-                  placeholder="Buscar conversa..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 rounded-xl bg-aletis-bege border border-transparent text-sm font-body text-aletis-grafite-escuro placeholder:text-aletis-grafite-claro focus:outline-none focus:ring-2 focus:ring-aletis-verde/20 focus:bg-white transition-all"
-                />
-              </div>
+        <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+          <div className="rounded-md border border-slate-200 bg-card p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-500">Conversas</span>
+              <MessageCircle className="h-4 w-4 text-foreground" />
             </div>
+            <p className="mt-2 text-2xl font-semibold">{conversations.length}</p>
+          </div>
+          <div className="rounded-md border border-slate-200 bg-card p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-500">Com humano</span>
+              <Headphones className="h-4 w-4 text-amber-600" />
+            </div>
+            <p className="mt-2 text-2xl font-semibold">{metrics.humanas}</p>
+          </div>
+          <div className="rounded-md border border-slate-200 bg-card p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-500">Elegiveis</span>
+              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+            </div>
+            <p className="mt-2 text-2xl font-semibold">{metrics.elegiveis}</p>
+          </div>
+          <div className="rounded-md border border-slate-200 bg-card p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-500">Reunioes</span>
+              <CalendarDays className="h-4 w-4 text-sky-600" />
+            </div>
+            <p className="mt-2 text-2xl font-semibold">{metrics.agendadas}</p>
+          </div>
+          <div className="rounded-md border border-slate-200 bg-card p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-500">Documentos pendentes</span>
+              <FileText className="h-4 w-4 text-rose-600" />
+            </div>
+            <p className="mt-2 text-2xl font-semibold">{metrics.pendDocs}</p>
+          </div>
+        </section>
 
-            {/* Contact list */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
-              {filteredContacts.map((contact) => {
-                const isSelected = contact.id === selectedContact
-                return (
-                  <button
-                    key={contact.id}
-                    onClick={() => handleSelectContact(contact.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors duration-150 border-b border-aletis-borda/40 ${
-                      isSelected
-                        ? 'bg-aletis-verde/5 border-l-[3px] border-l-aletis-verde'
-                        : 'hover:bg-aletis-bege/50 border-l-[3px] border-l-transparent'
-                    }`}
-                  >
-                    {/* Avatar */}
-                    <div className="relative flex-shrink-0">
-                      <div
-                        className={`w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-semibold ${
-                          isSelected
-                            ? 'bg-aletis-verde'
-                            : 'bg-gradient-to-br from-aletis-verde-medio to-aletis-verde-escuro'
-                        }`}
-                      >
-                        {contact.avatar}
-                      </div>
-                      {contact.online && (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-positivo border-2 border-white" />
-                      )}
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p
-                          className={`text-sm font-body truncate ${
-                            contact.unread > 0
-                              ? 'font-bold text-aletis-grafite-escuro'
-                              : 'font-medium text-aletis-grafite-escuro'
-                          }`}
-                        >
-                          {contact.name}
-                        </p>
-                        <span
-                          className={`text-[11px] font-body flex-shrink-0 ml-2 ${
-                            contact.unread > 0
-                              ? 'text-aletis-verde font-semibold'
-                              : 'text-aletis-grafite-claro'
-                          }`}
-                        >
-                          {contact.time}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between mt-0.5">
-                        <p
-                          className={`text-xs font-body truncate ${
-                            contact.unread > 0
-                              ? 'text-aletis-grafite-escuro'
-                              : 'text-aletis-grafite-claro'
-                          }`}
-                        >
-                          {contact.lastMessage}
-                        </p>
-                        {contact.unread > 0 && (
-                          <span className="flex-shrink-0 ml-2 w-5 h-5 rounded-full bg-aletis-verde text-white text-[10px] font-bold flex items-center justify-center">
-                            {contact.unread}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                )
-              })}
-
-              {filteredContacts.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-12 text-aletis-grafite-claro">
-                  <MessageCircle className="w-8 h-8 mb-2 opacity-40" />
-                  <p className="text-sm font-body">Nenhuma conversa encontrada</p>
-                </div>
-              )}
+        <details open={evolutionStatus !== 'connected' ? true : undefined} className="rounded-lg border border-border bg-card p-4"><summary className="cursor-pointer text-sm font-medium">Conexão e integrações</summary><section className="pt-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <QrCode className="h-4 w-4 text-foreground" />
+                <h2 className="font-semibold text-slate-900">Conexao WhatsApp</h2>
+              </div>
+              <p className="mt-1 text-sm text-slate-500">
+                Tudo fica nesta tela: crie a instancia, gere o QR e configure o webhook sem depender do Manager local.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={connectInstance}
+                disabled={connectionBusy}
+                className="inline-flex h-9 items-center gap-2 rounded-md bg-aletis-verde px-3 text-sm font-medium text-white hover:bg-aletis-verde-escuro disabled:opacity-50"
+              >
+                <QrCode className="h-4 w-4" />
+                Gerar QR
+              </button>
+              <button
+                onClick={configureWebhook}
+                disabled={connectionBusy}
+                className="inline-flex h-9 items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-700 disabled:opacity-50"
+              >
+                Configurar webhook
+              </button>
             </div>
           </div>
 
-          {/* ── Right Panel: Chat Area ─────────────────────── */}
-          <div
-            className={`
-              flex-1 flex flex-col bg-[#F0ECE3]
-              ${showMobileChat ? 'flex' : 'hidden md:flex'}
-            `}
-          >
-            {currentContact ? (
-              <>
-                {/* Chat header */}
-                <div className="px-4 sm:px-5 py-3 border-b border-aletis-borda bg-white flex items-center gap-3">
-                  {/* Back button (mobile) */}
-                  <button
-                    onClick={handleBackToContacts}
-                    className="md:hidden p-1.5 -ml-1 rounded-lg text-aletis-grafite-medio hover:bg-aletis-bege transition-colors"
-                  >
-                    <ArrowLeft className="w-5 h-5" />
-                  </button>
+          {qrSrc || qrData?.code ? (
+            <div className="mt-4 grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+              {qrSrc ? (
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                  <img src={qrSrc} alt="QR Code para conectar WhatsApp" className="mx-auto h-48 w-48 rounded bg-card object-contain p-2" />
+                </div>
+              ) : null}
+              <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-sm text-slate-700">
+                <p className="font-medium text-slate-900">Como conectar</p>
+                <p className="mt-1">Abra o WhatsApp no celular, acesse aparelhos conectados e escaneie o QR acima.</p>
+                {qrData?.count ? <p className="mt-2 text-xs text-slate-500">Tentativa atual: {qrData.count}</p> : null}
+                {qrData?.code ? (
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-xs font-semibold text-slate-600">Ver codigo bruto</summary>
+                    <pre className="mt-2 max-h-28 overflow-auto rounded bg-card p-2 text-[11px] text-slate-500">{qrData.code}</pre>
+                  </details>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </section></details>
 
-                  {/* Avatar */}
-                  <div className="relative flex-shrink-0">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-aletis-verde-medio to-aletis-verde-escuro flex items-center justify-center text-white text-sm font-semibold">
-                      {currentContact.avatar}
+        <section aria-label="Conversas e atendimento" className="grid min-h-[680px] grid-cols-1 gap-4 pb-2 xl:grid-cols-[260px_minmax(0,1fr)] 2xl:grid-cols-[280px_minmax(0,1fr)_320px]">
+          <aside className="min-w-0 rounded-md border border-slate-200 bg-card shadow-sm">
+            <div className="border-b border-slate-100 p-3">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') loadAll(activeId)
+                  }}
+                  placeholder="Buscar contato ou telefone"
+                  className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none focus:border-aletis-verde focus:bg-white"
+                />
+              </div>
+            </div>
+            <div className="max-h-[620px] overflow-y-auto">
+              {loading && conversations.length === 0 ? (
+                <div className="p-6 text-sm text-slate-500">Carregando conversas...</div>
+              ) : conversations.length === 0 ? (
+                <div className="p-6 text-sm text-slate-500">
+                  Nenhuma conversa recebida ainda. Configure a instancia na Evolution API e aponte o webhook para o ALETIS.
+                </div>
+              ) : conversations.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => openConversation(c.id)}
+                  className={`flex w-full gap-3 border-b border-slate-100 p-3 text-left transition hover:bg-slate-50 ${
+                    activeId === c.id ? 'bg-emerald-50/80' : 'bg-card'
+                  }`}
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-aletis-verde text-sm font-semibold text-white">
+                    {initials(c.nomeContato, c.telefone)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-sm font-semibold text-slate-900">{c.nomeContato || c.telefone}</p>
+                      <span className="shrink-0 text-[11px] text-slate-500">{fmtDate(c.ultimaMensagemEm)}</span>
                     </div>
-                    {currentContact.online && (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-positivo border-2 border-white" />
+                    <p className="mt-1 truncate text-xs text-slate-500">{c.ultimaMensagem || c.resumo || 'Sem mensagens exibidas'}</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">{statusLabel[c.status] || c.status}</span>
+                      {c.crmStatus && (
+                        <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[11px] text-sky-700">{c.crmStatus}</span>
+                      )}
+                      <span className={`rounded px-1.5 py-0.5 text-[11px] ${c.atendimentoModo === 'ia' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>
+                        {c.atendimentoModo === 'ia' ? 'IA' : 'Humano'}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          <section className="flex min-w-0 flex-col rounded-md border border-slate-200 bg-card shadow-sm">
+            {activeConversation ? (
+              <>
+                <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-semibold text-slate-900">{activeConversation.nomeContato || activeConversation.telefone}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                      <span>{activeConversation.telefone}</span>
+                      <span className="h-1 w-1 rounded-full bg-slate-300" />
+                      <span>{statusLabel[activeConversation.status] || activeConversation.status}</span>
+                      <span className="h-1 w-1 rounded-full bg-slate-300" />
+                      <span>{(activeConversation.currentState || activeConversation.etapa).replace(/_/g, ' ')}</span>
+                      {activeConversation.crmStatus && (
+                        <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700">{activeConversation.crmStatus}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {activeConversation.clienteId && (
+                      <Link
+                        to={`/clientes/${activeConversation.clienteId}`}
+                        className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-card px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        CRM
+                      </Link>
                     )}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-body font-semibold text-aletis-grafite-escuro truncate">
-                      {currentContact.name}
-                    </p>
-                    <p className="text-xs font-body text-aletis-grafite-claro">
-                      {currentContact.online ? 'online' : 'visto por último recentemente'}
-                    </p>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1">
-                    <button className="p-2 rounded-lg text-aletis-grafite-claro hover:bg-aletis-bege transition-colors hidden sm:block">
-                      <Phone className="w-4.5 h-4.5" />
+                    <button
+                      onClick={() => setMode('handoff')}
+                      disabled={busy || activeConversation.atendimentoModo === 'humano'}
+                      className="inline-flex h-9 items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 text-sm font-medium text-amber-800 disabled:opacity-50"
+                    >
+                      <UserRound className="h-4 w-4" />
+                      Assumir
                     </button>
-                    <button className="p-2 rounded-lg text-aletis-grafite-claro hover:bg-aletis-bege transition-colors hidden sm:block">
-                      <Video className="w-4.5 h-4.5" />
-                    </button>
-                    <button className="p-2 rounded-lg text-aletis-grafite-claro hover:bg-aletis-bege transition-colors">
-                      <MoreVertical className="w-4.5 h-4.5" />
+                    <button
+                      onClick={() => setMode('ai')}
+                      disabled={busy || activeConversation.atendimentoModo === 'ia'}
+                      className="inline-flex h-9 items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-700 disabled:opacity-50"
+                    >
+                      <Bot className="h-4 w-4" />
+                      Devolver para IA
                     </button>
                   </div>
                 </div>
 
-                {/* Messages area */}
-                <div
-                  className="flex-1 overflow-y-auto custom-scrollbar px-4 sm:px-6 py-4 space-y-2"
-                  style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23D4CFC5' fill-opacity='0.2'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-                  }}
-                >
-                  {/* Date separator */}
-                  <div className="flex items-center justify-center py-2">
-                    <span className="px-4 py-1 rounded-lg bg-white/80 text-[11px] font-body text-aletis-grafite-claro shadow-sm">
-                      Hoje
-                    </span>
-                  </div>
-
-                  {currentMessages.map((msg) => {
-                    const isConsultant = msg.from === 'consultant'
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`flex ${isConsultant ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div
-                          className={`relative max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 shadow-sm ${
-                            isConsultant
-                              ? 'bg-[#D9FDD3] text-aletis-grafite-escuro rounded-tr-md'
-                              : 'bg-white text-aletis-grafite-escuro rounded-tl-md'
-                          }`}
-                        >
-                          {/* Alix label (IA assistant) */}
-                          {msg.senderLabel === 'Alix' && (
-                            <div className="flex items-center gap-1 mb-1">
-                              <Sparkles className="w-3 h-3 text-aletis-verde" />
-                              <span className="text-[10px] font-semibold text-aletis-verde uppercase tracking-wide">
-                                Aletéia · IA
-                              </span>
+                <div className="flex-1 overflow-y-auto bg-slate-50 p-4">
+                  <div className="mx-auto flex max-w-4xl flex-col gap-3">
+                    {(bundle?.messages || []).length === 0 ? (
+                      <div className="rounded-md border border-dashed border-slate-300 bg-card p-8 text-center text-sm text-slate-500">
+                        A conversa foi criada, mas ainda nao ha mensagens persistidas.
+                      </div>
+                    ) : bundle!.messages.map((m) => {
+                      const outbound = m.direction === 'outbound'
+                      const unconfirmed = outbound && !confirmedManualSend(m.status)
+                      return (
+                        <div key={m.id} className={`flex ${outbound ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[78%] rounded-md px-4 py-3 shadow-sm ${
+                            unconfirmed ? 'border border-amber-200 bg-amber-50 text-amber-950' : outbound ? 'bg-aletis-verde text-white' : 'bg-card text-slate-800'
+                          }`}>
+                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                              {m.text || m.transcription || m.mediaFilename || `[${m.type}]`}
+                            </p>
+                            <div className={`mt-2 flex items-center gap-2 text-[11px] ${unconfirmed ? 'text-amber-800' : outbound ? 'text-white/75' : 'text-slate-400'}`}>
+                              <span>{fmtDate(m.timestamp)}</span>
+                              <span>{messageStatusLabel[m.status] || (outbound ? 'Confirmação pendente' : m.status)}</span>
                             </div>
-                          )}
-
-                          {/* Audio message special rendering */}
-                          {msg.type === 'audio' ? (
-                            <AudioBubble url={msg.audioUrl} fallbackDuration={msg.audioDuration} />
-                          ) : (
-                            <p className="text-sm font-body leading-relaxed">{msg.text}</p>
-                          )}
-
-                          {/* Time + read status */}
-                          <div className="flex items-center justify-end gap-1 mt-1">
-                            <span className="text-[10px] font-body text-aletis-grafite-claro">
-                              {msg.time}
-                            </span>
-                            {isConsultant && (
-                              <span>
-                                {msg.read ? (
-                                  <CheckCheck className="w-3.5 h-3.5 text-blue-500" />
-                                ) : (
-                                  <Check className="w-3.5 h-3.5 text-aletis-grafite-claro" />
-                                )}
-                              </span>
-                            )}
                           </div>
                         </div>
-                      </div>
-                    )
-                  })}
-
-                  <div ref={messagesEndRef} />
+                      )
+                    })}
+                  </div>
                 </div>
 
-                {/* Input bar */}
-                <div className="px-3 sm:px-4 py-3 border-t border-aletis-borda bg-white">
-                  <div className="flex items-center gap-2">
-                    <button className="p-2 rounded-lg text-aletis-grafite-claro hover:bg-aletis-bege transition-colors hidden sm:block">
-                      <Smile className="w-5 h-5" />
-                    </button>
-                    <button className="p-2 rounded-lg text-aletis-grafite-claro hover:bg-aletis-bege transition-colors">
-                      <Paperclip className="w-5 h-5" />
-                    </button>
-
-                    <input
-                      type="text"
-                      value={messageInput}
-                      onChange={(e) => setMessageInput(e.target.value)}
+                <div className="border-t border-slate-100 p-3">
+                  <div className="flex gap-2">
+                    <textarea
+                      value={draft}
+                      onChange={(e) => updateDraft(e.target.value)}
+                      disabled={busy}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleSendMessage()
+                        if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                          e.preventDefault()
+                          sendMessage()
+                        }
                       }}
-                      placeholder="Digite uma mensagem..."
-                      className="flex-1 px-4 py-2.5 rounded-xl bg-aletis-bege border border-transparent text-sm font-body text-aletis-grafite-escuro placeholder:text-aletis-grafite-claro focus:outline-none focus:ring-2 focus:ring-aletis-verde/20 focus:bg-white transition-all"
+                      placeholder="Escreva uma resposta manual..."
+                      className="min-h-[44px] flex-1 resize-none rounded-md border border-slate-200 bg-card px-3 py-2 text-sm outline-none focus:border-aletis-verde"
                     />
-
-                    {messageInput.trim() ? (
-                      <button
-                        onClick={handleSendMessage}
-                        className="p-2.5 rounded-xl bg-aletis-verde text-white hover:bg-aletis-verde-medio transition-colors shadow-md"
-                      >
-                        <Send className="w-5 h-5" />
-                      </button>
-                    ) : (
-                      <button className="p-2.5 rounded-xl bg-aletis-verde text-white hover:bg-aletis-verde-medio transition-colors shadow-md">
-                        <Mic className="w-5 h-5" />
-                      </button>
-                    )}
+                    <button
+                      onClick={sendMessage}
+                      disabled={busy || !draft.trim()}
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-aletis-verde text-white hover:bg-aletis-verde-escuro disabled:opacity-50"
+                      aria-label="Enviar mensagem"
+                    >
+                      <Send className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               </>
             ) : (
-              /* Empty state */
-              <div className="flex-1 flex flex-col items-center justify-center text-aletis-grafite-claro">
-                <div className="w-20 h-20 rounded-full bg-aletis-bege flex items-center justify-center mb-4">
-                  <MessageCircle className="w-10 h-10 text-aletis-grafite-claro/40" />
+              <div className="flex flex-1 items-center justify-center p-8 text-center">
+                <div className="max-w-md">
+                  <MessageCircle className="mx-auto h-10 w-10 text-slate-300" />
+                  <h2 className="mt-3 text-lg font-semibold text-slate-900">{emptyState.title}</h2>
+                  <p className="mt-2 text-sm text-slate-500">
+                    {emptyState.detail}
+                  </p>
                 </div>
-                <h2 className="text-xl font-display font-semibold text-aletis-grafite-medio mb-2">
-                  ALETIS WhatsApp
-                </h2>
-                <p className="text-sm font-body text-center max-w-sm">
-                  Selecione uma conversa para iniciar a comunicação com seus clientes.
-                </p>
               </div>
             )}
-          </div>
-        </div>
+          </section>
+
+          <aside className="min-w-0 space-y-4 overflow-x-auto xl:col-span-2 2xl:col-span-1">
+            {activeConversation && (
+              <div className="rounded-md border border-slate-200 bg-card p-4 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <Bot className="h-4 w-4 text-foreground" />
+                  <h3 className="font-semibold text-slate-900">Controle da conversa</h3>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded border border-slate-100 bg-slate-50 p-3">
+                    <p className="text-xs text-slate-500">Modo</p>
+                    <p className="mt-1 font-semibold">{activeConversation.atendimentoModo === 'ia' ? 'IA ativa' : 'Humano assumiu'}</p>
+                  </div>
+                  <div className="rounded border border-slate-100 bg-slate-50 p-3">
+                    <p className="text-xs text-slate-500">Score</p>
+                    <p className="mt-1 font-semibold">{Number(activeConversation.eligibilityScore || 0).toLocaleString('pt-BR')}</p>
+                  </div>
+                </div>
+                {activeConversation.takeoverReason && (
+                  <p className="mt-3 rounded border border-amber-100 bg-amber-50 p-2 text-xs text-amber-800">
+                    {activeConversation.takeoverReason}
+                  </p>
+                )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    onClick={resendDocumentChecklist}
+                    disabled={busy}
+                    className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-card px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <FileCheck2 className="h-4 w-4" />
+                    Reenviar documentos
+                  </button>
+                  {activeConversation.clienteId && (
+                    <Link
+                      to={`/clientes/${activeConversation.clienteId}?area=workflow`}
+                      className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-card px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Abrir cliente
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-md border border-slate-200 bg-card p-4 shadow-sm">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-foreground" />
+                <h3 className="font-semibold text-slate-900">Operacao</h3>
+              </div>
+              <div className="mt-4 space-y-3 text-sm">
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500">Instancia</span>
+                  <span className="truncate font-medium">{status?.evolution?.instance || 'Nao definida'}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500">Conexão</span>
+                  <span className="truncate font-medium">{evolutionStatusMeta[evolutionStatus].label}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500">Webhook</span>
+                  <span className="truncate font-medium">{status?.evolution?.webhookUrl ? 'Configurado' : 'Pendente'}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500">Agenda</span>
+                  <span className="truncate font-medium">{status?.calendar?.dryRun ? 'Modo teste' : 'Conectada'}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500">Storage</span>
+                  <span className="truncate font-medium">{status?.storage?.provider || 'local'}</span>
+                </div>
+              </div>
+            </div>
+
+            {bundle?.calendarEvents?.length ? (
+              <div className="rounded-md border border-slate-200 bg-card p-4 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <CalendarCheck2 className="h-4 w-4 text-sky-600" />
+                  <h3 className="font-semibold text-slate-900">Agenda</h3>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {bundle.calendarEvents.slice(0, 3).map((event: any, idx) => (
+                    <div key={String(event.id || idx)} className="rounded border border-slate-100 bg-slate-50 p-3 text-sm">
+                      <p className="font-medium text-slate-800">{String(event.titulo || event.summary || 'Reuniao ALETIS')}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {fmtDate(String(event.start_at || event.startAt || event.start || ''))} · {String(event.status || 'registrado')}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="rounded-md border border-slate-200 bg-card p-4 shadow-sm">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <h3 className="font-semibold text-slate-900">Elegibilidade</h3>
+              </div>
+              <p className="mt-2 text-sm text-slate-500">
+                {activeConversation
+                  ? `Status: ${activeConversation.elegibilidadeStatus.replace(/_/g, ' ')}`
+                  : 'Selecione uma conversa para ver a triagem.'}
+              </p>
+              <div className="mt-3 space-y-2">
+                {(bundle?.eligibility || []).map((item: any) => (
+                  <div key={String(item.question_key || item.questionKey)} className="rounded border border-slate-100 bg-slate-50 p-2">
+                    <p className="text-xs font-medium text-slate-500">{String(item.question_key || item.questionKey).replace(/_/g, ' ')}</p>
+                    <p className="mt-1 break-words text-sm text-slate-800">{String(item.answer_text || item.answerText || '')}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-md border border-slate-200 bg-card p-4 shadow-sm">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-sky-600" />
+                <h3 className="font-semibold text-slate-900">Checklist documental</h3>
+              </div>
+              <div className="mt-3 space-y-2">
+                {checklist.map((item) => (
+                  <div key={item.key} className="flex items-center justify-between gap-3 rounded border border-slate-100 bg-slate-50 px-3 py-2">
+                    <span className="min-w-0 break-words text-sm text-slate-700">{item.label}</span>
+                    <span className={`shrink-0 rounded px-2 py-0.5 text-[11px] font-medium ${
+                      item.status === 'recebido' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
+                    }`}>
+                      {item.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {bundle?.documents?.length ? (
+                <div className="mt-4 border-t border-slate-100 pt-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Recebidos</p>
+                  <div className="mt-2 space-y-2">
+                    {bundle.documents.map((doc) => (
+                      <div key={doc.id} className="rounded border border-slate-100 p-2">
+                        <p className="break-words text-sm font-medium text-slate-800">{doc.filename}</p>
+                        <p className="mt-1 text-xs text-slate-500">{doc.categoria} · {doc.status}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </aside>
+        </section>
       </div>
     </div>
   )

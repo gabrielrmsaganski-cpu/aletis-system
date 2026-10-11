@@ -6,6 +6,7 @@
  * componentes daqui usam tokens ALETIS oficiais — nunca cor literal.
  */
 import type { ReactNode, ButtonHTMLAttributes } from 'react'
+import { uiAction } from '../ui/foundation'
 
 // ─────────────── DSCard ───────────────
 export function DSCard({
@@ -20,8 +21,7 @@ export function DSCard({
   return (
     <div
       className={`
-        rounded-xl border border-aletis-borda bg-white shadow-sm
-        dark:bg-aletis-grafite-escuro/80 dark:border-white/10
+        ui-panel
         ${dense ? 'p-3' : 'p-5'}
         ${className}
       `}
@@ -58,15 +58,15 @@ export function DSStatCard({
     info: 'border-aletis-verde/30',
   }
   const toneIcon: Record<string, string> = {
-    neutral: 'text-aletis-grafite-medio',
+    neutral: 'text-[var(--text-soft)]',
     positive: 'text-positivo',
     warning: 'text-ambar',
     negative: 'text-red-600',
     gold: 'text-aletis-dourado',
-    info: 'text-aletis-verde',
+    info: 'text-foreground',
   }
   const interactive = onClick
-    ? 'cursor-pointer hover:shadow-md transition-shadow'
+    ? 'cursor-pointer ui-panel-interactive'
     : ''
   return (
     <div
@@ -80,23 +80,22 @@ export function DSStatCard({
         }
       }}
       className={`
-        rounded-xl border-2 ${toneRing[tone]} bg-white p-4
-        dark:bg-aletis-grafite-escuro/80 dark:border-white/10
+        ui-panel ui-metric ${toneRing[tone]}
         ${interactive}
       `}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] font-body font-semibold uppercase tracking-wider text-aletis-grafite-claro dark:text-white/60">
+        <p className="ui-metric-label">
           {label}
         </p>
         {icon && <span className={toneIcon[tone]}>{icon}</span>}
       </div>
-      <p className="text-2xl font-display font-bold text-aletis-grafite-escuro dark:text-white mt-1.5 tracking-tight">
+      <p className="ui-metric-value">
         {value}
       </p>
       {(hint || trend) && (
         <div className="mt-1.5 flex items-center gap-2 text-[11px] font-body">
-          {hint && <span className="text-aletis-grafite-medio dark:text-white/60">{hint}</span>}
+          {hint && <span className="text-[var(--text-soft)] dark:text-white/60">{hint}</span>}
           {trend && (
             <span
               className={
@@ -106,7 +105,7 @@ export function DSStatCard({
               }
             >
               {trend.value >= 0 ? '↑' : '↓'} {Math.abs(trend.value).toFixed(1)}%
-              {trend.label && <span className="ml-0.5 text-aletis-grafite-medio">{trend.label}</span>}
+              {trend.label && <span className="ml-0.5 text-[var(--text-soft)]">{trend.label}</span>}
             </span>
           )}
         </div>
@@ -130,13 +129,13 @@ export function DSEmpty({
   return (
     <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
       {icon && (
-        <div className="w-12 h-12 rounded-xl bg-aletis-borda/40 dark:bg-white/5 flex items-center justify-center mb-3 text-aletis-grafite-medio dark:text-white/40">
+        <div className="w-12 h-12 rounded-xl bg-aletis-borda/40 dark:bg-white/5 flex items-center justify-center mb-3 text-[var(--text-soft)] dark:text-white/40">
           {icon}
         </div>
       )}
-      <p className="text-sm font-display font-semibold text-aletis-grafite-escuro dark:text-white">{title}</p>
+      <p className="text-sm font-display font-semibold text-foreground dark:text-white">{title}</p>
       {description && (
-        <p className="text-xs font-body text-aletis-grafite-claro dark:text-white/60 mt-1 max-w-sm">
+        <p className="text-xs font-body text-muted-foreground dark:text-white/60 mt-1 max-w-sm">
           {description}
         </p>
       )}
@@ -169,19 +168,25 @@ export function DSTable<T>({
   rowKey?: (row: T) => string
   dense?: boolean
 }) {
-  if (rows.length === 0 && emptyState) {
-    return <>{emptyState}</>
+  if (rows.length === 0) {
+    return <>{emptyState ?? <DSEmpty title="Nenhum registro encontrado" description="Ajuste os filtros para ampliar sua consulta." />}</>
   }
-  const padCell = dense ? 'px-2 py-1.5' : 'px-3 py-2.5'
+  const padCell = dense ? 'px-3 py-2' : 'px-4 py-3.5'
+  const alignClass = {
+    left: 'text-left',
+    center: 'text-center',
+    right: 'text-right',
+  } as const
   return (
-    <div className="overflow-x-auto rounded-lg border border-aletis-borda dark:border-white/10">
-      <table className="min-w-full text-sm font-body">
-        <thead className="bg-aletis-bege/40 dark:bg-white/5 text-aletis-grafite-claro dark:text-white/60 uppercase tracking-wider text-[10px] font-semibold">
+    <div className="ui-table-wrap">
+      <table className={`ui-table ${dense ? 'ui-table--dense' : ''}`}>
+        <thead className="text-[var(--text-muted)]">
           <tr>
             {columns.map((c) => (
               <th
                 key={c.key}
-                className={`${padCell} text-${c.align ?? 'left'} font-semibold whitespace-nowrap`}
+                scope="col"
+                className={`${padCell} ${alignClass[c.align ?? 'left']} font-semibold whitespace-nowrap`}
                 style={c.width ? { width: c.width } : undefined}
               >
                 {c.label}
@@ -196,10 +201,12 @@ export function DSTable<T>({
               <tr
                 key={key}
                 onClick={() => onRowClick?.(row)}
+                tabIndex={onRowClick ? 0 : undefined}
+                onKeyDown={(event) => { if (onRowClick && event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onRowClick(row) } }}
                 className={`${onRowClick ? 'cursor-pointer hover:bg-aletis-bege/30 dark:hover:bg-white/5' : ''}`}
               >
                 {columns.map((c) => (
-                  <td key={c.key} className={`${padCell} text-${c.align ?? 'left'} text-aletis-grafite-escuro dark:text-white/90`}>
+                  <td key={c.key} className={`${padCell} ${alignClass[c.align ?? 'left']} text-foreground dark:text-white/90`}>
                     {c.render ? c.render(row) : (row as any)[c.key] ?? '—'}
                   </td>
                 ))}
@@ -221,15 +228,15 @@ export function DSBadge({
   tone?: 'neutral' | 'positive' | 'warning' | 'negative' | 'gold' | 'info'
 }) {
   const tones: Record<string, string> = {
-    neutral: 'bg-aletis-borda/60 text-aletis-grafite-escuro dark:bg-white/10 dark:text-white/80',
+    neutral: 'bg-aletis-borda/60 text-foreground dark:bg-white/10 dark:text-white/80',
     positive: 'bg-positivo/15 text-positivo dark:bg-positivo/20',
     warning: 'bg-ambar/15 text-ambar-dark dark:text-ambar dark:bg-ambar/20',
     negative: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-    gold: 'bg-aletis-dourado/15 text-aletis-grafite-escuro dark:text-aletis-dourado',
-    info: 'bg-aletis-verde/10 text-aletis-verde dark:bg-aletis-verde/20',
+    gold: 'bg-aletis-dourado/15 text-foreground dark:text-aletis-dourado',
+    info: 'bg-aletis-verde/10 text-foreground dark:bg-aletis-verde/20',
   }
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-body font-semibold uppercase tracking-wider ${tones[tone]}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-body font-medium ${tones[tone]}`}>
       {children}
     </span>
   )
@@ -252,14 +259,14 @@ export function DSButton({
     lg: 'px-5 py-3 text-base',
   }
   const variants: Record<string, string> = {
-    primary: 'bg-aletis-verde text-white hover:bg-aletis-verde-escuro',
-    secondary: 'bg-white text-aletis-grafite-escuro border border-aletis-borda hover:bg-aletis-bege/40 dark:bg-white/5 dark:text-white dark:border-white/10 dark:hover:bg-white/10',
-    ghost: 'text-aletis-grafite-escuro hover:bg-aletis-bege/40 dark:text-white dark:hover:bg-white/5',
-    danger: 'bg-red-600 text-white hover:bg-red-700',
+    primary: uiAction.primary,
+    secondary: uiAction.secondary,
+    ghost: uiAction.ghost,
+    danger: uiAction.danger,
   }
   return (
     <button
-      className={`inline-flex items-center justify-center gap-1.5 font-body font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${sizes[size]} ${variants[variant]} ${className}`}
+      className={`font-body ${variants[variant]} ${sizes[size]} ${className}`}
       {...props}
     >
       {children}

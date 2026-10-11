@@ -1,4 +1,4 @@
-import type { ClaudeTool, ClaudeToolRegistry } from '../../../../llm/ClaudeFoundryClient.js';
+import type { LLMTool, LLMToolRegistry } from '../../../../llm/OpenAIClient.js';
 
 // TJs relevantes para o agro BR
 const TJS_AGRO = [
@@ -18,8 +18,8 @@ const TJS_AGRO = [
  * Gera queries otimizadas para web_search — cada TJ tem pesquisa pública
  * por nome/CPF/CNPJ, mas a UX varia muito, então delegamos ao web_search.
  */
-export function buildProcessosTJsTool(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tool: ClaudeTool = {
+export function buildProcessosTJsTool(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tool: LLMTool = {
     name: 'consultar_processos_tjs',
     description: 'Busca processos em Tribunais de Justiça estaduais (TJMT, TJGO, TJMS, etc). Essencial para detectar execuções fiscais, ações de cobrança, penhoras em curso. Use após identificar a UF principal do cliente/lead.',
     input_schema: {

@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert';
 import { BaseAgent } from '../../src/services/alix/agents/BaseAgent.ts';
 import { DelegationLoopError } from '../../src/services/alix/agents/types.ts';

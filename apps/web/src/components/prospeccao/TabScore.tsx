@@ -25,17 +25,17 @@ export function TabScore({ lead }: { lead: LeadFull }) {
   return (
     <>
       <div className="rounded-xl border border-aletis-borda dark:border-white/10 p-4 bg-gradient-to-br from-aletis-verde/5 to-transparent">
-        <p className="text-[11px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-1">
+        <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50 mb-1">
           Score ALETIS
         </p>
         <div className="flex items-baseline gap-2">
-          <span className="font-display text-5xl font-bold text-aletis-verde">{lead.score.total}</span>
-          <span className="text-sm text-aletis-grafite-medio dark:text-white/50">/ 100</span>
-          <span className="ml-auto text-sm font-semibold text-aletis-grafite-escuro dark:text-white">
+          <span className="font-display text-5xl font-bold text-foreground">{lead.score.total}</span>
+          <span className="text-sm text-[var(--text-soft)] dark:text-white/50">/ 100</span>
+          <span className="ml-auto text-sm font-semibold text-foreground dark:text-white">
             {CLASSIF_STYLE[lead.score.classificacao].label}
           </span>
         </div>
-        <p className="text-xs text-aletis-grafite-medio dark:text-white/50 mt-1">
+        <p className="text-xs text-[var(--text-soft)] dark:text-white/50 mt-1">
           Honorários estimados (1% dívida): <b className="text-aletis-dourado">{fmtBRL(lead.score.honorariosEstimados)}</b>
         </p>
       </div>
@@ -47,10 +47,10 @@ export function TabScore({ lead }: { lead: LeadFull }) {
           return (
             <div key={it.label}>
               <div className="flex items-center justify-between mb-1 text-xs">
-                <span className="flex items-center gap-1.5 text-aletis-grafite-escuro dark:text-white">
+                <span className="flex items-center gap-1.5 text-foreground dark:text-white">
                   <Icon size={12} /> {it.label}
                 </span>
-                <span className="font-mono text-aletis-grafite-medio dark:text-white/60">
+                <span className="font-mono text-[var(--text-soft)] dark:text-white/60">
                   {it.value} / {it.max}
                 </span>
               </div>
@@ -61,7 +61,7 @@ export function TabScore({ lead }: { lead: LeadFull }) {
                 />
               </div>
               {it.hint && (
-                <p className="mt-0.5 text-[10px] italic text-aletis-grafite-medio dark:text-white/40">
+                <p className="mt-0.5 text-[11px] italic text-[var(--text-soft)] dark:text-white/40">
                   {it.hint}
                 </p>
               )}

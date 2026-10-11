@@ -11,7 +11,7 @@ import type { LeadFull } from '../../pages/Prospeccao'
 export function TabSocios({ lead }: { lead: LeadFull }) {
   if (!lead.cnpj) {
     return (
-      <div className="text-center py-8 text-aletis-grafite-medio dark:text-white/50">
+      <div className="text-center py-8 text-[var(--text-soft)] dark:text-white/50">
         <Users size={32} className="mx-auto mb-2 opacity-40" />
         Dados de sócios disponíveis após enriquecimento BrasilAPI.
       </div>
@@ -19,7 +19,7 @@ export function TabSocios({ lead }: { lead: LeadFull }) {
   }
   if (lead.cnpj.socios.length === 0) {
     return (
-      <p className="text-xs text-aletis-grafite-medio dark:text-white/50">
+      <p className="text-xs text-[var(--text-soft)] dark:text-white/50">
         Sem QSA cadastrado.
       </p>
     )
@@ -32,13 +32,13 @@ export function TabSocios({ lead }: { lead: LeadFull }) {
           className="flex items-center gap-3 p-3 rounded-lg bg-aletis-bege/50 dark:bg-white/5 border border-aletis-borda dark:border-white/10"
         >
           <div className="w-9 h-9 rounded-full bg-aletis-verde/15 flex items-center justify-center">
-            <Users size={14} className="text-aletis-verde" />
+            <Users size={14} className="text-foreground" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm text-aletis-grafite-escuro dark:text-white truncate">
+            <p className="font-semibold text-sm text-foreground dark:text-white truncate">
               {s.nome}
             </p>
-            <p className="text-[11px] text-aletis-grafite-medio dark:text-white/50">
+            <p className="text-[11px] text-[var(--text-soft)] dark:text-white/50">
               {s.qualificacao}
               {s.faixaEtaria && ` · ${s.faixaEtaria}`}
               {s.dataEntrada && ` · desde ${s.dataEntrada}`}

@@ -10,6 +10,48 @@
 
 export type TipoRegime = 'simples_nacional' | 'lucro_presumido' | 'mei'
 
+/** Empresa do grupo ALETIS (multi-CNPJ) */
+export interface Empresa {
+  id: string
+  cnpj: string
+  razaoSocial: string
+  nomeFantasia?: string
+  atividadePrincipal?: string
+  naturezaJuridica?: string
+  endereco?: string
+  cidade?: string
+  uf?: string
+  cep?: string
+  telefone?: string
+  email?: string
+  dataAbertura?: string
+  situacaoCadastral?: 'ativa' | 'inativa' | 'baixada'
+  porte?: 'ME' | 'EPP' | 'ME' | 'DEMAIS'
+  ativa: boolean
+  responsavel?: string
+  observacoes?: string
+  criadoEm: string
+  atualizadoEm: string
+}
+
+/** Levantamento mensal por empresa — espelho de DRE simplificado */
+export interface LevantamentoMensalEmpresa {
+  id: string
+  empresaId: string
+  competencia: string // YYYY-MM
+  faturamento: number
+  custosOperacionais: number
+  despesasAdministrativas: number
+  folhaPagamento: number
+  impostos: number
+  resultadoLiquido: number
+  margemPercentual: number
+  observacoes?: string
+  anexos: Anexo[]
+  criadoEm: string
+  atualizadoEm: string
+}
+
 export type StatusReceita = 'emitida' | 'recebida' | 'atrasada' | 'cancelada'
 
 export type FormaPagamentoReceita = 'pix' | 'ted' | 'boleto' | 'dinheiro' | 'cartao' | 'outro'
@@ -73,6 +115,7 @@ export interface Anexo {
 /** Receita — honorário de consultoria recebido (ou a receber). */
 export interface Receita {
   id: string
+  empresaId?: string // filtro por empresa no multi-CNPJ
   competencia: string // YYYY-MM (mês de competência fiscal)
   descricao: string
   cliente?: {
@@ -113,6 +156,7 @@ export interface Receita {
 /** Despesa operacional do negócio. */
 export interface Despesa {
   id: string
+  empresaId?: string
   competencia: string // YYYY-MM
   descricao: string
   fornecedor?: {
@@ -158,6 +202,7 @@ export interface Despesa {
 /** Imposto a pagar (DAS, INSS, ISS, DARF). */
 export interface Imposto {
   id: string
+  empresaId?: string
   competencia: string // YYYY-MM
   tipo: 'das_simples' | 'inss_pro_labore' | 'iss' | 'irpj' | 'csll' | 'pis' | 'cofins' | 'outro'
   descricao: string
@@ -177,6 +222,7 @@ export interface Imposto {
 /** Lançamento bancário (extrato). */
 export interface LancamentoBancario {
   id: string
+  empresaId?: string
   contaId: string
   data: string // ISO
   descricao: string

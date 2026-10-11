@@ -11,7 +11,7 @@ import {
   Building2,
   ArrowRight,
 } from 'lucide-react'
-import { siteConfig } from '@/lib/siteConfig'
+import { getWhatsappHref } from '@/lib/siteConfig'
 import { cn } from '@/lib/cn'
 
 interface Atalho {
@@ -26,14 +26,14 @@ const atalhos: Atalho[] = [
     label: 'Quero entender como funciona',
     icone: Sparkles,
     resposta:
-      'A ALETIS atua em três fases: (1) diagnóstico financeiro com memória de cálculo auditável; (2) proposta estruturada de reestruturação, multi-credor, com DSCR realista; (3) negociação e acompanhamento da execução. O primeiro diagnóstico é gratuito.',
+      'A ALETIS começa organizando documentos, contratos, garantias e fluxo de safra. Depois monta cenários de decisão e, só então, apoia a conversa com credores. O objetivo é chegar à negociação com uma leitura financeira clara.',
     cta: { label: 'Ver metodologia', href: '/sobre#metodologia' },
   },
   {
     label: 'Quero simular um cenário',
     icone: Calculator,
     resposta:
-      'Temos três simuladores públicos: reestruturação de dívida, capacidade de pagamento safra e detector de abusividade. Rodam no navegador, sem cadastro — mas você pode enviar o resultado para um especialista ao final.',
+      'Há três simuladores públicos: reestruturação de dívida, capacidade de pagamento da safra e detector de abusividade. Eles ajudam a fazer uma primeira leitura, mas não substituem análise dos contratos.',
     cta: { label: 'Abrir calculadoras', href: '/calculadoras' },
   },
   {
@@ -57,7 +57,7 @@ export function FloatingChat() {
     {
       autor: 'bot',
       texto:
-        'Olá — eu sou a ALIX, assistente da ALETIS. Posso te ajudar a entender nossa metodologia, simular cenários ou direcionar para um consultor humano. Como começo?',
+        'Olá, sou a ALIX, assistente da ALETIS. Posso te mostrar como funciona a assessoria, abrir uma simulação ou encaminhar seu caso para um consultor. Por onde começamos?',
     },
   ])
   const [input, setInput] = useState('')
@@ -93,9 +93,9 @@ export function FloatingChat() {
     setInput('')
   }
 
-  const waLink = `https://wa.me/${siteConfig.contact.whatsapp}?text=${encodeURIComponent(
+  const waLink = getWhatsappHref(
     'Olá ALETIS, vim pelo site e gostaria de conversar.',
-  )}`
+  )
 
   return (
     <>
@@ -226,15 +226,17 @@ export function FloatingChat() {
           </button>
         </form>
 
-        <a
-          href={waLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 border-t border-aletis-borda/60 bg-aletis-bege px-5 py-3 text-[12px] font-display font-semibold uppercase tracking-wider text-aletis-verde-escuro transition hover:bg-aletis-dourado/15"
-        >
-          <MessageCircle className="h-3.5 w-3.5" />
-          Continuar pelo WhatsApp
-        </a>
+        {waLink && (
+          <a
+            href={waLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 border-t border-aletis-borda/60 bg-aletis-bege px-5 py-3 text-[12px] font-display font-semibold uppercase tracking-wider text-aletis-verde-escuro transition hover:bg-aletis-dourado/15"
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+            Continuar pelo WhatsApp
+          </a>
+        )}
       </div>
     </>
   )

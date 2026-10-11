@@ -15,6 +15,7 @@ describe('upload-validation', () => {
     expect(isMimeAllowed('image/jpeg')).toBe(true)
     expect(isMimeAllowed('text/csv')).toBe(true)
     expect(isMimeAllowed('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')).toBe(true)
+    expect(isMimeAllowed('application/vnd.ms-excel.sheet.macroEnabled.12')).toBe(true)
   })
 
   it('recusa tipos perigosos', () => {
@@ -28,6 +29,7 @@ describe('upload-validation', () => {
 
   it('normaliza casing e descarta charset suffix', () => {
     expect(isMimeAllowed('APPLICATION/PDF')).toBe(true)
+    expect(isMimeAllowed('APPLICATION/VND.MS-EXCEL.SHEET.MACROENABLED.12')).toBe(true)
     expect(isMimeAllowed('text/csv; charset=utf-8')).toBe(true)
   })
 

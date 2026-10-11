@@ -1,10 +1,19 @@
 // ============================================================
 // ALETIS — Alix Document Intake: Image Processor
 // Reencoda imagens grandes via sharp (lado máx 2048 px, qualidade
-// 85) e prepara base64 + media type para blocos "image" do Claude.
+// 85) e prepara base64 + media type para a entrada multimodal da OpenAI.
 // ============================================================
 
 import type { ImageMediaType, ParserResult } from './types.js'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { createHash } from 'node:crypto'
+import { boundedReadingNumber } from './DocumentReadingPlan.js'
+
+const execFileAsync = promisify(execFile)
 
 const LARGE_IMAGE_BYTES = 5 * 1024 * 1024 // 5 MB
 const MAX_DIMENSION = 2048
@@ -32,6 +41,7 @@ export async function processImage(
   buffer: Buffer,
   filename: string,
   mimetype: string,
+  options: { ocr?: boolean } = {},
 ): Promise<ParserResult> {
   const sharpMod = await import('sharp')
   const sharp = sharpMod.default
@@ -82,10 +92,33 @@ export async function processImage(
   const base64 = outBuf.toString('base64')
   const dims = width && height ? `${width}x${height}px` : 'dimensões desconhecidas'
   const description = `[Imagem: ${filename}, ${dims}]`
+  let ocrText = ''
+  let ocrError: string | undefined
+  if (options.ocr && process.env.ALIX_IMAGE_OCR !== '0') {
+    const workDir = await mkdtemp(join(tmpdir(), 'alix-image-ocr-'))
+    try {
+      const path = join(workDir, 'image.png')
+      await writeFile(path, await sharp(buffer).rotate().png().toBuffer())
+      const result = await execFileAsync('tesseract', [path, 'stdout', '-l', process.env.ALIX_TESSERACT_LANG || 'por+eng', '--psm', process.env.ALIX_TESSERACT_PSM || '6'], {
+        timeout: boundedReadingNumber(process.env.ALIX_IMAGE_OCR_TIMEOUT_MS, 45_000, 1_000, 90_000), maxBuffer: 8 * 1024 * 1024,
+      })
+      ocrText = result.stdout.replace(/\r/g, '').trim()
+      if (!ocrText) ocrError = 'OCR não encontrou texto legível na imagem.'
+    } catch { ocrError = 'OCR local da imagem falhou ou excedeu o tempo disponível.' }
+    finally { await rm(workDir, { recursive: true, force: true }) }
+  }
+  const id = createHash('sha256').update(ocrText).digest('hex').slice(0, 32)
+  const source = 'image:p1:ocr:tesseract'
+  const enoughText = ocrText.length >= 80
 
   return {
     kind: 'image',
-    extractedText: description,
+    extractedText: ocrText || description,
+    pageCount: 1,
+    ...(ocrText ? {
+      evidences: [{ id: `image-evidence-${id}`, kind: 'ocr' as const, source, text: ocrText, page: 1, confidence: .72 }],
+      chunks: [{ id: `image-chunk-${id}`, ordinal: 0, kind: 'ocr' as const, source, text: ocrText, pageStart: 1, pageEnd: 1, confidence: .72, evidenceIds: [`image-evidence-${id}`] }],
+    } : {}),
     imageBase64: base64,
     imageMediaType: outMime,
     metadata: {
@@ -94,6 +127,9 @@ export async function processImage(
       reencoded: outBuf !== buffer,
       originalBytes: buffer.byteLength,
       finalBytes: outBuf.byteLength,
+      ocr: { engine: 'tesseract', attempted: Boolean(options.ocr && process.env.ALIX_IMAGE_OCR !== '0'), succeeded: Boolean(ocrText), error: ocrError },
+      extractionCoverage: { status: enoughText ? 'complete' : 'partial', totalPages: 1, readablePages: enoughText ? [1] : [], pendingPages: enoughText ? [] : [1],
+        limitations: enoughText ? [] : [ocrError || (options.ocr ? 'Texto insuficiente para confirmar a leitura da imagem; confira o original.' : 'Imagem recebida; OCR será realizado no processamento profundo.')] },
     },
   }
 }

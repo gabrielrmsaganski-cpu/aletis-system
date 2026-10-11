@@ -1,3 +1,4 @@
+import PageHeader from '../components/ui/PageHeader'
 /**
  * Página de Dossiê Agro Canônico (padrão Daycoval 2025).
  *
@@ -136,10 +137,10 @@ function Section({
     >
       <summary className="px-5 py-4 cursor-pointer bg-aletis-bg-suave/40 hover:bg-aletis-bg-suave/60 transition-colors flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">{titulo}</h2>
-          {descricao && <p className="text-xs font-body text-aletis-grafite-claro mt-0.5">{descricao}</p>}
+          <h2 className="text-lg font-display font-semibold text-foreground">{titulo}</h2>
+          {descricao && <p className="text-xs font-body text-muted-foreground mt-0.5">{descricao}</p>}
         </div>
-        <span className="text-xs text-aletis-grafite-claro font-mono">clique p/ expandir</span>
+        <span className="text-xs text-muted-foreground font-mono">clique p/ expandir</span>
       </summary>
       <div className="p-5 space-y-4">{children}</div>
     </details>
@@ -156,15 +157,15 @@ function Field({
   hint?: string
 }) {
   return (
-    <label className="flex flex-col gap-1 text-xs font-body text-aletis-grafite-medio">
-      <span className="font-medium text-aletis-grafite-escuro">{label}</span>
+    <label className="flex flex-col gap-1 text-xs font-body text-[var(--text-soft)]">
+      <span className="font-medium text-foreground">{label}</span>
       {children}
-      {hint && <span className="text-[10px] text-aletis-grafite-claro">{hint}</span>}
+      {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
     </label>
   )
 }
 
-const inputCls = 'input-base w-full text-sm px-3 py-2 border border-aletis-borda rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-aletis-verde'
+const inputCls = 'input-base w-full text-sm px-3 py-2 border border-aletis-borda rounded-md bg-card focus:outline-none focus:ring-1 focus:ring-aletis-verde'
 const textareaCls = inputCls + ' min-h-[80px] resize-y font-body'
 
 // ─── Página ────────────────────────────────────────────────
@@ -321,22 +322,19 @@ export default function ClienteDossie() {
             <ArrowLeft className="w-3.5 h-3.5" />
             Voltar
           </Link>
-          <div>
-            <h1 className="text-xl font-display font-bold text-aletis-grafite-escuro">Dossiê Agro Canônico</h1>
-            <p className="text-xs font-body text-aletis-grafite-claro">
+          <PageHeader className="!mb-0" title={<>Dossiê Agro Canônico</>} description={<> <p className="text-xs font-body text-muted-foreground">
               Padrão Daycoval 2025 — cliente <span className="font-mono">{apiId}</span> · versão{' '}
               <span className="font-mono">v{dossie.versao}</span> · salvo{' '}
               {ultimoSalvo ? fmtData(ultimoSalvo) : 'nunca'}
-            </p>
-          </div>
+            </p> </>} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-body flex items-center gap-1.5">
-            {saveState === 'idle' && <span className="text-aletis-grafite-claro">Rascunho sincronizado</span>}
+            {saveState === 'idle' && <span className="text-muted-foreground">Rascunho sincronizado</span>}
             {saveState === 'pending' && <span className="text-aletis-dourado">Editando…</span>}
-            {saveState === 'saving' && <span className="text-aletis-verde">Salvando…</span>}
+            {saveState === 'saving' && <span className="text-foreground">Salvando…</span>}
             {saveState === 'saved' && (
-              <span className="text-aletis-verde inline-flex items-center gap-1">
+              <span className="text-foreground inline-flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 Salvo
               </span>
@@ -373,9 +371,9 @@ export default function ClienteDossie() {
 
       {mostrarHistorico && (
         <div className="card-premium p-4 mb-4">
-          <h2 className="text-sm font-display font-semibold text-aletis-grafite-escuro mb-2">Histórico de versões</h2>
+          <h2 className="text-sm font-display font-semibold text-foreground mb-2">Histórico de versões</h2>
           {historico.length === 0 ? (
-            <p className="text-xs text-aletis-grafite-claro">Nenhuma versão anterior ainda.</p>
+            <p className="text-xs text-muted-foreground">Nenhuma versão anterior ainda.</p>
           ) : (
             <ul className="space-y-1">
               {historico.map((h) => (
@@ -398,7 +396,7 @@ export default function ClienteDossie() {
                         // best-effort
                       }
                     }}
-                    className="text-xs text-aletis-verde hover:underline"
+                    className="text-xs text-foreground hover:underline"
                   >
                     baixar JSON
                   </Link>
@@ -544,7 +542,7 @@ function GrupoEconomicoEditor({
             <Plus className="w-3 h-3" /> adicionar PF
           </button>
         </div>
-        {valor.pessoasFisicas.length === 0 && <p className="text-xs text-aletis-grafite-claro">Nenhuma PF cadastrada.</p>}
+        {valor.pessoasFisicas.length === 0 && <p className="text-xs text-muted-foreground">Nenhuma PF cadastrada.</p>}
         {valor.pessoasFisicas.map((pf) => (
           <div key={pf.id} className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-2 p-3 rounded border border-aletis-borda/50 bg-aletis-bg-suave/30">
             <Field label="Nome">
@@ -599,7 +597,7 @@ function GrupoEconomicoEditor({
             <Plus className="w-3 h-3" /> adicionar PJ
           </button>
         </div>
-        {valor.pessoasJuridicas.length === 0 && <p className="text-xs text-aletis-grafite-claro">Nenhuma PJ cadastrada.</p>}
+        {valor.pessoasJuridicas.length === 0 && <p className="text-xs text-muted-foreground">Nenhuma PJ cadastrada.</p>}
         {valor.pessoasJuridicas.map((pj) => (
           <div key={pj.id} className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-2 p-3 rounded border border-aletis-borda/50 bg-aletis-bg-suave/30">
             <Field label="Razão Social">
@@ -881,7 +879,7 @@ function ProducaoEditor({
             <Plus className="w-3 h-3" /> adicionar quadro
           </button>
         </div>
-        {valor.agricultura.length === 0 && <p className="text-xs text-aletis-grafite-claro">Nenhum quadro cadastrado.</p>}
+        {valor.agricultura.length === 0 && <p className="text-xs text-muted-foreground">Nenhum quadro cadastrado.</p>}
         {valor.agricultura.map((q) => (
           <div key={q.id} className="p-3 rounded border border-aletis-borda/50 bg-aletis-bg-suave/30 mb-3">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
@@ -908,15 +906,15 @@ function ProducaoEditor({
             {/* Safras dentro do quadro */}
             <div className="mt-3">
               <div className="flex justify-between items-center mb-2">
-                <h4 className="text-xs font-semibold text-aletis-grafite-escuro">Safras</h4>
+                <h4 className="text-xs font-semibold text-foreground">Safras</h4>
                 <button onClick={() => addSafra(q.id)} className="btn-outline text-xs px-2 py-1 inline-flex items-center gap-1">
                   <Plus className="w-3 h-3" /> safra
                 </button>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-full text-xs">
+                <table className="ui-table min-w-full text-xs">
                   <thead>
-                    <tr className="text-aletis-grafite-claro">
+                    <tr className="text-muted-foreground">
                       <th className="text-left p-1">Safra</th>
                       <th className="text-left p-1">Tipo</th>
                       <th className="text-right p-1">Área (ha)</th>

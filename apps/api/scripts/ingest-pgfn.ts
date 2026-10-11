@@ -128,6 +128,11 @@ interface LeadAggregate {
   temAjuizada: boolean
 }
 
+const MAX_DEBTS_PER_LEAD = Math.max(
+  1,
+  Number(process.env.PGFN_MAX_DEBTS_PER_LEAD || 25) || 25,
+)
+
 function parseBrazilianNumber(s: string): number {
   if (!s) return 0
   const cleaned = s.trim().replace(/\./g, '').replace(',', '.')
@@ -165,6 +170,29 @@ function detectKind(fileName: string): CsvKind {
  */
 function parseLine(line: string): string[] {
   return line.split(';').map((c) => c.trim())
+}
+
+function pushDebtCapped(lead: LeadAggregate, debt: DebtRecord): void {
+  if (lead.debts.length < MAX_DEBTS_PER_LEAD) {
+    lead.debts.push(debt)
+    return
+  }
+
+  let replaceIdx = -1
+  let weakestScore = Number.POSITIVE_INFINITY
+  for (let i = 0; i < lead.debts.length; i++) {
+    const d = lead.debts[i]
+    const score = (d.ajuizado ? 1_000_000_000 : 0) + (d.valor || 0)
+    if (score < weakestScore) {
+      weakestScore = score
+      replaceIdx = i
+    }
+  }
+
+  const incomingScore = (debt.ajuizado ? 1_000_000_000 : 0) + (debt.valor || 0)
+  if (replaceIdx >= 0 && incomingScore > weakestScore) {
+    lead.debts[replaceIdx] = debt
+  }
 }
 
 interface IngestStats {
@@ -224,7 +252,7 @@ async function ingestFile(
 
     const existing = accumulator.get(cpfCnpjClean)
     if (existing) {
-      existing.debts.push(debt)
+      pushDebtCapped(existing, debt)
       existing.totalDivida += valor
       existing.qtdInscricoes++
       existing.temAjuizada ||= debt.ajuizado

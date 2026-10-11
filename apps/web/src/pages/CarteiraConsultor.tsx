@@ -1,3 +1,4 @@
+import PageHeader from '../components/ui/PageHeader'
 // ============================================================
 // CarteiraConsultor — visão consolidada multi-grupo do consultor.
 // Wrapper de rota para o componente CarteiraPanel; ao clicar em um
@@ -15,21 +16,15 @@ export default function CarteiraConsultor() {
 
   return (
     <div className="space-y-4">
-      <header className="card-premium p-4">
-        <p className="text-[10px] font-mono text-aletis-verde uppercase font-semibold tracking-wider">
+      <PageHeader title={<>Carteira do consultor</>} eyebrow={<> <p className="text-[11px] font-mono text-foreground uppercase font-semibold tracking-wider">
           📊 Visão consolidada · multi-grupo
-        </p>
-        <h1 className="text-xl font-display font-bold text-aletis-grafite-escuro mt-1">
-          Carteira do consultor
-        </h1>
-        <p className="text-xs font-body text-aletis-grafite-claro mt-1 max-w-3xl">
+        </p> </>} description={<> <p className="text-xs font-body text-muted-foreground mt-1 max-w-3xl">
           KPIs agregados, rankings (melhor margem, pior margem, mais alavancado, maior receita)
           e distribuição saudável/atenção/crítico de todos os grupos sob gestão. Clique em um grupo
           para abrir o R.OP.001 v2.0 dele.
-        </p>
-      </header>
+        </p> </>} />
 
-      <Suspense fallback={<div className="card-premium p-8 text-center text-xs text-aletis-grafite-claro">Carregando carteira…</div>}>
+      <Suspense fallback={<div className="card-premium p-8 text-center text-xs text-muted-foreground">Carregando carteira…</div>}>
         <CarteiraPanel
           consultorId={consultorId}
           onSelectGrupo={(clienteId) => {

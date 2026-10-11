@@ -6,10 +6,10 @@
  * CPU/memória) para gerar e verificar hash de senha, e `@fastify/jwt`
  * (já registrado no server) para emitir tokens de sessão.
  *
- * Credenciais ficam persistidas no próprio objeto Cliente
- * (`portalAcesso`) em memória, coerente com o padrão atual do backend.
+ * PortalAccountService persiste as credenciais no PostgreSQL e mantém
+ * Cliente.portalAcesso como cache de compatibilidade.
  */
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
+import { randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto'
 import type { PushSubscriptionRecord } from './PushService.js'
 
 /** Parâmetros scrypt: N=16384 (2^14), r=8, p=1 — padrão recomendado. */
@@ -41,13 +41,14 @@ export interface PortalJwtPayload {
   sub: string              // clienteId
   usuario: string
   kind: 'portal-cliente'
+  authVersion?: string
 }
 
 /** Gera senha temporária legível (8 dígitos + 4 letras maiúsculas). */
 export function gerarSenhaTemporaria(): string {
-  const digits = Math.floor(10000000 + Math.random() * 90000000).toString()
+  const digits = randomInt(10000000, 100000000).toString()
   const letters = Array.from({ length: 4 }, () =>
-    String.fromCharCode(65 + Math.floor(Math.random() * 26))
+    String.fromCharCode(65 + randomInt(26))
   ).join('')
   return `${letters}${digits}`
 }

@@ -178,6 +178,7 @@ export class WhatsAppService {
       text: { preview_url: previewUrl, body: body.slice(0, 4096) },
     }
     const res = await fetch(url, {
+      signal: AbortSignal.timeout(20_000),
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.config.token}`,
@@ -189,7 +190,9 @@ export class WhatsAppService {
     if (!res.ok) {
       throw new Error(`sendText falhou: ${res.status} ${json?.error?.message || ''}`)
     }
-    return { messageId: json?.messages?.[0]?.id }
+    const messageId = json?.messages?.[0]?.id
+    if (typeof messageId !== 'string' || !messageId) throw new Error('Meta não confirmou o identificador da mensagem; conferir resultado antes de reenviar.')
+    return { messageId }
   }
 
   // ── Send: typing indicator ─────────────────────────────
@@ -198,6 +201,7 @@ export class WhatsAppService {
     if (!this.config) return
     const url = `${this.baseUrl()}/${this.config.phoneNumberId}/messages`
     await fetch(url, {
+      signal: AbortSignal.timeout(20_000),
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.config.token}`,
@@ -224,6 +228,7 @@ export class WhatsAppService {
     fd.append('file', blob, 'voice.ogg')
 
     const res = await fetch(url, {
+      signal: AbortSignal.timeout(20_000),
       method: 'POST',
       headers: { Authorization: `Bearer ${this.config.token}` },
       body: fd as unknown as BodyInit,
@@ -247,6 +252,7 @@ export class WhatsAppService {
       audio: { id: mediaId },
     }
     const res = await fetch(url, {
+      signal: AbortSignal.timeout(20_000),
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.config.token}`,
@@ -258,7 +264,9 @@ export class WhatsAppService {
     if (!res.ok) {
       throw new Error(`sendAudio falhou: ${res.status} ${json?.error?.message || ''}`)
     }
-    return { messageId: json?.messages?.[0]?.id, mediaId }
+    const messageId = json?.messages?.[0]?.id
+    if (typeof messageId !== 'string' || !messageId) throw new Error('Meta não confirmou o identificador do áudio; conferir resultado antes de reenviar.')
+    return { messageId, mediaId }
   }
 
   // ── Send: interactive buttons ───────────────────────────
@@ -288,6 +296,7 @@ export class WhatsAppService {
     }
 
     const res = await fetch(url, {
+      signal: AbortSignal.timeout(20_000),
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.config.token}`,
@@ -309,6 +318,7 @@ export class WhatsAppService {
     // 1. Resolve media URL
     const infoUrl = `${this.baseUrl()}/${mediaId}`
     const infoRes = await fetch(infoUrl, {
+      signal: AbortSignal.timeout(20_000),
       headers: { Authorization: `Bearer ${this.config.token}` },
     })
     const info: any = await infoRes.json()
@@ -318,6 +328,7 @@ export class WhatsAppService {
 
     // 2. Download actual bytes (same token required)
     const mediaRes = await fetch(info.url, {
+      signal: AbortSignal.timeout(20_000),
       headers: { Authorization: `Bearer ${this.config.token}` },
     })
     if (!mediaRes.ok) {

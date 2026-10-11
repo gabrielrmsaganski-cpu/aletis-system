@@ -1,0 +1,134 @@
+# =============================================================
+# ALETIS — Central WhatsApp IA (Evolution API + Manager)
+# =============================================================
+# Compose dedicado para preparar a infraestrutura do WhatsApp sem
+# acoplar o ciclo de vida ao compose principal do ALETIS.
+#
+# Uso:
+#   docker compose -f docker-compose.whatsapp.yml up -d
+#   docker compose -f docker-compose.whatsapp.yml --profile manager up -d
+#
+# O webhook padrão aponta para a API ALETIS local. Em produção, defina
+# EVOLUTION_WEBHOOK_URL com a URL pública:
+#   https://app.aletis.com.br/api/whatsapp/webhook
+# =============================================================
+services:
+  evolution-postgres:
+    image: postgres:16-alpine
+    container_name: aletis-evolution-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${EVOLUTION_POSTGRES_USER:-evolution}
+      POSTGRES_PASSWORD: ${EVOLUTION_POSTGRES_PASSWORD:?Configure EVOLUTION_POSTGRES_PASSWORD no arquivo .env}
+      POSTGRES_DB: ${EVOLUTION_POSTGRES_DB:-evolution}
+    ports:
+      - '${EVOLUTION_POSTGRES_PORT:-5434}:5432'
+    volumes:
+      - evolution-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${EVOLUTION_POSTGRES_USER:-evolution}']
+      interval: 10s
+      timeout: 5s
+      retries: 8
+
+  evolution-redis:
+    image: redis:7-alpine
+    container_name: aletis-evolution-redis
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '${EVOLUTION_REDIS_PORT:-6380}:6379'
+    volumes:
+      - evolution-redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 8
+
+  evolution-minio:
+    image: minio/minio:latest
+    container_name: aletis-evolution-minio
+    restart: unless-stopped
+    command: server /data --console-address ':9001'
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-aletis_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Configure MINIO_ROOT_PASSWORD no arquivo .env}
+    ports:
+      - '${MINIO_PORT:-9000}:9000'
+      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+    volumes:
+      - evolution-minio-data:/data
+
+  evolution-api:
+    image: ${EVOLUTION_API_IMAGE:-evoapicloud/evolution-api:latest}
+    container_name: aletis-evolution-api
+    restart: unless-stopped
+    depends_on:
+      evolution-postgres:
+        condition: service_healthy
+      evolution-redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      SERVER_TYPE: http
+      SERVER_PORT: 8080
+      SERVER_URL: ${EVOLUTION_PUBLIC_URL:-http://localhost:8080}
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:?EVOLUTION_API_KEY obrigatoria}
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://${EVOLUTION_POSTGRES_USER:-evolution}:${EVOLUTION_POSTGRES_PASSWORD:?Configure EVOLUTION_POSTGRES_PASSWORD no arquivo .env}@evolution-postgres:5432/${EVOLUTION_POSTGRES_DB:-evolution}
+      CACHE_REDIS_ENABLED: 'true'
+      CACHE_REDIS_URI: redis://evolution-redis:6379/1
+      CACHE_LOCAL_ENABLED: 'false'
+      WEBHOOK_GLOBAL_ENABLED: ${EVOLUTION_WEBHOOK_ENABLED:-false}
+      WEBHOOK_GLOBAL_URL: ${EVOLUTION_WEBHOOK_URL:-http://host.docker.internal:3011/api/whatsapp/webhook}
+      WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS: ${EVOLUTION_WEBHOOK_BY_EVENTS:-false}
+      WEBHOOK_GLOBAL_WEBHOOK_BASE64: ${EVOLUTION_WEBHOOK_BASE64:-true}
+      WEBHOOK_EVENTS_MESSAGES_UPSERT: ${EVOLUTION_WEBHOOK_MESSAGES_UPSERT:-false}
+      WEBHOOK_EVENTS_MESSAGES_UPDATE: 'false'
+      WEBHOOK_EVENTS_SEND_MESSAGE: 'false'
+      WEBHOOK_EVENTS_CONNECTION_UPDATE: 'false'
+      S3_ENABLED: ${EVOLUTION_S3_ENABLED:-true}
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-aletis_minio}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?Configure MINIO_ROOT_PASSWORD no arquivo .env}
+      S3_BUCKET: ${EVOLUTION_S3_BUCKET:-evolution}
+      S3_ENDPOINT: evolution-minio
+      S3_PORT: 9000
+      S3_USE_SSL: 'false'
+    ports:
+      - '${EVOLUTION_API_PORT:-8080}:8080'
+    volumes:
+      - evolution-instances:/evolution/instances
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+  evolution-manager:
+    image: ${EVOLUTION_MANAGER_IMAGE:-aletis/evolution-manager-v2:local}
+    build:
+      context: ./docker/evolution-manager
+      args:
+        VITE_EVOLUTION_API_URL: ${EVOLUTION_PUBLIC_URL:-http://localhost:8080}
+        VITE_EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-}
+        VITE_APP_NAME: 'ALETIS Evolution Manager'
+    container_name: aletis-evolution-manager
+    restart: unless-stopped
+    profiles: ['manager']
+    depends_on:
+      - evolution-api
+    environment:
+      VITE_EVOLUTION_API_URL: ${EVOLUTION_PUBLIC_URL:-http://localhost:8080}
+      VITE_EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-}
+      VITE_APP_NAME: 'ALETIS Evolution Manager'
+    ports:
+      - '${EVOLUTION_MANAGER_PORT:-3008}:80'
+
+volumes:
+  evolution-postgres-data:
+    name: aletis-evolution-postgres-data
+  evolution-redis-data:
+    name: aletis-evolution-redis-data
+  evolution-minio-data:
+    name: aletis-evolution-minio-data
+  evolution-instances:
+    name: aletis-evolution-instances

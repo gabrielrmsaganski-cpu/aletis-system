@@ -1,12 +1,12 @@
-import type { ClaudeTool, ClaudeToolRegistry } from '../../../../llm/ClaudeFoundryClient.js';
+import type { LLMTool, LLMToolRegistry } from '../../../../llm/OpenAIClient.js';
 
 /**
  * Busca imóvel rural via INCRA/CAR/SICAR por nome do proprietário.
  * Hoje não existe API pública com busca reversa PF→CAR — delegamos para
  * web_search filtrado em car.gov.br + incra.gov.br + sigef.
  */
-export function buildIncraSicarTool(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tool: ClaudeTool = {
+export function buildIncraSicarTool(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tool: LLMTool = {
     name: 'consultar_incra_sicar',
     description: 'Busca imóvel rural por nome/CPF/CNPJ no INCRA (SICAR, SIGEF, CCIR). Útil para descobrir área total, localização e CAR associado a um proprietário.',
     input_schema: {

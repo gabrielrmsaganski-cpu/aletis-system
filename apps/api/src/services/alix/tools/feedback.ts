@@ -1,17 +1,17 @@
 // ============================================================
 // feedback — tool learnings_recentes para o Orchestrator
 // ============================================================
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 import { getFeedbackService } from '../learning/FeedbackService.js'
 
-export function buildFeedbackTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildFeedbackTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   tools.push({
     name: 'learnings_recentes',
     description:
-      'Retorna feedbacks recentes do Christian (últimos 50) + ranking de tools por "score de utilidade" calculado a partir de "útil - incorreto*2 - irrelevante*0.5 - off-tom*0.3". Use antes de responder quando estiver em dúvida sobre abordagem — evita repetir erros marcados como incorreto.',
+      'Retorna feedbacks recentes do consultor + ranking de ferramentas. Destaca respostas úteis, incompletas, incorretas e com tom inadequado para evitar reincidências.',
     input_schema: {
       type: 'object',
       properties: {
@@ -32,7 +32,10 @@ export function buildFeedbackTools(): { tools: ClaudeTool[]; registry: ClaudeToo
         totalFeedbacksRecentes: feedbacks.length,
         feedbacks: feedbacks.slice(-limit).map((f) => ({
           rating: f.rating,
+          motivo: f.motivo,
+          categoria: f.category,
           notas: (f.notas || '').slice(0, 160),
+          correcaoEsperada: (f.expectedCorrection || '').slice(0, 240),
           quando: f.ts.slice(0, 10),
           agent: f.agent,
           tools: f.tools,

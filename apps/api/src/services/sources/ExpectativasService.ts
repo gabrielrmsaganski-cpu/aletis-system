@@ -29,6 +29,11 @@ export interface ExpectativasMercado {
   atualizadoEm: string;
 }
 
+export interface ExpectativasFiltro {
+  anoReferencia?: number;
+  baseCalculo?: 0 | 1;
+}
+
 // ── Fallback Data ───────────────────────────────────────────
 
 const FALLBACK: Record<string, ExpectativaAnual[]> = {
@@ -69,8 +74,12 @@ export class ExpectativasService {
     });
   }
 
-  async getExpectativasAnuais(indicador: string, top: number = 10): Promise<ExpectativasMercado> {
-    const cacheKey = `expectativas_anuais_${indicador}`;
+  async getExpectativasAnuais(indicador: string, top: number = 10, filtro: ExpectativasFiltro = {}): Promise<ExpectativasMercado> {
+    if (!Number.isInteger(top) || top < 1 || top > 100) throw new RangeError('Quantidade Focus deve ser de 1 a 100');
+    if (filtro.anoReferencia !== undefined && (!Number.isInteger(filtro.anoReferencia) || filtro.anoReferencia < 2000 || filtro.anoReferencia > 2100)) throw new RangeError('Ano Focus inválido');
+    if (filtro.baseCalculo !== undefined && ![0, 1].includes(filtro.baseCalculo)) throw new RangeError('Base Focus inválida');
+    // Quantidade, horizonte e base não podem reutilizar uma consulta diferente.
+    const cacheKey = JSON.stringify(['expectativas_anuais', indicador, top, filtro.anoReferencia ?? null, filtro.baseCalculo ?? null]);
     const cached = this.cache.get<ExpectativasMercado>(cacheKey);
     if (cached) {
       this.dsm.updateSourceStatus('bcb_expectativas', 'online', 0);
@@ -79,7 +88,10 @@ export class ExpectativasService {
 
     const start = Date.now();
     try {
-      const url = `ExpectativasMercadoAnuais?$top=${top}&$format=json&$filter=Indicador%20eq%20'${encodeURIComponent(indicador)}'&$orderby=Data%20desc`;
+      const filters = [`Indicador eq '${indicador.replace(/'/g, "''")}'`];
+      if (filtro.anoReferencia !== undefined) filters.push(`DataReferencia eq '${filtro.anoReferencia}'`);
+      if (filtro.baseCalculo !== undefined) filters.push(`baseCalculo eq ${filtro.baseCalculo}`);
+      const url = `ExpectativasMercadoAnuais?$top=${top}&$format=json&$filter=${encodeURIComponent(filters.join(' and '))}&$orderby=Data%20desc`;
       const response = await this.http.get(url);
       const items = response.data?.value || [];
 
@@ -113,7 +125,10 @@ export class ExpectativasService {
       console.warn(`[Expectativas] Falha ${indicador}: ${msg}`);
       this.dsm.updateSourceStatus('bcb_expectativas', 'degraded', Date.now() - start, msg);
 
-      const fallback = FALLBACK[indicador] || FALLBACK['Selic'];
+      const fallback = (FALLBACK[indicador] || [])
+        .filter(item => filtro.anoReferencia === undefined || item.dataReferencia === String(filtro.anoReferencia))
+        .filter(item => filtro.baseCalculo === undefined || item.baseCalculo === filtro.baseCalculo)
+        .slice(0, top);
       return {
         indicador,
         expectativas: fallback,

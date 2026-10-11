@@ -28,8 +28,9 @@ import {
   type GfInsight,
   type GfGrupo,
 } from '../../db/schema.js'
-import { getGestaoFinanceiraService } from './GestaoFinanceiraService.js'
-import { getChangelogService } from './ChangelogService.js'
+import { GestaoFinanceiraService, getGestaoFinanceiraService } from './GestaoFinanceiraService.js'
+import { ChangelogService, getChangelogService } from './ChangelogService.js'
+import type { GestaoFinanceiraDb } from './GestaoFinanceiraDb.js'
 import { computeRateio } from './calculo/rateio-calculator.js'
 import { computeEbitdaMensal } from './calculo/ebitda-mensal-calculator.js'
 import { computePassivos } from './calculo/passivos-calculator.js'
@@ -43,15 +44,25 @@ function id(prefix: string): string {
 }
 
 export class GestaoFinanceiraServiceV2 {
+  constructor(private readonly database?: GestaoFinanceiraDb) {}
+
+  private db(): GestaoFinanceiraDb { return this.database ?? getDb() }
+
+  private changelog(): ChangelogService {
+    return this.database
+      ? new ChangelogService({ db: this.database, strict: true, publishEvents: false, origem: 'import' })
+      : getChangelogService()
+  }
+
   // ── Ativos extras ───────────────────────────────────────────
   async listarAtivosOutros(grupoId: string): Promise<GfAtivoOutro[]> {
-    if (!isPgEnabled()) return []
-    return getDb().select().from(gfAtivoOutro).where(eq(gfAtivoOutro.grupoId, grupoId))
+    if (!this.database && !isPgEnabled()) return []
+    return this.db().select().from(gfAtivoOutro).where(eq(gfAtivoOutro.grupoId, grupoId))
   }
 
   async upsertAtivoOutro(input: Partial<GfAtivoOutro> & { grupoId: string; tipo: string; descricao: string }): Promise<GfAtivoOutro> {
-    const db = getDb()
-    const changelog = getChangelogService()
+    const db = this.db()
+    const changelog = this.changelog()
     if (input.id) {
       const antes = (await db.select().from(gfAtivoOutro).where(eq(gfAtivoOutro.id, input.id)).limit(1))[0]
       const set: any = { atualizadoEm: new Date() }
@@ -59,7 +70,7 @@ export class GestaoFinanceiraServiceV2 {
       for (const f of fields) if ((input as any)[f] !== undefined) set[f] = (input as any)[f]
       await db.update(gfAtivoOutro).set(set).where(eq(gfAtivoOutro.id, input.id))
       const r = await db.select().from(gfAtivoOutro).where(eq(gfAtivoOutro.id, input.id)).limit(1)
-      changelog.registrar({ grupoId: input.grupoId, entidade: 'ativo_outro', entidadeId: input.id, acao: 'update', antes: antes as any, depois: r[0] as any }).catch(() => {})
+      await changelog.registrar({ grupoId: input.grupoId, entidade: 'ativo_outro', entidadeId: input.id, acao: 'update', antes: antes as any, depois: r[0] as any })
       return r[0]
     }
     const novo = {
@@ -80,29 +91,29 @@ export class GestaoFinanceiraServiceV2 {
     }
     await db.insert(gfAtivoOutro).values(novo)
     const r = await db.select().from(gfAtivoOutro).where(eq(gfAtivoOutro.id, novo.id)).limit(1)
-    changelog.registrar({ grupoId: input.grupoId, entidade: 'ativo_outro', entidadeId: novo.id, acao: 'create', depois: r[0] as any }).catch(() => {})
+    await changelog.registrar({ grupoId: input.grupoId, entidade: 'ativo_outro', entidadeId: novo.id, acao: 'create', depois: r[0] as any })
     return r[0]
   }
 
   async deletarAtivoOutro(id: string): Promise<void> {
-    if (!isPgEnabled()) return
-    const db = getDb()
+    if (!this.database && !isPgEnabled()) return
+    const db = this.db()
     const antes = (await db.select().from(gfAtivoOutro).where(eq(gfAtivoOutro.id, id)).limit(1))[0]
     await db.delete(gfAtivoOutro).where(eq(gfAtivoOutro.id, id))
     if (antes) {
-      getChangelogService().registrar({ grupoId: antes.grupoId, entidade: 'ativo_outro', entidadeId: id, acao: 'delete', antes: antes as any }).catch(() => {})
+      await this.changelog().registrar({ grupoId: antes.grupoId, entidade: 'ativo_outro', entidadeId: id, acao: 'delete', antes: antes as any })
     }
   }
 
   // ── Passivos extras ────────────────────────────────────────
   async listarPassivosOutros(grupoId: string): Promise<GfPassivoOutro[]> {
-    if (!isPgEnabled()) return []
-    return getDb().select().from(gfPassivoOutro).where(eq(gfPassivoOutro.grupoId, grupoId))
+    if (!this.database && !isPgEnabled()) return []
+    return this.db().select().from(gfPassivoOutro).where(eq(gfPassivoOutro.grupoId, grupoId))
   }
 
   async upsertPassivoOutro(input: Partial<GfPassivoOutro> & { grupoId: string; tipo: string; descricao: string }): Promise<GfPassivoOutro> {
-    const db = getDb()
-    const changelog = getChangelogService()
+    const db = this.db()
+    const changelog = this.changelog()
     if (input.id) {
       const antes = (await db.select().from(gfPassivoOutro).where(eq(gfPassivoOutro.id, input.id)).limit(1))[0]
       const set: any = { atualizadoEm: new Date() }
@@ -110,7 +121,7 @@ export class GestaoFinanceiraServiceV2 {
       for (const f of fields) if ((input as any)[f] !== undefined) set[f] = (input as any)[f]
       await db.update(gfPassivoOutro).set(set).where(eq(gfPassivoOutro.id, input.id))
       const r = await db.select().from(gfPassivoOutro).where(eq(gfPassivoOutro.id, input.id)).limit(1)
-      changelog.registrar({ grupoId: input.grupoId, entidade: 'passivo_outro', entidadeId: input.id, acao: 'update', antes: antes as any, depois: r[0] as any }).catch(() => {})
+      await changelog.registrar({ grupoId: input.grupoId, entidade: 'passivo_outro', entidadeId: input.id, acao: 'update', antes: antes as any, depois: r[0] as any })
       return r[0]
     }
     const novo = {
@@ -131,29 +142,29 @@ export class GestaoFinanceiraServiceV2 {
     }
     await db.insert(gfPassivoOutro).values(novo)
     const r = await db.select().from(gfPassivoOutro).where(eq(gfPassivoOutro.id, novo.id)).limit(1)
-    changelog.registrar({ grupoId: input.grupoId, entidade: 'passivo_outro', entidadeId: novo.id, acao: 'create', depois: r[0] as any }).catch(() => {})
+    await changelog.registrar({ grupoId: input.grupoId, entidade: 'passivo_outro', entidadeId: novo.id, acao: 'create', depois: r[0] as any })
     return r[0]
   }
 
   async deletarPassivoOutro(id: string): Promise<void> {
-    if (!isPgEnabled()) return
-    const db = getDb()
+    if (!this.database && !isPgEnabled()) return
+    const db = this.db()
     const antes = (await db.select().from(gfPassivoOutro).where(eq(gfPassivoOutro.id, id)).limit(1))[0]
     await db.delete(gfPassivoOutro).where(eq(gfPassivoOutro.id, id))
     if (antes) {
-      getChangelogService().registrar({ grupoId: antes.grupoId, entidade: 'passivo_outro', entidadeId: id, acao: 'delete', antes: antes as any }).catch(() => {})
+      await this.changelog().registrar({ grupoId: antes.grupoId, entidade: 'passivo_outro', entidadeId: id, acao: 'delete', antes: antes as any })
     }
   }
 
   // ── Garantias ──────────────────────────────────────────────
   async listarGarantias(grupoId: string): Promise<GfGarantia[]> {
-    if (!isPgEnabled()) return []
-    return getDb().select().from(gfGarantia).where(eq(gfGarantia.grupoId, grupoId))
+    if (!this.database && !isPgEnabled()) return []
+    return this.db().select().from(gfGarantia).where(eq(gfGarantia.grupoId, grupoId))
   }
 
   async upsertGarantia(input: Partial<GfGarantia> & { grupoId: string; tipo: string; descricao: string }): Promise<GfGarantia> {
-    const db = getDb()
-    const changelog = getChangelogService()
+    const db = this.db()
+    const changelog = this.changelog()
     if (input.id) {
       const antes = (await db.select().from(gfGarantia).where(eq(gfGarantia.id, input.id)).limit(1))[0]
       const set: any = { atualizadoEm: new Date() }
@@ -161,7 +172,7 @@ export class GestaoFinanceiraServiceV2 {
       for (const f of fields) if ((input as any)[f] !== undefined) set[f] = (input as any)[f]
       await db.update(gfGarantia).set(set).where(eq(gfGarantia.id, input.id))
       const r = await db.select().from(gfGarantia).where(eq(gfGarantia.id, input.id)).limit(1)
-      changelog.registrar({ grupoId: input.grupoId, entidade: 'garantia', entidadeId: input.id, acao: 'update', antes: antes as any, depois: r[0] as any }).catch(() => {})
+      await changelog.registrar({ grupoId: input.grupoId, entidade: 'garantia', entidadeId: input.id, acao: 'update', antes: antes as any, depois: r[0] as any })
       return r[0]
     }
     const novo = {
@@ -181,29 +192,29 @@ export class GestaoFinanceiraServiceV2 {
     }
     await db.insert(gfGarantia).values(novo)
     const r = await db.select().from(gfGarantia).where(eq(gfGarantia.id, novo.id)).limit(1)
-    changelog.registrar({ grupoId: input.grupoId, entidade: 'garantia', entidadeId: novo.id, acao: 'create', depois: r[0] as any }).catch(() => {})
+    await changelog.registrar({ grupoId: input.grupoId, entidade: 'garantia', entidadeId: novo.id, acao: 'create', depois: r[0] as any })
     return r[0]
   }
 
   async deletarGarantia(id: string): Promise<void> {
-    if (!isPgEnabled()) return
-    const db = getDb()
+    if (!this.database && !isPgEnabled()) return
+    const db = this.db()
     const antes = (await db.select().from(gfGarantia).where(eq(gfGarantia.id, id)).limit(1))[0]
     await db.delete(gfGarantia).where(eq(gfGarantia.id, id))
     if (antes) {
-      getChangelogService().registrar({ grupoId: antes.grupoId, entidade: 'garantia', entidadeId: id, acao: 'delete', antes: antes as any }).catch(() => {})
+      await this.changelog().registrar({ grupoId: antes.grupoId, entidade: 'garantia', entidadeId: id, acao: 'delete', antes: antes as any })
     }
   }
 
   // ── Premissas ──────────────────────────────────────────────
   async listarPremissas(grupoId: string): Promise<GfPremissa[]> {
-    if (!isPgEnabled()) return []
-    return getDb().select().from(gfPremissa).where(eq(gfPremissa.grupoId, grupoId))
+    if (!this.database && !isPgEnabled()) return []
+    return this.db().select().from(gfPremissa).where(eq(gfPremissa.grupoId, grupoId))
   }
 
   async upsertPremissa(input: Partial<GfPremissa> & { grupoId: string; chave: string; rotulo: string; valor: string }): Promise<GfPremissa> {
-    const db = getDb()
-    const changelog = getChangelogService()
+    const db = this.db()
+    const changelog = this.changelog()
     if (input.id) {
       const antes = (await db.select().from(gfPremissa).where(eq(gfPremissa.id, input.id)).limit(1))[0]
       const set: any = { atualizadoEm: new Date() }
@@ -211,7 +222,7 @@ export class GestaoFinanceiraServiceV2 {
       for (const f of fields) if ((input as any)[f] !== undefined) set[f] = (input as any)[f]
       await db.update(gfPremissa).set(set).where(eq(gfPremissa.id, input.id))
       const r = await db.select().from(gfPremissa).where(eq(gfPremissa.id, input.id)).limit(1)
-      changelog.registrar({ grupoId: input.grupoId, entidade: 'premissa', entidadeId: input.id, acao: 'update', antes: antes as any, depois: r[0] as any }).catch(() => {})
+      await changelog.registrar({ grupoId: input.grupoId, entidade: 'premissa', entidadeId: input.id, acao: 'update', antes: antes as any, depois: r[0] as any })
       return r[0]
     }
     const novo = {
@@ -227,24 +238,24 @@ export class GestaoFinanceiraServiceV2 {
     }
     await db.insert(gfPremissa).values(novo)
     const r = await db.select().from(gfPremissa).where(eq(gfPremissa.id, novo.id)).limit(1)
-    changelog.registrar({ grupoId: input.grupoId, entidade: 'premissa', entidadeId: novo.id, acao: 'create', depois: r[0] as any }).catch(() => {})
+    await changelog.registrar({ grupoId: input.grupoId, entidade: 'premissa', entidadeId: novo.id, acao: 'create', depois: r[0] as any })
     return r[0]
   }
 
   async deletarPremissa(id: string): Promise<void> {
-    if (!isPgEnabled()) return
-    const db = getDb()
+    if (!this.database && !isPgEnabled()) return
+    const db = this.db()
     const antes = (await db.select().from(gfPremissa).where(eq(gfPremissa.id, id)).limit(1))[0]
     await db.delete(gfPremissa).where(eq(gfPremissa.id, id))
     if (antes) {
-      getChangelogService().registrar({ grupoId: antes.grupoId, entidade: 'premissa', entidadeId: id, acao: 'delete', antes: antes as any }).catch(() => {})
+      await this.changelog().registrar({ grupoId: antes.grupoId, entidade: 'premissa', entidadeId: id, acao: 'delete', antes: antes as any })
     }
   }
 
   // ── Insights ───────────────────────────────────────────────
   async listarInsights(grupoId: string, limit = 50): Promise<GfInsight[]> {
-    if (!isPgEnabled()) return []
-    return getDb()
+    if (!this.database && !isPgEnabled()) return []
+    return this.db()
       .select()
       .from(gfInsight)
       .where(eq(gfInsight.grupoId, grupoId))
@@ -254,7 +265,7 @@ export class GestaoFinanceiraServiceV2 {
 
   async persistirInsights(grupoId: string, insights: Array<{ severidade: string; categoria: string; titulo: string; mensagem: string; metricas?: any; recomendacao?: string }>): Promise<void> {
     if (!isPgEnabled() || insights.length === 0) return
-    const db = getDb()
+    const db = this.db()
     await db.insert(gfInsight).values(
       insights.map((i) => ({
         grupoId,
@@ -270,7 +281,7 @@ export class GestaoFinanceiraServiceV2 {
 
   // ── BULK INSERT (paste do Excel) ───────────────────────────
   async bulkInsertCulturas(grupoId: string, rows: Array<Record<string, any>>): Promise<{ inserted: number; errors: string[] }> {
-    const svc = getGestaoFinanceiraService()
+    const svc = this.database ? new GestaoFinanceiraService(this.database) : getGestaoFinanceiraService()
     const errors: string[] = []
     let inserted = 0
     for (const [i, row] of rows.entries()) {
@@ -291,6 +302,7 @@ export class GestaoFinanceiraServiceV2 {
           custoUnitarioInsumosRs: row.custoUnitarioInsumosRs ?? null,
           arrendamentoBaseScHa: row.arrendamentoBaseScHa ?? null,
           unidade: row.unidade ?? 'sc',
+          observacoes: row.observacoes ?? null,
           ordem: row.ordem ?? 0,
         })
         inserted += 1
@@ -302,7 +314,7 @@ export class GestaoFinanceiraServiceV2 {
   }
 
   async bulkInsertContratos(grupoId: string, rows: Array<Record<string, any>>): Promise<{ inserted: number; errors: string[] }> {
-    const svc = getGestaoFinanceiraService()
+    const svc = this.database ? new GestaoFinanceiraService(this.database) : getGestaoFinanceiraService()
     const errors: string[] = []
     let inserted = 0
     for (const [i, row] of rows.entries()) {
@@ -321,7 +333,7 @@ export class GestaoFinanceiraServiceV2 {
   }
 
   async bulkInsertCustos(grupoId: string, rows: Array<Record<string, any>>): Promise<{ inserted: number; errors: string[] }> {
-    const svc = getGestaoFinanceiraService()
+    const svc = this.database ? new GestaoFinanceiraService(this.database) : getGestaoFinanceiraService()
     const errors: string[] = []
     let inserted = 0
     for (const [i, row] of rows.entries()) {
@@ -332,8 +344,13 @@ export class GestaoFinanceiraServiceV2 {
           tipo: row.tipo ?? 'operacional',
           descricao: row.descricao ?? `Item ${i + 1}`,
           cultura: row.cultura ?? null,
+          terceirizado: row.terceirizado ?? false,
+          quantidade: row.quantidade ?? null,
+          unidade: row.unidade ?? null,
+          valorUnitario: row.valorUnitario ?? null,
           valorAnual: row.valorAnual ?? null,
           valorMensal: row.valorMensal ?? null,
+          observacoes: row.observacoes ?? null,
           ordem: row.ordem ?? i,
         })
         inserted += 1
@@ -345,7 +362,7 @@ export class GestaoFinanceiraServiceV2 {
   }
 
   async bulkInsertFazendas(grupoId: string, rows: Array<Record<string, any>>): Promise<{ inserted: number; errors: string[] }> {
-    const svc = getGestaoFinanceiraService()
+    const svc = this.database ? new GestaoFinanceiraService(this.database) : getGestaoFinanceiraService()
     const errors: string[] = []
     let inserted = 0
     for (const [i, row] of rows.entries()) {
@@ -376,8 +393,8 @@ export class GestaoFinanceiraServiceV2 {
    * Idempotente: se já existe grupo com mesmo clienteId, retorna ele.
    */
   async autoImportFromCRM(clienteId: string): Promise<{ grupo: GfGrupo; criado: boolean; estatisticas: { membros: number; culturas: number; contratos: number; fazendas: number; premissas: number } }> {
-    const db = getDb()
-    const svc = getGestaoFinanceiraService()
+    const db = this.db()
+    const svc = this.database ? new GestaoFinanceiraService(this.database) : getGestaoFinanceiraService()
     // Já existe?
     const existentes = await svc.listarGruposPorCliente(clienteId)
     if (existentes.length > 0) {
@@ -503,7 +520,7 @@ export class GestaoFinanceiraServiceV2 {
     anos?: number
     persistir?: boolean
   }): Promise<any> {
-    const svc = getGestaoFinanceiraService()
+    const svc = this.database ? new GestaoFinanceiraService(this.database) : getGestaoFinanceiraService()
     const grupo = await svc.obterGrupo(grupoId)
     if (!grupo) throw new Error(`Grupo ${grupoId} não encontrado`)
 

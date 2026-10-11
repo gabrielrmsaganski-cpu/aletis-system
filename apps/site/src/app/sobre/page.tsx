@@ -9,9 +9,9 @@ import { Eyebrow } from '@/components/ui/Eyebrow'
 import { Metodologia } from '@/components/home/Metodologia'
 
 export const metadata: Metadata = {
-  title: 'Sobre · A mesa técnica do agro brasileiro',
+  title: 'Sobre · Finanças estratégicas para o agro',
   description:
-    'A ALETIS une inteligência financeira, vivência de agro e tecnologia proprietária em uma mesa única — construída para reestruturar o passivo de produtores e grupos do agronegócio.',
+    'A ALETIS une método financeiro, vivência de agro e tecnologia proprietária para organizar dívida, caixa e negociação no agronegócio.',
   alternates: { canonical: '/sobre' },
 }
 
@@ -19,7 +19,7 @@ const valores = [
   {
     icone: Target,
     titulo: 'Rigor técnico',
-    desc: 'Nenhuma tese entra na mesa sem memória de cálculo auditável e fundamento legal explícito.',
+    desc: 'Nenhuma recomendação é feita sem contrato, evidência documental e racional financeiro explícito.',
   },
   {
     icone: Compass,
@@ -46,11 +46,11 @@ export default function SobrePage() {
         titulo={
           <>
             Uma{' '}
-            <span className="italic text-aletis-dourado">mesa técnica</span>{' '}
-            construída para o agro que decide com dado.
+            <span className="italic text-aletis-dourado">estrutura financeira</span>{' '}
+            para o agro que decide com dado.
           </>
         }
-        subtitulo="Nascemos da convicção de que o produtor brasileiro merece uma interlocução financeira tão sofisticada quanto a que o outro lado da mesa já tem. Unimos finanças, agro e tecnologia em uma entrega integrada, independente e auditável."
+        subtitulo="Nascemos para dar ao produtor e às empresas do agro uma leitura financeira tão organizada quanto a cobrança que chega do outro lado. Unimos finanças, agro e tecnologia em uma entrega independente, clara e acompanhável."
         breadcrumbs={[
           { label: 'Início', href: '/' },
           { label: 'Sobre' },
@@ -72,10 +72,10 @@ export default function SobrePage() {
             </Reveal>
             <Reveal delay={120} className="space-y-5 text-[17px] leading-relaxed text-aletis-grafite-medio">
               <p>
-                O agro brasileiro é o setor mais sofisticado da nossa economia — e, paradoxalmente, o menos bem servido por consultoria financeira independente. A maior parte do mercado vende parecer, planilha genérica ou litígio. Nenhum desses entrega decisão executável.
+                O agro brasileiro é sofisticado na operação, mas muitas vezes negocia dívida com informação espalhada: contrato em um lugar, garantia em outro, fluxo de safra em planilhas que não conversam entre si.
               </p>
               <p>
-                A ALETIS foi projetada para fechar essa lacuna. Somos uma mesa técnica que senta com produtores, grupos, cooperativas e empresas do agro e devolve um plano: diagnóstico auditável, estratégia multi-credor e execução com contratos prontos para assinar.
+                A ALETIS foi criada para fechar essa lacuna. Trabalhamos com produtores, grupos, cooperativas e empresas do agro para transformar documentação, números e credores em um plano financeiro defensável.
               </p>
               <p>
                 Cada entrega passa por três filtros: <strong>rigor técnico</strong>, <strong>visão de agro</strong> e <strong>tecnologia proprietária</strong>. Se algum dos três falha, não entregamos.
@@ -133,10 +133,10 @@ export default function SobrePage() {
               <Eyebrow>Liderança</Eyebrow>
               <h2 className="mt-6 display-md text-aletis-grafite-escuro">
                 Conduzida por quem{' '}
-                <span className="italic text-aletis-verde-escuro">viveu</span> o campo e a mesa bancária.
+                <span className="italic text-aletis-verde-escuro">viveu</span> o campo e a negociação financeira.
               </h2>
               <p className="mt-6 max-w-md text-base leading-relaxed text-aletis-grafite-medio">
-                A direção técnica da ALETIS combina vivência de gestão financeira sênior, operação de crédito rural, assessoria em reestruturações e construção de tecnologia. A mesa que negocia com o seu credor entende ambos os lados — porque já sentou nos dois.
+                A direção técnica da ALETIS combina gestão financeira, crédito rural, reestruturações e construção de tecnologia. Isso permite ler a operação do produtor e também a lógica do credor.
               </p>
               <Link
                 href="/contato"
@@ -158,7 +158,7 @@ export default function SobrePage() {
                     Diretor-fundador · Consultor sênior
                   </p>
                   <p className="mt-6 text-[15px] leading-relaxed text-white/75">
-                    &ldquo;Construí a ALETIS porque vi muitos produtores bons perderem terra por falta de uma mesa que falasse a língua deles — e que falasse a língua do credor com a mesma autoridade. Hoje entregamos exatamente isso.&rdquo;
+                    &ldquo;Construí a ALETIS porque vi muitos produtores bons negociarem no escuro. O nosso trabalho é colocar ordem nos números, proteger o que precisa ser protegido e levar uma proposta séria para a conversa.&rdquo;
                   </p>
                 </div>
               </div>

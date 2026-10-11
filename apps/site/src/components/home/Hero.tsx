@@ -1,8 +1,16 @@
 import Link from 'next/link'
-import { ArrowRight, PlayCircle, ShieldCheck, Scale, Handshake, TrendingUp } from 'lucide-react'
+import { ArrowRight, Calculator, Handshake, Scale, ShieldCheck, TrendingUp } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
 import { Reveal } from '@/components/ui/Reveal'
+import BrandMark from '@/components/ui/BrandMark'
 import BrandWatermark from '@/components/ui/BrandWatermark'
+import { BrandIcon } from '@/components/ui/BrandIcon'
+
+const trustItems = [
+  { label: 'Contratos lidos antes da proposta', icon: ShieldCheck },
+  { label: 'Tese financeira com base documental', icon: Scale },
+  { label: 'Negociação organizada por credor', icon: Handshake },
+]
 
 export function Hero() {
   return (
@@ -10,223 +18,157 @@ export function Hero() {
       className="relative isolate overflow-hidden text-aletis-cream"
       style={{
         backgroundImage:
-          'linear-gradient(140deg, rgba(8,13,9,0.97) 0%, rgba(13,22,17,0.94) 45%, rgba(36,58,44,0.92) 100%), url(/brand/pattern/repetidor.png)',
+          'linear-gradient(135deg, rgba(8,13,9,0.98) 0%, rgba(13,22,17,0.97) 48%, rgba(23,37,27,0.94) 100%), url(/brand/pattern/repetidor.png)',
         backgroundColor: '#080d09',
-        backgroundSize: 'auto, 360px',
+        backgroundSize: 'auto, 340px',
         backgroundBlendMode: 'normal, soft-light',
         backgroundRepeat: 'no-repeat, repeat',
       }}
     >
-      {/* Glow ambiente */}
-      <div aria-hidden="true" className="absolute inset-0 bg-hero-radial" />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-[0.07] bg-grain mix-blend-overlay"
+        className="pointer-events-none absolute inset-0 opacity-[0.11]"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(237,233,217,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(237,233,217,0.12) 1px, transparent 1px)',
+          backgroundSize: '96px 96px',
+        }}
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-aletis-gold/80 to-transparent"
       />
 
-      {/* Watermark do bracket-A gigante */}
       <BrandWatermark
-        size={780}
+        size={720}
         tone="cream"
-        opacity={0.045}
-        className="absolute -right-40 -bottom-40 hidden lg:block"
-        rotate={-8}
-      />
-      <BrandWatermark
-        size={220}
-        tone="gold"
-        opacity={0.08}
-        className="absolute right-16 top-32 hidden xl:block animate-float-slow"
+        opacity={0.04}
+        className="absolute -right-44 -bottom-44 hidden lg:block"
+        rotate={-6}
       />
 
-      {/* Frame dourado nas pontas */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-8 top-32 hidden h-[260px] w-px bg-gradient-to-b from-aletis-gold/65 via-aletis-gold/20 to-transparent lg:block"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute right-8 bottom-40 hidden h-[260px] w-px bg-gradient-to-t from-aletis-gold/65 via-aletis-gold/20 to-transparent lg:block"
-      />
-
-      <Container className="relative py-32 md:py-40 lg:py-48">
-        <div className="grid items-center gap-14 lg:grid-cols-[1.15fr_1fr]">
-          {/* Esquerda — texto */}
-          <div>
+      <Container className="relative py-20 md:py-24 lg:py-28">
+        <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1.02fr)_minmax(420px,0.78fr)]">
+          <div className="min-w-0">
             <Reveal>
-              <div className="inline-flex items-center gap-2.5 rounded-full border border-aletis-gold/35 bg-aletis-gold/10 px-3.5 py-1.5 text-[10.5px] font-display font-semibold uppercase tracking-widest2 text-aletis-gold">
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-aletis-gold opacity-65" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-aletis-gold" />
-                </span>
-                Finanças Estratégicas · Agrobusiness
-              </div>
+              <BrandMark variant="full" tone="cream" size={52} className="max-w-full" />
             </Reveal>
 
             <Reveal delay={80}>
-              <h1 className="mt-8 display-3xl">
-                A mesa que{' '}
-                <span className="relative inline-block">
-                  <span className="text-gold-gradient italic">reorganiza</span>
-                  <span
-                    aria-hidden="true"
-                    className="absolute -bottom-2 left-0 h-px w-full bg-gradient-to-r from-aletis-gold/0 via-aletis-gold to-aletis-gold/0"
-                  />
-                </span>
-                <br className="hidden md:block" />
-                a <span className="text-cream-gradient">dívida do agro.</span>
+              <h1 className="mt-8 display-3xl max-w-4xl">
+                Dívida, caixa e negociação com{' '}
+                <span className="text-gold-gradient italic">clareza técnica</span>.
               </h1>
             </Reveal>
 
-            <Reveal delay={160}>
-              <p className="mt-7 max-w-xl font-body text-[16px] md:text-[17px] leading-relaxed text-aletis-sage-claro/85">
-                Diagnóstico financeiro auditável, revisão contratual fundamentada e
-                negociação multi-credor — em uma única mesa técnica independente, do lado do
-                produtor. Tecnologia ALETIS, metodologia proprietária, números à prova de
-                contestação.
+            <Reveal delay={140}>
+              <p className="mt-6 max-w-2xl font-display text-xl font-semibold leading-snug text-aletis-gold md:text-[28px]">
+                Assessoria financeira para produtores, grupos e empresas do agro que precisam decidir com números confiáveis.
               </p>
             </Reveal>
 
-            <Reveal delay={240}>
-              <div className="mt-10 flex flex-wrap items-center gap-4">
+            <Reveal delay={200}>
+              <p className="mt-6 max-w-xl font-body text-[15px] leading-relaxed text-aletis-sage-claro/86 md:text-[16px]">
+                A ALETIS organiza contratos, garantias, fluxo de safra e cenário de credores em um dossiê único. O resultado é um caminho negociável, documentado e possível de acompanhar.
+              </p>
+            </Reveal>
+
+            <Reveal delay={260}>
+              <div className="mt-9 flex flex-wrap items-center gap-3">
                 <Link href="/contato" className="btn-primary">
                   Solicitar diagnóstico
                   <ArrowRight className="h-4 w-4" />
                 </Link>
-                <Link
-                  href="/calculadoras"
-                  className="group inline-flex items-center gap-2.5 font-display text-[12.5px] font-semibold uppercase tracking-wider2 text-aletis-cream/85 hover:text-aletis-gold transition"
-                >
-                  <PlayCircle className="h-5 w-5 text-aletis-gold transition group-hover:scale-110" />
-                  Simular meu cenário
+                <Link href="/calculadoras" className="btn-ghost">
+                  <Calculator className="h-4 w-4" />
+                  Abrir calculadoras
                 </Link>
               </div>
             </Reveal>
 
-            {/* Chips de confiança */}
             <Reveal delay={320}>
-              <div className="mt-14 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-aletis-sage/15 pt-6 font-body text-[12px] text-aletis-cream/55">
-                <span className="inline-flex items-center gap-2">
-                  <ShieldCheck className="h-3.5 w-3.5 text-aletis-gold" />
-                  Memória de cálculo auditável
-                </span>
-                <span className="inline-flex items-center gap-2">
-                  <Scale className="h-3.5 w-3.5 text-aletis-gold" />
-                  Lei 14.181/21 · Res. BCB 4.966/21
-                </span>
-                <span className="inline-flex items-center gap-2">
-                  <Handshake className="h-3.5 w-3.5 text-aletis-gold" />
-                  Mesa multi-credor simultânea
-                </span>
+              <div className="mt-10 grid gap-3 border-t border-aletis-sage/15 pt-6 sm:grid-cols-3">
+                {trustItems.map(({ label, icon: Icon }) => (
+                  <div key={label} className="flex items-center gap-2 text-[12px] leading-snug text-aletis-cream/62">
+                    <Icon className="h-4 w-4 flex-shrink-0 text-aletis-gold" />
+                    <span>{label}</span>
+                  </div>
+                ))}
               </div>
             </Reveal>
           </div>
 
-          {/* Direita — Glass card de diagnóstico */}
-          <Reveal delay={320}>
-            <div className="relative">
-              {/* Card principal */}
-              <div className="card-glass relative p-7">
-                <div className="flex items-center justify-between pb-4 border-b border-aletis-sage/15">
-                  <div className="flex items-center gap-2.5">
-                    <div className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-aletis-gold/70" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-aletis-gold" />
-                    </div>
-                    <span className="font-display text-[10.5px] font-semibold uppercase tracking-widest2 text-aletis-cream/65">
-                      Diagnóstico ALETIS
-                    </span>
+          <Reveal delay={280}>
+            <div className="relative border border-aletis-gold/28 bg-aletis-verde-profundo/72 p-5 shadow-premium backdrop-blur-sm md:p-6" style={{ borderRadius: 8 }}>
+              <div className="flex items-start justify-between gap-4 border-b border-aletis-sage/16 pb-4">
+                <div className="flex items-center gap-3">
+                  <BrandIcon id={1} size={44} className="opacity-95" />
+                  <div>
+                    <p className="font-display text-[12px] font-semibold text-aletis-gold">Dossiê ALETIS</p>
+                    <p className="mt-1 text-[12px] text-aletis-cream/52">Leitura financeira preliminar</p>
                   </div>
-                  <span className="font-display text-[10.5px] uppercase tracking-widest2 text-aletis-gold">
-                    Memória de cálculo
+                </div>
+                <span className="inline-flex items-center gap-1.5 border border-aletis-gold/30 bg-aletis-gold/10 px-2.5 py-1 text-[11px] text-aletis-gold" style={{ borderRadius: 6 }}>
+                  <TrendingUp className="h-3.5 w-3.5" />
+                  DSCR
+                </span>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                <StatRow label="Exposição consolidada" value="Contratos + CPRs + fiscal" />
+                <StatRow label="Pontos que merecem revisão" value="Encargos, garantias e prazos" accent />
+                <StatRow label="Cenário negociável" value="Fluxo de safra preservado" progress={81} />
+              </div>
+
+              <div className="mt-6 border-t border-aletis-sage/16 pt-5">
+                <p className="text-[12px] text-aletis-cream/55">A decisão sai de um conjunto disperso de cobranças e vira</p>
+                <p className="mt-1 font-display text-4xl font-bold leading-none text-aletis-cream md:text-[44px]">
+                  3 cenários
+                </p>
+                <div className="mt-5 grid grid-cols-3 gap-2 text-center text-[11px] text-aletis-cream/58">
+                  <span className="border border-aletis-sage/14 px-2 py-2" style={{ borderRadius: 6 }}>
+                    Central
+                  </span>
+                  <span className="border border-aletis-sage/14 px-2 py-2" style={{ borderRadius: 6 }}>
+                    Conservador
+                  </span>
+                  <span className="border border-aletis-sage/14 px-2 py-2" style={{ borderRadius: 6 }}>
+                    Stress
                   </span>
                 </div>
-
-                <div className="mt-5 space-y-4">
-                  <StatRow label="Saldo devedor atualizado" valor="R$ 4.820.000" />
-                  <StatRow label="Abusividade detectada" valor="+ R$ 612.430" positivo />
-                  <StatRow
-                    label="Proposta ALETIS · 72 meses"
-                    valor="R$ 3.890.000"
-                    barPercent={81}
-                  />
-
-                  <div className="mt-5 rounded-xl border border-aletis-gold/30 bg-aletis-gold/8 px-4 py-4">
-                    <p className="font-display text-[10.5px] uppercase tracking-widest2 text-aletis-gold">
-                      Economia estimada
-                    </p>
-                    <p className="mt-1.5 font-display text-3xl md:text-[34px] font-bold tracking-tight text-aletis-cream">
-                      R$ 1.342.000
-                    </p>
-                    <p className="mt-1 font-body text-[11.5px] text-aletis-cream/55">
-                      Em 5 credores · considerando deságio + revisão de anatocismo
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 pt-3">
-                    {['Crédito Rural', 'CPR', 'Bancário'].map((t) => (
-                      <div
-                        key={t}
-                        className="rounded-lg border border-aletis-sage/15 bg-aletis-cream/[0.03] px-2 py-2.5 text-center font-display text-[10px] font-semibold uppercase tracking-wider2 text-aletis-cream/65"
-                      >
-                        {t}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Badges flutuantes */}
-              <div className="absolute -right-3 -top-3 hidden rounded-full border border-aletis-gold/45 bg-aletis-verde-profundo px-3 py-1.5 font-display text-[10px] font-semibold uppercase tracking-widest2 text-aletis-gold md:block shadow-gold">
-                Mesa ALETIS
-              </div>
-              <div className="absolute -bottom-4 left-8 hidden rounded-full border border-aletis-sage/40 bg-aletis-verde-escuro/95 px-3 py-1.5 font-display text-[10px] font-semibold uppercase tracking-widest2 text-aletis-sage-claro md:block shadow-premium">
-                <TrendingUp className="mr-1.5 inline h-3 w-3" />
-                DSCR &gt; 1.25 ✓
               </div>
             </div>
           </Reveal>
         </div>
       </Container>
 
-      {/* Divider dourado */}
-      <div
-        aria-hidden="true"
-        className="relative h-px w-full bg-gradient-to-r from-transparent via-aletis-gold/45 to-transparent"
-      />
+      <div aria-hidden="true" className="relative h-px w-full bg-gradient-to-r from-transparent via-aletis-gold/45 to-transparent" />
     </section>
   )
 }
 
 function StatRow({
   label,
-  valor,
-  positivo,
-  barPercent,
+  value,
+  accent,
+  progress,
 }: {
   label: string
-  valor: string
-  positivo?: boolean
-  barPercent?: number
+  value: string
+  accent?: boolean
+  progress?: number
 }) {
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <span className="font-body text-[12px] text-aletis-cream/60">{label}</span>
-        <span
-          className={`font-display text-sm font-semibold tabular-nums ${
-            positivo ? 'text-aletis-sage-claro' : 'text-aletis-cream'
-          }`}
-        >
-          {valor}
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-[12px] text-aletis-cream/58">{label}</span>
+        <span className={`font-display text-sm font-semibold tabular-nums ${accent ? 'text-aletis-gold' : 'text-aletis-cream'}`}>
+          {value}
         </span>
       </div>
-      {typeof barPercent === 'number' && (
-        <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-aletis-cream/8">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-aletis-gold/75 to-aletis-gold"
-            style={{ width: `${barPercent}%` }}
-          />
+      {typeof progress === 'number' && (
+        <div className="mt-2 h-1 overflow-hidden bg-aletis-cream/10" style={{ borderRadius: 999 }}>
+          <div className="h-full bg-aletis-gold" style={{ width: `${progress}%` }} />
         </div>
       )}
     </div>

@@ -96,15 +96,15 @@ export default function BulkPasteEditor({ title, columns, endpoint, onClose, onS
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl">
+      <div className="bg-card rounded-lg w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl">
         {/* Header */}
         <header className="px-5 py-4 border-b border-aletis-grafite-claro/15 flex items-center justify-between">
           <div>
-            <p className="text-[10px] font-mono font-semibold text-aletis-verde uppercase">📋 Bulk Paste do Excel</p>
-            <h2 className="text-base font-display font-semibold text-aletis-grafite-escuro">{title}</h2>
+            <p className="text-[11px] font-mono font-semibold text-foreground uppercase">📋 Bulk Paste do Excel</p>
+            <h2 className="text-base font-display font-semibold text-foreground">{title}</h2>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-aletis-grafite-escuro/5 flex items-center justify-center">
-            <X className="w-5 h-5 text-aletis-grafite-claro" />
+            <X className="w-5 h-5 text-muted-foreground" />
           </button>
         </header>
 
@@ -112,14 +112,14 @@ export default function BulkPasteEditor({ title, columns, endpoint, onClose, onS
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {/* Schema */}
           <div className="rounded-lg bg-aletis-cream/30 border border-aletis-grafite-claro/15 p-3">
-            <p className="text-[11px] font-body font-semibold text-aletis-grafite-escuro mb-1.5">
+            <p className="text-[11px] font-body font-semibold text-foreground mb-1.5">
               Cole {columns.length} colunas (separadas por TAB ou vírgula), uma linha por registro:
             </p>
             <div className="flex flex-wrap gap-1.5">
               {columns.map((c) => (
                 <span
                   key={c.key}
-                  className={`px-1.5 py-0.5 text-[10px] font-mono rounded ${c.required ? 'bg-aletis-verde/15 text-aletis-verde' : 'bg-aletis-grafite-claro/10 text-aletis-grafite-escuro'}`}
+                  className={`px-1.5 py-0.5 text-[11px] font-mono rounded ${c.required ? 'bg-aletis-verde/15 text-foreground' : 'bg-aletis-grafite-claro/10 text-foreground'}`}
                 >
                   {c.label}
                   {c.required && <span className="text-red-600">*</span>}
@@ -156,11 +156,11 @@ export default function BulkPasteEditor({ title, columns, endpoint, onClose, onS
           {/* Preview */}
           {parsed && parsed.length > 0 && (
             <div className="rounded-lg border border-aletis-grafite-claro/15 overflow-x-auto">
-              <table className="w-full text-[11px] font-body">
+              <table className="ui-table w-full text-[11px] font-body">
                 <thead className="bg-aletis-cream/40">
                   <tr>
                     {columns.map((c) => (
-                      <th key={c.key} className="text-left px-2 py-1.5 text-[10px] uppercase tracking-wider text-aletis-grafite-claro">
+                      <th key={c.key} className="text-left px-2 py-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
                         {c.label}
                       </th>
                     ))}
@@ -178,7 +178,7 @@ export default function BulkPasteEditor({ title, columns, endpoint, onClose, onS
                   ))}
                   {parsed.length > 10 && (
                     <tr>
-                      <td colSpan={columns.length} className="text-center py-1.5 text-[10px] text-aletis-grafite-claro">
+                      <td colSpan={columns.length} className="text-center py-1.5 text-[11px] text-muted-foreground">
                         ... +{parsed.length - 10} linhas
                       </td>
                     </tr>
@@ -190,7 +190,7 @@ export default function BulkPasteEditor({ title, columns, endpoint, onClose, onS
 
           {/* Resultado */}
           {result && (
-            <div className={`rounded-lg p-3 text-xs ${result.inserted > 0 ? 'bg-aletis-verde/10 border border-aletis-verde/30 text-aletis-verde' : 'bg-amber-50 border border-amber-300 text-amber-800'}`}>
+            <div className={`rounded-lg p-3 text-xs ${result.inserted > 0 ? 'bg-aletis-verde/10 border border-aletis-verde/30 text-foreground' : 'bg-amber-50 border border-amber-300 text-amber-800'}`}>
               <div className="flex items-center gap-2 mb-1">
                 {result.inserted > 0 ? <Check className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
                 <strong>{result.inserted} registros inseridos</strong>
@@ -209,7 +209,7 @@ export default function BulkPasteEditor({ title, columns, endpoint, onClose, onS
 
         {/* Footer */}
         <footer className="px-5 py-3 border-t border-aletis-grafite-claro/15 bg-aletis-cream/20 flex items-center justify-between">
-          <div className="text-[11px] font-body text-aletis-grafite-claro">
+          <div className="text-[11px] font-body text-muted-foreground">
             {parsed ? `${parsed.length} linhas detectadas` : 'aguardando paste'}
           </div>
           <div className="flex items-center gap-2">

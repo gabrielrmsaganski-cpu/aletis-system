@@ -78,13 +78,13 @@ export function TabDivida({ lead }: { lead: LeadFull }) {
           const meta = FONTE_LABEL[g.fonte] || { label: g.fonte, desc: '' }
           return (
             <div key={g.fonte} className="bg-aletis-bege/50 dark:bg-white/5 rounded-lg p-3 border border-aletis-borda dark:border-white/10">
-              <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50">{meta.label}</p>
-              <p className="font-display text-lg font-bold text-aletis-grafite-escuro dark:text-white">{fmtBRLShort(g.total)}</p>
-              <p className="text-[10px] text-aletis-grafite-medio dark:text-white/50">
+              <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50">{meta.label}</p>
+              <p className="font-display text-lg font-bold text-foreground dark:text-white">{fmtBRLShort(g.total)}</p>
+              <p className="text-[11px] text-[var(--text-soft)] dark:text-white/50">
                 {g.count} inscrições{g.ajuizadas > 0 ? ` · ${g.ajuizadas} ajuizadas` : ''}
               </p>
               {meta.desc && (
-                <p className="text-[10px] text-aletis-grafite-medio dark:text-white/40 mt-1 leading-tight">{meta.desc}</p>
+                <p className="text-[11px] text-[var(--text-soft)] dark:text-white/40 mt-1 leading-tight">{meta.desc}</p>
               )}
             </div>
           )
@@ -93,7 +93,7 @@ export function TabDivida({ lead }: { lead: LeadFull }) {
 
       {/* Distribuição por SITUAÇÃO — leitura jurídica */}
       <div className="rounded-xl border border-aletis-borda dark:border-white/10 p-3 bg-white/60 dark:bg-black/10">
-        <p className="text-[11px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-2">
+        <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50 mb-2">
           Situação das inscrições
         </p>
         <div className="flex flex-wrap gap-2">
@@ -118,7 +118,7 @@ export function TabDivida({ lead }: { lead: LeadFull }) {
       {/* Distribuição por tipo de crédito */}
       {tipoAgg.length > 0 && (
         <div className="rounded-xl border border-aletis-borda dark:border-white/10 p-3">
-          <p className="text-[11px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-2">
+          <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50 mb-2">
             Principais tipos de crédito (top {tipoAgg.length})
           </p>
           <div className="space-y-1">
@@ -126,9 +126,9 @@ export function TabDivida({ lead }: { lead: LeadFull }) {
               const pct = Math.min(100, Math.round((t.total / Math.max(1, lead.totalDivida)) * 100))
               return (
                 <div key={t.tipo} className="flex items-center gap-3 text-xs">
-                  <span className="flex-1 min-w-0 truncate text-aletis-grafite-escuro dark:text-white" title={t.tipo}>{t.tipo}</span>
-                  <span className="text-aletis-grafite-medio dark:text-white/50 text-[11px]">{t.count}×</span>
-                  <span className="font-mono font-semibold text-aletis-grafite-escuro dark:text-white w-24 text-right">{fmtBRLShort(t.total)}</span>
+                  <span className="flex-1 min-w-0 truncate text-foreground dark:text-white" title={t.tipo}>{t.tipo}</span>
+                  <span className="text-[var(--text-soft)] dark:text-white/50 text-[11px]">{t.count}×</span>
+                  <span className="font-mono font-semibold text-foreground dark:text-white w-24 text-right">{fmtBRLShort(t.total)}</span>
                   <div className="w-16 h-1.5 rounded-full bg-aletis-borda/40 dark:bg-white/10 overflow-hidden">
                     <div className="h-full bg-aletis-verde" style={{ width: `${pct}%` }} />
                   </div>
@@ -141,8 +141,8 @@ export function TabDivida({ lead }: { lead: LeadFull }) {
 
       {/* Tabela detalhada — cada inscrição com tipo de crédito legível */}
       <div className="overflow-x-auto rounded-lg border border-aletis-borda dark:border-white/10">
-        <table className="w-full text-xs">
-          <thead className="bg-aletis-bege/50 dark:bg-white/5 text-aletis-grafite-medio dark:text-white/50">
+        <table className="ui-table w-full text-xs">
+          <thead className="bg-aletis-bege/50 dark:bg-white/5 text-[var(--text-soft)] dark:text-white/50">
             <tr>
               <th className="text-left px-3 py-2 font-medium">Fonte</th>
               <th className="text-left px-3 py-2 font-medium">Inscrição</th>
@@ -159,15 +159,15 @@ export function TabDivida({ lead }: { lead: LeadFull }) {
               const fonteLabel = FONTE_LABEL[d.fonte]?.label ?? d.fonte
               return (
                 <tr key={`${d.fonte}-${d.inscricao}-${i}`} className="hover:bg-aletis-bege/30 dark:hover:bg-white/5">
-                  <td className="px-3 py-2 whitespace-nowrap text-[11px] font-semibold text-aletis-grafite-escuro dark:text-white">{fonteLabel}</td>
-                  <td className="px-3 py-2 font-mono text-[11px] text-aletis-grafite-medio dark:text-white/60">{d.inscricao}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-[11px] font-semibold text-foreground dark:text-white">{fonteLabel}</td>
+                  <td className="px-3 py-2 font-mono text-[11px] text-[var(--text-soft)] dark:text-white/60">{d.inscricao}</td>
                   <td className="px-3 py-2 truncate max-w-[220px]" title={d.tipoCredito}>{shortTipoCredito(d.tipoCredito)}</td>
                   <td className="px-3 py-2">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium border ${st.chip}`} title={d.situacao}>
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium border ${st.chip}`} title={d.situacao}>
                       {st.label}
                     </span>
                     {d.tipoSituacao && (
-                      <span className="ml-1 text-[10px] text-aletis-grafite-medio dark:text-white/40">· {d.tipoSituacao}</span>
+                      <span className="ml-1 text-[11px] text-[var(--text-soft)] dark:text-white/40">· {d.tipoSituacao}</span>
                     )}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap text-[11px]">{d.dataInscricao}</td>
@@ -175,7 +175,7 @@ export function TabDivida({ lead }: { lead: LeadFull }) {
                     {d.ajuizado ? (
                       <span className="text-red-600 dark:text-red-400" title="Ajuizada">●</span>
                     ) : (
-                      <span className="text-aletis-grafite-medio dark:text-white/30">—</span>
+                      <span className="text-[var(--text-soft)] dark:text-white/30">—</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-right font-mono font-semibold whitespace-nowrap">{fmtBRL(d.valor)}</td>
@@ -185,8 +185,8 @@ export function TabDivida({ lead }: { lead: LeadFull }) {
           </tbody>
           <tfoot className="bg-aletis-verde/5 border-t-2 border-aletis-verde">
             <tr>
-              <td colSpan={6} className="px-3 py-2 text-right font-semibold text-aletis-grafite-escuro dark:text-white">Total</td>
-              <td className="px-3 py-2 text-right font-mono font-bold text-aletis-verde">{fmtBRL(lead.totalDivida)}</td>
+              <td colSpan={6} className="px-3 py-2 text-right font-semibold text-foreground dark:text-white">Total</td>
+              <td className="px-3 py-2 text-right font-mono font-bold text-foreground">{fmtBRL(lead.totalDivida)}</td>
             </tr>
           </tfoot>
         </table>
@@ -194,7 +194,7 @@ export function TabDivida({ lead }: { lead: LeadFull }) {
       {lead.debts.length > 50 && (
         <button
           onClick={() => setShowAll((v) => !v)}
-          className="w-full text-[11px] text-aletis-verde hover:underline py-1"
+          className="w-full text-[11px] text-foreground hover:underline py-1"
         >
           {showAll ? `Mostrar apenas as 50 maiores` : `Ver todas as ${lead.debts.length} inscrições`}
         </button>

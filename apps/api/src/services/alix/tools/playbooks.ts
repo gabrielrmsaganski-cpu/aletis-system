@@ -1,7 +1,7 @@
 // ============================================================
 // playbooks — tools de detecção/aplicação de playbook
 // ============================================================
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 import { detectPlaybooks, findPlaybook, PLAYBOOKS } from '../playbooks/playbooks.js'
 import { getProspeccaoService } from '../../prospeccao/ProspeccaoService.js'
 
@@ -9,9 +9,9 @@ function digits(s: string): string {
   return (s || '').replace(/\D/g, '')
 }
 
-export function buildPlaybooksTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildPlaybooksTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   tools.push({
     name: 'listar_playbooks',

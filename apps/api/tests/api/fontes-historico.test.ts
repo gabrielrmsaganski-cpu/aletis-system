@@ -39,6 +39,7 @@ describe('GET /api/fontes/historico + /uptime', () => {
     const body = r.json()
     expect(body.sucesso).toBe(true)
     if (body.fontes && body.fontes.length > 0) {
+      expect(body.fontes).toHaveLength(36)
       expect(typeof body.media).toBe('number')
       for (const f of body.fontes.slice(0, 3)) {
         expect(typeof f.nome).toBe('string')

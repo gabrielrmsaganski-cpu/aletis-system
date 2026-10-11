@@ -36,6 +36,10 @@ import {
   Building2,
   Briefcase,
   MapPin,
+  Landmark,
+  Calculator,
+  FileSpreadsheet,
+  Archive,
 } from 'lucide-react'
 
 export type ToolCategory =
@@ -63,26 +67,26 @@ export interface CategoryMeta {
 export const CATEGORIES: CategoryMeta[] = [
   {
     id: 'principal',
-    label: 'Começar',
+    label: 'Início',
     subtitle: 'Dashboard, IA e catálogo',
     accentClass: 'bg-aletis-dourado/15 text-aletis-dourado-escuro',
   },
   {
     id: 'funil',
-    label: 'Funil',
+    label: 'Clientes',
     subtitle: 'Prospecção e CRM',
     accentClass: 'bg-aletis-verde/10 text-aletis-verde',
   },
   {
     id: 'deal',
-    label: 'Deal flow',
-    subtitle: 'Propostas, negociações, contratos',
+    label: 'Comercial',
+    subtitle: 'Propostas, negociações e contratos',
     accentClass: 'bg-emerald-100 text-emerald-700',
   },
   {
     id: 'operacao',
-    label: 'Operação agro',
-    subtitle: 'Carteira, custeio, crédito, calculadoras',
+    label: 'Operação',
+    subtitle: 'Carteira, crédito e calculadoras',
     accentClass: 'bg-amber-100 text-amber-800',
   },
   {
@@ -93,7 +97,7 @@ export const CATEGORIES: CategoryMeta[] = [
   },
   {
     id: 'sistema',
-    label: 'Sistema',
+    label: 'Administração',
     subtitle: 'Financeiro interno, relatórios, configurações',
     accentClass: 'bg-aletis-grafite-medio/10 text-aletis-grafite-escuro',
   },
@@ -128,10 +132,10 @@ export const TOOL_CATALOG: ToolEntry[] = [
   // ─────────── PRINCIPAL ───────────
   {
     id: 'dashboard',
-    title: 'Dashboard',
-    tagline: 'Visão geral do escritório',
+    title: 'Visão geral',
+    tagline: 'Prioridades e visão do escritório',
     description:
-      'Painel de KPIs do portfólio de reestruturação: clientes ativos, volume sob negociação, economia gerada, pipeline e alertas de mercado em tempo real (SELIC, PTAX, diesel, focos de incêndio).',
+      'Organize o dia com prioridades de clientes, propostas e próximos passos. Consulte os indicadores da carteira e abra cada atendimento com o contexto disponível.',
     icon: LayoutDashboard,
     route: '/dashboard',
     category: 'principal',
@@ -141,7 +145,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
   },
   {
     id: 'ferramentas',
-    title: 'Todas as ferramentas',
+    title: 'Ferramentas',
     tagline: 'Catálogo explicativo de tudo que existe',
     description:
       'Inventário completo do sistema. Cada ferramenta, calculadora e relatório com descrição detalhada do que faz, quando usar e como se conecta ao fluxo de trabalho.',
@@ -179,15 +183,15 @@ export const TOOL_CATALOG: ToolEntry[] = [
     showInSidebar: false,
   },
   {
-    id: 'crm',
-    title: 'CRM',
-    tagline: 'Gestão de clientes e estágios',
+    id: 'crm-aletis',
+    title: 'Clientes · CRM',
+    tagline: 'Carteira única de todos os escritórios',
     description:
-      'Base de clientes em visualização Lista ou Kanban por estágio de negociação (lead → análise → proposta → fechamento). Registra dívidas, credores, histórico de contato e documentos.',
+      'Base única de clientes ALETIS, com filtro por escritório e visualização Lista ou Kanban por estágio. Dentro do cliente, reúne cadastro, diagnóstico, financeiro, demandas, propostas, negociações, documentos e workflow.',
     icon: Users,
     route: '/crm',
     category: 'funil',
-    keywords: ['crm', 'clientes', 'kanban', 'lista', 'estagios', 'pipeline', 'contatos'],
+    keywords: ['crm', 'aletis', 'canarana', 'escritorios', 'clientes', 'kanban', 'lista', 'estagios', 'pipeline', 'contatos'],
     showInSidebar: true,
     shortcut: 'g c',
   },
@@ -266,6 +270,58 @@ export const TOOL_CATALOG: ToolEntry[] = [
     showInSidebar: true,
   },
   {
+    id: 'planilhas-aletis',
+    title: 'Planilhas ALETIS',
+    tagline: 'Simulador v16, FARMS e Fechamento',
+    description:
+      'Central das planilhas transformadas em sistema: Simulador v16 financeiro, Calculadora de Viabilidade Agrícola FARMS v6 e Fechamento Geral por Embarque.',
+    icon: FileSpreadsheet,
+    route: '/planilhas-aletis',
+    category: 'operacao',
+    keywords: ['planilhas', 'excel', 'simulador v16', 'farms', 'viabilidade agricola', 'fechamento', 'embarque', 'ari do prado'],
+    showInSidebar: true,
+    badge: 'novo',
+  },
+  {
+    id: 'dossies-bancarios',
+    title: 'Dossiês Bancários',
+    tagline: 'Modelos, checklists e PDF por banco',
+    description:
+      'Central de dossiês bancários agro: organiza modelos BTG, Itaú BBA, Santander, Daycoval, BOCOM BBM e cadastro produtor rural; monta checklist inteligente por caso e exporta PDF executivo com identidade ALETIS.',
+    icon: Archive,
+    route: '/dossies-bancarios',
+    category: 'operacao',
+    keywords: ['dossies', 'dossie bancario', 'cadastro bancario', 'btg', 'itau', 'santander', 'daycoval', 'bocom', 'bbm', 'bacen', 'scr', 'checklist', 'pdf', 'produtor rural'],
+    showInSidebar: true,
+    badge: 'novo',
+  },
+  {
+    id: 'simulador-operacao',
+    title: 'Simulador financeiro',
+    tagline: 'PRICE, SAC, SACRE e CET',
+    description:
+      'Versão nativa do Simulador v16 com painel de dados, despesas acessórias, seguro, IOF, tabelas PRICE/SAC/SACRE, resumo comparativo, gráficos, recálculo de operações e ficha gráfica bancária.',
+    icon: Calculator,
+    route: '/simulador-operacao',
+    category: 'operacao',
+    keywords: ['simulador', 'v16', 'price', 'sac', 'sacre', 'cet', 'iof', 'seguro', 'financiamento', 'operacao', 'planilha'],
+    showInSidebar: false,
+    badge: 'novo',
+  },
+  {
+    id: 'recalculo-acordo',
+    title: 'Recálculo de acordo',
+    tagline: 'Índices oficiais e memória auditável',
+    description:
+      'Recálculo financeiro de propostas com INPC, IPCA e séries do Banco Central, múltiplas parcelas, mora simples, snapshot imutável, histórico e PDF profissional.',
+    icon: Landmark,
+    route: '/recalculos-acordo',
+    category: 'operacao',
+    keywords: ['recalculo', 'acordo', 'inpc', 'ipca', 'mora', 'correcao monetaria', 'memoria de calculo', 'indices oficiais', 'pdf'],
+    showInSidebar: true,
+    badge: 'novo',
+  },
+  {
     id: 'calculadoras-agro',
     title: 'Calculadoras Agro',
     tagline: 'Dupont/Fleuriet, Preço de Venda, FARMS Viabilidade',
@@ -320,26 +376,27 @@ export const TOOL_CATALOG: ToolEntry[] = [
   // ─────────── COMUNICAÇÃO ───────────
   {
     id: 'whatsapp',
-    title: 'WhatsApp',
-    tagline: 'Central de mensagens ALETIS',
+    title: 'WhatsApp IA',
+    tagline: 'Triagem, agenda e documentos',
     description:
-      'Central integrada de WhatsApp — mensagens, áudios com player, indicadores de leitura, templates aprovados e histórico por cliente. Faz ponte com o CRM automaticamente.',
+      'Central WhatsApp IA conectada a Evolution API: conversas, handoff humano, triagem por regras, documentos recebidos, agenda do consultor e histórico vinculado ao CRM.',
     icon: MessageCircle,
     route: '/whatsapp',
     category: 'deal',
-    keywords: ['whatsapp', 'mensagens', 'audio', 'templates', 'conversa', 'chat'],
+    keywords: ['whatsapp', 'mensagens', 'audio', 'ia', 'alix', 'evolution', 'agenda', 'documentos', 'conversa', 'chat'],
     showInSidebar: true,
+    badge: 'ia',
   },
   {
     id: 'alix',
-    title: 'Aletéia',
-    tagline: 'Assistente IA com ~80 ferramentas',
+    title: 'Assistente ALIX',
+    tagline: 'Copiloto operacional da ALETIS',
     description:
-      'Aletéia, agente IA da ALETIS (Claude Sonnet 4.6) com acesso a dossiê, custeio, contabilidade Lambda, fiscal, relatórios, simuladores CBS-IBS/Funrural/Desenrola, BSC Agro, SICOR Bacen, RAG BM25, upload multimodal, calculadoras agro nativas (Dupont/Fleuriet/FARMS/Preço) e geração real de PDF/DOCX/XLSX.',
+      'ALIX, agente IA da ALETIS com acesso a CRM, dossiês, documentos, propostas, gestão financeira, simuladores, mercado, upload multimodal e geração real de PDF/DOCX/XLSX.',
     icon: Bot,
     route: '/ia',
     category: 'principal',
-    keywords: ['aletéia', 'aleteia', 'aletheia', 'alix', 'ia', 'ai', 'assistente', 'chat', 'claude', 'inteligencia artificial', 'agente'],
+    keywords: ['aletéia', 'aleteia', 'aletheia', 'alix', 'ia', 'ai', 'assistente', 'chat', 'openai', 'inteligencia artificial', 'agente'],
     showInSidebar: true,
     shortcut: 'g a',
     badge: 'ia',
@@ -359,17 +416,55 @@ export const TOOL_CATALOG: ToolEntry[] = [
     showInSidebar: true,
   },
   {
-    id: 'financeiro',
-    title: 'Financeiro',
-    tagline: 'Caixa, impostos e fechamento interno',
+    id: 'financeiro-aletis',
+    title: 'Financeiro ALETIS',
+    tagline: 'Caixa, impostos e fechamento interno — matriz',
     description:
-      'Gestão financeira interna do escritório em 7 abas: Receitas, Despesas, Impostos (DAS/INSS/ISS), Extratos, Fluxo de caixa, Fechamento mensal e Anexos. Todos os lançamentos persistidos em JSON local.',
+      'Gestão financeira interna do escritório principal ALETIS em 7 abas: Receitas, Despesas, Impostos (DAS/INSS/ISS), Extratos, Fluxo de caixa, Fechamento mensal e Anexos.',
     icon: DollarSign,
     route: '/financeiro',
     category: 'sistema',
-    keywords: ['financeiro', 'caixa', 'receitas', 'despesas', 'das', 'impostos', 'fechamento', 'extrato'],
+    keywords: ['financeiro aletis', 'caixa', 'receitas', 'despesas', 'das', 'impostos', 'fechamento', 'extrato'],
     showInSidebar: true,
   },
+  {
+    id: 'adm-canarana',
+    title: 'Administração Canarana',
+    tagline: 'Receitas, despesas, folha e funcionários — Canarana',
+    description:
+      'Gestão administrativa do escritório de Canarana em 5 abas: Dashboard com KPIs e fluxo anual, Receitas, Despesas, Funcionários e Folha de pagamento.',
+    icon: Landmark,
+    route: '/adm-canarana',
+    category: 'sistema',
+    keywords: ['adm', 'canarana', 'administrativo', 'receitas', 'despesas', 'folha', 'funcionarios', 'escritorio'],
+    showInSidebar: true,
+  },
+  {
+    id: 'adm-aletis',
+    title: 'Administração Aletis',
+    tagline: 'Receitas, despesas, folha e funcionários — matriz',
+    description:
+      'Gestão administrativa do escritório principal ALETIS. Dashboard executivo, DRE, pipeline comercial, projetos, receitas, despesas, funcionários, folha, lançamento inteligente com OCR e fechamento mensal para contador.',
+    icon: Landmark,
+    route: '/adm-aletis',
+    category: 'sistema',
+    keywords: ['adm', 'aletis', 'administrativo', 'matriz', 'receitas', 'despesas', 'folha', 'funcionarios', 'escritorio', 'fechamento', 'ocr'],
+    showInSidebar: true,
+  },
+  {
+    id: 'checklist-assessoria',
+    title: 'Checklist Assessoria',
+    tagline: 'R.OP.003 / 004 / 005 — Checklist interativo do cliente',
+    description:
+      'Checklist de assessoria com múltiplas seções avaliativas, respostas JSONB por cliente, progresso visual e exportação. Templates configuráveis via API.',
+    icon: FileCheck,
+    route: '/clientes/:id/checklist',
+    category: 'operacao',
+    keywords: ['checklist', 'assessoria', 'rop003', 'rop004', 'rop005', 'avaliacao', 'cliente'],
+    showInSidebar: false,
+    badge: 'novo',
+  },
+
   {
     id: 'relatorios',
     title: 'Relatórios',
@@ -387,7 +482,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
     title: 'Configurações',
     tagline: 'Perfil, empresa, integrações',
     description:
-      'Configuração do perfil do consultor, dados da empresa, contador vinculado, permissões por usuário e integrações externas (CEPEA, Bacen, Sicor, WhatsApp Cloud API, Azure Foundry).',
+      'Configuração do perfil do consultor, dados da empresa, contador vinculado, permissões por usuário e integrações externas de mercado, comunicação, documentos e IA.',
     icon: Settings,
     route: '/configuracoes',
     category: 'sistema',
@@ -412,11 +507,12 @@ export const TOOL_CATALOG: ToolEntry[] = [
  * Helpers de consulta
  */
 export function getToolByRoute(pathname: string): ToolEntry | undefined {
+  if (pathname === '/clientes' || pathname.startsWith('/clientes/')) return TOOL_CATALOG.find((t) => t.id === 'crm-aletis')
   // Match exato primeiro
   const exact = TOOL_CATALOG.find((t) => t.route === pathname)
   if (exact) return exact
   // Fallback por prefixo (ex.: /custeio/abc casa com /custeio)
-  return TOOL_CATALOG.find(
+  return [...TOOL_CATALOG].sort((a, b) => b.route.length - a.route.length).find(
     (t) => pathname.startsWith(t.route + '/') && t.route !== '/'
   )
 }
@@ -433,10 +529,11 @@ function fold(s: string): string {
 export function searchTools(query: string): ToolEntry[] {
   const q = fold(query.trim())
   if (!q) return TOOL_CATALOG
+  const words = q.split(/\s+/).filter(Boolean)
   return TOOL_CATALOG.filter((t) => {
     const haystack = fold(
-      [t.title, t.tagline, t.description, ...t.keywords, t.category].join(' ')
+      [t.title, t.tagline, t.description, ...t.keywords, t.category, CATEGORIES.find((c) => c.id === t.category)?.label ?? ''].join(' ')
     )
-    return haystack.includes(q)
-  })
+    return words.every((word) => haystack.includes(word))
+  }).sort((a, b) => Number(fold(b.title).includes(q)) - Number(fold(a.title).includes(q)))
 }

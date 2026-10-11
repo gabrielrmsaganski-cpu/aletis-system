@@ -26,6 +26,7 @@ import type { ProspeccaoService } from '../prospeccao/ProspeccaoService.js';
 import { ingestDOUOnce } from '../prospeccao/sources/DOUSource.js';
 import { expandSociosFromPJs } from '../prospeccao/sources/SocioExpansionSource.js';
 import { getAlixPushChannel } from './push/AlixPushChannel.js';
+import { hasVerifiedMacroComparison, macroShiftLabel } from './MacroShiftService.js';
 
 export type InsightTipo =
   | 'janela-critica'
@@ -40,6 +41,9 @@ export type InsightTipo =
   | 'whatsapp-mudo'         // Wave A4: cliente parou de responder no WhatsApp >5d
   | 'alerta-preco-disparado' // Wave B1: regra de preço por cliente bateu threshold
   | 'macro-shift'           // Wave B2: shift macro (Selic/USD/IPCA/commodity) >|threshold|
+  | 'crm-acao-hoje'         // CRM: próxima ação vence hoje
+  | 'crm-acao-vencida'      // CRM: próxima ação atrasada
+  | 'crm-sem-proxima-acao'  // CRM: cliente ativo sem próximo passo definido
   | 'doc-vencendo';         // Wave B6: contrato/CAR/LO vencendo em 30/15/7d
 
 export interface Insight {
@@ -61,6 +65,7 @@ function insightsFileFor(storageDir: string, date: Date = new Date()): string {
 }
 
 export class ProactiveService {
+  private readonly macroComparisons = new Set<string>();
   private douTimer: NodeJS.Timeout | null = null;
   private sociosTimer: NodeJS.Timeout | null = null;
   private insightsTimer: NodeJS.Timeout | null = null;
@@ -298,12 +303,16 @@ export class ProactiveService {
         const macro = getMacroShiftService(this.storageDir);
         const history = macro.loadHistory();
         const shifts = macro.detectShifts(brief, history);
+        const recentComparisons = new Set((await this.getRecentInsights(8)).filter(item => item.tipo === 'macro-shift').map(item => String(item.payload?.comparisonId || '')));
         for (const s of shifts) {
+          if (this.macroComparisons.has(s.comparisonId) || recentComparisons.has(s.comparisonId)) continue;
+          this.macroComparisons.add(s.comparisonId);
+          if (this.macroComparisons.size > 1000) this.macroComparisons.delete(this.macroComparisons.values().next().value!);
           this.recordInsight({
             tipo: 'macro-shift',
             urgencia: s.urgencia,
-            titulo: `${s.indicador} · shift ${s.janela} (${s.deltaPct != null ? (s.deltaPct >= 0 ? '+' : '') + s.deltaPct.toFixed(2) + '%' : s.delta.toFixed(0) + 'bp'})`,
-            detalhes: s.descricao + ' Avalie impacto em DSCR/hedge da carteira de clientes expostos.',
+            titulo: `${s.indicador} · variação ${s.janela} (${macroShiftLabel(s)})`,
+            detalhes: s.descricao,
             payload: {
               indicador: s.indicador,
               janela: s.janela,
@@ -311,6 +320,9 @@ export class ProactiveService {
               valorReferencia: s.valorReferencia,
               delta: s.delta,
               deltaPct: s.deltaPct,
+              unidadeDelta: s.unidadeDelta,
+              comparisonId: s.comparisonId,
+              evidence: s.evidence,
             },
           });
           shiftsCount++;
@@ -561,6 +573,121 @@ export class ProactiveService {
         console.warn('[ProactiveService] watcher stage-stuck falhou:', (err as Error).message);
       }
 
+      // 6.1. CRM operacional — ALIX como "gerente de carteira".
+      // Gera sinais acionáveis para a fila do consultor: ações vencidas,
+      // ações do dia e clientes ativos sem próximo passo definido.
+      try {
+        const { alixGetClientes } = await import('../AlixService.js');
+        const recentes = await this.getRecentInsights(2);
+        const hojeYmd = hoje.toISOString().slice(0, 10);
+        const inicioHoje = new Date(`${hojeYmd}T00:00:00.000Z`);
+        const estagiosAtivos = new Set(['lead', 'qualificacao', 'analise', 'proposta', 'negociacao', 'acordo', 'acompanhamento']);
+
+        for (const cliente of alixGetClientes()) {
+          if (!cliente?.id) continue;
+          const clienteId = String(cliente.id);
+          const nome = String(cliente.nome || clienteId).slice(0, 44);
+          const estagio = String(cliente.estagio || '').toLowerCase();
+          if (!estagiosAtivos.has(estagio)) continue;
+
+          const rawAcao = cliente.proximaAcao && typeof cliente.proximaAcao === 'object'
+            ? cliente.proximaAcao as Record<string, unknown>
+            : null;
+          const dataAcao = rawAcao?.data ? new Date(String(rawAcao.data)) : null;
+          const descricaoAcao = rawAcao?.descricao ? String(rawAcao.descricao) : 'Próxima ação sem descrição';
+
+          if (dataAcao && !Number.isNaN(dataAcao.getTime())) {
+            const dataYmd = dataAcao.toISOString().slice(0, 10);
+            const dias = Math.floor((inicioHoje.getTime() - new Date(`${dataYmd}T00:00:00.000Z`).getTime()) / 86400_000);
+            if (dias > 0) {
+              const uniqueKey = `crm-acao-vencida:${clienteId}:${dataYmd}`;
+              if (!this.hasRecentInsight(recentes, 'crm-acao-vencida', uniqueKey)) {
+                insights.push(this.recordInsight({
+                  tipo: 'crm-acao-vencida',
+                  urgencia: dias >= 3 ? 'critico' : 'importante',
+                  titulo: `${nome} · ação atrasada há ${dias}d`,
+                  detalhes: `Próxima ação de ${dataYmd} está vencida: ${descricaoAcao}. Sugestão: registrar contato ou reagendar com motivo.`,
+                  payload: {
+                    uniqueKey,
+                    clienteId,
+                    estagio,
+                    diasAtraso: dias,
+                    data: dataYmd,
+                    descricao: descricaoAcao,
+                    suggestedTool: 'registrar_contato_cliente',
+                    suggestedPayload: {
+                      clienteId,
+                      canal: 'telefone',
+                      descricao: `Follow-up da ação atrasada: ${descricaoAcao}`,
+                    },
+                  },
+                }));
+              }
+            } else if (dias === 0) {
+              const uniqueKey = `crm-acao-hoje:${clienteId}:${dataYmd}`;
+              if (!this.hasRecentInsight(recentes, 'crm-acao-hoje', uniqueKey)) {
+                insights.push(this.recordInsight({
+                  tipo: 'crm-acao-hoje',
+                  urgencia: 'importante',
+                  titulo: `${nome} · ação para hoje`,
+                  detalhes: `Próxima ação marcada para hoje: ${descricaoAcao}. Sugestão: executar contato e registrar resultado no CRM.`,
+                  payload: {
+                    uniqueKey,
+                    clienteId,
+                    estagio,
+                    data: dataYmd,
+                    descricao: descricaoAcao,
+                    suggestedTool: 'registrar_contato_cliente',
+                    suggestedPayload: {
+                      clienteId,
+                      canal: 'telefone',
+                      descricao: descricaoAcao,
+                    },
+                  },
+                }));
+              }
+            }
+            continue;
+          }
+
+          const ultimaRaw = cliente.ultimaAtualizacao || cliente.atualizadoEm || cliente.dataCadastro;
+          const ultima = ultimaRaw ? new Date(String(ultimaRaw)) : null;
+          const diasSemAtualizacao = ultima && !Number.isNaN(ultima.getTime())
+            ? Math.floor((hoje.getTime() - ultima.getTime()) / 86400_000)
+            : null;
+          const prioridadeEstagio = ['proposta', 'negociacao', 'acordo'].includes(estagio);
+          const deveSinalizar = prioridadeEstagio || (diasSemAtualizacao != null && diasSemAtualizacao >= 15);
+          if (!deveSinalizar) continue;
+
+          const uniqueKey = `crm-sem-proxima-acao:${clienteId}:${estagio}`;
+          if (this.hasRecentInsight(recentes, 'crm-sem-proxima-acao', uniqueKey)) continue;
+          insights.push(this.recordInsight({
+            tipo: 'crm-sem-proxima-acao',
+            urgencia: diasSemAtualizacao != null && diasSemAtualizacao >= 30 ? 'critico' : 'importante',
+            titulo: `${nome} · sem próxima ação no CRM`,
+            detalhes:
+              `Cliente em "${estagio}" não tem próximo passo definido` +
+              (diasSemAtualizacao != null ? ` e está sem atualização há ${diasSemAtualizacao} dias.` : '.') +
+              ' Sugestão: definir próximo contato com responsável e prazo.',
+            payload: {
+              uniqueKey,
+              clienteId,
+              estagio,
+              diasSemAtualizacao,
+              suggestedTool: 'definir_proxima_acao_cliente',
+              suggestedPayload: {
+                clienteId,
+                data: this.nextBusinessDayYmd(hoje),
+                descricao: `Definir follow-up para cliente em ${estagio}`,
+                prioridade: prioridadeEstagio ? 'alta' : 'normal',
+              },
+            },
+          }));
+        }
+      } catch (err) {
+        console.warn('[ProactiveService] watcher crm-operacional falhou:', (err as Error).message);
+      }
+
       // 8. Doc-vencendo — Wave B6: pendências do Portal cliente envelhecendo
       // Critério: portal_documento_pendente.status='pendente' AND solicitadoEm muito antiga.
       // 30d → importante, 60d → critico. Reforça follow-up de cobrança.
@@ -654,6 +781,17 @@ export class ProactiveService {
     } catch (err) {
       console.warn('[ProactiveService] detectInsights falhou:', (err as Error).message);
     }
+    // Etapas 7/8: toda leitura proativa vira sugestão governada e
+    // deduplicada. A varredura documental é somente leitura; nenhuma ação
+    // operacional é executada por este caminho.
+    try {
+      const { getAlixGovernanceService } = await import('./governance/AlixGovernanceService.js');
+      const governance = getAlixGovernanceService();
+      await governance.ingestInsights(insights);
+      await governance.scanDeterministicCandidates();
+    } catch (err) {
+      console.warn('[ProactiveService] governança proativa falhou:', (err as Error).message);
+    }
     return insights;
   }
 
@@ -663,6 +801,7 @@ export class ProactiveService {
    * para emitir insights sem tight coupling ao watcher.
    */
   recordInsight(partial: Omit<Insight, 'id' | 'ts'>): Insight {
+    if (partial.tipo === 'macro-shift' && !hasVerifiedMacroComparison(partial.payload)) throw new Error('Comparação macro sem evidências compatíveis.');
     const insight: Insight = {
       id: `ins_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       ts: new Date().toISOString(),
@@ -702,6 +841,17 @@ export class ProactiveService {
     return insight;
   }
 
+  private hasRecentInsight(recentes: Insight[], tipo: InsightTipo, uniqueKey: string): boolean {
+    return recentes.some((i) => i.tipo === tipo && String(i.payload?.uniqueKey || '') === uniqueKey);
+  }
+
+  private nextBusinessDayYmd(from: Date): string {
+    const d = new Date(from);
+    d.setDate(d.getDate() + 1);
+    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+
   /** Retorna insights dos últimos N dias, mais recentes primeiro. */
   async getRecentInsights(days = 7): Promise<Insight[]> {
     const result: Insight[] = [];
@@ -715,7 +865,12 @@ export class ProactiveService {
         for (const line of raw.split('\n')) {
           if (!line) continue;
           try {
-            result.push(JSON.parse(line));
+            const insight = JSON.parse(line) as Insight;
+            if (!insight || typeof insight.ts !== 'string' || typeof insight.id !== 'string') continue;
+            // Preserva o JSONL original; comparações antigas sem fonte/base
+            // verificável não voltam como recomendação ou alerta atual.
+            if (insight.tipo === 'macro-shift' && !hasVerifiedMacroComparison(insight.payload)) continue;
+            result.push(insight);
           } catch {
             /* linha corrompida */
           }

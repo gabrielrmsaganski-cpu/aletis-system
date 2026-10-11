@@ -69,7 +69,7 @@ const TOOL_PROVENANCE: Record<string, { source: string; confidence: number }> = 
   clima_historico: { source: 'NASA POWER', confidence: 0.92 },
   zarc_cliente: { source: 'MAPA ZARC', confidence: 0.9 },
   // News / web
-  buscar_noticias: { source: 'Tavily web search', confidence: 0.7 },
+  buscar_noticias: { source: 'OpenAI web_search', confidence: 0.7 },
   // TJ / processos
   consultar_processos_tj: { source: 'DataJud (CNJ)', confidence: 0.9 },
   // Custeio / DSCR / Reestruturação (power tools)
@@ -103,7 +103,7 @@ const TOOL_PROVENANCE: Record<string, { source: string; confidence: number }> = 
   adicionar_nota_negociacao: { source: 'DealRoomService (histórico append)', confidence: 0.99 },
   // Sub-agent delegate tools (Orchestrator → sub-agent)
   delegate_deal_analyzer: { source: 'DealAnalyzerAgent (Opus 4.7 + thinking)', confidence: 0.93 },
-  delegate_web_researcher: { source: 'WebResearcherAgent (Tavily + Sonnet)', confidence: 0.85 },
+  delegate_web_researcher: { source: 'WebResearcherAgent (provider web configurado + LLM)', confidence: 0.85 },
   delegate_crm_writer: { source: 'CRMWriterAgent (HITL via confirmation)', confidence: 0.95 },
   delegate_doc_generator: { source: 'DocGeneratorAgent (PDF/DOCX templates)', confidence: 0.95 },
   // Sub-agent tools (chamados por DealAnalyzer/WebResearcher/etc)

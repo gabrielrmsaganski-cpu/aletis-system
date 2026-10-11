@@ -1,13 +1,13 @@
 import Link from 'next/link'
 import { ArrowRight, Compass, MessageCircle } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
-import { siteConfig } from '@/lib/siteConfig'
-
-const whatsappHref = `https://wa.me/${siteConfig.contact.whatsapp}?text=${encodeURIComponent(
-  'Olá, caí numa página inexistente do site ALETIS e gostaria de conversar.',
-)}`
+import { getWhatsappHref } from '@/lib/siteConfig'
 
 export default function NotFound() {
+  const whatsappHref = getWhatsappHref(
+    'Olá, caí numa página inexistente do site ALETIS e gostaria de conversar.',
+  )
+
   return (
     <section className="relative flex min-h-[calc(100vh-76px)] items-center overflow-hidden bg-gradient-to-b from-aletis-verde-profundo via-aletis-verde-escuro to-aletis-verde-escuro py-24 text-white">
       <div aria-hidden="true" className="absolute inset-0 bg-hero-radial opacity-80" />
@@ -25,11 +25,11 @@ export default function NotFound() {
 
           <h1 className="mt-6 font-display text-4xl font-semibold leading-tight md:text-[48px]">
             Essa página{' '}
-            <span className="italic text-aletis-dourado">não está na mesa</span>.
+            <span className="italic text-aletis-dourado">saiu da rota</span>.
           </h1>
 
           <p className="mx-auto mt-5 max-w-lg text-[16px] leading-relaxed text-white/70">
-            O link pode ter sido movido, removido ou digitado de outra forma. Sem prejuízo — há três caminhos dali para continuar a conversa.
+            O link pode ter sido movido, removido ou digitado de outra forma. Há três caminhos para continuar.
           </p>
 
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
@@ -44,15 +44,17 @@ export default function NotFound() {
               <Compass className="h-4 w-4" />
               Ver soluções
             </Link>
-            <a
-              href={whatsappHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-aletis-dourado/50 bg-aletis-dourado/10 px-6 py-3 font-display text-[12px] font-semibold uppercase tracking-wider2 text-aletis-dourado transition hover:bg-aletis-dourado/20"
-            >
-              <MessageCircle className="h-4 w-4" />
-              Chamar no WhatsApp
-            </a>
+            {whatsappHref && (
+              <a
+                href={whatsappHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border border-aletis-dourado/50 bg-aletis-dourado/10 px-6 py-3 font-display text-[12px] font-semibold uppercase tracking-wider2 text-aletis-dourado transition hover:bg-aletis-dourado/20"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Chamar no WhatsApp
+              </a>
+            )}
           </div>
 
           <div className="mt-14 grid gap-4 sm:grid-cols-3">
@@ -86,7 +88,7 @@ export default function NotFound() {
                 Contato
               </p>
               <p className="mt-2 text-[13px] text-white/80">
-                Diagnóstico gratuito em 72h. Retorno em 1 dia útil.
+                Primeira conversa sob sigilo. Retorno em 1 dia útil.
               </p>
             </Link>
           </div>

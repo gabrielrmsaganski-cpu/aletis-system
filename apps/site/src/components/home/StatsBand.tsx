@@ -2,33 +2,26 @@ import { Container } from '@/components/ui/Container'
 import { Reveal } from '@/components/ui/Reveal'
 import Link from 'next/link'
 
-/**
- * Números de mesa — auditados internamente pela equipe ALETIS.
- * Nota metodológica explícita logo abaixo (transparência total).
- *
- * Atualizar trimestralmente conforme dossiê interno.
- * Última revisão: Q1 2026.
- */
 const stats = [
   {
-    valor: 'R$ 280M+',
-    label: 'em passivo analisado',
-    detalhe: 'Carteira agregada das mesas Agro + Corporate desde 2022',
-  },
-  {
-    valor: '62%',
-    label: 'redução média em reestruturações',
-    detalhe: 'Mediana sobre acordos finalizados (não a média do hero)',
+    valor: '4',
+    label: 'frentes integradas',
+    detalhe: 'Agro, Corporate, Fomento e Gestão no mesmo método de decisão',
   },
   {
     valor: '72h',
-    label: 'para diagnóstico inicial',
-    detalhe: 'Mesa pré-acordo entrega laudo + 3 cenários',
+    label: 'para a primeira leitura',
+    detalhe: 'Prazo típico após recebimento dos documentos essenciais',
   },
   {
-    valor: '14',
-    label: 'classes de credor cobertas',
-    detalhe: 'BB, BR, Sicredi, Sicoob, BNDES, FCO, FNO, FNE, cooperativas, fundos, revendas, traders, factorings, instituições não-bancárias',
+    valor: '3',
+    label: 'cenários de decisão',
+    detalhe: 'Central, conservador e stress para testar o fluxo de safra',
+  },
+  {
+    valor: '1',
+    label: 'dossiê executivo',
+    detalhe: 'Contratos, garantias, credores, capacidade de pagamento e próximos passos',
   },
 ]
 
@@ -63,15 +56,14 @@ export function StatsBand() {
             </Reveal>
           ))}
         </div>
-        {/* Nota metodológica: transparência sobre origem dos números */}
         <div className="border-t border-aletis-cream-escuro/60 py-4 text-center">
           <p className="text-[11px] font-body text-aletis-verde-medio/80">
-            Números auditados pela mesa ALETIS · Dados consolidados Q1 2026 ·{' '}
+            Indicadores de metodologia, não promessa de resultado. Cada caso depende dos contratos e documentos recebidos.{' '}
             <Link
-              href="/cases"
+              href="/documentos-necessarios"
               className="underline decoration-aletis-gold/40 underline-offset-2 hover:decoration-aletis-gold/80"
             >
-              ver cases reais (anônimos)
+              ver documentos necessários
             </Link>
           </p>
         </div>

@@ -8,6 +8,12 @@ export * from './dossie-agro.js';
 // ── Plano Simples de Custeio Agrícola 2026 ────────────────
 export * from './custeio.js';
 
+// ── CRM — demandas e versões de proposta ──────────────────
+export * from './cliente-demanda.js';
+
+// ── FARMS — Calculadora de Viabilidade Agricola v6 ─────────
+export * from './farms.js';
+
 // ── Contabilidade (Lambda-backed: Balancete, DRE, EBITDA…) ─
 export * from './contabil.js';
 
@@ -32,6 +38,9 @@ export * from './bsc.js';
 
 // ── Wave 8c — SICOR (Bacen OData) ─────────────────────────
 export * from './sicor.js';
+
+// ── Wave 11 — Smart Document Extraction (ALIX Ultra)
+export * from './document-extraction.js';
 
 // ── Auth & Users ──────────────────────────────────────────
 export type UserRole = 'admin' | 'consultor_senior' | 'consultor_junior' | 'cliente';
@@ -93,7 +102,7 @@ export interface Cliente {
   id: string;
   tipo: 'pessoa_fisica' | 'pessoa_juridica';
   nome: string;
-  cpfCnpj: string;
+  cpfCnpj?: string;
   email?: string;
   telefone: string;
   whatsapp?: string;
@@ -103,6 +112,21 @@ export interface Cliente {
   consultorId: string;
   tags: string[];
   observacoes?: string;
+  grupoFamiliar?: Array<{
+    id: string;
+    nome: string;
+    parentesco?: string;
+    papel?: string;
+    cpfCnpj?: string;
+    telefone?: string;
+    email?: string;
+    atuaAtividade?: boolean;
+    vinculoCliente?: string;
+    observacoes?: string;
+    principal?: boolean;
+    criadoEm: string;
+    atualizadoEm: string;
+  }>;
   documentos: Documento[];
   dividas: Divida[];
   criadoEm: string;
@@ -310,3 +334,5 @@ export interface EventoCliente {
   usuarioId: string;
   dados?: Record<string, unknown>;
 }
+export * from './portal-fiscal.js'
+export * from './fiscal-connection'

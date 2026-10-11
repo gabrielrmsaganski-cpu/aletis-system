@@ -6,9 +6,9 @@
 //   - Empty state guiado
 //   - Toolbar com totais customizáveis
 // ============================================================
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { apiFetch } from '../../hooks/useApi'
-import { Plus, Trash2, ClipboardPaste, RefreshCw, Loader2, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, ClipboardPaste, RefreshCw, Loader2, AlertTriangle, Search, CheckCircle2 } from 'lucide-react'
 
 const BulkPasteEditor = lazy(() => import('./BulkPasteEditor'))
 
@@ -60,6 +60,7 @@ export default function TableEditor<T extends Record<string, any>>(props: Props<
   const [adding, setAdding] = useState(false)
   const [showBulk, setShowBulk] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
 
   const reload = useCallback(async () => {
     try {
@@ -115,10 +116,28 @@ export default function TableEditor<T extends Record<string, any>>(props: Props<
     }
   }
 
-  if (error) return <div className="card-premium p-4 text-xs text-red-600">{error}</div>
+  const allItems = items ?? []
+  const filteredItems = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return allItems
+    return allItems.filter((item) =>
+      columns.some((col) => String((item as any)[col.key] ?? '').toLowerCase().includes(q)),
+    )
+  }, [allItems, columns, query])
+
+  const requiredColumns = columns.filter((col) => col.required)
+  const completeRows = requiredColumns.length === 0
+    ? allItems.length
+    : allItems.filter((item) => requiredColumns.every((col) => {
+        const value = (item as any)[col.key]
+        return value !== null && value !== undefined && String(value).trim() !== ''
+      })).length
+  const completionPct = allItems.length === 0 ? 0 : Math.round((completeRows / allItems.length) * 100)
+
+  if (error) return <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-xs text-red-700">{error}</div>
   if (!items) {
     return (
-      <div className="card-premium p-6 space-y-2">
+      <div className="space-y-2 rounded-lg border border-aletis-borda bg-card p-6 shadow-none">
         <div className="h-4 w-1/3 bg-gray-100 animate-pulse rounded" />
         <div className="h-32 bg-gray-50 animate-pulse rounded" />
       </div>
@@ -126,20 +145,37 @@ export default function TableEditor<T extends Record<string, any>>(props: Props<
   }
 
   return (
-    <section className="card-premium p-4 space-y-3">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h3 className="text-sm font-display font-semibold text-aletis-grafite-escuro">
+    <section className="space-y-3 rounded-lg border border-aletis-borda bg-card p-4 shadow-none">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-sm font-display font-semibold text-foreground">
             {emoji && <span className="mr-1">{emoji}</span>}
             {title} ({items.length})
           </h3>
-          {subtitle && <p className="text-[10px] text-aletis-grafite-claro mt-0.5">{subtitle}</p>}
+          {subtitle && <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>}
+          {items.length > 0 && requiredColumns.length > 0 && (
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-aletis-borda bg-aletis-cream/30 px-2 py-1 text-[11px] font-body text-[var(--text-soft)]">
+              <CheckCircle2 className={`h-3 w-3 ${completionPct >= 90 ? 'text-emerald-600' : completionPct >= 50 ? 'text-amber-600' : 'text-red-600'}`} />
+              {completionPct}% das linhas com campos obrigatórios
+            </div>
+          )}
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {items.length > 0 && (
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Filtrar linhas..."
+                className="h-9 w-full rounded-xl border border-aletis-borda bg-card py-1.5 pl-8 pr-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-aletis-verde/20 sm:w-48"
+              />
+            </div>
+          )}
           <button
             type="button"
             onClick={reload}
-            className="px-2 py-1 rounded-lg text-aletis-grafite-claro hover:bg-aletis-grafite-escuro/5 transition-colors"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-aletis-bege/55 transition-colors"
             title="Recarregar"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -148,7 +184,7 @@ export default function TableEditor<T extends Record<string, any>>(props: Props<
             <button
               type="button"
               onClick={() => setShowBulk(true)}
-              className="px-3 py-1 rounded-lg bg-aletis-dourado/15 text-aletis-grafite-escuro text-xs font-body font-semibold hover:bg-aletis-dourado/25 inline-flex items-center gap-1"
+              className="inline-flex h-9 items-center gap-1 rounded-xl bg-aletis-dourado/15 px-3 text-xs font-body font-semibold text-foreground hover:bg-aletis-dourado/25"
               title="Cole linhas do Excel/Sheets"
             >
               <ClipboardPaste className="w-3 h-3" /> Paste do Excel
@@ -158,7 +194,7 @@ export default function TableEditor<T extends Record<string, any>>(props: Props<
             type="button"
             onClick={adicionar}
             disabled={adding}
-            className="px-3 py-1 rounded-lg bg-aletis-verde/10 text-aletis-verde text-xs font-body font-semibold hover:bg-aletis-verde/20 inline-flex items-center gap-1"
+            className="inline-flex h-9 items-center gap-1 rounded-xl bg-aletis-verde/10 px-3 text-xs font-body font-semibold text-foreground hover:bg-aletis-verde/20 disabled:opacity-50"
           >
             <Plus className="w-3 h-3" /> Adicionar
           </button>
@@ -167,11 +203,13 @@ export default function TableEditor<T extends Record<string, any>>(props: Props<
 
       {items.length === 0 ? (
         <EmptyState msg={emptyStateMsg ?? `Nenhum registro. Clique em "Adicionar" ou cole linhas do Excel.`} />
+      ) : filteredItems.length === 0 ? (
+        <EmptyState msg="Nenhuma linha corresponde ao filtro atual." />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs font-body">
-            <thead>
-              <tr className="text-[10px] uppercase tracking-wider text-aletis-grafite-claro border-b border-aletis-grafite-claro/15">
+        <div className="overflow-x-auto rounded-xl border border-aletis-borda/70">
+          <table className="ui-table w-full text-xs font-body">
+            <thead className="bg-aletis-cream/40">
+              <tr className="text-[11px] uppercase tracking-wider text-muted-foreground border-b border-aletis-grafite-claro/15">
                 {columns.map((c) => (
                   <th
                     key={c.key}
@@ -185,7 +223,7 @@ export default function TableEditor<T extends Record<string, any>>(props: Props<
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {filteredItems.map((item) => (
                 <Row
                   key={item.id}
                   row={item}
@@ -202,7 +240,7 @@ export default function TableEditor<T extends Record<string, any>>(props: Props<
                   {columns.map((c, idx) => {
                     if (idx === 0) return <td key={c.key} className="py-2 px-1 text-[11px]">TOTAL</td>
                     if (showTotals.includes(c.key)) {
-                      const total = items.reduce((acc, it) => acc + parseFloat(String((it as any)[c.key] ?? 0) || '0'), 0)
+                      const total = filteredItems.reduce((acc, it) => acc + parseFloat(String((it as any)[c.key] ?? 0) || '0'), 0)
                       return (
                         <td key={c.key} className={`py-2 px-1 tabular-nums text-[11px] ${c.align === 'right' ? 'text-right' : ''}`}>
                           {c.format ? c.format(total) : total.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}
@@ -270,6 +308,7 @@ function Row<T extends Record<string, any>>({
           <Cell
             column={c}
             row={local}
+            invalid={!!c.required && (local[c.key] === null || local[c.key] === undefined || String(local[c.key]).trim() === '')}
             onChange={(v) => setLocal((s) => ({ ...s, [c.key]: v }))}
             onCommit={(v) => commit(c.key, v)}
           />
@@ -277,14 +316,14 @@ function Row<T extends Record<string, any>>({
       ))}
       <td className="py-1 px-1">
         {saving ? (
-          <Loader2 className="w-3 h-3 animate-spin text-aletis-verde" />
+          <Loader2 className="w-3 h-3 animate-spin text-foreground" />
         ) : (
           <button
             type="button"
             onClick={() => {
               if (confirm('Excluir este registro?')) onDelete()
             }}
-            className="text-aletis-grafite-claro hover:text-red-600"
+            className="text-muted-foreground hover:text-red-600"
             aria-label="Excluir"
           >
             <Trash2 className="w-3 h-3" />
@@ -296,19 +335,21 @@ function Row<T extends Record<string, any>>({
 }
 
 function Cell<T>({
-  column, row, onChange, onCommit,
+  column, row, invalid, onChange, onCommit,
 }: {
   column: TableColumn<T>
   row: T
+  invalid?: boolean
   onChange: (v: any) => void
   onCommit: (v: any) => void
 }) {
   const value = (row as any)[column.key]
+  const invalidClass = invalid ? 'border-red-300 bg-red-50/70 focus:ring-red-200' : ''
 
   if (column.computed) {
     const v = column.computed(row)
     return (
-      <span className="tabular-nums text-aletis-grafite-claro italic">
+      <span className="tabular-nums text-muted-foreground italic">
         {column.format ? column.format(v) : String(v ?? '—')}
       </span>
     )
@@ -319,7 +360,7 @@ function Cell<T>({
       <select
         value={value ?? ''}
         onChange={(e) => { onChange(e.target.value); onCommit(e.target.value) }}
-        className={`input-cell ${column.width ?? ''}`}
+        className={`input-cell ${column.width ?? ''} ${invalidClass}`}
       >
         <option value="">—</option>
         {column.options?.map((opt) => (
@@ -348,7 +389,7 @@ function Cell<T>({
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value)}
         onBlur={(e) => onCommit(e.target.value === '' ? null : e.target.value)}
-        className={`input-cell ${column.width ?? 'w-24'} ${column.align === 'right' ? 'text-right' : ''} tabular-nums`}
+        className={`input-cell ${column.width ?? 'w-24'} ${column.align === 'right' ? 'text-right' : ''} tabular-nums ${invalidClass}`}
         placeholder={column.default !== undefined ? String(column.default) : ''}
       />
     )
@@ -361,7 +402,7 @@ function Cell<T>({
         value={value ? String(value).slice(0, 10) : ''}
         onChange={(e) => onChange(e.target.value)}
         onBlur={(e) => onCommit(e.target.value || null)}
-        className={`input-cell ${column.width ?? 'w-32'}`}
+        className={`input-cell ${column.width ?? 'w-32'} ${invalidClass}`}
       />
     )
   }
@@ -370,11 +411,11 @@ function Cell<T>({
     <input
       type="text"
       value={value ?? ''}
-      onChange={(e) => onChange(e.target.value)}
-      onBlur={(e) => onCommit(e.target.value || null)}
-      className={`input-cell ${column.width ?? 'w-32'}`}
-      placeholder={column.default !== undefined ? String(column.default) : ''}
-    />
+    onChange={(e) => onChange(e.target.value)}
+    onBlur={(e) => onCommit(e.target.value || null)}
+    className={`input-cell ${column.width ?? 'w-32'} ${invalidClass}`}
+    placeholder={column.default !== undefined ? String(column.default) : ''}
+  />
   )
 }
 
@@ -382,7 +423,7 @@ function EmptyState({ msg }: { msg: string }) {
   return (
     <div className="rounded-lg border border-dashed border-aletis-grafite-claro/30 p-8 text-center bg-aletis-cream/20">
       <AlertTriangle className="w-6 h-6 text-aletis-grafite-claro/40 mx-auto mb-2" />
-      <p className="text-xs font-body text-aletis-grafite-claro">{msg}</p>
+      <p className="text-xs font-body text-muted-foreground">{msg}</p>
     </div>
   )
 }

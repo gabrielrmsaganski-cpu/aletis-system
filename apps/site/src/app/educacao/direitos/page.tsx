@@ -37,7 +37,7 @@ export default function DireitosIndex() {
   return (
     <EduLayout
       titulo="Direitos do produtor rural"
-      subtitulo="O produtor rural tem proteções legais que muitos consultores e advogados desconhecem. Saber exercer cada uma muda o equilíbrio da mesa."
+      subtitulo="O produtor rural tem proteções legais que muitos consultores e advogados desconhecem. Saber exercer cada uma muda o equilíbrio da negociação."
       breadcrumbs={[
         { label: 'Educação', href: '/educacao' },
         { label: 'Direitos' },
@@ -55,7 +55,7 @@ export default function DireitosIndex() {
       </Lead>
 
       <Callout tone="info" title="Princípio orientador">
-        Direitos do produtor rural não são "manhas processuais". São <Strong>ferramentas legais</Strong> previstas em lei e jurisprudência consolidada. Usá-las bem é fazer a mesa de negociação ficar honesta.
+        Direitos do produtor rural não são "manhas processuais". São <Strong>ferramentas legais</Strong> previstas em lei e jurisprudência consolidada. Usá-las bem ajuda a negociação a ficar honesta.
       </Callout>
 
       <div className="my-10 grid gap-4">

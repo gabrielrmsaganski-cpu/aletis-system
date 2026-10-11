@@ -11,12 +11,12 @@
 //   2. queimadas_regiao(lat, lon, raioKm) — focos próximos (FIRMS)
 //   3. alertas_desmatamento_municipio(codigoIbge) — DETER por município
 // ============================================================
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 import { DataSourceManager } from '../../DataSourceManager.js'
 
-export function buildClimaTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildClimaTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   tools.push({
     name: 'alertas_climaticos_agro',

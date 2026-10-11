@@ -9,7 +9,7 @@
 // Os arquivos preservam 100% da formatação, fontes e logos do original.
 // ============================================================
 
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 import {
   getContractTemplateService,
   type RenderClienteData,
@@ -18,6 +18,17 @@ import {
 import { resolveTemplateSlug } from '../../contratos/templateResolver.js'
 import { alixGetClientes } from '../../AlixService.js'
 import { cacheRender } from '../../../routes/contratos-templates.js'
+
+function parseInputs(value: unknown): Record<string, string> | undefined {
+  if (!value) return undefined
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
+    return Object.fromEntries(Object.entries(parsed).map(([key, item]) => [key, String(item ?? '')]))
+  } catch {
+    return undefined
+  }
+}
 
 function loadCliente(clienteId: string): RenderClienteData | null {
   const list = alixGetClientes()
@@ -45,9 +56,9 @@ function loadCliente(clienteId: string): RenderClienteData | null {
   }
 }
 
-export function buildContratosOficiaisTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildContratosOficiaisTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   // ── listar_contratos_oficiais ───────────────────────────────
   tools.push({
@@ -95,13 +106,26 @@ export function buildContratosOficiaisTools(): { tools: ClaudeTool[]; registry: 
       properties: {
         clienteId: { type: 'string', description: 'ID do cliente no CRM' },
         templateSlug: { type: 'string', description: 'Slug OU nome natural do template (consultoria, NDA, procuração, termo de aceite, etc.)' },
-        inputs: {
-          type: 'object',
-          description: 'Overrides para campos manuais (ex.: { contrato_numero: "107/2026", contrato_data: "27/04/2026" })',
+        inputsJson: {
+          type: 'string',
+          description: 'JSON válido de overrides (ex.: {"contrato_numero":"107/2026"})',
         },
         outorgantes: {
           type: 'array',
-          description: 'Para NDA/Procuração: array de pessoas { nome, qualificacao, endereco, cep, rg, orgaoRg, cpf, genero (M|F) }',
+          description: 'Para NDA/Procuração: array de pessoas',
+          items: {
+            type: 'object',
+            properties: {
+              nome: { type: 'string' },
+              qualificacao: { type: 'string' },
+              endereco: { type: 'string' },
+              cep: { type: 'string' },
+              rg: { type: 'string' },
+              orgaoRg: { type: 'string' },
+              cpf: { type: 'string' },
+              genero: { type: 'string', enum: ['M', 'F'] },
+            },
+          },
         },
       },
       required: ['clienteId', 'templateSlug'],
@@ -119,7 +143,7 @@ export function buildContratosOficiaisTools(): { tools: ClaudeTool[]; registry: 
         const preview = svc.preview({
           templateSlug: resolved.slug,
           cliente,
-          inputs: (input.inputs ?? undefined) as Record<string, string> | undefined,
+          inputs: parseInputs(input.inputsJson),
           outorgantes: input.outorgantes as OutorganteEntry[] | undefined,
         })
         return {
@@ -153,8 +177,24 @@ export function buildContratosOficiaisTools(): { tools: ClaudeTool[]; registry: 
       properties: {
         clienteId: { type: 'string' },
         templateSlug: { type: 'string', description: 'Slug OU nome natural do template' },
-        inputs: { type: 'object', description: 'Overrides manuais' },
-        outorgantes: { type: 'array', description: 'Para NDA/Procuração' },
+        inputsJson: { type: 'string', description: 'JSON válido com overrides manuais' },
+        outorgantes: {
+          type: 'array',
+          description: 'Para NDA/Procuração: array de pessoas',
+          items: {
+            type: 'object',
+            properties: {
+              nome: { type: 'string' },
+              qualificacao: { type: 'string' },
+              endereco: { type: 'string' },
+              cep: { type: 'string' },
+              rg: { type: 'string' },
+              orgaoRg: { type: 'string' },
+              cpf: { type: 'string' },
+              genero: { type: 'string', enum: ['M', 'F'] },
+            },
+          },
+        },
       },
       required: ['clienteId', 'templateSlug'],
     },
@@ -171,7 +211,7 @@ export function buildContratosOficiaisTools(): { tools: ClaudeTool[]; registry: 
         const result = svc.render({
           templateSlug: resolved.slug,
           cliente,
-          inputs: (input.inputs ?? undefined) as Record<string, string> | undefined,
+          inputs: parseInputs(input.inputsJson),
           outorgantes: input.outorgantes as OutorganteEntry[] | undefined,
         })
         const token = cacheRender(result.buffer, result.filename)

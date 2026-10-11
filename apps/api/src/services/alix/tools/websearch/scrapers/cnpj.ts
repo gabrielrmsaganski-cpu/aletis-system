@@ -1,7 +1,7 @@
-import type { ClaudeTool, ClaudeToolRegistry } from '../../../../llm/ClaudeFoundryClient.js';
+import type { LLMTool, LLMToolRegistry } from '../../../../llm/OpenAIClient.js';
 
-export function buildCnpjTool(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tool: ClaudeTool = {
+export function buildCnpjTool(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tool: LLMTool = {
     name: 'consultar_cnpj_detalhado',
     description: 'Consulta BrasilAPI para dados públicos da Receita Federal: razão social, CNAE, situação cadastral, sócios, endereço, porte, situação especial (falida, RJ, etc).',
     input_schema: {

@@ -60,11 +60,11 @@ export default function BenchmarkPanel({ grupoId }: Props) {
       <div className="card-premium p-4">
         <div className="flex items-center gap-2 mb-2">
           <Trophy className="w-5 h-5 text-aletis-dourado" />
-          <h3 className="text-sm font-display font-semibold text-aletis-grafite-escuro">
+          <h3 className="text-sm font-display font-semibold text-foreground">
             Benchmark — {data.grupoNome} vs carteira
           </h3>
         </div>
-        <p className="text-[11px] text-aletis-grafite-claro">
+        <p className="text-[11px] text-muted-foreground">
           Carteira do consultor: <strong>{data.carteiraSize}</strong> grupos · Comparação vs média/mediana e referência setorial agro
         </p>
       </div>
@@ -94,7 +94,7 @@ function KpiBenchmark({ kpi }: { kpi: Kpi }) {
   }[kpi.classificacao]
 
   const classIcon = {
-    top: <TrendingUp className="w-3.5 h-3.5 text-aletis-verde" />,
+    top: <TrendingUp className="w-3.5 h-3.5 text-foreground" />,
     media: <Target className="w-3.5 h-3.5 text-aletis-dourado" />,
     abaixo: <TrendingDown className="w-3.5 h-3.5 text-red-600" />,
   }[kpi.classificacao]
@@ -110,28 +110,28 @@ function KpiBenchmark({ kpi }: { kpi: Kpi }) {
       <div className="flex items-baseline justify-between mb-2">
         <div className="flex items-center gap-1.5">
           {classIcon}
-          <h4 className="text-sm font-display font-semibold text-aletis-grafite-escuro">{kpi.rotulo}</h4>
+          <h4 className="text-sm font-display font-semibold text-foreground">{kpi.rotulo}</h4>
         </div>
-        <div className="text-[10px] text-aletis-grafite-claro tabular-nums">
-          ranking <span className="font-bold text-aletis-grafite-escuro">{kpi.ranking}/{kpi.totalCarteira}</span>
-          {kpi.classificacao === 'top' && <span className="ml-1 text-aletis-verde">🏆</span>}
+        <div className="text-[11px] text-muted-foreground tabular-nums">
+          ranking <span className="font-bold text-foreground">{kpi.ranking}/{kpi.totalCarteira}</span>
+          {kpi.classificacao === 'top' && <span className="ml-1 text-foreground">🏆</span>}
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-[10px]">
+      <div className="grid grid-cols-3 gap-2 text-[11px]">
         <div>
-          <p className="uppercase tracking-wider text-aletis-grafite-claro">Este grupo</p>
-          <p className="text-base font-display font-bold text-aletis-grafite-escuro tabular-nums">{fmt(kpi.valor)}</p>
+          <p className="uppercase tracking-wider text-muted-foreground">Este grupo</p>
+          <p className="text-base font-display font-semibold text-foreground tabular-nums">{fmt(kpi.valor)}</p>
         </div>
         <div>
-          <p className="uppercase tracking-wider text-aletis-grafite-claro">Média carteira</p>
-          <p className="text-base font-display font-bold text-aletis-grafite-claro tabular-nums">{fmt(kpi.mediaCarteira)}</p>
-          <p className="text-[9px] text-aletis-grafite-claro">mediana {fmt(kpi.medianaCarteira)}</p>
+          <p className="uppercase tracking-wider text-muted-foreground">Média carteira</p>
+          <p className="text-base font-display font-semibold text-muted-foreground tabular-nums">{fmt(kpi.mediaCarteira)}</p>
+          <p className="text-[11px] text-muted-foreground">mediana {fmt(kpi.medianaCarteira)}</p>
         </div>
         <div>
-          <p className="uppercase tracking-wider text-aletis-grafite-claro">Setor</p>
-          <p className="text-base font-display font-bold text-aletis-grafite-claro tabular-nums">{fmt(kpi.setorReferencia)}</p>
-          <p className="text-[9px] text-aletis-grafite-claro truncate" title={kpi.setorRotulo}>{kpi.setorRotulo}</p>
+          <p className="uppercase tracking-wider text-muted-foreground">Setor</p>
+          <p className="text-base font-display font-semibold text-muted-foreground tabular-nums">{fmt(kpi.setorReferencia)}</p>
+          <p className="text-[11px] text-muted-foreground truncate" title={kpi.setorRotulo}>{kpi.setorRotulo}</p>
         </div>
       </div>
 
@@ -148,11 +148,11 @@ function KpiBenchmark({ kpi }: { kpi: Kpi }) {
 function Bar({ label, pct, cor, valor }: { label: string; pct: number; cor: string; valor: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[9px] uppercase text-aletis-grafite-claro w-14">{label}</span>
+      <span className="text-[11px] uppercase text-muted-foreground w-14">{label}</span>
       <div className="flex-1 h-2 bg-aletis-grafite-claro/10 rounded overflow-hidden">
         <div className={`h-full ${cor} transition-all`} style={{ width: `${Math.max(2, Math.min(100, pct))}%` }} />
       </div>
-      <span className="text-[9px] tabular-nums text-aletis-grafite-escuro w-20 text-right font-semibold">{valor}</span>
+      <span className="text-[11px] tabular-nums text-foreground w-20 text-right font-semibold">{valor}</span>
     </div>
   )
 }

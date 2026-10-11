@@ -1,11 +1,11 @@
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert';
 import type { SubAgent, SubAgentContext, SubAgentResult } from '../../src/services/alix/agents/types.ts';
 
 test('SubAgent tem shape esperado', () => {
   const fake: SubAgent = {
     name: 'FakeAgent',
-    model: 'claude-sonnet-4-6',
+    model: 'gpt-5.6-terra',
     buildSystemPrompt: () => 'prompt',
     buildTools: () => ({ tools: [], registry: {} }),
     run: async () => ({

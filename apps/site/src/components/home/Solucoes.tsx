@@ -1,71 +1,64 @@
 import Link from 'next/link'
-import {
-  Stethoscope,
-  RefreshCw,
-  Scale,
-  TrendingUp,
-  BarChart3,
-  LifeBuoy,
-  ArrowUpRight,
-} from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { Reveal } from '@/components/ui/Reveal'
 import { Eyebrow } from '@/components/ui/Eyebrow'
+import { BrandIcon } from '@/components/ui/BrandIcon'
 
 const solucoes = [
   {
-    icone: Stethoscope,
+    icone: 2,
     titulo: 'Diagnóstico Financeiro',
-    sub: 'Porta de entrada · 72h',
+    sub: 'Primeira leitura · 72h',
     descricao:
-      'Toda a dívida do produtor em uma única memória de cálculo auditável, com abusividade mapeada, DSCR dimensionado e plano priorizado.',
-    tag: 'Gratuito',
+      'Organiza contratos, extratos, garantias e vencimentos para mostrar onde a pressão está e quais caminhos fazem sentido.',
+    tag: 'Entrada',
     href: '/solucoes#diagnostico',
   },
   {
-    icone: RefreshCw,
+    icone: 7,
     titulo: 'Reestruturação de Dívida',
-    sub: 'Multi-credor · DSCR realista',
+    sub: 'Credores · fluxo de safra',
     descricao:
-      'Mesa técnica única com banco, cooperativa, revenda e cerealista simultaneamente. Plano executável em 60–120 meses com contratos prontos para assinar.',
-    tag: 'Serviço principal',
+      'Desenha uma proposta negociável por credor, com prazos, garantias e capacidade de pagamento conectados à realidade da operação.',
+    tag: 'Principal',
     href: '/solucoes#reestruturacao',
   },
   {
-    icone: Scale,
+    icone: 12,
     titulo: 'Revisional & Abusividade',
     sub: 'Anatocismo · Crédito rural',
     descricao:
-      'Auditoria técnica de CCBs, CPRs e cédulas rurais. Identifica anatocismo, capitalização indevida e descaracterização sob Res. BCB 4.966/21.',
-    tag: 'Alta conversão',
+      'Revisa CCBs, CPRs e cédulas rurais para separar cobrança legítima de encargos e cláusulas que pedem contestação técnica.',
+    tag: 'Revisão',
     href: '/solucoes#revisional',
   },
   {
-    icone: TrendingUp,
+    icone: 17,
     titulo: 'Estruturação Financeira',
     sub: 'Prevenção · profissionalização',
     descricao:
-      'Visibilidade de caixa, DRE por fazenda, política de endividamento e governança de garantias. Para grupos que cresceram sem área financeira.',
+      'Cria visibilidade de caixa, DRE por unidade, política de endividamento e governança de garantias para reduzir surpresa.',
     tag: 'Preventivo',
     href: '/solucoes#estruturacao',
   },
   {
-    icone: BarChart3,
+    icone: 21,
     titulo: 'Inteligência de Mercado',
     sub: 'Commodities · Basis · Timing',
     descricao:
-      'Quando vender, quanto travar, em que basis, com que hedge. Decisão de comercialização deixa de ser calendário e vira tese.',
+      'Apoio para comercialização, trava, basis, câmbio e cenário de safra com uma leitura que conversa com o caixa.',
     tag: 'Recorrente',
     href: '/solucoes#mercado',
   },
   {
-    icone: LifeBuoy,
+    icone: 24,
     titulo: 'Gestão de Crise',
     sub: 'Turn-around · urgência',
     descricao:
-      'Para o produtor em estágio crítico: protesto, execução, risco patrimonial. Triagem em 24h e estabilização do perímetro antes da reestruturação formal.',
-    tag: 'Emergência',
+      'Para protesto, execução, perda de prazo ou risco patrimonial: prioriza o que precisa ser estabilizado antes da negociação longa.',
+    tag: 'Urgência',
     href: '/solucoes#crise',
   },
 ]
@@ -78,12 +71,12 @@ export function Solucoes() {
           <Reveal>
             <Eyebrow>Consultoria</Eyebrow>
             <h2 className="mt-6 display-lg max-w-2xl text-aletis-grafite-escuro">
-              Seis frentes.{' '}
-              <span className="italic text-aletis-verde-escuro">Uma única mesa.</span>
+              Seis frentes para{' '}
+              <span className="italic text-aletis-verde-escuro">organizar decisões difíceis</span>.
             </h2>
             <p className="mt-5 max-w-lg text-[15px] leading-relaxed text-aletis-grafite-medio">
-              Consultoria financeira estratégica para o agro — do diagnóstico ao acompanhamento
-              pós-acordo. Sem vender software, sem vender parecer. Entregando decisão.
+              Do primeiro diagnóstico ao acompanhamento posterior ao acordo,
+              a entrega fica concentrada em documentos, números e próximos passos.
             </p>
           </Reveal>
           <Reveal delay={100}>
@@ -95,9 +88,7 @@ export function Solucoes() {
         </div>
 
         <div className="mt-14 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {solucoes.map((s, i) => {
-            const Icon = s.icone
-            return (
+          {solucoes.map((s, i) => (
               <Reveal key={s.titulo} delay={(i % 3) * 80}>
                 <Link
                   href={s.href}
@@ -105,7 +96,7 @@ export function Solucoes() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-aletis-dourado/40 bg-aletis-dourado/10 text-aletis-verde-escuro transition group-hover:bg-aletis-dourado/20">
-                      <Icon className="h-5 w-5" />
+                      <BrandIcon id={s.icone} size={44} />
                     </div>
                     <span className="rounded-full border border-aletis-borda bg-aletis-marfim px-2.5 py-1 text-[10px] font-display font-semibold uppercase tracking-wider text-aletis-grafite-escuro">
                       {s.tag}
@@ -126,8 +117,7 @@ export function Solucoes() {
                   </div>
                 </Link>
               </Reveal>
-            )
-          })}
+          ))}
         </div>
       </Container>
     </Section>

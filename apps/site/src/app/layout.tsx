@@ -93,7 +93,7 @@ const ORGANIZATION_JSONLD = {
   alternateName: siteConfig.name,
   description: siteConfig.longDescription,
   url: siteConfig.url,
-  logo: `${siteConfig.url}/brand/logos/aletis-principal-cream.png`,
+  logo: `${siteConfig.url}/brand/logos/principal-03.png`,
   image: `${siteConfig.url}${siteConfig.ogImage}`,
   email: siteConfig.contact.email,
   ...(siteConfig.contact.telefone ? { telephone: siteConfig.contact.telefone } : {}),
@@ -122,7 +122,7 @@ const ORGANIZATION_JSONLD = {
     'DSCR',
     'Agronegócio',
   ],
-  slogan: 'Verdade nos números. Prosperidade nos acordos.',
+  slogan: 'Finanças Estratégicas & Agrobusiness',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

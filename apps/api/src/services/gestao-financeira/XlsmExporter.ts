@@ -17,8 +17,10 @@ import PizZip from 'pizzip'
 import type {
   GfGrupo, GfMembro, GfCulturaSafra, GfCustoSafra,
   GfDemanda, GfContratoDivida, GfAtivoFazenda,
+  GfPassivoOutro, GfGarantia, GfPremissa,
 } from '../../db/schema.js'
 import { getGestaoFinanceiraService } from './GestaoFinanceiraService.js'
+import { getGestaoFinanceiraServiceV2 } from './GestaoFinanceiraServiceV2.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -55,6 +57,16 @@ interface CellWrite {
   type: 'text' | 'number'
 }
 
+function num(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null
+  const raw = String(value).trim()
+  const normalized = raw.includes(',')
+    ? raw.replace(/\./g, '').replace(',', '.')
+    : raw
+  const n = typeof value === 'number' ? value : parseFloat(normalized)
+  return isFinite(n) ? n : null
+}
+
 /** Constrói lista de células a injetar com base nos dados do grupo. */
 function buildCellWrites(args: {
   grupo: GfGrupo
@@ -64,10 +76,13 @@ function buildCellWrites(args: {
   demandas: GfDemanda[]
   contratos: GfContratoDivida[]
   fazendas: GfAtivoFazenda[]
+  passivosOutros: GfPassivoOutro[]
+  garantias: GfGarantia[]
+  premissas: GfPremissa[]
   versao: 'v1' | 'v2'
 }): CellWrite[] {
   const writes: CellWrite[] = []
-  const { grupo, membros, culturas, custos, demandas, contratos, fazendas, versao } = args
+  const { grupo, membros, culturas, custos, demandas, contratos, fazendas, passivosOutros, garantias, premissas, versao } = args
 
   // Mapping de células conforme versão
   const sheetCadastro = versao === 'v2' ? '3 - Cadastro' : 'Cadastro'
@@ -76,6 +91,9 @@ function buildCellWrites(args: {
   const sheetDemandas = versao === 'v2' ? '5 - Demandas' : 'Crédito'
   const sheetEndividamento = versao === 'v2' ? '10 - Endividamento' : 'Endividamento'
   const sheetAtivos = versao === 'v2' ? '8 - Ativos' : 'Ativos'
+  const sheetPassivos = versao === 'v2' ? '11 - Passivos' : 'Passivos'
+  const sheetGarantias = versao === 'v2' ? '14 - Garantias' : 'Garantias'
+  const sheetPremissas = versao === 'v2' ? '13 - PREMISSAS(PADRONIZAR)' : 'Premissas'
 
   // ── 3 - Cadastro
   // C18 (v2) ou C17 (v1) = Nome do Grupo
@@ -159,6 +177,67 @@ function buildCellWrites(args: {
     if (f.nrCcir) writes.push({ sheet: sheetAtivos, addr: `Z${r}`, value: f.nrCcir, type: 'text' })
     if (f.nrItr) writes.push({ sheet: sheetAtivos, addr: `AA${r}`, value: f.nrItr, type: 'text' })
     if (f.nrCar) writes.push({ sheet: sheetAtivos, addr: `AC${r}`, value: f.nrCar, type: 'text' })
+  }
+
+  // ── Passivos não bancários — espelha importador da aba 11
+  let fornecedorRow = 22
+  let dividendosRow = 22
+  let arrendamentoRow = 22
+  for (const p of passivosOutros) {
+    if ((p.tipo === 'fornecedor' || p.tipo === 'fiscal' || p.tipo === 'trabalhista' || p.tipo === 'outro') && fornecedorRow <= 85) {
+      const r = fornecedorRow++
+      writes.push({ sheet: sheetPassivos, addr: `AM${r}`, value: p.credor ?? p.descricao, type: 'text' })
+      if (p.observacoes) writes.push({ sheet: sheetPassivos, addr: `AN${r}`, value: p.observacoes, type: 'text' })
+      if (p.finalidade) writes.push({ sheet: sheetPassivos, addr: `AO${r}`, value: p.finalidade, type: 'text' })
+      if (p.vencimento) writes.push({ sheet: sheetPassivos, addr: `AP${r}`, value: p.vencimento, type: 'text' })
+      const valor = num(p.valor)
+      if (valor !== null) writes.push({ sheet: sheetPassivos, addr: `AQ${r}`, value: valor, type: 'number' })
+    } else if ((p.tipo === 'dividendos' || p.tipo === 'pro_labore') && dividendosRow <= 85) {
+      const r = dividendosRow++
+      const valor = num(p.valor)
+      if (valor !== null) {
+        writes.push({ sheet: sheetPassivos, addr: p.tipo === 'dividendos' ? `AS${r}` : `AT${r}`, value: valor, type: 'number' })
+      }
+    } else if (p.tipo === 'arrendamento' && arrendamentoRow <= 85) {
+      const r = arrendamentoRow++
+      writes.push({ sheet: sheetPassivos, addr: `AV${r}`, value: p.descricao, type: 'text' })
+      if (p.vencimento) writes.push({ sheet: sheetPassivos, addr: `BB${r}`, value: p.vencimento, type: 'text' })
+      if (p.valor) {
+        const valor = num(p.valor)
+        if (valor !== null) writes.push({ sheet: sheetPassivos, addr: `BH${r}`, value: valor, type: 'number' })
+      }
+      if (p.observacoes) writes.push({ sheet: sheetPassivos, addr: `AX${r}`, value: p.observacoes, type: 'text' })
+    }
+  }
+
+  // ── Garantias — aba 14
+  for (let i = 0; i < Math.min(garantias.length, 64); i++) {
+    const g = garantias[i]
+    const r = 22 + i
+    if (g.matricula) writes.push({ sheet: sheetGarantias, addr: `C${r}`, value: g.matricula, type: 'text' })
+    writes.push({ sheet: sheetGarantias, addr: `D${r}`, value: g.descricao, type: 'text' })
+    const area = num(g.areaHa)
+    if (area !== null) writes.push({ sheet: sheetGarantias, addr: `F${r}`, value: area, type: 'number' })
+    const valorMercado = num(g.valorMercado)
+    if (valorMercado !== null) writes.push({ sheet: sheetGarantias, addr: `H${r}`, value: valorMercado, type: 'number' })
+    const valorForcado = num(g.valorForcado)
+    if (valorForcado !== null) writes.push({ sheet: sheetGarantias, addr: `I${r}`, value: valorForcado, type: 'number' })
+    if (g.contratoVinculado) writes.push({ sheet: sheetGarantias, addr: `P${r}`, value: g.contratoVinculado, type: 'text' })
+    if (g.registrosAverbacoes) writes.push({ sheet: sheetGarantias, addr: `T${r}`, value: g.registrosAverbacoes, type: 'text' })
+    if (g.baixasAditivos) writes.push({ sheet: sheetGarantias, addr: `U${r}`, value: g.baixasAditivos, type: 'text' })
+    if (g.observacoes) writes.push({ sheet: sheetGarantias, addr: `V${r}`, value: g.observacoes, type: 'text' })
+  }
+
+  // ── Premissas gerais — bloco aberto para auditoria e reimportação
+  for (let i = 0; i < Math.min(premissas.length, 80); i++) {
+    const p = premissas[i]
+    const r = 22 + i
+    writes.push({ sheet: sheetPremissas, addr: `B${r}`, value: p.rotulo, type: 'text' })
+    const valor = num(p.valor)
+    writes.push({ sheet: sheetPremissas, addr: `C${r}`, value: valor ?? p.valor, type: valor === null ? 'text' : 'number' })
+    if (p.unidade) writes.push({ sheet: sheetPremissas, addr: `D${r}`, value: p.unidade, type: 'text' })
+    if (p.fonte) writes.push({ sheet: sheetPremissas, addr: `E${r}`, value: p.fonte, type: 'text' })
+    if (p.observacoes) writes.push({ sheet: sheetPremissas, addr: `F${r}`, value: p.observacoes, type: 'text' })
   }
 
   // ── Custos do Cliente — bloco D19:I66 (insumos por cultura) ou D75:E96 (demais custos)
@@ -313,19 +392,35 @@ export async function exportarParaXlsm(input: ExportXlsmInput): Promise<ExportXl
   }
 
   const svc = getGestaoFinanceiraService()
+  const svcV2 = getGestaoFinanceiraServiceV2()
   const grupo = await svc.obterGrupo(input.grupoId)
   if (!grupo) throw new Error(`Grupo ${input.grupoId} não encontrado`)
 
-  const [membros, culturas, custos, demandas, contratos, fazendas] = await Promise.all([
+  const [membros, culturas, custos, demandas, contratos, fazendas, passivosOutros, garantias, premissas] = await Promise.all([
     svc.listarMembros(input.grupoId),
     svc.listarCulturas(input.grupoId),
     svc.listarCustos(input.grupoId),
     svc.listarDemandas(input.grupoId),
     svc.listarContratos(input.grupoId),
     svc.listarFazendas(input.grupoId),
+    svcV2.listarPassivosOutros(input.grupoId),
+    svcV2.listarGarantias(input.grupoId),
+    svcV2.listarPremissas(input.grupoId),
   ])
 
-  const writes = buildCellWrites({ grupo, membros, culturas, custos, demandas, contratos, fazendas, versao })
+  const writes = buildCellWrites({
+    grupo,
+    membros,
+    culturas,
+    custos,
+    demandas,
+    contratos,
+    fazendas,
+    passivosOutros,
+    garantias,
+    premissas,
+    versao,
+  })
 
   const buf = readFileSync(templatePath)
   const zip = new PizZip(buf)

@@ -12,6 +12,7 @@ export const MIME_GROUPS = {
   spreadsheet: [
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'application/vnd.ms-excel',
+    'application/vnd.ms-excel.sheet.macroEnabled.12',
     'text/csv',
     'application/csv',
   ],
@@ -24,6 +25,8 @@ export const MIME_GROUPS = {
     'application/x-ofx',
     'application/x-quicken-ofx',
     'text/plain',
+    'text/markdown',
+    'text/x-markdown',
     // OFX antigos vêm como application/octet-stream
     'application/octet-stream',
   ],
@@ -39,7 +42,7 @@ export type MimeGroup = keyof typeof MIME_GROUPS
 export function mimeWhitelist(...groups: MimeGroup[]): Set<string> {
   const set = new Set<string>()
   for (const g of groups) {
-    for (const m of MIME_GROUPS[g]) set.add(m)
+    for (const m of MIME_GROUPS[g]) set.add(m.toLowerCase())
   }
   return set
 }

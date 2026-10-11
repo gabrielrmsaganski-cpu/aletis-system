@@ -9,6 +9,8 @@ import {
   calcularPrecoVenda,
   calcularFarms,
   rankearCenarios,
+  calcularFechamentoGeralEmbarque,
+  FECHAMENTO_ARI_PRADO_2024_INPUT,
   type DREInput,
   type BPInput,
 } from '../src/agro/index.js'
@@ -229,4 +231,30 @@ test('Ranking de cenários ordena por margem desc', () => {
   const ranked = rankearCenarios(cenarios)
   assert.equal(ranked[0].nome, 'B')
   assert.ok(ranked[0].result.margemBruta > ranked[1].result.margemBruta)
+})
+
+// ────────────────────────────────────────────────────────────
+// Fechamento por Embarque — Ari do Prado 2024
+// ────────────────────────────────────────────────────────────
+
+test('Fechamento por Embarque reproduz totais principais da planilha Ari do Prado', () => {
+  const r = calcularFechamentoGeralEmbarque(FECHAMENTO_ARI_PRADO_2024_INPUT)
+
+  assert.equal(r.geral.totalAnimais, 3148)
+  assert.ok(Math.abs(r.geral.pesoEntradaKg - 404.1129669631512) < 0.00001)
+  assert.ok(Math.abs(r.geral.precoEntradaRsCab - 2918.86687081745) < 0.00001)
+  assert.ok(Math.abs(r.geral.precoVendaRsCab - 4962.485289983459) < 0.00001)
+  assert.ok(Math.abs(r.geral.margemBrutaRsCab - 2043.6184191660086) < 0.00001)
+  assert.ok(Math.abs(r.geral.custoOperacionalTotalRsCab - 1211.3161264294786) < 0.00001)
+  assert.ok(Math.abs(r.geral.lucroLiquidoRsCab - 832.3022927365292) < 0.00001)
+  assert.ok(Math.abs(r.geral.rentabilidadeMensalPct - 0.06290162641783383) < 0.00001)
+  assert.ok(Math.abs(r.geral.lucroLiquidoTotalRs - 2_620_087.617534594) < 0.02)
+})
+
+test('Fechamento por Embarque destaca melhores e piores baias por lucro', () => {
+  const r = calcularFechamentoGeralEmbarque(FECHAMENTO_ARI_PRADO_2024_INPUT)
+
+  assert.equal(r.rankingLucro[0].id, 'embarque-23')
+  assert.equal(r.rankingLucro.at(-1)?.id, 'embarque-11')
+  assert.ok(r.alertas.some((a) => a.includes('lucro liquido negativo')))
 })

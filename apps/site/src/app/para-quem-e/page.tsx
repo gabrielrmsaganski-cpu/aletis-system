@@ -1,18 +1,12 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import {
-  Tractor,
-  Building2,
-  Users2,
-  Warehouse,
-  Briefcase,
-  ArrowRight,
-} from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { Reveal } from '@/components/ui/Reveal'
 import { Eyebrow } from '@/components/ui/Eyebrow'
+import { BrandIcon } from '@/components/ui/BrandIcon'
 
 export const metadata: Metadata = {
   title: 'Para quem é · Produtores, grupos, cooperativas e empresas do agro',
@@ -23,23 +17,23 @@ export const metadata: Metadata = {
 
 const publicos = [
   {
-    icone: Tractor,
+    icone: 1,
     titulo: 'Produtor Rural',
     sub: 'Pessoa Física ou PJ Rural',
     dor: 'Safra comprometida pela parcela, múltiplos credores pressionando, falta de interlocução técnica que fale a língua do campo.',
-    solucao: 'Diagnóstico auditável em 72h, mesa multi-credor simultânea, plano com DSCR realista e contratos prontos.',
-    resultado: 'Redução média de 62% no saldo devedor e parcela compatível com o fluxo de safra.',
+    solucao: 'Primeira leitura em até 72h, mapa de credores, cenário de pagamento e estratégia de abordagem.',
+    resultado: 'Decisão mais clara sobre renegociar, revisar, priorizar ou estabilizar o caixa antes da próxima safra.',
   },
   {
-    icone: Users2,
+    icone: 6,
     titulo: 'Grupo Agrícola',
     sub: 'Holdings e grupos familiares',
     dor: 'Exposição consolidada difícil de visualizar, gestão financeira fragmentada entre fazendas, risco de uma ponta derrubar o grupo.',
-    solucao: 'Diagnóstico consolidado por entidade, cenarização de stress por CAR e CPF/CNPJ, plano unificado de reestruturação.',
+    solucao: 'Diagnóstico consolidado por entidade, cenarização de stress por CAR e CPF/CNPJ e plano financeiro unificado.',
     resultado: 'Visão 360° do passivo do grupo e plano estratégico que preserva o patrimônio familiar.',
   },
   {
-    icone: Building2,
+    icone: 11,
     titulo: 'Cooperativa',
     sub: 'Cooperativas agropecuárias',
     dor: 'Cooperados em inadimplência, risco sistêmico na carteira, necessidade de reestruturar sem perder relacionamento.',
@@ -47,7 +41,7 @@ const publicos = [
     resultado: 'Carteira regularizada, cooperado ativo e previsibilidade financeira para a cooperativa.',
   },
   {
-    icone: Warehouse,
+    icone: 16,
     titulo: 'Cerealista / Trading',
     sub: 'Empresas de originação',
     dor: 'Produtor rural devedor que não entrega a CPR, risco de perda da originação, dificuldade em dimensionar exposição real.',
@@ -55,7 +49,7 @@ const publicos = [
     resultado: 'Originação preservada com previsibilidade de entrega física ou financeira.',
   },
   {
-    icone: Briefcase,
+    icone: 21,
     titulo: 'Empresa do Agro',
     sub: 'Revendas, insumos, serviços',
     dor: 'Inadimplência de clientes produtores, carteira de recebíveis deteriorada, necessidade de cobrança sem queimar relacionamento.',
@@ -72,10 +66,10 @@ export default function ParaQuemPage() {
         titulo={
           <>
             Se o seu negócio{' '}
-            <span className="italic text-aletis-dourado">depende do agro</span>, a ALETIS foi feita para você.
+            <span className="italic text-aletis-dourado">depende do agro</span>, a conversa precisa ser financeira.
           </>
         }
-        subtitulo="Do produtor pessoa física ao grupo com múltiplas fazendas, da cooperativa ao cerealista — atendemos toda a cadeia que vive do campo e precisa de interlocução financeira sofisticada."
+        subtitulo="Do produtor pessoa física ao grupo com múltiplas fazendas, da cooperativa ao cerealista: atendemos quem precisa organizar caixa, dívida, contratos e relacionamento com credores."
         breadcrumbs={[
           { label: 'Início', href: '/' },
           { label: 'Para quem é' },
@@ -86,7 +80,6 @@ export default function ParaQuemPage() {
         <Container>
           <div className="space-y-5">
             {publicos.map((p, i) => {
-              const Icon = p.icone
               return (
                 <Reveal key={p.titulo} delay={i * 60}>
                   <article className="group relative overflow-hidden rounded-3xl border border-aletis-borda/70 bg-white transition-all duration-500 hover:border-aletis-dourado/40 hover:shadow-premium">
@@ -94,7 +87,7 @@ export default function ParaQuemPage() {
                       {/* Left — persona */}
                       <div className="flex flex-col items-start gap-4 border-aletis-borda/60 md:border-r md:pr-10">
                         <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-aletis-dourado/40 bg-aletis-dourado/10 text-aletis-verde-escuro">
-                          <Icon className="h-6 w-6" />
+                          <BrandIcon id={p.icone} size={52} />
                         </div>
                         <div>
                           <h2 className="font-display text-2xl font-semibold text-aletis-grafite-escuro">
@@ -153,10 +146,10 @@ export default function ParaQuemPage() {
                     Seu caso não está na lista?
                   </p>
                   <h3 className="mt-3 font-display text-2xl font-semibold md:text-3xl">
-                    Toda conversa começa com um diagnóstico. Gratuito. Em 72h.
+                    Toda conversa começa por entender o que está pressionando o caixa.
                   </h3>
                   <p className="mt-2 max-w-xl text-sm text-white/70">
-                    Se o seu passivo envolve crédito rural, CPR, cooperativa ou qualquer ponta do agro, faz sentido sentarmos.
+                    Se o passivo envolve crédito rural, CPR, cooperativa ou qualquer ponta do agro, faz sentido organizar os documentos antes da próxima decisão.
                   </p>
                 </div>
                 <Link href="/contato" className="btn-primary flex-shrink-0">

@@ -1,5 +1,5 @@
 /**
- * Bootstrap dos templates do Processo de Assessoria TEX CAPITAL.
+ * Bootstrap dos templates do Processo de Assessoria ALETIS.
  *
  * Lê os 25 originais em /documentos/processo-assessoria/originais/
  * (mais a versão v2.0 em /documentos2/) e copia para

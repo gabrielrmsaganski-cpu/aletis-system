@@ -16,7 +16,7 @@
 //
 // Quando DATAJUD_API_KEY está presente, usamos a API oficial.
 // ============================================================
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 
 type PortalTJ = {
   uf: string
@@ -85,9 +85,9 @@ async function datajudPorCPF(cpfCnpj: string): Promise<unknown> {
   return out
 }
 
-export function buildTjProcessosTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildTjProcessosTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   tools.push({
     name: 'consultar_processos_tj',

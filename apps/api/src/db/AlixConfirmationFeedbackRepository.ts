@@ -17,18 +17,22 @@ import { getDb, isPgEnabled } from './client.js'
 import { alixConfirmation, alixFeedback } from './schema.js'
 
 interface ConfirmationLike {
-  id: string
+  id?: string
+  batchId?: string
   sessionId?: string
   status?: string // 'pending'|'approved'|'rejected'|'expired'
   expiraEm?: number | string
+  expiresAt?: number | string
   [k: string]: unknown
 }
 
 interface BatchLike {
-  id: string
+  id?: string
+  batchId?: string
   sessionId?: string
   status?: string
   expiraEm?: number | string
+  expiresAt?: number | string
   [k: string]: unknown
 }
 
@@ -36,9 +40,21 @@ interface FeedbackLike {
   ts?: string
   sessionId?: string
   messageId?: string
+  msgId?: string
   rating?: string
   motivo?: string
+  reason?: string
   comentario?: string
+  notas?: string
+  clienteId?: string
+  missionId?: string
+  notebookId?: string
+  artifactId?: string
+  category?: string
+  responseExcerpt?: string
+  expectedCorrection?: string
+  triageStatus?: string
+  priority?: string
   [k: string]: unknown
 }
 
@@ -48,17 +64,36 @@ function toDateOpt(v: number | string | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d
 }
 
+function resolveConfirmationId(c: ConfirmationLike, tipo: 'pending' | 'batch'): string | null {
+  const id = tipo === 'batch' ? c.batchId ?? c.id : c.id ?? c.batchId
+  const normalized = String(id ?? '').trim()
+  return normalized || null
+}
+
+function resolveExpiry(c: ConfirmationLike): number | string | undefined {
+  if (c.expiraEm != null) return c.expiraEm
+  if (c.expiresAt != null) return c.expiresAt
+  const pendings = Array.isArray(c.pendings) ? c.pendings : []
+  const expirations = pendings
+    .map((p) => (p && typeof p === 'object' ? (p as { expiresAt?: unknown; expiraEm?: unknown }).expiresAt ?? (p as { expiraEm?: unknown }).expiraEm : undefined))
+    .map((v) => (typeof v === 'number' || typeof v === 'string' ? toDateOpt(v)?.getTime() : undefined))
+    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+  return expirations.length > 0 ? Math.max(...expirations) : undefined
+}
+
 /* ── Confirmations ──────────────────────────────────────── */
 export async function upsertConfirmation(c: ConfirmationLike, tipo: 'pending' | 'batch'): Promise<void> {
   if (!isPgEnabled()) return
   try {
     const db = getDb()
+    const id = resolveConfirmationId(c, tipo)
+    if (!id) throw new Error(`Confirmação ${tipo} sem id/batchId`)
     const row = {
-      id: c.id,
+      id,
       sessionId: c.sessionId ?? null,
       tipo,
       status: c.status ?? 'pending',
-      expiraEm: toDateOpt(c.expiraEm),
+      expiraEm: toDateOpt(resolveExpiry(c)),
       payload: c as unknown as Record<string, unknown>,
       atualizadoEm: new Date(),
     }
@@ -134,22 +169,33 @@ export async function countConfirmations(): Promise<number> {
 }
 
 /* ── Feedback ────────────────────────────────────────────── */
-export async function appendFeedback(f: FeedbackLike): Promise<void> {
-  if (!isPgEnabled()) return
+export async function appendFeedback(f: FeedbackLike): Promise<number | null> {
+  if (!isPgEnabled()) return null
   try {
     const db = getDb()
-    await db.insert(alixFeedback).values({
+    const inserted = await db.insert(alixFeedback).values({
       sessionId: f.sessionId ?? null,
-      messageId: f.messageId ?? null,
+      messageId: f.messageId ?? f.msgId ?? null,
+      clienteId: f.clienteId ?? null,
+      missionId: f.missionId ?? null,
+      notebookId: f.notebookId ?? null,
+      artifactId: f.artifactId ?? null,
       rating: f.rating ?? null,
-      motivo: f.motivo ?? null,
-      comentario: f.comentario ?? null,
+      motivo: f.motivo ?? f.reason ?? null,
+      comentario: f.comentario ?? f.notas ?? null,
+      category: f.category ?? null,
+      responseExcerpt: f.responseExcerpt ?? null,
+      expectedCorrection: f.expectedCorrection ?? null,
+      triageStatus: f.triageStatus ?? 'unreviewed',
+      priority: f.priority ?? 'normal',
       payload: f as unknown as Record<string, unknown>,
       criadoEm: f.ts ? new Date(f.ts) : new Date(),
-    })
+    }).returning({ id: alixFeedback.id })
+    return inserted[0]?.id ?? null
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[AlixFeedbackRepo.append] fail:', (err as Error).message)
+    return null
   }
 }
 
@@ -188,7 +234,7 @@ export interface FeedbackStats {
 }
 
 const POSITIVE_RATINGS = new Set(['positive', 'positivo', 'util', 'útil', 'thumbs-up'])
-const NEGATIVE_RATINGS = new Set(['negative', 'negativo', 'incorreto', 'irrelevante', 'off-tom', 'thumbs-down'])
+const NEGATIVE_RATINGS = new Set(['negative', 'negativo', 'incompleta', 'incorreto', 'irrelevante', 'off-tom', 'thumbs-down'])
 
 export async function feedbackStats(): Promise<FeedbackStats> {
   const out: FeedbackStats = {

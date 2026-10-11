@@ -1,3 +1,4 @@
+import MetricCard from './MetricCard'
 /**
  * Design-system primitives ALETIS — componentes visuais reutilizáveis.
  *
@@ -7,6 +8,7 @@
 import React from 'react'
 import { Loader2 } from 'lucide-react'
 import BrandWatermark from './BrandWatermark'
+import { uiAction } from './foundation'
 
 // ────────────────────────────────────────────────────────────
 // Formatters (pt-BR, tabular-friendly)
@@ -90,12 +92,12 @@ export function Metric({
   const alignCls = { left: 'text-left', right: 'text-right', center: 'text-center' }[align]
   return (
     <div className={alignCls}>
-      <p className="text-[9.5px] uppercase tracking-[0.14em] text-aletis-grafite-medio dark:text-white/40 font-medium">
+      <p className="text-[9.5px] uppercase tracking-[0.14em] text-[var(--text-soft)] dark:text-white/40 font-medium">
         {label}
       </p>
       <p
         className={`font-mono text-sm font-semibold mt-0.5 tabular-nums ${
-          valueClass ?? 'text-aletis-grafite-escuro dark:text-white'
+          valueClass ?? 'text-foreground dark:text-white'
         }`}
       >
         {value}
@@ -150,50 +152,7 @@ export function KpiTile({
   /** Texto descritivo (hover) explicando o cálculo do KPI. */
   tooltip?: string
 }) {
-  const isDark = variant === 'dark'
-  const bgCls = isDark
-    ? 'bg-white/[0.04] border-white/10 hover:bg-white/[0.08] hover:border-white/15'
-    : 'bg-white dark:bg-aletis-grafite-escuro border-aletis-borda dark:border-white/5 hover:border-aletis-verde/40'
-  const labelCls = isDark ? 'text-white/55' : 'text-aletis-grafite-medio dark:text-white/55'
-  const valueCls = isDark ? 'text-white' : 'text-aletis-grafite-escuro dark:text-white'
-  const subCls = isDark ? 'text-white/45' : 'text-aletis-grafite-medio dark:text-white/45'
-  const accentCls = isDark ? KPI_ACCENT[accent] : KPI_ACCENT_LIGHT[accent]
-  const Tag = onClick ? 'button' : 'div'
-  return (
-    <Tag
-      onClick={onClick}
-      title={tooltip}
-      aria-label={tooltip ? `${label}: ${tooltip}` : undefined}
-      className={`group h-[128px] rounded-2xl border p-3.5 flex flex-col gap-2 transition text-left ${bgCls} ${
-        onClick ? 'cursor-pointer' : ''
-      } ${tooltip ? 'cursor-help' : ''}`}
-    >
-      <div className="flex items-center gap-2">
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${accentCls}`}>
-          <Icon size={16} />
-        </div>
-        <p
-          className={`text-[10.5px] uppercase tracking-[0.12em] font-medium leading-tight line-clamp-2 ${labelCls}`}
-        >
-          {label}
-        </p>
-      </div>
-      <div className="flex-1 flex flex-col justify-end min-h-0">
-        {loading ? (
-          <div className={`h-7 w-20 rounded animate-pulse ${isDark ? 'bg-white/10' : 'bg-slate-200 dark:bg-white/10'}`} />
-        ) : (
-          <p className={`font-display text-[26px] leading-none font-bold tabular-nums tracking-tight truncate ${valueCls}`} title={typeof value === 'string' ? value : undefined}>
-            {value}
-          </p>
-        )}
-        {sub && (
-          <p className={`text-[10.5px] mt-1 truncate ${subCls}`}>
-            {sub}
-          </p>
-        )}
-      </div>
-    </Tag>
-  )
+  return <MetricCard icon={Icon} label={label} value={value} detail={sub} loading={loading} onClick={onClick} title={tooltip} tone={accent === 'vermelho' ? 'danger' : accent === 'ambar' ? 'warning' : 'neutral'} />
 }
 
 // ────────────────────────────────────────────────────────────
@@ -251,14 +210,14 @@ export function FilterToggle({
   onChange: (v: boolean) => void
 }) {
   return (
-    <label className="inline-flex items-center gap-2 text-xs text-aletis-grafite-escuro dark:text-white/75 cursor-pointer select-none">
+    <label className="inline-flex items-center gap-2 text-xs text-foreground dark:text-white/75 cursor-pointer select-none">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
         className="accent-aletis-verde w-3.5 h-3.5"
       />
-      {Icon && <Icon size={12} className="text-aletis-grafite-medio dark:text-white/45" />}
+      {Icon && <Icon size={12} className="text-[var(--text-soft)] dark:text-white/45" />}
       <span>{label}</span>
     </label>
   )
@@ -297,21 +256,21 @@ export function CardSection({
         : 'border-aletis-borda dark:border-white/5'
   return (
     <section
-      className={`bg-white dark:bg-aletis-grafite-escuro rounded-2xl border ${toneBorder} shadow-sm overflow-hidden ${
+      className={`ui-panel ${toneBorder} overflow-hidden ${
         className || ''
       }`}
     >
       {(title || actions) && (
         <header className="px-5 lg:px-6 py-4 border-b border-aletis-borda/70 dark:border-white/5 flex items-center gap-3 flex-wrap">
-          {Icon && <Icon size={16} className="text-aletis-verde" />}
+          {Icon && <Icon size={16} className="text-foreground" />}
           <div className="min-w-0 flex-1">
             {title && (
-              <h3 className="font-semibold text-sm text-aletis-grafite-escuro dark:text-white leading-tight">
+              <h3 className="font-semibold text-sm text-foreground dark:text-white leading-tight">
                 {title}
               </h3>
             )}
             {subtitle && (
-              <p className="text-[11px] text-aletis-grafite-medio dark:text-white/45 mt-0.5">{subtitle}</p>
+              <p className="text-[11px] text-[var(--text-soft)] dark:text-white/45 mt-0.5">{subtitle}</p>
             )}
           </div>
           {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
@@ -348,7 +307,7 @@ export function PageHero({
   children?: React.ReactNode
 }) {
   return (
-    <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-aletis-verde via-aletis-verde-escuro to-[#1d3024] text-aletis-cream shadow-brand-lg">
+    <section className="relative overflow-hidden rounded-xl bg-gradient-to-br from-aletis-verde via-aletis-verde-escuro to-[#1d3024] text-aletis-cream shadow-brand-lg">
       <div
         className="absolute inset-0 opacity-[0.16] pointer-events-none"
         style={{
@@ -377,7 +336,7 @@ export function PageHero({
         <header className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-6 items-start">
           <div className="min-w-0">
             {eyebrow && (
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-aletis-gold/18 border border-aletis-gold/40 text-aletis-gold text-[10.5px] font-display font-semibold uppercase tracking-[0.18em]">
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-aletis-gold/18 border border-aletis-gold/40 text-aletis-gold text-xs font-display font-semibold uppercase tracking-[0.18em]">
                 {EyebrowIcon && <EyebrowIcon size={12} />}
                 {eyebrow}
               </span>
@@ -428,23 +387,21 @@ export function InlineButton({
 }) {
   const sizeCls = size === 'md' ? 'px-4 py-2 text-sm' : 'px-3 py-1.5 text-xs'
   const vcls = {
-    primary: 'bg-aletis-verde text-white hover:bg-aletis-verde-escuro disabled:opacity-50 font-semibold',
-    secondary:
-      'bg-aletis-bege dark:bg-white/5 text-aletis-grafite-escuro dark:text-white hover:bg-aletis-verde/10 font-medium',
+    primary: uiAction.primary,
+    secondary: uiAction.secondary,
     outline:
-      'border border-aletis-verde/30 text-aletis-verde hover:bg-aletis-verde/10 font-medium',
+      'border border-aletis-verde/30 text-foreground hover:bg-aletis-verde/10 font-medium',
     gold:
-      'bg-aletis-gold text-aletis-verde hover:bg-aletis-gold-escuro hover:text-aletis-cream font-semibold shadow-brand-gold',
-    ghost: 'text-aletis-grafite-medio dark:text-white/60 hover:bg-aletis-bege/60 dark:hover:bg-white/5',
-    danger:
-      'border border-red-300/60 dark:border-red-700/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 font-medium',
+      'bg-aletis-gold text-foreground hover:bg-aletis-gold-escuro hover:text-aletis-cream font-semibold shadow-brand-gold',
+    ghost: uiAction.ghost,
+    danger: uiAction.danger,
   }[variant]
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled || loading}
-      className={`inline-flex items-center gap-1.5 rounded-lg transition disabled:opacity-50 ${sizeCls} ${vcls} ${
+      className={`gap-1.5 ${vcls} ${sizeCls} ${
         className || ''
       }`}
     >

@@ -79,15 +79,15 @@ export default function CarteiraPanel({ consultorId, onSelectGrupo }: Props) {
       <div className="card-premium p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <Briefcase className="w-5 h-5 text-aletis-verde" />
+            <Briefcase className="w-5 h-5 text-foreground" />
             <div>
-              <h3 className="text-sm font-display font-semibold text-aletis-grafite-escuro">Carteira do consultor</h3>
-              <p className="text-[10px] text-aletis-grafite-claro">
+              <h3 className="text-sm font-display font-semibold text-foreground">Carteira do consultor</h3>
+              <p className="text-[11px] text-muted-foreground">
                 {total} grupos · {data.agregado.insightsCriticosTotal} insights críticos
               </p>
             </div>
           </div>
-          <button onClick={load} disabled={loading} className="px-2 py-1 rounded-lg text-aletis-grafite-claro hover:bg-aletis-grafite-escuro/5">
+          <button onClick={load} disabled={loading} className="px-2 py-1 rounded-lg text-muted-foreground hover:bg-aletis-grafite-escuro/5">
             <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
@@ -117,11 +117,11 @@ export default function CarteiraPanel({ consultorId, onSelectGrupo }: Props) {
 
       {/* Lista de todos os grupos */}
       <section className="card-premium p-4">
-        <h4 className="text-xs font-display font-semibold text-aletis-grafite-escuro mb-2">📋 Todos os grupos ({total})</h4>
+        <h4 className="text-xs font-display font-semibold text-foreground mb-2">📋 Todos os grupos ({total})</h4>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs font-body">
+          <table className="ui-table w-full text-xs font-body">
             <thead>
-              <tr className="text-[10px] uppercase tracking-wider text-aletis-grafite-claro border-b border-aletis-grafite-claro/15">
+              <tr className="text-[11px] uppercase tracking-wider text-muted-foreground border-b border-aletis-grafite-claro/15">
                 <th className="text-left py-2 px-2">Grupo</th>
                 <th className="text-right py-2 px-2">Receita</th>
                 <th className="text-right py-2 px-2">EBITDA</th>
@@ -142,11 +142,11 @@ export default function CarteiraPanel({ consultorId, onSelectGrupo }: Props) {
                 >
                   <td className="py-1.5 px-2">
                     <p className="font-semibold">{g.nomeGrupo}</p>
-                    <p className="text-[9px] text-aletis-grafite-claro font-mono">{g.grupoId.slice(-12)}</p>
+                    <p className="text-[11px] text-muted-foreground font-mono">{g.grupoId.slice(-12)}</p>
                   </td>
                   <td className="py-1.5 px-2 text-right tabular-nums">{fmtBRL(g.receitaProjetada)}</td>
                   <td className="py-1.5 px-2 text-right tabular-nums">{fmtBRL(g.ebitdaTotal)}</td>
-                  <td className={`py-1.5 px-2 text-right tabular-nums ${g.margemEbitda < 0.15 ? 'text-red-600' : g.margemEbitda > 0.25 ? 'text-aletis-verde font-semibold' : ''}`}>
+                  <td className={`py-1.5 px-2 text-right tabular-nums ${g.margemEbitda < 0.15 ? 'text-red-600' : g.margemEbitda > 0.25 ? 'text-foreground font-semibold' : ''}`}>
                     {(g.margemEbitda * 100).toFixed(1)}%
                   </td>
                   <td className="py-1.5 px-2 text-right tabular-nums">{fmtBRL(g.dividaTotal)}</td>
@@ -161,7 +161,7 @@ export default function CarteiraPanel({ consultorId, onSelectGrupo }: Props) {
                     {g.insightsCriticos > 0 ? (
                       <span className="text-red-600 font-bold">{g.insightsCriticos}</span>
                     ) : (
-                      <span className="text-aletis-grafite-claro">0</span>
+                      <span className="text-muted-foreground">0</span>
                     )}
                   </td>
                 </tr>
@@ -178,9 +178,9 @@ function Kpi({ label, value, sub, tone }: { label: string; value: string; sub?: 
   const cls = tone === 'good' ? 'border-l-aletis-verde' : tone === 'warn' ? 'border-l-amber-500' : tone === 'bad' ? 'border-l-red-500' : 'border-l-aletis-grafite-claro/30'
   return (
     <div className={`card-premium p-2 border-l-4 ${cls}`}>
-      <p className="text-[9px] uppercase tracking-wider text-aletis-grafite-claro">{label}</p>
-      <p className="text-base font-display font-bold text-aletis-grafite-escuro tabular-nums">{value}</p>
-      {sub && <p className="text-[10px] text-aletis-grafite-claro">{sub}</p>}
+      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="text-base font-display font-semibold text-foreground tabular-nums">{value}</p>
+      {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
     </div>
   )
 }
@@ -190,13 +190,13 @@ function DistCard({ label, count, total, cor }: { label: string; count: number; 
   return (
     <div className="card-premium p-2">
       <div className="flex items-baseline justify-between">
-        <span className="text-[10px] uppercase tracking-wider text-aletis-grafite-claro font-semibold">{label}</span>
-        <span className="text-base font-display font-bold tabular-nums">{count}</span>
+        <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</span>
+        <span className="text-base font-display font-semibold tabular-nums">{count}</span>
       </div>
       <div className="h-1 mt-1 bg-aletis-grafite-claro/15 rounded-full overflow-hidden">
         <div className={`h-full ${cor}`} style={{ width: `${pct}%` }} />
       </div>
-      <p className="text-[9px] text-aletis-grafite-claro tabular-nums mt-0.5">{pct.toFixed(0)}%</p>
+      <p className="text-[11px] text-muted-foreground tabular-nums mt-0.5">{pct.toFixed(0)}%</p>
     </div>
   )
 }
@@ -205,8 +205,8 @@ function RankingCard({ label, grupo, metrica, tone, onClick }: { label: string; 
   if (!grupo) {
     return (
       <div className="card-premium p-3 opacity-50">
-        <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-claro font-semibold">{label}</p>
-        <p className="text-xs text-aletis-grafite-claro mt-1">—</p>
+        <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</p>
+        <p className="text-xs text-muted-foreground mt-1">—</p>
       </div>
     )
   }
@@ -217,9 +217,9 @@ function RankingCard({ label, grupo, metrica, tone, onClick }: { label: string; 
       onClick={() => onClick?.(grupo.clienteId, grupo.grupoId)}
       className={`card-premium p-3 border-l-4 ${cls} text-left w-full hover:shadow-md transition-shadow`}
     >
-      <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-claro font-semibold">{label}</p>
-      <p className="text-sm font-display font-bold text-aletis-grafite-escuro mt-0.5">{grupo.nomeGrupo}</p>
-      <p className="text-base font-display font-bold tabular-nums">{metrica(grupo)}</p>
+      <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</p>
+      <p className="text-sm font-display font-semibold text-foreground mt-0.5">{grupo.nomeGrupo}</p>
+      <p className="text-base font-display font-semibold tabular-nums">{metrica(grupo)}</p>
     </button>
   )
 }

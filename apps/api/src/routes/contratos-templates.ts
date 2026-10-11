@@ -38,11 +38,29 @@ export function cacheRender(buffer: Buffer, filename: string): string {
   return token
 }
 
+function cleanText(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed.length ? trimmed : null
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return null
+}
+
+function pickText(...values: unknown[]): string | null {
+  for (const value of values) {
+    const text = cleanText(value)
+    if (text) return text
+  }
+  return null
+}
+
 // Carrega cliente do CRM (in-memory map) e mapeia para RenderClienteData.
 function loadCliente(clienteId: string): RenderClienteData | null {
   const list = alixGetClientes()
   const c = list.find((x: any) => String(x?.id) === clienteId)
   if (!c) return null
+  const endereco = c.endereco && typeof c.endereco === 'object' ? c.endereco : null
   // cpfCnpj pode ter prefixo XXX e estar mascarado/limpo
   const cpfDigits = String(c.cpfCnpj ?? '').replace(/\D/g, '')
   const isCnpj = cpfDigits.length === 14
@@ -54,12 +72,12 @@ function loadCliente(clienteId: string): RenderClienteData | null {
     rg: c.rg ?? null,
     orgaoRg: c.orgaoRg ?? null,
     qualificacao: c.qualificacao ?? c.atividade ?? null,
-    endereco: c.endereco ?? c.logradouro ?? null,
-    numero: c.numero ?? null,
-    bairro: c.bairro ?? null,
-    municipio: c.cidade ?? c.municipio ?? null,
-    uf: c.uf ?? null,
-    cep: c.cep ?? null,
+    endereco: pickText(c.logradouro, endereco?.logradouro, endereco?.rua, typeof c.endereco === 'string' ? c.endereco : null),
+    numero: pickText(c.numero, endereco?.numero),
+    bairro: pickText(c.bairro, endereco?.bairro),
+    municipio: pickText(c.cidade, c.municipio, endereco?.cidade, endereco?.municipio),
+    uf: pickText(c.uf, endereco?.uf),
+    cep: pickText(c.cep, endereco?.cep),
     email: c.email ?? null,
     telefone: c.telefone ?? null,
     genero: c.genero === 'F' ? 'F' : 'M',

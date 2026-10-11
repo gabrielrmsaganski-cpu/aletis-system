@@ -4,7 +4,8 @@
 
 import { BaseAgent } from './BaseAgent.js';
 import type { SubAgentContext } from './types.js';
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js';
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js';
+import { getModelForRole } from '../../llm/LLMConfig.js';
 import { buildFetchUrlTool } from '../tools/websearch/fetchUrl.js';
 import { buildCnpjTool } from '../tools/websearch/scrapers/cnpj.js';
 import { buildCvmTool } from '../tools/websearch/scrapers/cvm.js';
@@ -13,12 +14,17 @@ import { buildProtestosTool } from '../tools/websearch/scrapers/protestos.js';
 import { buildProcessosTJsTool } from '../tools/websearch/scrapers/processos.js';
 import { buildIncraSicarTool } from '../tools/websearch/scrapers/incra.js';
 import { WebSearchProviderFactory } from '../tools/websearch/WebSearchProviderFactory.js';
+import { groundResearchResult } from '../reliability/ResearchEvidence.js';
 
 export class WebResearcherAgent extends BaseAgent {
   name = 'WebResearcher';
-  model = process.env.ALIX_WEB_RESEARCHER_MODEL || 'claude-sonnet-4-6';
+  model = getModelForRole('web_researcher');
   maxTokens = 8000;
   maxIterations = 15;
+
+  override async run(goal: string, ctx: SubAgentContext) {
+    return groundResearchResult(await super.run(goal, ctx));
+  }
 
   buildSystemPrompt(ctx: SubAgentContext): string {
     return `Você é o WebResearcher da ALETIS, sub-agente do Alix.
@@ -39,6 +45,8 @@ Regras:
 5. Para cada scraper que retorna "queries", execute web_search com cada uma delas e consolide.
 6. Use fetch_url nas páginas mais relevantes para extrair texto completo.
 7. Responda em markdown com bullets e URLs. Cite a origem de cada fato.
+8. URL encontrada sem snippet é apenas link. Snippet é resumo da busca, não página lida. Só descreva leitura quando fetch_url retornar ok:true e conteúdo, ou quando uma consulta estruturada retornar dados reais.
+9. Se fetch_url falhar (HTTP, tamanho, extração), declare a fonte não consultada. Não complete os fatos com memória do modelo nem trate um link encontrado como comprovação.
 
 Contexto da sessão pai:
 - sessionId: ${ctx.sessionId}
@@ -47,9 +55,9 @@ ${ctx.leadCpfCnpj ? `- leadCpfCnpj alvo: ${ctx.leadCpfCnpj}` : ''}
 `;
   }
 
-  buildTools(_ctx: SubAgentContext): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-    const tools: ClaudeTool[] = [];
-    const registry: ClaudeToolRegistry = {};
+  buildTools(_ctx: SubAgentContext): { tools: LLMTool[]; registry: LLMToolRegistry } {
+    const tools: LLMTool[] = [];
+    const registry: LLMToolRegistry = {};
 
     const kits = [
       buildFetchUrlTool(),
@@ -68,20 +76,13 @@ ${ctx.leadCpfCnpj ? `- leadCpfCnpj alvo: ${ctx.leadCpfCnpj}` : ''}
     // web_search via provider cached (se warmUp rodou antes)
     const provider = WebSearchProviderFactory.getSync();
     if (provider) {
-      const nativeTool = provider.asClaudeTool();
+      const nativeTool = provider.asLLMTool();
       if (nativeTool) {
         tools.push(nativeTool);
-        if (provider.name === 'tavily') {
-          registry['web_search'] = {
-            spec: nativeTool,
-            handler: async (i) => provider.search(String(i.query || ''), i as any),
-          };
-        } else {
-          registry['web_search'] = {
-            spec: nativeTool,
-            handler: async () => ({ note: 'web_search nativa executada pelo LLM' }),
-          };
-        }
+        registry['web_search'] = {
+          spec: nativeTool,
+          handler: async (i) => provider.search(String(i.query || ''), i as any),
+        };
       }
     }
 

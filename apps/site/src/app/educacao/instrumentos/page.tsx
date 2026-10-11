@@ -87,7 +87,7 @@ export default function Instrumentos() {
       />
 
       <Callout tone="info" title="Onde mora o ouro">
-        A maioria dos produtores conhece e usa apenas <Strong>CPR Física e Barter</Strong>. Os 4 instrumentos restantes (Financeira, CDA/WA, Fiagro, CRA) abrem captação <Strong>2 a 4 pontos mais barata</Strong> e prazo melhor — mas exigem estrutura: balanço auditado (mesmo que simplificado), CAR ativo, armazém certificado, governança. É a fronteira que a mesa ALETIS ajuda a cruzar.
+        A maioria dos produtores conhece e usa apenas <Strong>CPR Física e Barter</Strong>. Os 4 instrumentos restantes (Financeira, CDA/WA, Fiagro, CRA) abrem captação <Strong>2 a 4 pontos mais barata</Strong> e prazo melhor — mas exigem estrutura: balanço auditado (mesmo que simplificado), CAR ativo, armazém certificado, governança. É a fronteira que a ALETIS ajuda a cruzar.
       </Callout>
 
       <div className="my-10 grid gap-4">

@@ -103,12 +103,17 @@ export interface PendenciaDTO {
   descricao?: string
   categoria: 'fiscal' | 'contrato' | 'identidade' | 'patrimonio' | 'agro' | 'outros'
   obrigatorio: boolean
-  status: 'pendente' | 'enviado' | 'aprovado' | 'rejeitado'
+  status: 'pendente' | 'enviado' | 'aprovado' | 'rejeitado' | 'cancelado'
+  prioridade?: 'normal' | 'alta' | 'urgente'
+  prazo?: string | null
+  tipoDocumento?: string | null
+  updatedAt?: string
   uploadId?: string
   solicitadoPor?: string
   solicitadoEm: string
   enviadoEm?: string
   observacao?: string
+  revisadoEm?: string
 }
 
 export interface UploadDTO {
@@ -122,6 +127,10 @@ export interface UploadDTO {
   enviadoPor: 'cliente' | 'consultor'
   enviadoEm: string
   url?: string
+  analiseStatus?: 'aguardando' | 'processando' | 'concluida' | 'revisao' | 'erro'
+  driveStatus?: 'aguardando' | 'processando' | 'arquivado' | 'erro' | 'indisponivel'
+  review?: { status: 'aprovado' | 'rejeitado'; observacao?: string; revisadoEm?: string }
+  versao?: number
 }
 
 export interface ParcelaDTO {
@@ -133,6 +142,8 @@ export interface ParcelaDTO {
 }
 
 export interface CronogramaDTO {
+  situacao?: 'nao_definido' | 'definido'
+  mensagem?: string
   totalAberto: number
   parcelaPadrao: number
   totalParcelas: number
@@ -242,12 +253,32 @@ export interface MarcoNegociacaoDTO {
   descricao: string
 }
 
+export interface PortalCaseIntelligenceDTO {
+  score: number
+  nivel: 'excelente' | 'boa' | 'atencao' | 'critica' | string
+  resumo: string
+  atualizadoEm: string
+  documentos: {
+    total: number
+    porGrupo: Record<string, number>
+    faltantes: string[]
+    revisao: Array<{ id: string; nome: string; motivo: string }>
+  }
+  proximasAcoes: Array<{ titulo: string; detalhe: string; prioridade: string }>
+  pendencias: Array<{ id: string; prioridade: string; titulo: string; detalhe: string; acao: string }>
+  alix: {
+    resumo: string
+    perguntasSugeridas: string[]
+  }
+}
+
 export interface PortalDashboardDTO {
   pulse: PulseDTO | null
   contrato: Contrato | null
   stepper: StepperItem[]
   timeline: TimelineEventoDTO[]
   documentos: DocumentoDTO[]
+  inteligencia: PortalCaseIntelligenceDTO | null
   honorarios: HonorariosProjecaoDTO | null
   economiaSerie: Array<{ mes: string; economia: number; pago: number }>
   breakdownCredor: BreakdownCredorDTO[]

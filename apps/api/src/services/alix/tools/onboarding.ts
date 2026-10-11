@@ -16,7 +16,7 @@
 // apropriados em sequência. Assim evitamos que o LLM perca iterações
 // re-descobrindo o pipeline a cada lead.
 // ============================================================
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 import { getProspeccaoService } from '../../prospeccao/ProspeccaoService.js'
 import { getDesenrolaRuralService } from '../../desenrola/DesenrolaRuralService.js'
 import { getFunruralService } from '../../funrural/FunruralService.js'
@@ -26,9 +26,9 @@ function digits(s: string): string {
   return (s || '').replace(/\D/g, '')
 }
 
-export function buildOnboardingTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildOnboardingTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   tools.push({
     name: 'onboarding_lead_blueprint',

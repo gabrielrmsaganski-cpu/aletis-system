@@ -25,16 +25,15 @@ export default async function OpenGraphImage() {
           position: 'relative',
         }}
       >
-        {/* Glow gold no canto superior */}
+        {/* Linha dourada superior */}
         <div
           style={{
             position: 'absolute',
-            top: '-200px',
-            right: '-100px',
-            width: '600px',
-            height: '600px',
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(203,157,82,0.32) 0%, transparent 65%)',
+            top: 0,
+            left: 80,
+            right: 80,
+            height: 2,
+            background: 'linear-gradient(90deg, transparent 0%, rgba(203,157,82,0.85) 50%, transparent 100%)',
           }}
         />
         {/* Watermark do bracket-A enorme */}
@@ -103,10 +102,10 @@ export default async function OpenGraphImage() {
               fontWeight: 700,
               color: '#ede9d9',
               lineHeight: 1.05,
-              letterSpacing: '-0.01em',
+              letterSpacing: 0,
             }}
           >
-            A mesa que reorganiza
+            Dívida, caixa e negociação
           </div>
           <div
             style={{
@@ -115,10 +114,10 @@ export default async function OpenGraphImage() {
               color: '#cb9d52',
               fontStyle: 'italic',
               lineHeight: 1.05,
-              letterSpacing: '-0.01em',
+              letterSpacing: 0,
             }}
           >
-            a dívida do agro.
+            com clareza técnica.
           </div>
           <div
             style={{
@@ -129,8 +128,7 @@ export default async function OpenGraphImage() {
               maxWidth: '720px',
             }}
           >
-            Diagnóstico financeiro auditável · Reestruturação multi-credor ·
-            Inteligência de mercado para o produtor brasileiro.
+            Assessoria financeira estratégica para produtores, grupos e empresas do agronegócio.
           </div>
         </div>
 

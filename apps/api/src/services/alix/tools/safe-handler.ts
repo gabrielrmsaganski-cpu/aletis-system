@@ -11,9 +11,9 @@
 //   5. LLM vê a falha e pode reagir, em vez do loop quebrar
 //
 // Filosofia: melhor a tool responder "deu ruim X" que o loop inteiro
-// do Claude morrer silenciosamente.
+// de a execucao do modelo falhar silenciosamente.
 // ============================================================
-import type { ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMToolRegistry } from '../../llm/OpenAIClient.js'
 
 export interface SafeHandlerOpts {
   /** Timeout em ms (default 20s; 60s para tools lentas como enriquecimento). */
@@ -38,16 +38,28 @@ export function safeHandler<T>(
   opts: SafeHandlerOpts,
 ): (input: Record<string, unknown>) => Promise<unknown> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  // Uma chamada que excedeu o prazo pode ainda produzir efeito. Reutilize seu
+  // resultado nesta execução do chat, em vez de iniciar uma segunda operação.
+  const pending = new Map<string, Promise<T>>()
   return async (input) => {
     const t0 = Date.now()
     const toolName = opts.name
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let timedOut = false
+    const key = JSON.stringify(input, (_key, value) => isPlainObject(value)
+      ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))) : value)
     try {
       // Race com timeout
       const timeoutPromise = new Promise<never>((_, reject) => {
-        const t = setTimeout(() => reject(new Error(`timeout após ${timeoutMs}ms`)), timeoutMs)
-        if (typeof t.unref === 'function') t.unref()
+        timer = setTimeout(() => { timedOut = true; reject(new Error(`timeout após ${timeoutMs}ms`)) }, timeoutMs)
+        timer.unref?.()
       })
-      const result = await Promise.race([handler(input), timeoutPromise])
+      let operation = pending.get(key)
+      if (!operation) {
+        operation = Promise.resolve().then(() => handler(input))
+        pending.set(key, operation)
+      }
+      const result = await Promise.race([operation, timeoutPromise])
       const latencyMs = Date.now() - t0
       // Log mínimo — habilita observability futuro (Fase E)
       if (process.env.ALIX_TOOL_LOG === 'true') {
@@ -70,9 +82,12 @@ export function safeHandler<T>(
         latencyMs,
         // Pistas para o LLM saber como reagir
         orientacao: isTimeoutLike(message)
-          ? 'A ferramenta demorou demais. Tente novamente sem ela ou com parâmetros mais restritos.'
+          ? 'O prazo terminou, mas o handler pode continuar. Não repita automaticamente ações de escrita/envio; consulte o estado e os recibos antes de tentar novamente.'
           : 'Handler falhou. Informe o usuário do erro e ofereça alternativas quando possível — NÃO invente dados.',
       }
+    } finally {
+      if (timer) clearTimeout(timer)
+      if (!timedOut) pending.delete(key)
     }
   }
 }
@@ -86,10 +101,10 @@ function isTimeoutLike(msg: string): boolean {
  * Uso: `safeWrapRegistry(registry, { defaultTimeoutMs: 30000 })`
  */
 export function safeWrapRegistry(
-  registry: ClaudeToolRegistry,
+  registry: LLMToolRegistry,
   opts: { defaultTimeoutMs?: number; overrides?: Record<string, number> } = {},
-): ClaudeToolRegistry {
-  const wrapped: ClaudeToolRegistry = {}
+): LLMToolRegistry {
+  const wrapped: LLMToolRegistry = {}
   for (const [name, entry] of Object.entries(registry)) {
     const timeoutMs = opts.overrides?.[name] ?? opts.defaultTimeoutMs
     wrapped[name] = {

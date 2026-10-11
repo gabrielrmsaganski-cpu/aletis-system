@@ -135,19 +135,19 @@ export default function WizardOnboarding({ clienteId, clienteNome, onClose, onSu
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="bg-card rounded-lg w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
         <header className="px-5 py-4 border-b border-aletis-grafite-claro/15 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-aletis-verde" />
+            <Sparkles className="w-5 h-5 text-foreground" />
             <div>
-              <p className="text-[10px] font-mono text-aletis-verde uppercase font-semibold">Wizard Onboarding</p>
-              <h2 className="text-base font-display font-semibold text-aletis-grafite-escuro">
+              <p className="text-[11px] font-mono text-foreground uppercase font-semibold">Wizard Onboarding</p>
+              <h2 className="text-base font-display font-semibold text-foreground">
                 Criar grupo de Gestão Financeira
               </h2>
             </div>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-aletis-grafite-escuro/5 flex items-center justify-center">
-            <X className="w-5 h-5 text-aletis-grafite-claro" />
+            <X className="w-5 h-5 text-muted-foreground" />
           </button>
         </header>
 
@@ -158,7 +158,7 @@ export default function WizardOnboarding({ clienteId, clienteNome, onClose, onSu
               <div key={n} className="flex items-center flex-1">
                 <div
                   className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                    step > n ? 'bg-aletis-verde text-white' : step === n ? 'bg-aletis-verde text-white ring-4 ring-aletis-verde/20' : 'bg-aletis-grafite-claro/20 text-aletis-grafite-claro'
+                    step > n ? 'bg-aletis-verde text-white' : step === n ? 'bg-aletis-verde text-white ring-4 ring-aletis-verde/20' : 'bg-aletis-grafite-claro/20 text-muted-foreground'
                   }`}
                 >
                   {step > n ? <Check className="w-3.5 h-3.5" /> : n}
@@ -167,11 +167,11 @@ export default function WizardOnboarding({ clienteId, clienteNome, onClose, onSu
               </div>
             ))}
           </div>
-          <div className="flex justify-between text-[10px] mt-1.5 font-body">
-            <span className={step === 1 ? 'text-aletis-verde font-semibold' : 'text-aletis-grafite-claro'}>1. Fonte</span>
-            <span className={step === 2 ? 'text-aletis-verde font-semibold' : 'text-aletis-grafite-claro'}>2. Cabeçalho</span>
-            <span className={step === 3 ? 'text-aletis-verde font-semibold' : 'text-aletis-grafite-claro'}>3. Conteúdo</span>
-            <span className={step === 4 ? 'text-aletis-verde font-semibold' : 'text-aletis-grafite-claro'}>4. Confirmar</span>
+          <div className="flex justify-between text-[11px] mt-1.5 font-body">
+            <span className={step === 1 ? 'text-foreground font-semibold' : 'text-muted-foreground'}>1. Fonte</span>
+            <span className={step === 2 ? 'text-foreground font-semibold' : 'text-muted-foreground'}>2. Cabeçalho</span>
+            <span className={step === 3 ? 'text-foreground font-semibold' : 'text-muted-foreground'}>3. Conteúdo</span>
+            <span className={step === 4 ? 'text-foreground font-semibold' : 'text-muted-foreground'}>4. Confirmar</span>
           </div>
         </div>
 
@@ -181,8 +181,8 @@ export default function WizardOnboarding({ clienteId, clienteNome, onClose, onSu
 
           {step === 1 && (
             <div className="space-y-3">
-              <h3 className="text-sm font-display font-semibold text-aletis-grafite-escuro">Como deseja iniciar o grupo?</h3>
-              <p className="text-xs text-aletis-grafite-claro">Escolha a fonte de dados — cada opção acelera o cadastro de forma diferente.</p>
+              <h3 className="text-sm font-display font-semibold text-foreground">Como deseja iniciar o grupo?</h3>
+              <p className="text-xs text-muted-foreground">Escolha a fonte de dados — cada opção acelera o cadastro de forma diferente.</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3">
                 <FonteCard
                   active={fonte === 'crm'}
@@ -219,8 +219,8 @@ export default function WizardOnboarding({ clienteId, clienteNome, onClose, onSu
 
           {step === 2 && (
             <div className="space-y-3">
-              <h3 className="text-sm font-display font-semibold text-aletis-grafite-escuro">Identificação do grupo</h3>
-              <p className="text-xs text-aletis-grafite-claro">Defina nome, data base e contexto.</p>
+              <h3 className="text-sm font-display font-semibold text-foreground">Identificação do grupo</h3>
+              <p className="text-xs text-muted-foreground">Defina nome, data base e contexto.</p>
               <div className="space-y-3 mt-3">
                 <Field label="Nome do grupo" required>
                   <input
@@ -261,15 +261,15 @@ export default function WizardOnboarding({ clienteId, clienteNome, onClose, onSu
 
           {step === 3 && (
             <div className="space-y-3">
-              <h3 className="text-sm font-display font-semibold text-aletis-grafite-escuro">Conteúdo inicial</h3>
+              <h3 className="text-sm font-display font-semibold text-foreground">Conteúdo inicial</h3>
               {fonte === 'crm' && (
-                <div className="rounded-lg bg-aletis-verde/10 border border-aletis-verde/30 p-3 text-xs text-aletis-verde">
+                <div className="rounded-lg bg-aletis-verde/10 border border-aletis-verde/30 p-3 text-xs text-foreground">
                   ⚡ Auto-import do CRM vai puxar automaticamente: 1 membro principal · todas as culturas declaradas · 1 contrato semente (se houver dívida) · 1 fazenda placeholder · 4 premissas (Selic/IPCA/taxas).
                 </div>
               )}
               {fonte === 'template' && (
                 <div className="space-y-2">
-                  <p className="text-xs text-aletis-grafite-claro">Selecione o perfil agro mais próximo do cliente:</p>
+                  <p className="text-xs text-muted-foreground">Selecione o perfil agro mais próximo do cliente:</p>
                   {TEMPLATES.map((t) => (
                     <button
                       key={t.id}
@@ -280,29 +280,29 @@ export default function WizardOnboarding({ clienteId, clienteNome, onClose, onSu
                       }`}
                     >
                       <p className="text-sm font-display font-semibold">{t.rotulo}</p>
-                      <p className="text-[11px] text-aletis-grafite-claro mt-0.5">{t.desc}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{t.desc}</p>
                     </button>
                   ))}
                 </div>
               )}
               {fonte === 'paste' && (
                 <div className="space-y-2">
-                  <p className="text-xs text-aletis-grafite-claro">Cole as safras do Excel (cultura, safra, cenário, área própria, área arrendada, rendimento, preço, custo, arrend. base):</p>
+                  <p className="text-xs text-muted-foreground">Cole as safras do Excel (cultura, safra, cenário, área própria, área arrendada, rendimento, preço, custo, arrend. base):</p>
                   <button
                     type="button"
                     onClick={() => setShowPaste(true)}
                     className="w-full p-4 rounded-lg border-2 border-dashed border-aletis-grafite-claro/30 hover:border-aletis-verde transition-colors"
                   >
-                    <FileSpreadsheet className="w-6 h-6 text-aletis-grafite-claro mx-auto mb-1" />
+                    <FileSpreadsheet className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
                     <p className="text-xs font-body font-semibold">Clique para abrir paste editor</p>
                     {pastedRows.length > 0 && (
-                      <p className="text-[10px] text-aletis-verde mt-1">✓ {pastedRows.length} linhas prontas</p>
+                      <p className="text-[11px] text-foreground mt-1">✓ {pastedRows.length} linhas prontas</p>
                     )}
                   </button>
                 </div>
               )}
               {fonte === 'vazio' && (
-                <div className="rounded-lg bg-aletis-cream/30 border border-aletis-grafite-claro/15 p-3 text-xs text-aletis-grafite-claro">
+                <div className="rounded-lg bg-aletis-cream/30 border border-aletis-grafite-claro/15 p-3 text-xs text-muted-foreground">
                   Grupo será criado vazio. Você adicionará culturas, contratos e custos manualmente nas sub-tabs depois.
                 </div>
               )}
@@ -311,7 +311,7 @@ export default function WizardOnboarding({ clienteId, clienteNome, onClose, onSu
 
           {step === 4 && (
             <div className="space-y-3">
-              <h3 className="text-sm font-display font-semibold text-aletis-grafite-escuro">Confirmação</h3>
+              <h3 className="text-sm font-display font-semibold text-foreground">Confirmação</h3>
               <div className="space-y-2 rounded-lg bg-aletis-cream/30 p-4 border border-aletis-grafite-claro/15">
                 <ConfirmRow label="Cliente" value={clienteNome ?? clienteId} />
                 <ConfirmRow label="Nome do grupo" value={cabecalho.nomeGrupo} />
@@ -324,7 +324,7 @@ export default function WizardOnboarding({ clienteId, clienteNome, onClose, onSu
                 } />
                 {cabecalho.historico && <ConfirmRow label="Histórico" value={cabecalho.historico.slice(0, 80) + (cabecalho.historico.length > 80 ? '…' : '')} />}
               </div>
-              <div className="text-[11px] text-aletis-grafite-claro">
+              <div className="text-[11px] text-muted-foreground">
                 Ao clicar em <strong>Criar grupo</strong>, o sistema executa todas as ações acima e você é levado direto ao Dashboard 360°.
               </div>
             </div>
@@ -336,7 +336,7 @@ export default function WizardOnboarding({ clienteId, clienteNome, onClose, onSu
                 <Check className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-lg font-display font-semibold">Grupo criado!</h3>
-              <p className="text-xs text-aletis-grafite-claro max-w-md mx-auto">
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
                 <strong>{cabecalho.nomeGrupo}</strong> está pronto. Você será levado ao Dashboard 360° onde os cálculos rodam em tempo real.
               </p>
               <button
@@ -361,7 +361,7 @@ export default function WizardOnboarding({ clienteId, clienteNome, onClose, onSu
             >
               <ChevronLeft className="w-3.5 h-3.5" /> Voltar
             </button>
-            <span className="text-[10px] text-aletis-grafite-claro">passo {step} de 4</span>
+            <span className="text-[11px] text-muted-foreground">passo {step} de 4</span>
             {step < 4 ? (
               <button
                 type="button"
@@ -424,15 +424,15 @@ function FonteCard({ active, onClick, icon, titulo, desc, badge }: {
       }`}
     >
       {badge && (
-        <span className="absolute top-2 right-2 px-1.5 py-0.5 text-[9px] font-mono font-bold bg-aletis-dourado text-aletis-grafite-escuro rounded">
+        <span className="absolute top-2 right-2 px-1.5 py-0.5 text-[11px] font-mono font-bold bg-aletis-dourado text-foreground rounded">
           {badge}
         </span>
       )}
       <div className="flex items-center gap-2 mb-1">
-        <span className="text-aletis-verde">{icon}</span>
-        <span className="text-sm font-display font-semibold text-aletis-grafite-escuro">{titulo}</span>
+        <span className="text-foreground">{icon}</span>
+        <span className="text-sm font-display font-semibold text-foreground">{titulo}</span>
       </div>
-      <p className="text-[11px] text-aletis-grafite-claro leading-relaxed">{desc}</p>
+      <p className="text-[11px] text-muted-foreground leading-relaxed">{desc}</p>
     </button>
   )
 }
@@ -440,7 +440,7 @@ function FonteCard({ active, onClick, icon, titulo, desc, badge }: {
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-[11px] uppercase tracking-wider text-aletis-grafite-claro font-semibold">
+      <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
         {label}{required && <span className="text-red-600">*</span>}
       </span>
       <div className="mt-1">{children}</div>
@@ -451,8 +451,8 @@ function Field({ label, required, children }: { label: string; required?: boolea
 function ConfirmRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline gap-2">
-      <span className="text-[11px] text-aletis-grafite-claro min-w-[120px]">{label}:</span>
-      <span className="text-xs font-body text-aletis-grafite-escuro font-medium">{value}</span>
+      <span className="text-[11px] text-muted-foreground min-w-[120px]">{label}:</span>
+      <span className="text-xs font-body text-foreground font-medium">{value}</span>
     </div>
   )
 }

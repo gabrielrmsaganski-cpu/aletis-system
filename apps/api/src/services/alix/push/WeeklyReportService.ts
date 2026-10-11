@@ -18,7 +18,7 @@ import { MarketBriefService } from '../../MarketBriefService.js'
 import { DataSourceManager } from '../../DataSourceManager.js'
 import { getProactiveService } from '../ProactiveService.js'
 import { getAlixPushChannel, type PushResult } from './AlixPushChannel.js'
-import { getMacroShiftService } from '../MacroShiftService.js'
+import { getMacroShiftService, observedPriceChange } from '../MacroShiftService.js'
 
 function fmtPct(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return '—'
@@ -82,28 +82,25 @@ export class WeeklyReportService {
       // Snapshot t-7 do macro-history para comparação real
       const macro = getMacroShiftService(this.storageDir)
       const history = macro.loadHistory()
-      const targetT7 = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10)
-      const t7 = history.find(h => h.data <= targetT7) || history[0]
 
       const linhas: string[] = []
       // Câmbio
       if (brief.cambio.usd != null) {
-        const ref = t7?.usd
-        const variacao = ref ? ((brief.cambio.usd - ref) / ref) * 100 : null
+        const ref = macro.comparableReference(brief, history, 'usd', '7d')?.usd
+        const variacao = ref ? observedPriceChange(brief.cambio.usd, ref)?.percent ?? null : null
         linhas.push(`• USD/BRL: ${fmtBRL2(brief.cambio.usd)} (${fmtPct(variacao)} 7d)`)
       }
       // Selic
       if (brief.macro.selic != null) {
-        const ref = t7?.selic
-        const variacao = ref != null ? (brief.macro.selic - ref) * 100 : null  // bp
-        linhas.push(`• Selic: ${brief.macro.selic.toFixed(2)}% ${variacao != null ? `(${variacao >= 0 ? '+' : ''}${variacao.toFixed(0)}bp 7d)` : ''}`)
+        const ref = macro.comparableReference(brief, history, 'selic', '7d')?.selic
+        const variacao = ref != null ? brief.macro.selic - ref : null
+        linhas.push(`• Selic: ${brief.macro.selic.toFixed(2)}% ${variacao != null ? `(${variacao >= 0 ? '+' : ''}${variacao.toFixed(2)} p.p. 7d)` : ''}`)
       }
       // Commodities
       for (const c of brief.commodities) {
-        const ref = t7?.commodities?.[c.simbolo.toLowerCase()]
-        const variacao = ref ? ((c.preco - ref) / ref) * 100 : c.variacao7d
-        const sinal = variacao >= 0 ? '↑' : '↓'
-        linhas.push(`• ${c.nome}: ${fmtBRL2(c.preco)} ${sinal} ${fmtPct(variacao)}`)
+        const variacao = c.variacao7d
+        const sinal = variacao == null ? 'variação indisponível' : variacao >= 0 ? '↑' : '↓'
+        linhas.push(`• ${c.nome}: ${c.preco.toLocaleString('pt-BR')} ${c.unidade} ${sinal} ${fmtPct(variacao)}`)
       }
       partes.push(...linhas)
     } catch (err) {

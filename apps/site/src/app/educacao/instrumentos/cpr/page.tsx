@@ -129,7 +129,7 @@ export default function CPRPage() {
           },
           {
             q: 'Vale assinar CPR no escuro com a trader?',
-            a: 'Nunca. CPR é título executável — quem assina compra obrigação contratual. Com a Lei do Agro 2, a complexidade aumentou (cláusulas de FGS, PRA, indexador). A mesa ALETIS revisa CPRs antes de assinatura — em 100% dos casos encontramos pontos a renegociar.',
+            a: 'Nunca. CPR é título executável — quem assina compra obrigação contratual. Com a Lei do Agro 2, a complexidade aumentou (cláusulas de FGS, PRA, indexador). ALETIS revisa CPRs antes de assinatura e aponta pontos que merecem renegociação.',
           },
         ]}
       />

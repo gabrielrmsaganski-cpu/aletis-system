@@ -4,7 +4,7 @@
 // (entrada via ?reset=<token>), TrocarSenhaModal (autenticado), e os
 // blocos UI compartilhados Field/ErrorBanner/InfoBanner.
 // ============================================================
-import React, { useState } from 'react'
+import React, { useId, useState } from 'react'
 import {
   Lock,
   User,
@@ -17,6 +17,8 @@ import {
   XCircle,
   Loader2,
   Shield,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import BrandMark from '../../components/ui/BrandMark'
 import { TOKEN_KEY, type ClienteMe } from './types'
@@ -52,23 +54,25 @@ export function LoginScreen({
   const handleSubmitMagic = async (e: React.FormEvent) => {
     e.preventDefault()
     setErro(null); setInfo(null); setCarregando(true)
-    await apiCall('/api/portal/auth/magic/request', {
+    const response = await apiCall('/api/portal/auth/magic/request', {
       method: 'POST',
       body: JSON.stringify({ identificador: usuario }),
     })
     setCarregando(false)
-    setInfo('Pronto! Se a conta existir, enviamos um link de acesso por e-mail e/ou WhatsApp em alguns segundos. Verifique sua caixa de entrada.')
+    if (!response.ok) { setErro('Não foi possível solicitar o link. Tente novamente em instantes.'); return }
+    setInfo('Se seus dados corresponderem a um acesso cadastrado, você receberá um link no canal registrado. Confira também a pasta de spam.')
   }
 
   const handleSubmitForgot = async (e: React.FormEvent) => {
     e.preventDefault()
     setErro(null); setInfo(null); setCarregando(true)
-    await apiCall('/api/portal/auth/forgot', {
+    const response = await apiCall('/api/portal/auth/forgot', {
       method: 'POST',
       body: JSON.stringify({ identificador: usuario }),
     })
     setCarregando(false)
-    setInfo('Se a conta existir, enviamos um link para redefinir a senha. O link vale por 30 minutos.')
+    if (!response.ok) { setErro('Não foi possível solicitar a redefinição. Tente novamente em instantes.'); return }
+    setInfo('Se seus dados corresponderem a um acesso cadastrado, você receberá um link para redefinir a senha. O link vale por 30 minutos.')
   }
 
   return (
@@ -93,17 +97,19 @@ export function LoginScreen({
 
       <div className="relative w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
-          <BrandMark variant="stacked" tone="cream" size={56} />
+          <BrandMark variant="stacked" tone="white" size={42} />
           <p className="mt-4 font-display text-[10.5px] font-semibold uppercase tracking-[0.22em] text-aletis-gold">
             Portal do Cliente
           </p>
         </div>
 
-        <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-brand-lg p-8 sm:p-10 border border-aletis-cream-escuro/60">
+        <div className="bg-card rounded-3xl shadow-brand-lg p-6 sm:p-8 border border-aletis-cream-escuro/60">
+          <h1 className="font-display text-2xl font-bold text-foreground">Acompanhe seu atendimento</h1>
+          <p className="mb-6 mt-2 text-sm leading-relaxed text-muted-foreground">Use o acesso fornecido pela equipe para enviar documentos, consultar andamentos e conversar com seu consultor.</p>
           <div className="flex gap-1 p-1 mb-6 rounded-full bg-aletis-cream/70">
             {([
               { id: 'senha', label: 'Senha', icon: Lock },
-              { id: 'magic', label: 'Link mágico', icon: Sparkles },
+              { id: 'magic', label: 'Link de acesso', icon: Sparkles },
             ] as const).map((m) => {
               const active = mode === m.id || (mode === 'forgot' && m.id === 'senha')
               const Icon = m.icon
@@ -111,11 +117,13 @@ export function LoginScreen({
                 <button
                   key={m.id}
                   type="button"
+                  aria-pressed={active}
+                  disabled={carregando}
                   onClick={() => { setMode(m.id); setErro(null); setInfo(null) }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full font-display text-[11.5px] font-semibold uppercase tracking-wider transition ${
+                  className={`flex-1 flex min-h-11 items-center justify-center gap-1.5 px-3 py-2 rounded-full font-display text-[11.5px] font-semibold uppercase tracking-wider transition ${
                     active
                       ? 'bg-aletis-verde text-aletis-cream shadow-brand-sm'
-                      : 'text-aletis-verde-medio hover:text-aletis-verde'
+                      : 'text-muted-foreground hover:text-aletis-verde'
                   }`}
                 >
                   <Icon size={12} />
@@ -159,7 +167,7 @@ export function LoginScreen({
               <button
                 type="button"
                 onClick={() => { setMode('forgot'); setErro(null); setInfo(null) }}
-                className="w-full text-center text-[12.5px] font-body text-aletis-verde-medio hover:text-aletis-gold-escuro transition"
+                className="min-h-11 w-full text-center text-[12.5px] font-body text-muted-foreground hover:text-aletis-gold-escuro transition"
               >
                 Esqueci minha senha
               </button>
@@ -168,8 +176,8 @@ export function LoginScreen({
 
           {mode === 'magic' && (
             <form onSubmit={handleSubmitMagic} className="space-y-4">
-              <p className="font-body text-[13px] leading-relaxed text-aletis-verde-medio">
-                Enviaremos um link de acesso direto para o seu e-mail e/ou WhatsApp. Sem senha, válido por 15 minutos.
+              <p className="font-body text-[13px] leading-relaxed text-muted-foreground">
+                Você recebe um link no canal cadastrado para entrar sem digitar a senha. Ele vale por 15 minutos e pode ser usado uma vez.
               </p>
               <Field
                 icon={Mail}
@@ -195,7 +203,7 @@ export function LoginScreen({
 
           {mode === 'forgot' && (
             <form onSubmit={handleSubmitForgot} className="space-y-4">
-              <p className="font-body text-[13px] leading-relaxed text-aletis-verde-medio">
+              <p className="font-body text-[13px] leading-relaxed text-muted-foreground">
                 Informe seu e-mail ou CPF/CNPJ. Se você tiver uma conta, enviaremos um link para redefinir a senha.
               </p>
               <Field
@@ -219,16 +227,16 @@ export function LoginScreen({
               <button
                 type="button"
                 onClick={() => { setMode('senha'); setErro(null); setInfo(null) }}
-                className="w-full text-center text-[12.5px] font-body text-aletis-verde-medio hover:text-aletis-gold-escuro transition"
+                className="min-h-11 w-full text-center text-[12.5px] font-body text-muted-foreground hover:text-aletis-gold-escuro transition"
               >
                 ← voltar para login com senha
               </button>
             </form>
           )}
 
-          <div className="flex items-center justify-center gap-2 mt-6 text-[11.5px] text-aletis-verde-medio font-body">
+          <div className="flex items-center justify-center gap-2 mt-6 text-[11.5px] text-muted-foreground font-body">
             <Shield className="w-3.5 h-3.5 text-aletis-gold-escuro" />
-            Acesso seguro · scrypt + JWT · trilha de auditoria
+            Acesso reservado ao cliente e à equipe responsável
           </div>
         </div>
 
@@ -253,23 +261,27 @@ export function Field({
   autoComplete?: string
   minLength?: number
 }) {
+  const fieldId = useId()
+  const [visible, setVisible] = useState(false)
   return (
     <div>
-      <label className="block text-[12.5px] font-display font-semibold uppercase tracking-wider text-aletis-verde-medio mb-1.5">
+      <label htmlFor={fieldId} className="block text-[12.5px] font-display font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
         {label}
       </label>
       <div className="relative">
-        <Icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-verde-medio" />
+        <Icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input
-          type={type}
+          id={fieldId}
+          type={type === 'password' && visible ? 'text' : type}
           value={value}
           onChange={(e) => onChange(onChangeRaw ? onChangeRaw(e.target.value) : e.target.value)}
           placeholder={placeholder}
-          className="w-full pl-11 pr-3 py-3 rounded-xl border border-aletis-borda bg-white text-aletis-verde placeholder:text-aletis-verde-claro focus:outline-none focus:ring-2 focus:ring-aletis-gold/35 focus:border-aletis-gold transition-all text-base"
+          className="w-full pl-11 pr-12 py-3 rounded-xl border border-aletis-borda bg-card text-foreground placeholder:text-aletis-verde-claro focus:outline-none focus:ring-2 focus:ring-aletis-gold/35 focus:border-aletis-gold transition-all text-base"
           autoComplete={autoComplete}
           required
           minLength={minLength}
         />
+        {type === 'password' && <button type="button" onClick={() => setVisible(value => !value)} aria-label={visible ? `Ocultar ${label.toLowerCase()}` : `Mostrar ${label.toLowerCase()}`} aria-pressed={visible} className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground focus-visible:ring-2 focus-visible:ring-aletis-gold">{visible ? <EyeOff size={18} /> : <Eye size={18} />}</button>}
       </div>
     </div>
   )
@@ -277,7 +289,7 @@ export function Field({
 
 export function ErrorBanner({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700">
+    <div role="alert" className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700">
       <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
       <p className="text-sm font-body">{message}</p>
     </div>
@@ -286,8 +298,8 @@ export function ErrorBanner({ message }: { message: string }) {
 
 export function InfoBanner({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2 p-3 rounded-xl bg-aletis-sage/20 border border-aletis-sage/40 text-aletis-verde">
-      <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-aletis-verde-medio" />
+    <div role="status" className="flex items-start gap-2 p-3 rounded-xl bg-aletis-sage/20 border border-aletis-sage/40 text-foreground">
+      <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
       <p className="text-sm font-body">{message}</p>
     </div>
   )
@@ -341,15 +353,15 @@ export function ResetSenhaScreen({
           {sucesso ? (
             <div className="text-center py-6">
               <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-aletis-sage/30 mb-4">
-                <CheckCircle2 className="w-7 h-7 text-aletis-verde" />
+                <CheckCircle2 className="w-7 h-7 text-foreground" />
               </div>
-              <h2 className="font-display text-xl font-bold text-aletis-verde">Senha atualizada</h2>
-              <p className="mt-2 font-body text-sm text-aletis-verde-medio">Você já pode entrar com sua nova senha.</p>
+              <h2 className="font-display text-xl font-bold text-foreground">Senha atualizada</h2>
+              <p className="mt-2 font-body text-sm text-muted-foreground">Você já pode entrar com sua nova senha.</p>
             </div>
           ) : (
             <>
-              <h2 className="font-display text-xl font-bold text-aletis-verde mb-1">Nova senha</h2>
-              <p className="font-body text-[13px] text-aletis-verde-medio mb-5">
+              <h2 className="font-display text-xl font-bold text-foreground mb-1">Nova senha</h2>
+              <p className="font-body text-[13px] text-muted-foreground mb-5">
                 Escolha uma senha com ao menos 8 caracteres. Recomendamos misturar letras e números.
               </p>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -394,7 +406,7 @@ export function TrocarSenhaModal({
   token: string
   obrigatorio: boolean
   onClose: () => void
-  onTrocou: () => void
+  onTrocou: (token?: string) => void
 }) {
   const [senhaAtual, setSenhaAtual] = useState('')
   const [novaSenha, setNovaSenha] = useState('')
@@ -408,26 +420,26 @@ export function TrocarSenhaModal({
     if (novaSenha.length < 8) { setErro('Nova senha precisa ter ao menos 8 caracteres'); return }
     if (novaSenha !== confirma) { setErro('Confirmação não confere'); return }
     setCarregando(true)
-    const resp = await apiCall('/api/portal/auth/trocar-senha', {
+    const resp = await apiCall<{ trocada: boolean; token?: string }>('/api/portal/auth/trocar-senha', {
       method: 'POST',
       token,
       body: JSON.stringify({ senhaAtual, novaSenha }),
     })
     setCarregando(false)
     if (!resp.ok) { setErro(resp.error); return }
-    onTrocou()
+    onTrocou(resp.data.token)
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-aletis-verde-escuro/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md bg-white rounded-3xl p-7 shadow-brand-lg border border-aletis-cream-escuro/60">
+      <div className="w-full max-w-md bg-card rounded-3xl p-7 shadow-brand-lg border border-aletis-cream-escuro/60">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-display text-lg font-bold text-aletis-verde">Trocar senha</h2>
+          <h2 className="font-display text-lg font-bold text-foreground">Trocar senha</h2>
           {!obrigatorio && (
             <button
               onClick={onClose}
               aria-label="Fechar modal"
-              className="text-aletis-verde-medio hover:text-aletis-verde p-1.5 rounded-lg"
+              className="text-muted-foreground hover:text-aletis-verde p-1.5 rounded-lg"
             >
               <XCircle size={20} />
             </button>

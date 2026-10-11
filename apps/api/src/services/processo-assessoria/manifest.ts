@@ -1,9 +1,9 @@
 // ============================================================
-// Processo de Assessoria TEX CAPITAL — Manifest
+// Processo de Assessoria ALETIS — Manifest
 // ============================================================
 // Catálogo dos 25 documentos do processo formal de assessoria
 // (POL/POP/IT/R.CM/R.OP/R.GQ) extraídos do pacote oficial
-// "3. Processo de Assessoria.zip" entregue pela TEX em 2025-08.
+// "3. Processo de Assessoria.zip" entregue pela ALETIS em 2025-08.
 //
 // Originais ficam em /documentos/processo-assessoria/originais/.
 // Templates render-aware ficam em
@@ -47,6 +47,10 @@ export interface PlaceholderSpec {
   /** valor default se nada vier */
   default?: string
   required: boolean
+  /** grupo visual no modal (ex: 'Identificação', 'Endereço', 'Bancário') */
+  grupo?: string
+  /** tipo de input UI */
+  tipo?: 'texto' | 'textarea' | 'numero' | 'moeda' | 'data' | 'email' | 'telefone'
 }
 
 export interface ChecklistItemSpec {
@@ -129,7 +133,7 @@ export const PROCESSO_TEMPLATES: ProcessoTemplate[] = [
     nome: 'Checklist de Informações Básicas — PF',
     versao: '1.0',
     descricao:
-      'Identificação do cliente PF + 17 perguntas SIM/NÃO sobre estoque, insumos, recebíveis, dívidas, funcionários.',
+      'Identificação do cliente PF + 17 perguntas SIM/NÃO sobre estoque, insumos, recebíveis, dívidas, funcionários, custos e garantias.',
     categoria: 'checklist-cadastro',
     formato: 'docx',
     templateFile: 'R.OP.003_Checklist_Informacoes_Basicas_PF.docx',
@@ -138,23 +142,22 @@ export const PROCESSO_TEMPLATES: ProcessoTemplate[] = [
     uiTab: 'checklists',
     placeholders: [PH_CLIENTE_NOME, PH_CLIENTE_CPF, PH_DATA_HOJE, PH_RESPONSAVEL],
     checklist: [
-      { id: 'estoque', label: 'Possui estoque?', etapa: 'Estoque & Insumos', acceptsObservacao: true },
-      { id: 'insumos', label: 'Possui insumos comprados?', etapa: 'Estoque & Insumos', acceptsObservacao: true },
-      { id: 'valor_a_receber', label: 'Possui valores a receber de terceiros?', etapa: 'Recebíveis', acceptsObservacao: true },
-      { id: 'arrendamento_recebido', label: 'Recebe arrendamento de terras?', etapa: 'Recebíveis', acceptsObservacao: true },
-      { id: 'outras_receitas', label: 'Possui outras receitas (não-agro)?', etapa: 'Recebíveis', acceptsObservacao: true },
-      { id: 'dividas_fornecedores', label: 'Possui dívidas com fornecedores de insumos?', etapa: 'Dívidas', acceptsObservacao: true },
-      { id: 'dividas_terras', label: 'Possui dívidas com fornecedores de terras?', etapa: 'Dívidas', acceptsObservacao: true },
-      { id: 'dividas_bancarias', label: 'Possui dívidas bancárias?', etapa: 'Dívidas', acceptsObservacao: true },
-      { id: 'funcionarios', label: 'Possui funcionários?', etapa: 'Pessoal', acceptsObservacao: true },
-      { id: 'cnh_valida', label: 'CNH/RG dentro da validade?', etapa: 'Identificação', acceptsObservacao: true },
-      { id: 'cpf_regular', label: 'CPF regular junto à RFB?', etapa: 'Identificação', acceptsObservacao: true },
-      { id: 'comprovante_endereco', label: 'Comprovante de endereço atualizado?', etapa: 'Identificação', acceptsObservacao: true },
-      { id: 'irpf_atualizado', label: 'IRPF dos últimos 3 anos disponível?', etapa: 'Identificação', acceptsObservacao: true },
-      { id: 'estado_civil', label: 'Estado civil declarado e documentado?', etapa: 'Identificação', acceptsObservacao: true },
-      { id: 'parentesco_grupo', label: 'Relação familiar com membros do grupo identificada?', etapa: 'Grupo Familiar', acceptsObservacao: true },
-      { id: 'atua_atividade', label: 'Atua diretamente na atividade rural?', etapa: 'Grupo Familiar', acceptsObservacao: true },
-      { id: 'observacoes_gerais', label: 'Observações gerais', etapa: 'Encerramento', acceptsObservacao: true },
+      { id: 'estoque_produtos_acabados', label: 'Possui Estoque de produtos acabados? (Se sim: descreva quantidade de sacas e qual produto)', etapa: 'Estoque & Insumos', acceptsObservacao: true },
+      { id: 'estoque_insumos', label: 'Possui estoque de insumos? (Se sim: verificar quantidade, valor e referente a qual cultura)', etapa: 'Estoque & Insumos', acceptsObservacao: true },
+      { id: 'valor_a_receber_clientes', label: 'Possui valor a receber de clientes? (Se sim: verificar o nome Cliente, valor e vencimento)', etapa: 'Recebíveis', acceptsObservacao: true },
+      { id: 'outros_valores_receber', label: 'Possui outros valores a receber? (arrendamentos/aluguel?) (Se sim: valor, vencimento e origem)', etapa: 'Recebíveis', acceptsObservacao: true },
+      { id: 'dividas_fornecedores', label: 'Possui dívidas com fornecedores/revendas de insumos? (Se sim: verificar Nome Fornecedor/Revenda, valor e vencimento)', etapa: 'Dívidas', acceptsObservacao: true },
+      { id: 'dividas_terras', label: 'Possui dívidas de terras? (Se sim: verificar qual terra, valor e vencimento, e se possui contrato)', etapa: 'Dívidas', acceptsObservacao: true },
+      { id: 'funcionarios', label: 'Possui funcionários? (Se sim, quantos e verificar o valor da Folha de pagamento mensal e valor dos Tributos mensais)', etapa: 'Pessoal', acceptsObservacao: true },
+      { id: 'empresa_grupo', label: 'Possui empresa que faz parte do Grupo? (Se sim, enviar CNPJ e contrato social e demais documentos — relação PJ)', etapa: 'Grupo Empresarial', acceptsObservacao: true },
+      { id: 'custo_insumos_cultura', label: 'Qual é o custo de insumos por atividade/cultura?', etapa: 'Custos Operacionais', acceptsObservacao: true },
+      { id: 'custo_diesel_anual', label: 'Qual o valor gasto anualmente com diesel?', etapa: 'Custos Operacionais', acceptsObservacao: true },
+      { id: 'mapeamento_garantias', label: 'Mapear as matrículas das possíveis garantias', etapa: 'Garantias', acceptsObservacao: true },
+      { id: 'custo_manutencao_maquinas', label: 'Qual o custo anual de manutenção de máquinas?', etapa: 'Custos Operacionais', acceptsObservacao: true },
+      { id: 'vencimentos_contratos', label: 'Vencimentos de contratos', etapa: 'Contratos', acceptsObservacao: true },
+      { id: 'custo_colheita_frete', label: 'Qual o custo da colheita (colheitadeira + frete)? (Se for colheita própria, informar)', etapa: 'Custos Operacionais', acceptsObservacao: true },
+      { id: 'manutencao_familiar', label: 'Qual o valor mensal aproximado de manutenção familiar?', etapa: 'Manutenção', acceptsObservacao: true },
+      { id: 'manutencao_propriedade', label: 'Qual o valor mensal de manutenção da propriedade?', etapa: 'Manutenção', acceptsObservacao: true },
     ],
     instrucaoTrabalho: 'instrucao-trabalho-google-drive',
   },
@@ -174,28 +177,32 @@ export const PROCESSO_TEMPLATES: ProcessoTemplate[] = [
     placeholders: [PH_CLIENTE_NOME, PH_CLIENTE_CPF, PH_DATA_HOJE, PH_RESPONSAVEL],
     checklist: [
       // ETAPA 2 — Sócios
-      { id: 'cnh_socios', label: 'CNH/CPF/RG dos sócios', etapa: 'Sócios', requiresUpload: true },
-      { id: 'certidao_estado_civil', label: 'Certidão de Estado Civil', etapa: 'Sócios', requiresUpload: true },
-      { id: 'certidao_nascimento', label: 'Certidão de Nascimento', etapa: 'Sócios', requiresUpload: true },
-      { id: 'escritura_uniao_estavel', label: 'Escritura de União Estável (se aplicável)', etapa: 'Sócios', requiresUpload: true },
-      { id: 'certidao_casamento', label: 'Certidão de Casamento averbada', etapa: 'Sócios', requiresUpload: true },
-      { id: 'comprovante_endereco_socios', label: 'Comprovante de Endereço dos sócios', etapa: 'Sócios', requiresUpload: true },
+      { id: 'cnh_socios', label: 'Cópia da CNH ou CPF e RG', etapa: 'Sócios', requiresUpload: true, acceptsObservacao: true },
+      { id: 'certidao_estado_civil', label: 'Cópia da Certidão de Estado Civil: Casamento e Pacto Antenupcial (se houver)', etapa: 'Sócios', requiresUpload: true, acceptsObservacao: true },
+      { id: 'certidao_nascimento', label: 'Cópia Certidão de Nascimento (solteiro)', etapa: 'Sócios', requiresUpload: true, acceptsObservacao: true },
+      { id: 'escritura_uniao_estavel', label: 'Cópia da Escritura Pública de União estável', etapa: 'Sócios', requiresUpload: true, acceptsObservacao: true },
+      { id: 'certidao_casamento_divorcio', label: 'Cópia da Certidão de Casamento com averbação do Divórcio (se divorciado)', etapa: 'Sócios', requiresUpload: true, acceptsObservacao: true },
+      { id: 'comprovante_endereco_socios', label: 'Cópia do Comprovante de Endereço dos sócios (Atualizado até 90 dias)', etapa: 'Sócios', requiresUpload: true, acceptsObservacao: true },
       // ETAPA 3 — IRPF
-      { id: 'irpf_declaracao', label: 'Cópia da declaração IRPF (último ano)', etapa: 'IRPF', requiresUpload: true },
-      { id: 'irpf_recibo', label: 'Recibo de entrega IRPF (último ano)', etapa: 'IRPF', requiresUpload: true },
+      { id: 'irpf_declaracao', label: 'Cópia declaração IRPF (Enviar sempre o do último exercício)', etapa: 'IRPF dos Sócios e Cônjuges', requiresUpload: true, acceptsObservacao: true },
+      { id: 'irpf_recibo', label: 'Cópia recibo IRPF (Enviar sempre o do último exercício)', etapa: 'IRPF dos Sócios e Cônjuges', requiresUpload: true, acceptsObservacao: true },
       // ETAPA 4 — Quadro Safra
-      { id: 'historico_safra', label: 'Histórico de safras (PDF)', etapa: 'Quadro Safra', requiresUpload: true },
+      { id: 'quadro_safra_historico', label: 'Quadro Safra com histórico de plantio das últimas 2 safras, safra atual e 2 próximas safras (previsão)', etapa: 'Quadro Safra', requiresUpload: true, acceptsObservacao: true },
+      { id: 'quadro_safra_modelo', label: 'Cliente enviar dados do Quadro Safra no modelo que possui / Ou enviar o Anexo 1 – Quadro de Produção – preenchido', etapa: 'Quadro Safra', requiresUpload: true, acceptsObservacao: true },
       // ETAPA 5 — PFs do Grupo
-      { id: 'endividamento_atualizado', label: 'Endividamento atualizado (todos do grupo)', etapa: 'Endividamento', requiresUpload: true },
-      { id: 'extratos_contratos', label: 'Extratos de contratos bancários', etapa: 'Endividamento', requiresUpload: true },
-      { id: 'relatorio_scr', label: 'Relatório SCR/Registrato (BACEN)', etapa: 'Endividamento', requiresUpload: true },
+      { id: 'endividamento_bancos', label: 'Endividamento atualizado aberto por bancos', etapa: 'PFs do Grupo', requiresUpload: true, acceptsObservacao: true },
+      { id: 'extratos_contratos', label: 'Extratos dos Contratos de Endividamentos bancários, detalhando: modalidades/parcelas/vencimentos/taxas', etapa: 'PFs do Grupo', requiresUpload: true, acceptsObservacao: true },
+      { id: 'relatorio_scr', label: 'Relatório SCR/Registrato atualizado (Emitido pelo link: https://registrato.bcb.gov.br)', etapa: 'PFs do Grupo', requiresUpload: true, acceptsObservacao: true },
       // ETAPA 6 — Áreas Próprias e Arrendadas
-      { id: 'relacao_fazendas', label: 'Relação de fazendas (Matrícula + Município + Tamanho)', etapa: 'Áreas Rurais', requiresUpload: true },
-      { id: 'ccir', label: 'CCIR atualizado', etapa: 'Áreas Rurais', requiresUpload: true },
-      { id: 'car', label: 'CAR (Cadastro Ambiental Rural)', etapa: 'Áreas Rurais', requiresUpload: true },
-      { id: 'itr', label: 'ITR pago', etapa: 'Áreas Rurais', requiresUpload: true },
-      { id: 'contratos_arrendamento', label: 'Contratos de arrendamento', etapa: 'Áreas Rurais', requiresUpload: true },
-      { id: 'contratos_usinas', label: 'Contratos com usinas (cana, etanol)', etapa: 'Áreas Rurais', requiresUpload: true },
+      { id: 'relacao_fazendas', label: 'Relação de terras/fazendas atualizadas', etapa: 'Áreas Próprias e Arrendadas', requiresUpload: true, acceptsObservacao: true },
+      { id: 'matricula_municipio_tamanho', label: 'Matrícula + Município + tamanho do imóvel – atualizada 30 dias', etapa: 'Áreas Próprias e Arrendadas', requiresUpload: true, acceptsObservacao: true },
+      { id: 'ccir', label: 'CCIR', etapa: 'Áreas Próprias e Arrendadas', requiresUpload: true, acceptsObservacao: true },
+      { id: 'car', label: 'CAR (Cadastro Ambiental Rural)', etapa: 'Áreas Próprias e Arrendadas', requiresUpload: true, acceptsObservacao: true },
+      { id: 'itr', label: 'Declaração e Recibo de Entrega - ITR (CIB)', etapa: 'Áreas Próprias e Arrendadas', requiresUpload: true, acceptsObservacao: true },
+      { id: 'contratos_arrendamento', label: 'Cópia dos Contratos de arrendamento', etapa: 'Áreas Próprias e Arrendadas', requiresUpload: true, acceptsObservacao: true },
+      { id: 'contratos_usinas', label: 'Cópia dos Contratos com Usinas (para clientes produtores de Cana)', etapa: 'Áreas Próprias e Arrendadas', requiresUpload: true, acceptsObservacao: true },
+      { id: 'relacao_equipamentos', label: 'Relação de Equipamentos contendo: modelo, ano, valor de mercado', etapa: 'Áreas Próprias e Arrendadas', requiresUpload: true, acceptsObservacao: true },
+      { id: 'relacao_imoveis', label: 'Relação de Imóveis Residenciais e comerciais, contendo: localidade e valor de mercado', etapa: 'Áreas Próprias e Arrendadas', requiresUpload: true, acceptsObservacao: true },
     ],
   },
   {
@@ -213,27 +220,44 @@ export const PROCESSO_TEMPLATES: ProcessoTemplate[] = [
     uiTab: 'checklists',
     placeholders: [PH_CLIENTE_NOME, PH_CLIENTE_CPF, PH_DATA_HOJE, PH_RESPONSAVEL],
     checklist: [
-      { id: 'irpf_bens_imoveis', label: 'IRPF — Bens imóveis declarados', etapa: 'IRPF', acceptsObservacao: true },
-      { id: 'irpf_matriculas', label: 'IRPF — Matrículas listadas', etapa: 'IRPF', acceptsObservacao: true },
-      { id: 'irpf_cnpjs_ocultos', label: 'IRPF — CNPJs ocultos identificados', etapa: 'IRPF', acceptsObservacao: true },
-      { id: 'pj_documentos', label: 'PJ — Documentos das pessoas jurídicas', etapa: 'Pessoa Jurídica', acceptsObservacao: true },
-      { id: 'pj_holding_operacional', label: 'PJ — Operacional/Holding identificada', etapa: 'Pessoa Jurídica', acceptsObservacao: true },
-      { id: 'if_definicao', label: 'IF — Definição da Instituição Financeira atual', etapa: 'Inst. Financeira', acceptsObservacao: true },
-      { id: 'if_cpfs_grupo', label: 'IF — CPFs/CNPJs do grupo identificados', etapa: 'Inst. Financeira', acceptsObservacao: true },
-      { id: 'if_carta_bacen', label: 'IF — Carta Bacen atualizada', etapa: 'Inst. Financeira', requiresUpload: true },
-      { id: 'matriculas_imoveis', label: 'Matrículas dos imóveis próprios', etapa: 'Imóveis', acceptsObservacao: true },
-      { id: 'garantias_mapeamento', label: 'Garantias — Mapeamento completo', etapa: 'Garantias', acceptsObservacao: true },
-      { id: 'garantias_comprometimento', label: 'Garantias — Comprometimento devedor avaliado', etapa: 'Garantias', acceptsObservacao: true },
-      { id: 'arrendamento_vencimentos', label: 'Arrendamento — Vencimentos verificados', etapa: 'Arrendamento', acceptsObservacao: true },
-      { id: 'cana_termo_cessao', label: 'Cana — Termo de Cessão verificado', etapa: 'Cana', acceptsObservacao: true },
-      { id: 'endividamento_atualizado', label: 'Endividamento atualizado', etapa: 'Endividamento', acceptsObservacao: true },
-      { id: 'restricoes_fragilidades', label: 'Restrições — Fragilidades mapeadas', etapa: 'Restrições', acceptsObservacao: true },
-      { id: 'restricoes_terceiros', label: 'Restrições — Terceiros relacionados', etapa: 'Restrições', acceptsObservacao: true },
-      { id: 'safra_dados_producao', label: 'Quadro Safra — Dados de produção validados', etapa: 'Quadro Safra', acceptsObservacao: true },
-      { id: 'safra_areas_proprias', label: 'Quadro Safra — Áreas próprias validadas', etapa: 'Quadro Safra', acceptsObservacao: true },
-      { id: 'safra_areas_arrendadas', label: 'Quadro Safra — Áreas arrendadas validadas', etapa: 'Quadro Safra', acceptsObservacao: true },
-      { id: 'safra_divergencias', label: 'Quadro Safra — Divergências identificadas', etapa: 'Quadro Safra', acceptsObservacao: true },
-      { id: 'safra_pecuaria', label: 'Quadro Safra — Pecuária verificada', etapa: 'Quadro Safra', acceptsObservacao: true },
+      // ETAPA 2 — IRPF
+      { id: 'irpf_bens_imoveis', label: 'Bens Imóveis que aparecem no IRPF', etapa: 'IRPF', acceptsObservacao: true },
+      { id: 'irpf_matriculas', label: 'Todas as matrículas atualizadas', etapa: 'IRPF', acceptsObservacao: true },
+      { id: 'irpf_cnpjs_ocultos', label: 'Existência de CNPJs que o cliente não informou', etapa: 'IRPF', acceptsObservacao: true },
+      // ETAPA 3 — Pessoa Jurídica
+      { id: 'pj_documentos', label: 'Documentos das PJs, citados no registro R.OP.004_Checklist_Informações Básicas PF', etapa: 'Pessoa Jurídica', acceptsObservacao: true },
+      { id: 'pj_holding_operacional', label: 'Operacional ou Holding', etapa: 'Pessoa Jurídica', acceptsObservacao: true },
+      // ETAPA 4 — Instituição Financeira
+      { id: 'if_definicao', label: 'Identificar definição de IF', etapa: 'Instituição Financeira', acceptsObservacao: true },
+      { id: 'if_cpfs_grupo', label: 'CPFs e CNPJs que fazem parte do grupo', etapa: 'Instituição Financeira', acceptsObservacao: true },
+      { id: 'if_carta_bacen', label: 'Carta Bacen por IF dos CPFs e CPNJs', etapa: 'Instituição Financeira', requiresUpload: true, acceptsObservacao: true },
+      { id: 'if_envio_carta', label: 'Envio Carta Bacen para assinatura', etapa: 'Instituição Financeira', acceptsObservacao: true },
+      // ETAPA 5 — Matrículas
+      { id: 'matriculas_operacoes', label: 'Possíveis operações vinculadas/registradas nas matrículas', etapa: 'Matrículas de Imóveis Próprios', acceptsObservacao: true },
+      // ETAPA 6 — Garantias
+      { id: 'garantias_mapeamento', label: 'Mapear as matrículas das possíveis garantias', etapa: 'Garantias', acceptsObservacao: true },
+      { id: 'garantias_comprometimento', label: 'Analisar comprometimento devedor', etapa: 'Garantias', acceptsObservacao: true },
+      // ETAPA 7 — Contratos de Arrendamento
+      { id: 'arrendamento_vencimentos', label: 'Vencimentos de contratos', etapa: 'Contratos de Arrendamento', acceptsObservacao: true },
+      { id: 'arrendamento_renovacao', label: 'Se houver vencimentos até o próximo ano, solicitar se serão renovados', etapa: 'Contratos de Arrendamento', acceptsObservacao: true },
+      // ETAPA 8 — Contratos de Cana
+      { id: 'cana_contratos_usinas', label: 'Verificar contratos com as usinas', etapa: 'Contratos de Cana', acceptsObservacao: true },
+      { id: 'cana_relatorio_usinas', label: 'Relatório de usinas', etapa: 'Contratos de Cana', acceptsObservacao: true },
+      { id: 'cana_termo_cessao', label: 'Termo de cessão', etapa: 'Contratos de Cana', acceptsObservacao: true },
+      // ETAPA 9 — Endividamento
+      { id: 'endividamento_atualizado', label: 'Detalhamento do Endividamento/Saldo devedor x SCR atualizado', etapa: 'Endividamento Atualizado', acceptsObservacao: true },
+      // ETAPA 10 — Restrições
+      { id: 'restricoes_fragilidades', label: 'Fragilidades identificadas', etapa: 'Restrições', acceptsObservacao: true },
+      { id: 'restricoes_terceiros', label: 'Outros/terceiros, que possam fazer parte do grupo/administração, mas não são citados nos documentos oficiais', etapa: 'Restrições', acceptsObservacao: true },
+      // ETAPA 11 — Quadro Safra
+      { id: 'safra_dados_producao', label: 'Validar dados de produção com o cliente', etapa: 'Quadro Safra', acceptsObservacao: true },
+      { id: 'safra_areas_proprias', label: 'Total de áreas próprias produtivas, pecuária e área de reserva (considerando que a soma precisa fechar com o total das áreas próprias geral)', etapa: 'Quadro Safra', acceptsObservacao: true },
+      { id: 'safra_areas_arrendadas', label: 'Total de áreas arrendadas produtivas, pecuária e área de reserva (considerando que a soma precisa fechar com o total de áreas arrendadas geral)', etapa: 'Quadro Safra', acceptsObservacao: true },
+      { id: 'safra_divergencias', label: 'Identificar se há divergências entre as áreas de plantio de Safra e Safrinha', etapa: 'Quadro Safra', acceptsObservacao: true },
+      { id: 'safra_atividade_entre_safras', label: 'Mapear se o produtor realiza alguma atividade entre safras', etapa: 'Quadro Safra', acceptsObservacao: true },
+      { id: 'safra_pecuaria', label: 'Verificar parte pecuária e identificar dados Indea', etapa: 'Quadro Safra', acceptsObservacao: true },
+      { id: 'safra_retorno_op003', label: 'Identificar o retorno dos itens do R.OP.003_Checklist de Informações Básicas PF, para sequência no preenchimento do Quadro Safra', etapa: 'Quadro Safra', acceptsObservacao: true },
+      { id: 'safra_finalizar', label: 'Finalizar preenchimento do Quadro Safra', etapa: 'Quadro Safra', acceptsObservacao: true },
     ],
   },
 
@@ -299,19 +323,21 @@ export const PROCESSO_TEMPLATES: ProcessoTemplate[] = [
     estrutura: { paginas: 8 },
     uiTab: 'contratos',
     placeholders: [
-      { name: 'identificacao_documento', label: 'Identificação do documento (nº)', hint: 'ex: 101/2026', required: true },
-      { name: 'cliente_nome', label: 'Nome do contratante', clientePath: 'nome', transform: 'upper', required: true },
-      { name: 'cliente_profissao', label: 'Profissão', default: 'agricultor', required: true },
-      { name: 'cliente_endereco', label: 'Endereço completo', clientePath: 'endereco', required: true },
-      { name: 'cliente_cidade', label: 'Cidade', clientePath: 'cidade', required: true },
-      { name: 'cliente_uf', label: 'UF', clientePath: 'uf', required: true },
-      { name: 'cliente_rg', label: 'RG', required: true },
-      { name: 'cliente_orgao_emissor', label: 'Órgão emissor RG', default: 'SSP', required: true },
-      { name: 'cliente_cpf', label: 'CPF', clientePath: 'cpfCnpj', transform: 'cpf-mask', required: true },
-      { name: 'banco', label: 'Banco para crédito honorários', required: false },
-      { name: 'agencia', label: 'Agência', required: false },
-      { name: 'conta', label: 'Conta-corrente', required: false },
-      PH_DATA_HOJE,
+      { name: 'identificacao_documento', label: 'Identificação do documento (nº)', hint: 'ex: 101/2026', required: true, grupo: 'Documento', tipo: 'texto' },
+      { name: 'cliente_nome', label: 'Nome do contratante', clientePath: 'nome', transform: 'upper', required: true, grupo: 'Identificação', tipo: 'texto' },
+      { name: 'cliente_profissao', label: 'Profissão', default: 'agricultor', required: true, grupo: 'Identificação', tipo: 'texto' },
+      { name: 'cliente_rg', label: 'RG', required: true, grupo: 'Identificação', tipo: 'texto' },
+      { name: 'cliente_orgao_emissor', label: 'Órgão emissor RG', default: 'SSP', required: true, grupo: 'Identificação', tipo: 'texto' },
+      { name: 'cliente_cpf', label: 'CPF', clientePath: 'cpfCnpj', transform: 'cpf-mask', required: true, grupo: 'Identificação', tipo: 'texto' },
+      { name: 'cliente_endereco', label: 'Endereço completo', clientePath: 'endereco', required: true, grupo: 'Endereço', tipo: 'textarea' },
+      { name: 'cliente_numero_endereco', label: 'Número do endereço', default: 'S/N', required: false, grupo: 'Endereço', tipo: 'texto' },
+      { name: 'cliente_cidade', label: 'Cidade', clientePath: 'cidade', required: true, grupo: 'Endereço', tipo: 'texto' },
+      { name: 'cliente_uf', label: 'UF', clientePath: 'uf', required: true, grupo: 'Endereço', tipo: 'texto' },
+      { name: 'cliente_cep', label: 'CEP', required: false, grupo: 'Endereço', tipo: 'texto' },
+      { name: 'banco', label: 'Banco para crédito honorários', required: false, grupo: 'Bancário', tipo: 'texto' },
+      { name: 'agencia', label: 'Agência', required: false, grupo: 'Bancário', tipo: 'texto' },
+      { name: 'conta', label: 'Conta-corrente', required: false, grupo: 'Bancário', tipo: 'texto' },
+      { ...PH_DATA_HOJE, grupo: 'Documento', tipo: 'data' },
     ],
   },
   {
@@ -328,11 +354,18 @@ export const PROCESSO_TEMPLATES: ProcessoTemplate[] = [
     estrutura: { paginas: 6 },
     uiTab: 'contratos',
     placeholders: [
-      { name: 'cliente_nome', label: 'Nome da Parte Divulgadora', clientePath: 'nome', transform: 'upper', required: true },
-      { name: 'cliente_cpf', label: 'CPF/CNPJ', clientePath: 'cpfCnpj', transform: 'cpf-mask', required: true },
-      { name: 'cliente_endereco', label: 'Endereço', clientePath: 'endereco', required: true },
-      { name: 'cidade_assinatura', label: 'Cidade da assinatura', default: 'Curitiba', required: true },
-      PH_DATA_HOJE,
+      { name: 'cliente_nome', label: 'Nome da Parte Divulgadora', clientePath: 'nome', transform: 'upper', required: true, grupo: 'Identificação', tipo: 'texto' },
+      { name: 'cliente_profissao', label: 'Profissão', default: 'agricultor', required: true, grupo: 'Identificação', tipo: 'texto' },
+      { name: 'cliente_cpf', label: 'CPF/CNPJ', clientePath: 'cpfCnpj', transform: 'cpf-mask', required: true, grupo: 'Identificação', tipo: 'texto' },
+      { name: 'cliente_rg', label: 'RG', required: true, grupo: 'Identificação', tipo: 'texto' },
+      { name: 'cliente_orgao_emissor', label: 'Órgão emissor RG', default: 'SSP', required: true, grupo: 'Identificação', tipo: 'texto' },
+      { name: 'cliente_endereco', label: 'Endereço', clientePath: 'endereco', required: true, grupo: 'Endereço', tipo: 'textarea' },
+      { name: 'cliente_numero_endereco', label: 'Número', default: 'S/N', required: false, grupo: 'Endereço', tipo: 'texto' },
+      { name: 'cliente_cidade', label: 'Cidade', clientePath: 'cidade', required: true, grupo: 'Endereço', tipo: 'texto' },
+      { name: 'cliente_uf', label: 'UF', clientePath: 'uf', required: true, grupo: 'Endereço', tipo: 'texto' },
+      { name: 'cliente_cep', label: 'CEP', required: false, grupo: 'Endereço', tipo: 'texto' },
+      { name: 'cidade_assinatura', label: 'Cidade da assinatura', default: 'Curitiba', required: true, grupo: 'Assinatura', tipo: 'texto' },
+      { ...PH_DATA_HOJE, grupo: 'Assinatura', tipo: 'data' },
     ],
   },
 
@@ -517,7 +550,7 @@ export const PROCESSO_TEMPLATES: ProcessoTemplate[] = [
   {
     slug: 'apresentacao-comercial',
     codigo: 'R.CM.001',
-    nome: 'Apresentação Comercial TEX CAPITAL',
+    nome: 'Apresentação Comercial ALETIS',
     versao: '1.0',
     descricao: 'Pitch comercial — slides de venda para prospect.',
     categoria: 'apresentacao-comercial',
@@ -565,7 +598,7 @@ export const PROCESSO_TEMPLATES: ProcessoTemplate[] = [
     categoria: 'politica',
     formato: 'pdf',
     templateFile: 'POL.001_GRD_TEX_CAPITAL_Assessoria.pdf',
-    originalFile: 'POL.001_GRD_TEX CAPITAL_Assessoria_v2.0.pdf',
+    originalFile: 'POL.001_GRD_ALETIS_Assessoria_v2.0.pdf',
     estrutura: { paginas: 1 },
     uiTab: 'docs',
   },
@@ -586,7 +619,7 @@ export const PROCESSO_TEMPLATES: ProcessoTemplate[] = [
     codigo: 'IT.OP.001',
     nome: 'IT — Ferramenta Google Drive',
     versao: '1.0',
-    descricao: 'Tutorial passo-a-passo para uso do Google Drive corporativo TEX.',
+    descricao: 'Tutorial passo-a-passo para uso do Google Drive corporativo ALETIS.',
     categoria: 'instrucao-trabalho',
     formato: 'docx',
     templateFile: 'IT.OP.001_Ferramenta_Google_Drive.docx',

@@ -2,7 +2,7 @@
 // WebSearchProvider — abstração p/ web search no Alix
 // ============================================================
 
-import type { ClaudeTool } from '../../../llm/ClaudeFoundryClient.js';
+import type { LLMTool } from '../../../llm/OpenAIClient.js';
 
 export interface WebSearchResult {
   title: string;
@@ -29,11 +29,11 @@ export interface WebSearchResponse {
 }
 
 export interface WebSearchProvider {
-  name: 'claude-native' | 'tavily' | 'fake';
+  name: 'openai' | 'fake';
   /** Verifica se provider está disponível (ex: key configurada). */
   available(): Promise<boolean>;
   /** Executa busca direta (usado por scraping / tests). */
   search(query: string, opts?: WebSearchOpts): Promise<WebSearchResponse>;
   /** Retorna o tool-spec que deve ser passado ao LLM — ou null se provider usa tool-use que o LLM executa (nativa). */
-  asClaudeTool(): ClaudeTool | null;
+  asLLMTool(): LLMTool | null;
 }

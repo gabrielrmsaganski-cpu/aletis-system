@@ -12,14 +12,14 @@
 // Estratégia: fetch HTTP direto (sem autenticação) quando possível,
 // senão retorna instruções para consulta manual no portal.
 // ============================================================
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 
 const SIGEF_BASE = 'https://sigef.incra.gov.br'
 const SIGEF_WFS = 'https://certificacao.incra.gov.br/geoserver/wfs'
 
-export function buildIncraSigefTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildIncraSigefTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   tools.push({
     name: 'consultar_sigef_por_proprietario',

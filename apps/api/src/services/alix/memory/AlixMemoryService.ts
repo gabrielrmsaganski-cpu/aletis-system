@@ -46,6 +46,9 @@
 
 import { promises as fs } from 'fs'
 import { join } from 'path'
+import { randomUUID } from 'node:crypto'
+import { isPgEnabled } from '../../../db/client.js'
+import { getAlixMemory, listAlixMemories, updateAlixMemoryStrict, deleteAlixMemory, type MemoriaLike } from '../../../db/AlixMemoryRepository.js'
 import type {
   MemoriaCliente,
   MemoriaHistoricoItem,
@@ -255,6 +258,7 @@ export class AlixMemoryService {
 
   /** Lê memória do cliente. Retorna null se arquivo não existir. */
   async get(clienteId: string): Promise<MemoriaCliente | null> {
+    if (isPgEnabled()) return await getAlixMemory(clienteId) as unknown as MemoriaCliente | null
     const fp = filePathFor(clienteId)
     try {
       const raw = await fs.readFile(fp, 'utf-8')
@@ -274,40 +278,31 @@ export class AlixMemoryService {
     clienteId: string,
     patch: Partial<MemoriaCliente>,
   ): Promise<MemoriaCliente> {
-    await ensureDir()
     const safeId = sanitizeClienteId(clienteId)
-    const existing =
-      (await this.get(safeId)) ?? emptyMemoria(safeId, patch.clienteNome || safeId)
-
-    const merged: MemoriaCliente = {
-      clienteId: safeId,
-      clienteNome:
-        (patch.clienteNome && patch.clienteNome.trim()) ||
-        existing.clienteNome ||
-        safeId,
-      atualizadoEm: new Date().toISOString(),
-      perfil: mergeLista(existing.perfil, patch.perfil),
-      dividasAtivas: mergeLista(existing.dividasAtivas, patch.dividasAtivas),
-      decisoes: mergeLista(existing.decisoes, patch.decisoes),
-      proximasAcoes: mergeLista(existing.proximasAcoes, patch.proximasAcoes),
-      alertas: mergeLista(existing.alertas, patch.alertas),
-      historico: mergeHistorico(existing.historico, patch.historico),
-    }
-
-    const fp = filePathFor(safeId)
-    await fs.writeFile(fp, serializar(merged), 'utf-8')
-
-    // Wave-PG-14: dual-write best-effort no Postgres.
-    void (async () => {
-      try {
-        const repo = await import('../../../db/AlixMemoryRepository.js')
-        await repo.upsertAlixMemory(merged as unknown as Parameters<typeof repo.upsertAlixMemory>[0])
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('[AlixMemoryService.upsert] dual-write PG falhou:', (err as Error).message)
+    const merge = (existing: MemoriaCliente | null, canonicalId = safeId): MemoriaCliente => {
+      const base = existing ?? emptyMemoria(canonicalId, patch.clienteNome || canonicalId)
+      return {
+        ...base,
+        clienteId: canonicalId,
+        clienteNome: (patch.clienteNome && patch.clienteNome.trim()) || base.clienteNome || canonicalId,
+        atualizadoEm: new Date().toISOString(),
+        perfil: mergeLista(base.perfil, patch.perfil),
+        dividasAtivas: mergeLista(base.dividasAtivas, patch.dividasAtivas),
+        decisoes: mergeLista(base.decisoes, patch.decisoes),
+        proximasAcoes: mergeLista(base.proximasAcoes, patch.proximasAcoes),
+        alertas: mergeLista(base.alertas, patch.alertas),
+        historico: mergeHistorico(base.historico, patch.historico),
       }
-    })()
-
+    }
+    // O banco confirma primeiro; arquivos são espelhos, nunca alternativa silenciosa a erro de PG.
+    const merged = isPgEnabled()
+      ? await updateAlixMemoryStrict(safeId, (previous, canonicalId) => merge(previous as unknown as MemoriaCliente | null, canonicalId) as unknown as MemoriaLike) as unknown as MemoriaCliente
+      : merge(await this.get(safeId))
+    await ensureDir()
+    const destination = filePathFor(merged.clienteId)
+    const temporary = `${destination}.${randomUUID()}.tmp`
+    try { await fs.writeFile(temporary, serializar(merged), { encoding: 'utf-8', mode: 0o600 }); await fs.rename(temporary, destination) }
+    finally { await fs.rm(temporary, { force: true }) }
     return merged
   }
 
@@ -346,6 +341,7 @@ export class AlixMemoryService {
 
   /** Remove o arquivo de memória do cliente. Idempotente. */
   async delete(clienteId: string): Promise<void> {
+    if (isPgEnabled()) await deleteAlixMemory(clienteId)
     const fp = filePathFor(clienteId)
     try {
       await fs.unlink(fp)
@@ -382,6 +378,7 @@ export class AlixMemoryService {
 
   /** Lista metadados das memórias existentes. */
   async list(): Promise<MemoriaListItem[]> {
+    if (isPgEnabled()) return (await listAlixMemories()).map(memory => ({ clienteId: memory.clienteId, clienteNome: memory.clienteNome, atualizadoEm: memory.atualizadoEm, bytes: Buffer.byteLength(serializar(memory as unknown as MemoriaCliente), 'utf-8') }))
     await ensureDir()
     const entries = await fs.readdir(STORAGE_DIR)
     const out: MemoriaListItem[] = []

@@ -16,13 +16,18 @@ export interface DocumentoPendencia {
   descricao?: string
   categoria: 'fiscal' | 'contrato' | 'identidade' | 'patrimonio' | 'agro' | 'outros'
   obrigatorio: boolean
-  status: 'pendente' | 'enviado' | 'aprovado' | 'rejeitado'
+  status: 'pendente' | 'enviado' | 'aprovado' | 'rejeitado' | 'cancelado'
   uploadId?: string
   solicitadoPor?: string
   solicitadoEm: string
   enviadoEm?: string
   revisadoEm?: string
   observacao?: string
+  prioridade?: 'normal' | 'alta' | 'urgente'
+  prazo?: string | null
+  tipoDocumento?: string | null
+  updatedAt?: string
+  metadata?: Record<string, unknown>
 }
 
 export interface UploadCliente {
@@ -38,6 +43,8 @@ export interface UploadCliente {
   enviadoPor: 'cliente' | 'consultor'
   enviadoEm: string
   url?: string // URL relativa para download
+  versao?: number | null
+  metadata?: Record<string, unknown>
 }
 
 export interface PortalEvento {
@@ -57,6 +64,8 @@ export interface PortalEvento {
     | 'doc_visualizado'
     | 'pendencia_criada'
     | 'pendencia_resolvida'
+    | 'pendencia_atualizada'
+    | 'pendencia_cancelada'
   canal?: 'web' | 'mobile' | 'magic' | 'consultor'
   ip?: string
   userAgent?: string
@@ -80,6 +89,22 @@ function bucket(clienteId: string): Bucket {
     BY_CLIENTE.set(clienteId, b)
   }
   return b
+}
+
+/** Espelho de compatibilidade: chamar somente após uma transação já confirmada. */
+export function cachePortalPendencia(value: DocumentoPendencia): void {
+  bucket(value.clienteId).pendencias.set(value.id, structuredClone(value))
+}
+export function cachePortalUpload(value: UploadCliente): void {
+  bucket(value.clienteId).uploads.set(value.id, structuredClone(value))
+}
+export function cachePortalEvento(value: PortalEvento): void {
+  const events = bucket(value.clienteId).eventos
+  const index = events.findIndex(event => event.id === value.id)
+  if (index >= 0) events[index] = structuredClone(value)
+  else events.push(structuredClone(value))
+  if (events.length > 200) events.splice(0, events.length - 200)
+  _eventoSeq = Math.max(_eventoSeq, value.id + 1)
 }
 
 /* ── Pendências ────────────────────────────────────────────── */
@@ -245,6 +270,11 @@ export async function hydratePortalStoreFromPg(): Promise<{ pendencias: number; 
         enviadoEm: r.enviadoEm?.toISOString(),
         revisadoEm: r.revisadoEm?.toISOString(),
         observacao: r.observacao ?? undefined,
+        prioridade: r.prioridade ?? 'normal',
+        prazo: r.prazo ?? null,
+        tipoDocumento: r.tipoDocumento ?? null,
+        updatedAt: (r.updatedAt ?? r.revisadoEm ?? r.enviadoEm ?? r.solicitadoEm).toISOString(),
+        metadata: r.metadata ?? {},
       })
     }
     for (const r of ups) {
@@ -262,6 +292,8 @@ export async function hydratePortalStoreFromPg(): Promise<{ pendencias: number; 
         enviadoPor: r.enviadoPor,
         enviadoEm: r.enviadoEm.toISOString(),
         url: `/api/portal/uploads/${r.id}`,
+        metadata: r.metadata ?? {},
+        versao: typeof r.metadata?.requestVersion === 'number' ? r.metadata.requestVersion : null,
       })
     }
     return { pendencias: pends.length, uploads: ups.length }

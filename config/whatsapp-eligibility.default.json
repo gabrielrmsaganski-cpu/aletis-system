@@ -1,0 +1,75 @@
+{
+  "checklistId": "whatsapp-default-v1",
+  "version": 1,
+  "questions": [
+    {
+      "id": "whatsapp-q1-perfil-agro",
+      "order": 1,
+      "key": "perfil_agro",
+      "text": "Voce e produtor rural, empresa do agro ou possui relacao direta com atividade rural?",
+      "kind": "choice",
+      "required": true,
+      "weight": 20,
+      "choices": ["produtor rural", "empresa agro", "cooperativa", "outro"]
+    },
+    {
+      "id": "whatsapp-q2-problema",
+      "order": 2,
+      "key": "problema_principal",
+      "text": "Qual e o principal problema que deseja resolver?",
+      "kind": "text",
+      "required": true,
+      "weight": 10
+    },
+    {
+      "id": "whatsapp-q3-situacao-financeira",
+      "order": 3,
+      "key": "situacao_financeira",
+      "text": "Existe divida, contrato bancario, execucao, cobranca ou situacao financeira relevante?",
+      "kind": "boolean",
+      "required": true,
+      "weight": 20
+    },
+    {
+      "id": "whatsapp-q4-valor",
+      "order": 4,
+      "key": "valor_envolvido",
+      "text": "Qual e o valor aproximado envolvido?",
+      "kind": "money",
+      "required": true,
+      "weight": 20
+    },
+    {
+      "id": "whatsapp-q5-docs",
+      "order": 5,
+      "key": "documentacao_minima",
+      "text": "Existe documentacao minima para analise, como contrato, proposta, extrato ou notificacao?",
+      "kind": "boolean",
+      "required": true,
+      "weight": 15
+    },
+    {
+      "id": "whatsapp-q6-consultor",
+      "order": 6,
+      "key": "deseja_consultor",
+      "text": "Voce deseja falar com um consultor da ALETIS?",
+      "kind": "boolean",
+      "required": true,
+      "weight": 10
+    }
+  ],
+  "rules": {
+    "eligible": {
+      "requiresAgroProfile": true,
+      "requiresFinancialProblem": true,
+      "minimumAmount": 200000,
+      "requiresDocuments": true,
+      "requiresConsultorIntent": true
+    },
+    "attention": {
+      "requiresAgroProfile": true,
+      "requiresFinancialProblem": true,
+      "minimumAmount": 50000
+    }
+  }
+}

@@ -4,11 +4,11 @@
 // Métodos reais do serviço: buscar, getLead, enrichLead, stats, etc.
 // ============================================================
 
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js';
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js';
 import { getProspeccaoService } from '../../prospeccao/ProspeccaoService.js';
 import type { ProspeccaoFilters, ContactOutcomeTipo } from '../../prospeccao/types.js';
 
-type ToolSpec = { spec: ClaudeTool; handler: (input: Record<string, unknown>) => Promise<unknown> | unknown };
+type ToolSpec = { spec: LLMTool; handler: (input: Record<string, unknown>) => Promise<unknown> | unknown };
 
 function buildSpecs(): ToolSpec[] {
   const svc = getProspeccaoService();
@@ -161,10 +161,10 @@ function buildSpecs(): ToolSpec[] {
   ];
 }
 
-export function buildProspeccaoTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
+export function buildProspeccaoTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
   const specs = buildSpecs();
   const tools = specs.map(s => s.spec);
-  const registry: ClaudeToolRegistry = {};
+  const registry: LLMToolRegistry = {};
   for (const s of specs) {
     registry[s.spec.name] = { spec: s.spec, handler: s.handler };
   }

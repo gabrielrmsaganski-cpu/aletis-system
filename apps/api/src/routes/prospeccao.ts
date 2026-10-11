@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto'
 import { getProspeccaoService, BatchEvent } from '../services/prospeccao/ProspeccaoService.js'
 import { SICARError } from '../services/prospeccao/SICARClient.js'
 import { getCaptchaSolver, hasCaptchaKey } from '../services/captcha/CaptchaSolver.js'
-import type { ContactOutcome, ContactOutcomeTipo, ProspeccaoFilters } from '../services/prospeccao/types.js'
+import type { ContactOutcome, ContactOutcomeTipo, LeadFull, ProspeccaoFilters } from '../services/prospeccao/types.js'
 
 const OUTCOME_TIPOS: readonly ContactOutcomeTipo[] = [
   'sucesso',
@@ -21,6 +21,84 @@ const CANAIS: readonly NonNullable<ContactOutcome['canal']>[] = [
   'presencial',
   'outro',
 ]
+
+interface SqlLeadsQuery {
+  uf?: string
+  minScore?: string
+  minDivida?: string
+  maxDivida?: string
+  tipoPessoa?: 'PF' | 'PJ'
+  ajuizado?: string
+  limit?: string
+  offset?: string
+  orderBy?: string
+}
+
+function boundedInteger(value: string | undefined, fallback: number, maximum: number): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback
+  return Math.min(Math.floor(parsed), maximum)
+}
+
+function nonNegativeInteger(value: string | undefined): number {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0
+}
+
+function nonNegativeNumber(value: string | undefined): number | undefined {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
+}
+
+function normalizedUf(value: string | undefined): string | undefined {
+  const uf = value?.trim().toUpperCase()
+  return uf && /^[A-Z]{2}$/.test(uf) ? uf : undefined
+}
+
+function sqlFallbackLead(lead: LeadFull) {
+  return {
+    cnpjCpf: lead.cpfCnpj,
+    nome: lead.nome,
+    uf: lead.uf,
+    areaEstimadaHa: Number.isFinite(lead.area.hectaresEstimados)
+      ? String(lead.area.hectaresEstimados)
+      : null,
+    totalDivida: Number.isFinite(lead.totalDivida) ? lead.totalDivida.toFixed(2) : null,
+    inscricoesCount: lead.qtdInscricoes,
+    ajuizado: lead.temAjuizada,
+    agroScore: Number.isFinite(lead.score.total) ? Math.round(lead.score.total) : null,
+  }
+}
+
+function sqlFallbackResponse(
+  service: Pick<ReturnType<typeof getProspeccaoService>, 'buscar'>,
+  query: SqlLeadsQuery,
+  reason: string,
+) {
+  const limit = boundedInteger(query.limit, 50, 500)
+  const offset = nonNegativeInteger(query.offset)
+  const ajuizado = query.ajuizado === 'true' ? true : query.ajuizado === 'false' ? false : undefined
+  const result = service.buscar({
+    uf: normalizedUf(query.uf),
+    minDivida: nonNegativeNumber(query.minDivida),
+    maxDivida: nonNegativeNumber(query.maxDivida),
+    tipoPessoa: query.tipoPessoa,
+    temAjuizada: ajuizado,
+    sortBy: query.orderBy === 'score' ? 'score' : 'divida',
+    pageSize: limit,
+    offset,
+  })
+
+  return {
+    success: true,
+    source: 'memory' as const,
+    aviso: `Consulta SQL indisponível; exibindo índice local (${reason}).`,
+    total: result.total,
+    limit: result.pageSize,
+    offset,
+    leads: result.leads.map(sqlFallbackLead),
+  }
+}
 
 /**
  * Rotas de Prospecção — busca de leads agro com dívida ativa PGFN.
@@ -153,41 +231,36 @@ export default async function prospeccaoRoutes(app: FastifyInstance) {
    *   - orderBy=divida|score|nome    default 'divida desc'
    */
   app.get('/api/prospeccao/leads/sql', async (req: FastifyRequest, reply: FastifyReply) => {
-    const q = req.query as {
-      uf?: string
-      minScore?: string
-      minDivida?: string
-      maxDivida?: string
-      ajuizado?: string
-      limit?: string
-      offset?: string
-      orderBy?: string
-    }
+    const q = req.query as SqlLeadsQuery
+    const limit = boundedInteger(q.limit, 50, 500)
+    const offset = nonNegativeInteger(q.offset)
+    const minScore = nonNegativeNumber(q.minScore)
+    const minDivida = nonNegativeNumber(q.minDivida)
+    const maxDivida = nonNegativeNumber(q.maxDivida)
+    const uf = normalizedUf(q.uf)
 
     try {
       const { isPgEnabled, getDb } = await import('../db/client.js')
       if (!isPgEnabled()) {
-        return reply.status(200).send({
-          success: true,
-          aviso: 'PG desligado — use /api/prospeccao/buscar (RAM).',
-          total: 0,
-          leads: [],
-        })
+        return reply.status(200).send(sqlFallbackResponse(service, q, 'PostgreSQL desativado'))
       }
       const { leadPgfn } = await import('../db/schema.js')
       const { and, eq, gte, lte, desc, asc, sql } = await import('drizzle-orm')
       const db = getDb()
 
-      const limit = Math.min(Math.max(Number(q.limit) || 50, 1), 500)
-      const offset = Math.max(Number(q.offset) || 0, 0)
-
       const filters = [] as Array<ReturnType<typeof and>>
-      if (q.uf && /^[A-Z]{2}$/.test(q.uf)) filters.push(eq(leadPgfn.uf, q.uf) as any)
-      if (q.minScore) filters.push(gte(leadPgfn.agroScore, Number(q.minScore)) as any)
-      if (q.minDivida) filters.push(gte(leadPgfn.totalDivida, String(Number(q.minDivida))) as any)
-      if (q.maxDivida) filters.push(lte(leadPgfn.totalDivida, String(Number(q.maxDivida))) as any)
+      if (uf) filters.push(eq(leadPgfn.uf, uf) as any)
+      if (minScore !== undefined) filters.push(gte(leadPgfn.agroScore, minScore) as any)
+      if (minDivida !== undefined) filters.push(gte(leadPgfn.totalDivida, String(minDivida)) as any)
+      if (maxDivida !== undefined) filters.push(lte(leadPgfn.totalDivida, String(maxDivida)) as any)
       if (q.ajuizado === 'true') filters.push(eq(leadPgfn.ajuizado, true) as any)
       if (q.ajuizado === 'false') filters.push(eq(leadPgfn.ajuizado, false) as any)
+      if (q.tipoPessoa === 'PF' || q.tipoPessoa === 'PJ') {
+        const documentLength = q.tipoPessoa === 'PF' ? 11 : 14
+        filters.push(
+          sql`length(regexp_replace(${leadPgfn.cnpjCpf}, '\\D', '', 'g')) = ${documentLength}` as any,
+        )
+      }
 
       const whereClause = filters.length > 0 ? and(...(filters as Parameters<typeof and>)) : undefined
 
@@ -208,6 +281,7 @@ export default async function prospeccaoRoutes(app: FastifyInstance) {
           cnpjCpf: leadPgfn.cnpjCpf,
           nome: leadPgfn.nome,
           uf: leadPgfn.uf,
+          areaEstimadaHa: leadPgfn.areaEstimadaHa,
           totalDivida: leadPgfn.totalDivida,
           inscricoesCount: leadPgfn.inscricoesCount,
           ajuizado: leadPgfn.ajuizado,
@@ -225,14 +299,15 @@ export default async function prospeccaoRoutes(app: FastifyInstance) {
 
       return reply.status(200).send({
         success: true,
+        source: 'postgres',
         total: totalRow[0]?.n ?? 0,
         limit,
         offset,
         leads: rows,
       })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'erro desconhecido'
-      return reply.status(500).send({ success: false, error: msg })
+      app.log.warn({ err }, 'Consulta SQL de prospecção indisponível; usando índice local.')
+      return reply.status(200).send(sqlFallbackResponse(service, q, 'PostgreSQL indisponível'))
     }
   })
 

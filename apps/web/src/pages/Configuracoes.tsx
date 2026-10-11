@@ -1,3 +1,5 @@
+import { SectionNav } from '../components/ui/SectionNav'
+import PageHeader from '../components/ui/PageHeader'
 /**
  * Configurações (Settings)
  *
@@ -29,14 +31,27 @@ import {
   UserPlus,
   Search,
   MailOpen,
+  Cloud,
+  FolderOpen,
+  CalendarCheck2,
+  FileText,
+  Link2,
+  Unplug,
+  Send,
 } from 'lucide-react'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
 import { apiFetch, apiFetchFull } from '../hooks/useApi'
+import { useDSTheme } from '../hooks/useDSTheme'
 import { InlineButton } from '../components/ui'
+import AppDialog from '../components/ui/AppDialog'
+import { googleConnectionGuidance } from '../components/settings/googleConnectionGuidance'
+import { GoogleDriveAuthorizationPanel } from '../components/settings/GoogleDriveAuthorizationPanel'
+import { GoogleDrivePersistentAuthorizationPanel } from '../components/settings/GoogleDrivePersistentAuthorizationPanel'
+import { uiAction } from '../components/ui/foundation'
 
 // ── Types ────────────────────────────────────────────────────
-type TabId = 'perfil' | 'aparencia' | 'fontes' | 'preferencias' | 'acessos'
+type TabId = 'perfil' | 'aparencia' | 'fontes' | 'preferencias' | 'acessos' | 'google'
 
 interface PortalClienteRow {
   id: string
@@ -94,10 +109,45 @@ interface Preferencias {
   alertasMercado: boolean
 }
 
+interface GoogleWorkspaceStatus {
+  id?: string
+  status: 'unconfigured' | 'disconnected' | 'connected' | 'expired' | 'revoked' | 'error'
+  enabled: boolean
+  configured: boolean
+  oauthConfigured?: boolean
+  canManageConnection?: boolean
+  diagnostic?: { code: string; message: string }
+  googleEmail?: string | null
+  googleAccountId?: string | null
+  connectionMode?: 'oauth' | 'gcloud_drive' | 'corporate_oauth'
+  scopes: string[]
+  connectedAt?: string | null
+  updatedAt?: string | null
+  tokenExpiry?: string | null
+  revokedAt?: string | null
+  missingEnv: string[]
+  features: {
+    drive: string
+    docs: string
+    calendar: string
+    gmail: string
+  }
+}
+
+interface GoogleAuditLog {
+  id: string
+  action: string
+  resourceType: string
+  resourceId?: string | null
+  googleResourceId?: string | null
+  status: string
+  errorMessage?: string | null
+  createdAt: string
+}
+
 // ── Storage keys ─────────────────────────────────────────────
 const PERFIL_KEY = 'aletis:perfil'
 const PREFS_KEY = 'aletis:preferencias'
-const TEMA_KEY = 'aletis:tema'
 
 const DEFAULT_PERFIL: PerfilForm = {
   nome: 'Christian Kohler',
@@ -153,7 +203,7 @@ function StatusChip({ status }: { status: FonteEntry['status'] }) {
     online: { icon: CheckCircle2, label: 'Online', cls: 'bg-positivo/10 text-positivo border-positivo/30' },
     degraded: { icon: AlertTriangle, label: 'Degradado', cls: 'bg-aletis-dourado/10 text-aletis-dourado border-aletis-dourado/30' },
     offline: { icon: XCircle, label: 'Offline', cls: 'bg-alerta/10 text-alerta border-alerta/30' },
-    unknown: { icon: HelpCircle, label: 'Desconhecido', cls: 'bg-aletis-bege text-aletis-grafite-claro border-aletis-borda' },
+    unknown: { icon: HelpCircle, label: 'Desconhecido', cls: 'bg-aletis-bege text-muted-foreground border-aletis-borda' },
   }[status]
   const Icon = cfg.icon
   return (
@@ -170,14 +220,11 @@ export default function Configuracoes() {
   const initialTab = (params.get('tab') as TabId) || 'perfil'
   const [activeTab, setActiveTab] = useState<TabId>(initialTab)
   const { toasts, show: showToast, dismiss: dismissToast } = useToast()
+  const { mode, setMode } = useDSTheme()
+  const tema = mode === 'operational' ? 'escuro' : 'claro'
 
   // ── Perfil state ──
   const [perfil, setPerfil] = useState<PerfilForm>(() => loadJSON(PERFIL_KEY, DEFAULT_PERFIL))
-
-  // ── Aparencia state ──
-  const [tema, setTema] = useState<'claro' | 'escuro'>(() => {
-    try { return (localStorage.getItem(TEMA_KEY) as 'claro' | 'escuro') || 'claro' } catch { return 'claro' }
-  })
 
   // ── Preferencias state ──
   const [prefs, setPrefs] = useState<Preferencias>(() => loadJSON(PREFS_KEY, DEFAULT_PREFS))
@@ -198,6 +245,20 @@ export default function Configuracoes() {
   } | null>(null)
   const [acaoPendente, setAcaoPendente] = useState<string | null>(null)
 
+  // ── Google Workspace state ──
+  const [googleStatus, setGoogleStatus] = useState<GoogleWorkspaceStatus | null>(null)
+  const [googleAudit, setGoogleAudit] = useState<GoogleAuditLog[]>([])
+  const [googleLoading, setGoogleLoading] = useState(false)
+  const [googleError, setGoogleError] = useState<string | null>(null)
+  const [googleAuditError, setGoogleAuditError] = useState<string | null>(null)
+  const [googleAction, setGoogleAction] = useState<string | null>(null)
+  const googleGuidance = googleConnectionGuidance(googleStatus)
+  const googleFeatureStatus = (feature: keyof GoogleWorkspaceStatus['features']) => {
+    if (!googleStatus) return googleLoading ? 'Consultando' : 'Não consultado'
+    const value = googleStatus.features?.[feature] || 'Pendente'
+    return googleStatus.status !== 'connected' && /^conectado/i.test(value) ? 'Autorização necessária' : value
+  }
+
   // Tab param sync
   useEffect(() => {
     if (params.get('tab') !== activeTab) {
@@ -206,11 +267,6 @@ export default function Configuracoes() {
       setParams(next, { replace: true })
     }
   }, [activeTab])
-
-  // Apply theme
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', tema === 'escuro')
-  }, [tema])
 
   // Fetch fontes when tab opens (envelope { sucesso, dados })
   const loadFontes = async () => {
@@ -246,6 +302,71 @@ export default function Configuracoes() {
   useEffect(() => {
     if (activeTab === 'acessos' && clientesPortal.length === 0) loadClientesPortal()
   }, [activeTab])
+
+  const loadGoogleWorkspace = async () => {
+    setGoogleLoading(true)
+    setGoogleError(null)
+    setGoogleAuditError(null)
+    try {
+      const [status, logs] = await Promise.allSettled([
+        apiFetch<GoogleWorkspaceStatus>('/integrations/google/status'),
+        apiFetch<{ logs: GoogleAuditLog[]; total: number }>('/integrations/google/audit-logs?limit=8'),
+      ])
+      if (status.status === 'fulfilled') setGoogleStatus(status.value)
+      else { setGoogleStatus(null); setGoogleError('Não foi possível consultar a conexão Google. Tente atualizar novamente.') }
+      if (logs.status === 'fulfilled') setGoogleAudit(logs.value.logs || [])
+      else setGoogleAuditError('Não foi possível consultar as atividades recentes.')
+    } finally {
+      setGoogleLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'google') loadGoogleWorkspace()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
+
+  useEffect(() => {
+    const google = params.get('google')
+    if (google === 'connected') {
+      showToast('Autorização Google concluída. Atualizando os serviços disponíveis.', 'success')
+      const next = new URLSearchParams(params)
+      next.delete('google')
+      setParams(next, { replace: true })
+    } else if (google === 'error') {
+      showToast('A conexão Google não foi concluída. Verifique as credenciais e tente novamente.', 'warning')
+      const next = new URLSearchParams(params)
+      next.delete('google')
+      next.delete('message')
+      setParams(next, { replace: true })
+    }
+  }, [])
+
+  const conectarGoogleWorkspace = async () => {
+    setGoogleAction('connect')
+    try {
+      const data = await apiFetch<{ authorizationUrl: string }>('/integrations/google/auth-url?returnPath=/configuracoes?tab=google')
+      window.location.href = data.authorizationUrl
+    } catch (err) {
+      showToast((err as Error).message || 'Não foi possível iniciar OAuth Google', 'error')
+      setGoogleAction(null)
+    }
+  }
+
+  const desconectarGoogleWorkspace = async () => {
+    if (!window.confirm('Desconectar a conta Google Workspace do ALETIS? Os vínculos já registrados serão preservados.')) return
+    setGoogleAction('disconnect')
+    try {
+      const data = await apiFetch<{ status: GoogleWorkspaceStatus }>('/integrations/google/disconnect', { method: 'POST' })
+      setGoogleStatus(data.status)
+      await loadGoogleWorkspace()
+      showToast('Google Workspace desconectado', 'success')
+    } catch (err) {
+      showToast((err as Error).message || 'Falha ao desconectar Google Workspace', 'error')
+    } finally {
+      setGoogleAction(null)
+    }
+  }
 
   const criarOuResetarAcesso = async (cli: PortalClienteRow) => {
     setAcaoPendente(cli.id)
@@ -356,9 +477,8 @@ export default function Configuracoes() {
   }
 
   const handleSaveTema = (next: 'claro' | 'escuro') => {
-    setTema(next)
-    try { localStorage.setItem(TEMA_KEY, next) } catch { /* ignore */ }
-    showToast(`Tema ${next === 'claro' ? 'claro' : 'escuro'} aplicado`, 'success')
+    setMode(next === 'escuro' ? 'operational' : 'documental')
+    showToast(`Modo ${next === 'claro' ? 'documental' : 'operacional'} aplicado`, 'success')
   }
 
   return (
@@ -366,50 +486,23 @@ export default function Configuracoes() {
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl lg:text-3xl font-display font-bold text-aletis-grafite-escuro tracking-tight">
-          Configurações
-        </h1>
-        <p className="text-sm font-body text-aletis-grafite-claro mt-1">
+      <PageHeader title={<>Configurações</>} description={<> <p className="text-sm font-body text-muted-foreground mt-1">
           Perfil, aparência, fontes de dados e preferências do sistema.
-        </p>
-      </div>
+        </p> </>} />
 
-      {/* Tabs */}
-      <div className="border-b border-aletis-borda mb-6">
-        <nav className="flex gap-0 overflow-x-auto" role="tablist">
-          {([
-            { id: 'perfil', label: 'Perfil', icon: UserIcon },
-            { id: 'aparencia', label: 'Aparência', icon: Palette },
-            { id: 'acessos', label: 'Acessos Portal Cliente', icon: ShieldCheck },
-            { id: 'fontes', label: 'Fontes de Dados', icon: Database },
-            { id: 'preferencias', label: 'Preferências', icon: SlidersHorizontal },
-          ] as const).map(tab => {
-            const Icon = tab.icon
-            return (
-              <button
-                key={tab.id}
-                role="tab"
-                aria-selected={activeTab === tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-5 py-3 text-sm font-body font-medium whitespace-nowrap border-b-2 transition-all duration-200 inline-flex items-center gap-2 ${
-                  activeTab === tab.id
-                    ? 'border-aletis-verde text-aletis-verde'
-                    : 'border-transparent text-aletis-grafite-claro hover:text-aletis-grafite-escuro hover:border-aletis-borda'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            )
-          })}
-        </nav>
-      </div>
+      <SectionNav label="Áreas de configuração" active={activeTab} onChange={setActiveTab} items={[
+        { id: 'perfil', label: 'Meu perfil', icon: UserIcon },
+        { id: 'aparencia', label: 'Aparência', icon: Palette },
+        { id: 'acessos', label: 'Acessos de clientes', icon: ShieldCheck },
+        { id: 'google', label: 'Google Workspace', icon: Cloud },
+        { id: 'fontes', label: 'Fontes de dados', icon: Database },
+        { id: 'preferencias', label: 'Preferências', icon: SlidersHorizontal },
+      ]} />
 
       {/* ── Perfil ── */}
       {activeTab === 'perfil' && (
         <div className="card-premium p-6 max-w-3xl animate-fade-in">
-          <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro mb-4">Dados do Perfil</h2>
+          <h2 className="text-lg font-display font-semibold text-foreground mb-4">Dados do Perfil</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field label="Nome completo">
               <input type="text" value={perfil.nome} onChange={e => setPerfil({ ...perfil, nome: e.target.value })} className="input-field py-2.5 text-sm" />
@@ -438,14 +531,167 @@ export default function Configuracoes() {
       {/* ── Aparencia ── */}
       {activeTab === 'aparencia' && (
         <div className="card-premium p-6 max-w-3xl animate-fade-in">
-          <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro mb-4">Tema e Aparência</h2>
+          <h2 className="text-lg font-display font-semibold text-foreground mb-4">Tema e Aparência</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <TemaCard active={tema === 'claro'} onClick={() => handleSaveTema('claro')} nome="Claro" descricao="Fundo bege claro, ideal para o dia a dia." preview="bg-aletis-bege" />
-            <TemaCard active={tema === 'escuro'} onClick={() => handleSaveTema('escuro')} nome="Escuro" descricao="Fundo grafite escuro, ideal para pouca luz." preview="bg-aletis-grafite-escuro" />
+            <TemaCard active={tema === 'claro'} onClick={() => handleSaveTema('claro')} nome="Documental" descricao="Fundo claro, ideal para leitura e contratos." preview="bg-aletis-bege" />
+            <TemaCard active={tema === 'escuro'} onClick={() => handleSaveTema('escuro')} nome="Operacional" descricao="Fundo escuro, ideal para comando e análise." preview="bg-aletis-grafite-escuro" />
           </div>
-          <p className="text-xs font-body text-aletis-grafite-claro mt-4">
+          <p className="text-xs font-body text-muted-foreground mt-4">
             O tema é aplicado imediatamente e persistido no navegador.
           </p>
+        </div>
+      )}
+
+      {/* ── Google Workspace ── */}
+      {activeTab === 'google' && (
+        <div className="animate-fade-in space-y-5">
+          <div className="rounded-lg border border-aletis-borda bg-card p-5 shadow-sm">
+            <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-5">
+              <div className="flex items-start gap-4">
+                <div className="h-12 w-12 rounded-lg bg-aletis-verde/10 border border-aletis-verde/20 flex items-center justify-center">
+                  <Cloud className="h-6 w-6 text-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-lg font-display font-semibold text-foreground">Google Workspace</h2>
+                    {googleStatus ? <GoogleStatusBadge status={googleStatus.status} /> : <span className="text-xs text-muted-foreground">{googleLoading ? 'Consultando conexão…' : 'Estado indisponível'}</span>}
+                  </div>
+                  <p className="mt-1 text-sm font-body text-[var(--text-soft)] max-w-3xl">
+                    {googleStatus?.diagnostic?.message || googleGuidance.description}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs font-body text-[var(--text-soft)]">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-aletis-borda bg-aletis-bege/50 px-2.5 py-1">
+                      Conta: <strong className="text-foreground">{googleStatus?.googleEmail || 'não conectada'}</strong>
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-aletis-borda bg-aletis-bege/50 px-2.5 py-1">
+                      Permissões informadas: <strong className="text-foreground">{googleStatus ? googleStatus.scopes?.length ?? 0 : '—'}</strong>
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-aletis-borda bg-aletis-bege/50 px-2.5 py-1">
+                      Autorização: <strong className="text-foreground">{googleStatus?.status === 'connected' ? googleStatus.connectionMode === 'gcloud_drive' ? 'disponível no servidor' : googleStatus.tokenExpiry ? fmtAgo(googleStatus.tokenExpiry) : 'ativa' : googleGuidance.needsServerAuthorization ? 'requer revisão no servidor' : googleStatus?.status === 'expired' ? 'expirada' : googleStatus?.status === 'revoked' ? 'revogada' : 'pendente'}</strong>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 xl:justify-end">
+                <button
+                  onClick={loadGoogleWorkspace}
+                  disabled={googleLoading}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-aletis-borda text-sm font-body font-semibold text-[var(--text-soft)] hover:bg-aletis-bege disabled:opacity-60"
+                >
+                  <RefreshCw className={`h-4 w-4 ${googleLoading ? 'animate-spin' : ''}`} />
+                  Atualizar
+                </button>
+                {googleStatus?.connectionMode === 'gcloud_drive' && googleStatus.status === 'connected' ? (
+                  <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-aletis-verde/25 bg-aletis-verde/5 text-sm font-body font-semibold text-foreground">
+                    <Cloud className="h-4 w-4" />
+                    Autorização corporativa disponível
+                  </span>
+                ) : googleStatus?.connectionMode === 'oauth' && googleStatus?.status === 'connected' ? (
+                  <button
+                    onClick={desconectarGoogleWorkspace}
+                    disabled={googleAction === 'disconnect'}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-alerta/30 bg-alerta/5 text-sm font-body font-semibold text-alerta hover:bg-alerta/10 disabled:opacity-60"
+                  >
+                    <Unplug className="h-4 w-4" />
+                    Desconectar
+                  </button>
+                ) : googleStatus?.connectionMode !== 'corporate_oauth' && googleGuidance.canAuthorize ? (
+                  <button
+                    onClick={conectarGoogleWorkspace}
+                    disabled={googleAction === 'connect'}
+                    className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm disabled:opacity-60"
+                  >
+                    <Link2 className="h-4 w-4" />
+                    {googleGuidance.authorizationLabel}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            {googleError && <div role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{googleError}</div>}
+            {googleStatus?.canManageConnection && <GoogleDrivePersistentAuthorizationPanel active={googleStatus.connectionMode === 'corporate_oauth' && googleStatus.status === 'connected'} />}
+            {googleGuidance.needsServerAuthorization && (googleStatus?.canManageConnection
+              ? <GoogleDriveAuthorizationPanel onComplete={loadGoogleWorkspace} />
+              : <div role="status" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><strong>O Drive corporativo precisa de atenção.</strong><p className="mt-1 text-xs">O responsável pela conta {googleStatus?.googleEmail || 'corporativa'} pode renovar a autorização neste painel. Depois, use Atualizar para verificar a conexão.</p></div>)}
+            {googleStatus?.missingEnv?.length ? (
+              <div className="mt-5 rounded-xl border border-aletis-dourado/30 bg-aletis-dourado/10 p-4">
+                <p className="text-sm font-body font-semibold text-foreground">Configuração pendente no servidor</p>
+                <p className="text-xs font-body text-[var(--text-soft)] mt-1">
+                  A administração precisa concluir a configuração da conexão Google para habilitar a autorização pelo navegador.
+                </p>
+                <details className="mt-2"><summary className="cursor-pointer text-xs text-[var(--text-soft)]">Detalhes para a administração</summary><div className="mt-2 flex flex-wrap gap-2">
+                  {googleStatus.missingEnv.map((env) => (
+                    <code key={env} className="rounded-lg bg-white/70 border border-aletis-borda px-2 py-1 text-[11px] text-foreground">
+                      {env}
+                    </code>
+                  ))}
+                </div></details>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            <GoogleFeatureCard icon={FolderOpen} title="Google Drive" status={googleFeatureStatus('drive')} description="Pastas por cliente, subpastas padrão e upload para o Drive." />
+            <GoogleFeatureCard icon={FileText} title="Google Docs" status={googleFeatureStatus('docs')} description="Geração de propostas, relatórios, fichas, contratos e checklists." />
+            <GoogleFeatureCard icon={CalendarCheck2} title="Google Calendar" status={googleFeatureStatus('calendar')} description="Reuniões, follow ups e vencimentos vinculados ao CRM." />
+            <GoogleFeatureCard icon={Send} title="Gmail" status={googleFeatureStatus('gmail')} description="Envio explícito pelo usuário e registro no histórico do cliente." />
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-5">
+            <div className="card-premium p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <ShieldCheck className="h-4 w-4 text-foreground" />
+                <h3 className="text-sm font-display font-semibold text-foreground">Segurança aplicada</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {[
+                  'Autorização concluída pelo backend.',
+                  'Client secret nunca vai para o navegador.',
+                  googleStatus?.connectionMode === 'gcloud_drive' ? 'Credenciais corporativas mantidas no servidor.' : 'Tokens OAuth salvos criptografados.',
+                  'Renovação corporativa restrita ao responsável.',
+                  'Envio de e-mail exige ação explícita.',
+                  'Ações registradas em auditoria.',
+                ].map((item) => (
+                  <div key={item} className="rounded-xl border border-aletis-borda bg-aletis-bege/40 p-3 text-sm font-body text-[var(--text-soft)]">
+                    <CheckCircle2 className="h-4 w-4 text-positivo inline mr-2" />
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="card-premium p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm font-display font-semibold text-foreground">Auditoria recente</h3>
+                  <p className="text-xs font-body text-muted-foreground mt-0.5">Últimas ações Google registradas no ALETIS.</p>
+                </div>
+                <button onClick={loadGoogleWorkspace} className="p-2 rounded-lg hover:bg-aletis-bege" title="Atualizar auditoria">
+                  <RefreshCw className="h-4 w-4 text-[var(--text-soft)]" />
+                </button>
+              </div>
+              {googleAuditError ? <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">{googleAuditError}</div> : googleAudit.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-aletis-borda p-5 text-center text-sm font-body text-muted-foreground">
+                  Nenhuma ação Google registrada ainda.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {googleAudit.map((log) => (
+                    <div key={log.id} className="rounded-xl border border-aletis-borda bg-card px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-body font-semibold text-foreground">{log.action}</p>
+                        <span className="text-[11px] uppercase tracking-wider text-muted-foreground">{log.status}</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {fmtAgo(log.createdAt)} · {log.resourceType}{log.resourceId ? `/${log.resourceId}` : ''}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -455,20 +701,20 @@ export default function Configuracoes() {
           {/* Resumo */}
           {fontes && (
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              <ResumoCard label="Total" valor={fontes.resumo.total} cor="text-aletis-grafite-escuro" />
+              <ResumoCard label="Total" valor={fontes.resumo.total} cor="text-foreground" />
               <ResumoCard label="Online" valor={fontes.resumo.online} cor="text-positivo" />
               <ResumoCard label="Degradado" valor={fontes.resumo.degraded} cor="text-aletis-dourado" />
               <ResumoCard label="Offline" valor={fontes.resumo.offline} cor="text-alerta" />
-              <ResumoCard label="Desconhecido" valor={fontes.resumo.unknown} cor="text-aletis-grafite-claro" />
+              <ResumoCard label="Desconhecido" valor={fontes.resumo.unknown} cor="text-muted-foreground" />
             </div>
           )}
 
           <div className="card-premium p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">Fontes Registradas</h2>
+                <h2 className="text-lg font-display font-semibold text-foreground">Fontes Registradas</h2>
                 {fontes && (
-                  <p className="text-xs font-body text-aletis-grafite-claro mt-0.5">
+                  <p className="text-xs font-body text-muted-foreground mt-0.5">
                     Última verificação: {new Date(fontes.ultimaVerificacao).toLocaleString('pt-BR')}
                   </p>
                 )}
@@ -485,42 +731,42 @@ export default function Configuracoes() {
             </div>
 
             {fontesLoading && !fontes && (
-              <div className="text-center py-10 text-sm text-aletis-grafite-claro">Carregando fontes...</div>
+              <div className="text-center py-10 text-sm text-muted-foreground">Carregando fontes...</div>
             )}
 
             {!fontesLoading && !fontes && (
-              <div className="text-center py-10 text-sm text-aletis-grafite-claro">
+              <div className="text-center py-10 text-sm text-muted-foreground">
                 Nenhum dado disponível. Clique em Atualizar.
               </div>
             )}
 
             {fontes && Array.from(fontesPorCategoria.entries()).map(([cat, lista]) => (
               <div key={cat} className="mb-6 last:mb-0">
-                <h3 className="text-xs font-body font-semibold text-aletis-verde uppercase tracking-wider mb-2">
+                <h3 className="text-xs font-body font-semibold text-foreground uppercase tracking-wider mb-2">
                   {cat}
                 </h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="ui-table w-full text-sm">
                     <thead>
                       <tr className="border-b border-aletis-borda text-left">
-                        <th className="py-2 pr-3 text-xs font-body font-semibold text-aletis-grafite-claro uppercase tracking-wider">Fonte</th>
-                        <th className="py-2 pr-3 text-xs font-body font-semibold text-aletis-grafite-claro uppercase tracking-wider">Status</th>
-                        <th className="py-2 pr-3 text-xs font-body font-semibold text-aletis-grafite-claro uppercase tracking-wider">Latência</th>
-                        <th className="py-2 pr-3 text-xs font-body font-semibold text-aletis-grafite-claro uppercase tracking-wider">Atualização</th>
-                        <th className="py-2 pr-3 text-xs font-body font-semibold text-aletis-grafite-claro uppercase tracking-wider">Erros 24h</th>
+                        <th className="py-2 pr-3 text-xs font-body font-semibold text-muted-foreground uppercase tracking-wider">Fonte</th>
+                        <th className="py-2 pr-3 text-xs font-body font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                        <th className="py-2 pr-3 text-xs font-body font-semibold text-muted-foreground uppercase tracking-wider">Latência</th>
+                        <th className="py-2 pr-3 text-xs font-body font-semibold text-muted-foreground uppercase tracking-wider">Atualização</th>
+                        <th className="py-2 pr-3 text-xs font-body font-semibold text-muted-foreground uppercase tracking-wider">Erros 24h</th>
                       </tr>
                     </thead>
                     <tbody>
                       {lista.map(f => (
                         <tr key={f.nome} className="border-b border-aletis-borda/50 last:border-0">
                           <td className="py-2.5 pr-3">
-                            <div className="font-body font-medium text-aletis-grafite-escuro">{f.nome}</div>
-                            <div className="text-xs text-aletis-grafite-claro">{f.descricao}</div>
+                            <div className="font-body font-medium text-foreground">{f.nome}</div>
+                            <div className="text-xs text-muted-foreground">{f.descricao}</div>
                           </td>
                           <td className="py-2.5 pr-3"><StatusChip status={f.status} /></td>
-                          <td className="py-2.5 pr-3 text-aletis-grafite-medio">{fmtLatency(f.latenciaMs)}</td>
-                          <td className="py-2.5 pr-3 text-aletis-grafite-medio">{fmtAgo(f.ultimaAtualizacao)}</td>
-                          <td className="py-2.5 pr-3 text-aletis-grafite-medio">{f.erros24h}</td>
+                          <td className="py-2.5 pr-3 text-[var(--text-soft)]">{fmtLatency(f.latenciaMs)}</td>
+                          <td className="py-2.5 pr-3 text-[var(--text-soft)]">{fmtAgo(f.ultimaAtualizacao)}</td>
+                          <td className="py-2.5 pr-3 text-[var(--text-soft)]">{f.erros24h}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -535,7 +781,7 @@ export default function Configuracoes() {
       {/* ── Preferencias ── */}
       {activeTab === 'preferencias' && (
         <div className="card-premium p-6 max-w-3xl animate-fade-in">
-          <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro mb-4">Preferências do Sistema</h2>
+          <h2 className="text-lg font-display font-semibold text-foreground mb-4">Preferências do Sistema</h2>
 
           <div className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -554,7 +800,7 @@ export default function Configuracoes() {
             </div>
 
             <div className="border-t border-aletis-borda pt-4">
-              <h3 className="text-sm font-body font-semibold text-aletis-grafite-escuro mb-3">Notificações</h3>
+              <h3 className="text-sm font-body font-semibold text-foreground mb-3">Notificações</h3>
               <div className="space-y-2">
                 <ToggleRow label="Notificações por email" descricao="Receba atualizações de propostas e clientes" checked={prefs.notificacoesEmail} onChange={v => setPrefs({ ...prefs, notificacoesEmail: v })} />
                 <ToggleRow label="Notificações push" descricao="Alertas em tempo real no navegador" checked={prefs.notificacoesPush} onChange={v => setPrefs({ ...prefs, notificacoesPush: v })} />
@@ -578,17 +824,17 @@ export default function Configuracoes() {
           {/* Cabeçalho com ações */}
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
             <div>
-              <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
+              <h2 className="text-lg font-display font-semibold text-foreground">
                 Acessos Portal Cliente
               </h2>
-              <p className="text-sm font-body text-aletis-grafite-claro mt-0.5">
+              <p className="text-sm font-body text-muted-foreground mt-0.5">
                 Gerencie logins e senhas que os clientes usam no Portal (/portal-cliente).
               </p>
             </div>
             <button
               onClick={loadClientesPortal}
               disabled={acessosLoading}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-aletis-borda text-sm font-body text-aletis-grafite-medio hover:bg-aletis-bege self-start"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-aletis-borda text-sm font-body text-[var(--text-soft)] hover:bg-aletis-bege self-start"
             >
               <RefreshCw className={`w-4 h-4 ${acessosLoading ? 'animate-spin' : ''}`} />
               Atualizar
@@ -597,9 +843,9 @@ export default function Configuracoes() {
 
           {/* Resumo */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            <ResumoCard label="Clientes" valor={resumoAcessos.total} cor="text-aletis-grafite-escuro" />
-            <ResumoCard label="Com acesso" valor={resumoAcessos.com} cor="text-aletis-verde" />
-            <ResumoCard label="Sem acesso" valor={resumoAcessos.sem} cor="text-aletis-grafite-medio" />
+            <ResumoCard label="Clientes" valor={resumoAcessos.total} cor="text-foreground" />
+            <ResumoCard label="Com acesso" valor={resumoAcessos.com} cor="text-foreground" />
+            <ResumoCard label="Sem acesso" valor={resumoAcessos.sem} cor="text-[var(--text-soft)]" />
             <ResumoCard label="Ativos" valor={resumoAcessos.ativos} cor="text-positivo" />
             <ResumoCard label="Msg não lidas" valor={resumoAcessos.mensagens} cor="text-aletis-dourado" />
           </div>
@@ -607,7 +853,7 @@ export default function Configuracoes() {
           {/* Filtros + busca */}
           <div className="card-premium p-4 flex flex-col md:flex-row gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-grafite-claro" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
                 value={buscaAcessos}
@@ -631,12 +877,12 @@ export default function Configuracoes() {
           {/* Tabela */}
           <div className="card-premium overflow-hidden">
             {acessosLoading && clientesPortal.length === 0 ? (
-              <div className="p-10 text-center text-sm font-body text-aletis-grafite-claro">
+              <div className="p-10 text-center text-sm font-body text-muted-foreground">
                 <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />
                 Carregando clientes…
               </div>
             ) : clientesFiltrados.length === 0 ? (
-              <div className="p-10 text-center text-sm font-body text-aletis-grafite-claro">
+              <div className="p-10 text-center text-sm font-body text-muted-foreground">
                 Nenhum cliente encontrado com esses filtros.
               </div>
             ) : (
@@ -649,40 +895,40 @@ export default function Configuracoes() {
                     {/* Identificação */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-body font-semibold text-aletis-grafite-escuro">
+                        <p className="text-sm font-body font-semibold text-foreground">
                           {cli.nome}
                         </p>
                         {cli.portal ? (
                           cli.portal.ativo ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-positivo/10 text-positivo border border-positivo/30">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-positivo/10 text-positivo border border-positivo/30">
                               <CheckCircle2 className="w-3 h-3" /> Ativo
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-alerta/10 text-alerta border border-alerta/30">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-alerta/10 text-alerta border border-alerta/30">
                               <XCircle className="w-3 h-3" /> Inativo
                             </span>
                           )
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-aletis-bege text-aletis-grafite-medio border border-aletis-borda">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-aletis-bege text-[var(--text-soft)] border border-aletis-borda">
                             Sem acesso
                           </span>
                         )}
                         {cli.portal?.forcaTrocaSenha && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-aletis-dourado/10 text-aletis-dourado-escuro border border-aletis-dourado/30">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-aletis-dourado/10 text-aletis-dourado-escuro border border-aletis-dourado/30">
                             <KeyRound className="w-3 h-3" /> Trocar senha
                           </span>
                         )}
                         {cli.mensagensNaoLidas > 0 && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-aletis-verde/10 text-aletis-verde border border-aletis-verde/30">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-aletis-verde/10 text-foreground border border-aletis-verde/30">
                             <MailOpen className="w-3 h-3" /> {cli.mensagensNaoLidas} msg
                           </span>
                         )}
                       </div>
-                      <p className="text-xs font-body text-aletis-grafite-claro mt-0.5">
+                      <p className="text-xs font-body text-muted-foreground mt-0.5">
                         {cli.cpfCnpj} · {cli.cidade}/{cli.uf} · {cli.estagio}
                       </p>
                       {cli.portal && (
-                        <p className="text-xs font-body text-aletis-grafite-medio mt-1 flex items-center gap-1 flex-wrap">
+                        <p className="text-xs font-body text-[var(--text-soft)] mt-1 flex items-center gap-1 flex-wrap">
                           <span className="font-mono bg-aletis-bege px-1.5 py-0.5 rounded">
                             {cli.portal.usuario}
                           </span>
@@ -721,7 +967,7 @@ export default function Configuracoes() {
                             disabled={acaoPendente === cli.id}
                             className={`inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border disabled:opacity-60 ${
                               cli.portal.ativo
-                                ? 'bg-aletis-bege text-aletis-grafite-medio border-aletis-borda hover:bg-aletis-bege/70'
+                                ? 'bg-aletis-bege text-[var(--text-soft)] border-aletis-borda hover:bg-aletis-bege/70'
                                 : 'bg-positivo/10 text-positivo border-positivo/30 hover:bg-positivo/20'
                             }`}
                           >
@@ -746,8 +992,8 @@ export default function Configuracoes() {
           </div>
 
           {/* Info */}
-          <div className="rounded-xl border border-aletis-borda/60 bg-aletis-bege/40 p-4 text-xs font-body text-aletis-grafite-medio leading-relaxed">
-            <strong className="text-aletis-grafite-escuro">Como funciona:</strong> ao criar o
+          <div className="rounded-xl border border-aletis-borda/60 bg-aletis-bege/40 p-4 text-xs font-body text-[var(--text-soft)] leading-relaxed">
+            <strong className="text-foreground">Como funciona:</strong> ao criar o
             acesso, o sistema gera uma senha temporária de uso único.{' '}
             <strong>Copie e envie ao cliente com segurança</strong> (WhatsApp, email); no primeiro
             login, o cliente será obrigado a definir uma nova senha. Se o cliente esquecer a senha,
@@ -760,90 +1006,87 @@ export default function Configuracoes() {
 
       {/* Modal: senha temporária */}
       {modalSenha && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 sm:p-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-aletis-dourado/15 flex items-center justify-center">
-                <KeyRound className="w-5 h-5 text-aletis-dourado-escuro" />
-              </div>
-              <div>
-                <h2 className="text-lg font-display font-bold text-aletis-grafite-escuro">
-                  Senha temporária gerada
-                </h2>
-                <p className="text-xs text-aletis-grafite-claro font-body">
-                  Copie agora — não será exibida novamente
-                </p>
-              </div>
-            </div>
-            <div className="space-y-3">
-              <div className="p-3 rounded-xl bg-aletis-bege border border-aletis-borda">
-                <p className="text-[11px] uppercase tracking-wider text-aletis-grafite-claro font-body mb-1">
-                  Cliente
-                </p>
-                <p className="text-sm font-body font-semibold text-aletis-grafite-escuro">
-                  {modalSenha.cliente.nome}
-                </p>
-              </div>
-              <div className="p-3 rounded-xl bg-aletis-bege border border-aletis-borda flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wider text-aletis-grafite-claro font-body mb-1">
-                    Usuário
-                  </p>
-                  <p className="text-sm font-mono font-semibold text-aletis-grafite-escuro break-all">
-                    {modalSenha.usuario}
-                  </p>
-                </div>
-                <button
-                  onClick={() => copiarParaClipboard(modalSenha.usuario)}
-                  className="p-2 rounded-lg hover:bg-aletis-borda flex-shrink-0"
-                  title="Copiar"
-                >
-                  <Copy className="w-4 h-4 text-aletis-grafite-medio" />
-                </button>
-              </div>
-              <div className="p-3 rounded-xl bg-aletis-dourado/10 border border-aletis-dourado/30 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wider text-aletis-dourado-escuro font-body mb-1">
-                    Senha temporária
-                  </p>
-                  <p className="text-lg font-mono font-bold text-aletis-grafite-escuro tracking-wider break-all">
-                    {modalSenha.senhaTemporaria}
-                  </p>
-                </div>
-                <button
-                  onClick={() => copiarParaClipboard(modalSenha.senhaTemporaria)}
-                  className="p-2 rounded-lg hover:bg-aletis-dourado/20 flex-shrink-0"
-                  title="Copiar"
-                >
-                  <Copy className="w-4 h-4 text-aletis-dourado-escuro" />
-                </button>
-              </div>
-              <p className="text-xs text-aletis-grafite-medio font-body">
-                Envie as credenciais ao cliente por canal seguro. Ele será forçado a trocar a senha
-                no primeiro login.
-              </p>
-            </div>
-            <div className="flex gap-3 pt-5">
+        <AppDialog
+          title="Senha temporária gerada"
+          eyebrow="Portal do Cliente"
+          subtitle="Copie agora. Esta senha não será exibida novamente."
+          icon={<KeyRound className="h-5 w-5" />}
+          size="md"
+          onClose={() => setModalSenha(null)}
+          bodyClassName="space-y-3"
+          footerClassName="flex flex-col gap-2 sm:flex-row sm:justify-end"
+          footer={(
+            <>
               <button
+                type="button"
                 onClick={() =>
                   copiarParaClipboard(
                     `ALETIS — Portal do Cliente\nAcesse: ${window.location.origin}/portal-cliente\nUsuário: ${modalSenha.usuario}\nSenha temporária: ${modalSenha.senhaTemporaria}\n(Você será solicitado a criar uma nova senha no primeiro acesso.)`
                   )
                 }
-                className="flex-1 py-2.5 rounded-xl border border-aletis-borda text-aletis-grafite-medio hover:bg-aletis-bege text-sm font-body font-medium inline-flex items-center justify-center gap-1.5"
+                className={uiAction.secondary}
               >
                 <Copy className="w-4 h-4" />
                 Copiar mensagem pronta
               </button>
               <button
+                type="button"
                 onClick={() => setModalSenha(null)}
-                className="btn-primary flex-1 py-2.5 text-sm"
+                className={uiAction.primary}
               >
                 Fechar
               </button>
-            </div>
+            </>
+          )}
+        >
+          <div className="rounded-lg border border-aletis-borda bg-aletis-cream-papel/70 p-3">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              Cliente
+            </p>
+            <p className="text-sm font-semibold text-foreground">
+              {modalSenha.cliente.nome}
+            </p>
           </div>
-        </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-aletis-borda bg-aletis-cream-papel/70 p-3">
+            <div className="min-w-0">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Usuário
+              </p>
+              <p className="break-all font-mono text-sm font-semibold text-foreground">
+                {modalSenha.usuario}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => copiarParaClipboard(modalSenha.usuario)}
+              className={uiAction.iconButton}
+              title="Copiar usuário"
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-aletis-gold/35 bg-aletis-gold/10 p-3">
+            <div className="min-w-0">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-aletis-gold-escuro">
+                Senha temporária
+              </p>
+              <p className="break-all font-mono text-lg font-bold tracking-wide text-foreground">
+                {modalSenha.senhaTemporaria}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => copiarParaClipboard(modalSenha.senhaTemporaria)}
+              className={uiAction.iconButton}
+              title="Copiar senha"
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="text-xs leading-relaxed text-[var(--text-soft)]">
+            Envie as credenciais ao cliente por canal seguro. Ele será forçado a trocar a senha no primeiro login.
+          </p>
+        </AppDialog>
       )}
     </div>
   )
@@ -853,7 +1096,7 @@ export default function Configuracoes() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1.5">{label}</label>
+      <label className="block text-xs font-body text-muted-foreground uppercase tracking-wider mb-1.5">{label}</label>
       {children}
     </div>
   )
@@ -867,10 +1110,10 @@ function TemaCard({ active, onClick, nome, descricao, preview }: { active: boole
     >
       <div className={`${preview} h-20 rounded-lg border border-aletis-borda mb-3`} />
       <div className="flex items-center justify-between">
-        <span className="font-body font-semibold text-aletis-grafite-escuro">{nome}</span>
-        {active && <CheckCircle2 className="w-4 h-4 text-aletis-verde" />}
+        <span className="font-body font-semibold text-foreground">{nome}</span>
+        {active && <CheckCircle2 className="w-4 h-4 text-foreground" />}
       </div>
-      <p className="text-xs text-aletis-grafite-claro mt-1">{descricao}</p>
+      <p className="text-xs text-muted-foreground mt-1">{descricao}</p>
     </button>
   )
 }
@@ -878,8 +1121,59 @@ function TemaCard({ active, onClick, nome, descricao, preview }: { active: boole
 function ResumoCard({ label, valor, cor }: { label: string; valor: number; cor: string }) {
   return (
     <div className="card-premium p-4">
-      <p className="text-[11px] font-body text-aletis-grafite-claro uppercase tracking-wider">{label}</p>
-      <p className={`text-2xl font-display font-bold ${cor} mt-0.5`}>{valor}</p>
+      <p className="text-[11px] font-body text-muted-foreground uppercase tracking-wider">{label}</p>
+      <p className={`text-2xl font-display font-semibold ${cor} mt-0.5`}>{valor}</p>
+    </div>
+  )
+}
+
+function GoogleStatusBadge({ status }: { status: GoogleWorkspaceStatus['status'] }) {
+  const cfg = {
+    connected: 'bg-positivo/10 text-positivo border-positivo/30',
+    disconnected: 'bg-aletis-bege text-[var(--text-soft)] border-aletis-borda',
+    unconfigured: 'bg-aletis-dourado/10 text-aletis-dourado-escuro border-aletis-dourado/30',
+    expired: 'bg-aletis-dourado/10 text-aletis-dourado-escuro border-aletis-dourado/30',
+    revoked: 'bg-aletis-bege text-[var(--text-soft)] border-aletis-borda',
+    error: 'bg-alerta/10 text-alerta border-alerta/30',
+  }[status]
+  const label = {
+    connected: 'Conectado',
+    disconnected: 'Não conectado',
+    unconfigured: 'Configuração pendente',
+    expired: 'Expirado',
+    revoked: 'Revogado',
+    error: 'Erro',
+  }[status]
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-body font-semibold ${cfg}`}>
+      {label}
+    </span>
+  )
+}
+
+function GoogleFeatureCard({ icon: Icon, title, status, description }: { icon: typeof Cloud; title: string; status: string; description: string }) {
+  const connected = status === 'Conectado'
+  const pending = status === 'Pendente'
+  return (
+    <div className="rounded-lg border border-aletis-borda bg-card p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className={`h-10 w-10 rounded-xl flex items-center justify-center border ${
+          connected ? 'bg-positivo/10 border-positivo/20' : 'bg-aletis-bege border-aletis-borda'
+        }`}>
+          <Icon className={`h-5 w-5 ${connected ? 'text-positivo' : 'text-[var(--text-soft)]'}`} />
+        </div>
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-body font-semibold border ${
+          connected
+            ? 'bg-positivo/10 text-positivo border-positivo/30'
+            : pending
+              ? 'bg-aletis-bege text-[var(--text-soft)] border-aletis-borda'
+              : 'bg-aletis-dourado/10 text-aletis-dourado-escuro border-aletis-dourado/30'
+        }`}>
+          {status}
+        </span>
+      </div>
+      <h3 className="mt-3 text-sm font-display font-semibold text-foreground">{title}</h3>
+      <p className="mt-1 text-xs font-body leading-relaxed text-[var(--text-soft)]">{description}</p>
     </div>
   )
 }
@@ -888,8 +1182,8 @@ function ToggleRow({ label, descricao, checked, onChange }: { label: string; des
   return (
     <label className="flex items-start justify-between gap-3 py-2.5 cursor-pointer">
       <div>
-        <p className="text-sm font-body font-medium text-aletis-grafite-escuro">{label}</p>
-        <p className="text-xs font-body text-aletis-grafite-claro mt-0.5">{descricao}</p>
+        <p className="text-sm font-body font-medium text-foreground">{label}</p>
+        <p className="text-xs font-body text-muted-foreground mt-0.5">{descricao}</p>
       </div>
       <button
         type="button"
@@ -898,7 +1192,7 @@ function ToggleRow({ label, descricao, checked, onChange }: { label: string; des
         onClick={() => onChange(!checked)}
         className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors mt-1 ${checked ? 'bg-aletis-verde' : 'bg-aletis-borda'}`}
       >
-        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-card transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
       </button>
     </label>
   )

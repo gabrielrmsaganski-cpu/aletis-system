@@ -5,6 +5,7 @@ import { eq, desc } from 'drizzle-orm'
 import { getDb, isPgEnabled } from '../../db/client.js'
 import { gfChangelog, type GfChangelog } from '../../db/schema.js'
 import { publish } from './GfEventBus.js'
+import type { GestaoFinanceiraDb } from './GestaoFinanceiraDb.js'
 
 export interface RegistrarMudancaInput {
   grupoId: string
@@ -35,9 +36,16 @@ function calcularDiff(antes: Record<string, any> | undefined, depois: Record<str
 }
 
 export class ChangelogService {
+  constructor(private readonly options: {
+    db?: GestaoFinanceiraDb
+    strict?: boolean
+    publishEvents?: boolean
+    origem?: RegistrarMudancaInput['origem']
+  } = {}) {}
+
   async registrar(input: RegistrarMudancaInput): Promise<void> {
-    if (!isPgEnabled()) return
-    const db = getDb()
+    if (!this.options.db && !isPgEnabled()) return
+    const db = this.options.db ?? getDb()
     const diff = calcularDiff(input.antes, input.depois)
     if (input.acao === 'update' && Object.keys(diff).length === 0) return // nada mudou
     try {
@@ -49,11 +57,12 @@ export class ChangelogService {
         diff: diff as any,
         ator: input.ator ?? 'consultor',
         atorNome: input.atorNome ?? null,
-        origem: input.origem ?? 'api',
+        origem: input.origem ?? this.options.origem ?? 'api',
         traceId: input.traceId ?? null,
       })
       // Broadcast SSE
       try {
+        if (this.options.publishEvents === false) return
         publish('changelog', input.grupoId, {
           entidade: input.entidade,
           entidadeId: input.entidadeId,
@@ -63,14 +72,15 @@ export class ChangelogService {
           origem: input.origem,
         })
       } catch {}
-    } catch {
+    } catch (error) {
+      if (this.options.strict) throw error
       // best-effort
     }
   }
 
   async listarPorGrupo(grupoId: string, limit = 100): Promise<GfChangelog[]> {
-    if (!isPgEnabled()) return []
-    return getDb()
+    if (!this.options.db && !isPgEnabled()) return []
+    return (this.options.db ?? getDb())
       .select()
       .from(gfChangelog)
       .where(eq(gfChangelog.grupoId, grupoId))

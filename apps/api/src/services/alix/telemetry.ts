@@ -5,6 +5,7 @@
 import { mkdirSync } from 'fs';
 import { appendFile } from 'fs/promises';
 import { join, dirname } from 'path';
+import { estimateCost } from '../llm/LLMConfig.js';
 
 export interface TelemetryRecord {
   ts: string;
@@ -19,25 +20,20 @@ export interface TelemetryRecord {
   cacheRead?: number;
   cacheCreate?: number;
   latencyMs: number;
-  /** Custo estimado USD (baseado em pricing atual Claude/Sonnet/Opus). */
+  responseId?: string;
+  requestId?: string;
+  /** Custo estimado pela tabela central de modelos OpenAI. */
   costUsd?: number;
 }
 
-// Pricing aproximado (USD por Mtok) — atualizado 2026-04
-const PRICING: Record<string, { inputUsdPerM: number; outputUsdPerM: number }> = {
-  'claude-opus-4-7': { inputUsdPerM: 15, outputUsdPerM: 75 },
-  'claude-sonnet-4-6': { inputUsdPerM: 3, outputUsdPerM: 15 },
-  'claude-haiku-4-5': { inputUsdPerM: 0.8, outputUsdPerM: 4 },
-};
-
-export function estimateCostUsd(rec: Pick<TelemetryRecord, 'model' | 'inputTokens' | 'outputTokens' | 'thinkingTokens' | 'cacheRead'>): number {
-  const p = PRICING[rec.model] ?? PRICING['claude-sonnet-4-6'];
-  const paidInput = Math.max(0, rec.inputTokens - (rec.cacheRead ?? 0));
-  const cachedInput = rec.cacheRead ?? 0;
-  // Cache read ≈ 10% do input cost
-  const input = (paidInput / 1_000_000) * p.inputUsdPerM + (cachedInput / 1_000_000) * p.inputUsdPerM * 0.1;
-  const output = ((rec.outputTokens + (rec.thinkingTokens ?? 0)) / 1_000_000) * p.outputUsdPerM;
-  return Number((input + output).toFixed(6));
+export function estimateCostUsd(rec: Pick<TelemetryRecord, 'model' | 'inputTokens' | 'outputTokens' | 'thinkingTokens' | 'cacheRead' | 'cacheCreate'>): number {
+  return estimateCost(rec.model, {
+    input_tokens: rec.inputTokens,
+    output_tokens: rec.outputTokens,
+    reasoning_tokens: rec.thinkingTokens,
+    cached_tokens: rec.cacheRead,
+    cache_creation_input_tokens: rec.cacheCreate,
+  });
 }
 
 export function telemetryPath(storageDir: string, sessionId: string): string {

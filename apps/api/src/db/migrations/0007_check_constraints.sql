@@ -15,7 +15,7 @@ BEGIN
   END IF;
 END$$;
 
--- alix_message.role (system/user/assistant/tool são os papéis do Claude)
+-- alix_message.role (system/user/assistant/tool sao os papeis da conversa)
 DO $$
 BEGIN
   IF NOT EXISTS (

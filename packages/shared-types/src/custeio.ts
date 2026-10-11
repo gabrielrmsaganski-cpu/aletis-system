@@ -103,7 +103,7 @@ export type RegimeExploracao =
 export interface DadosProponente {
   nome: string;                 // B6
   tipo: TipoPessoa;             // N6
-  cpfCnpj: string;              // S6 (dígitos apenas)
+  cpfCnpj?: string;             // S6 (opcional; dígitos apenas quando disponível)
   email?: string;               // E7
   telefone1?: string;           // L7
   telefone2?: string;           // Q7
@@ -311,7 +311,7 @@ export interface PlanoComercializacao {
 export interface AvalistaInfo {
   id: string;
   nome: string;
-  cpfCnpj: string;
+  cpfCnpj?: string;
   tipo: TipoPessoa;
   /** Tipo de garantia (aval, penhor agrícola, hipoteca, alienação fiduciária). */
   tipoGarantia: 'aval' | 'penhor_agricola' | 'hipoteca' | 'alienacao_fiduciaria' | 'outro';

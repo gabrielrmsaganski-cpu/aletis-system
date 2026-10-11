@@ -51,7 +51,7 @@ export default function Breadcrumbs({ className = '' }: { className?: string }) 
   return (
     <nav
       aria-label="Trilha de navegação"
-      className={`flex items-center gap-1.5 text-[12px] text-aletis-grafite-medio dark:text-white/50 ${className}`}
+      className={`flex items-center gap-1.5 text-[12px] text-[var(--text-soft)] dark:text-white/50 ${className}`}
     >
       <Link
         to="/dashboard"
@@ -76,7 +76,7 @@ export default function Breadcrumbs({ className = '' }: { className?: string }) 
               <span
                 className={
                   isLast
-                    ? 'font-semibold text-aletis-grafite-escuro dark:text-white/90'
+                    ? 'font-semibold text-foreground dark:text-white/90'
                     : ''
                 }
                 aria-current={isLast ? 'page' : undefined}

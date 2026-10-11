@@ -3,7 +3,7 @@
 // ============================================================
 // Ciclo: após cada resposta do Alix, o Christian pode marcar:
 //   - util            (funcionou, repetir o padrão)
-//   - irrelevante     (perdi tempo, mas não é errado)
+//   - incompleta      (faltou informação ou cobertura)
 //   - incorreto       (dado/conclusão errada — CUIDADO)
 //   - off-tom         (certo mas entregue de forma ruim)
 //
@@ -19,24 +19,34 @@
 //   - Futuro (Fase D): ranking de tools mais-úteis × menos-úteis
 //     baseado em feedback agregado.
 // ============================================================
-import { promises as fs, existsSync, mkdirSync, readFileSync, readdirSync } from 'fs'
+import { promises as fs, existsSync, mkdirSync } from 'fs'
 import { appendFile } from 'fs/promises'
 import { join } from 'path'
 
-export type FeedbackRating = 'util' | 'irrelevante' | 'incorreto' | 'off-tom'
+export type FeedbackRating = 'util' | 'incompleta' | 'incorreto' | 'off-tom'
+export type FeedbackReason = 'fonte_errada' | 'dado_ausente' | 'calculo' | 'interpretacao' | 'escrita' | 'acao_indevida'
+type LegacyFeedbackRating = 'irrelevante'
 
 export interface FeedbackEntry {
   ts: string
   msgId: string
   sessionId: string
-  rating: FeedbackRating
+  rating: FeedbackRating | LegacyFeedbackRating
   notas?: string
+  motivo?: FeedbackReason
+  category?: string
+  clienteId?: string
+  missionId?: string
+  notebookId?: string
+  artifactId?: string
+  responseExcerpt?: string
+  expectedCorrection?: string
   agent?: string
   tools?: string[]
 }
 
 export interface Learning {
-  rating: FeedbackRating
+  rating: FeedbackRating | LegacyFeedbackRating
   resumo: string
   quando: string
 }
@@ -52,24 +62,17 @@ export class FeedbackService {
     return join(this.storageDir, 'alix-feedback', `${m}.jsonl`)
   }
 
-  record(entry: Omit<FeedbackEntry, 'ts'>): FeedbackEntry {
+  async record(entry: Omit<FeedbackEntry, 'ts'>): Promise<{ entry: FeedbackEntry; feedbackId: number | null }> {
     const full: FeedbackEntry = { ts: new Date().toISOString(), ...entry }
-    // append assíncrono — não bloqueia o event loop em hot path
-    appendFile(this.fileFor(), JSON.stringify(full) + '\n').catch((err: Error) => {
-      console.warn('[FeedbackService] append falhou:', err.message)
-    })
-
-    // Wave-PG-17: dual-write best-effort no Postgres
-    void (async () => {
-      try {
-        const repo = await import('../../../db/AlixConfirmationFeedbackRepository.js')
-        await repo.appendFeedback(full as unknown as Parameters<typeof repo.appendFeedback>[0])
-      } catch (err) {
-        console.warn('[FeedbackService.record] dual-write PG falhou:', (err as Error).message)
-      }
-    })()
-
-    return full
+    await appendFile(this.fileFor(), JSON.stringify(full) + '\n')
+    let feedbackId: number | null = null
+    try {
+      const repo = await import('../../../db/AlixConfirmationFeedbackRepository.js')
+      feedbackId = await repo.appendFeedback(full as unknown as Parameters<typeof repo.appendFeedback>[0])
+    } catch (err) {
+      console.warn('[FeedbackService.record] dual-write PG falhou:', (err as Error).message)
+    }
+    return { entry: full, feedbackId }
   }
 
   /** Últimos N feedbacks do mês atual + anterior (para janela mais realista). */
@@ -92,7 +95,7 @@ export class FeedbackService {
   /** Lições curtas para injetar no system prompt — só os negativos recentes. */
   async recentLearnings(limit = 10): Promise<Learning[]> {
     const all = await this.recent(200)
-    const negativos = all.filter((f) => f.rating === 'incorreto' || f.rating === 'irrelevante' || f.rating === 'off-tom')
+    const negativos = all.filter((f) => f.rating === 'incompleta' || f.rating === 'incorreto' || f.rating === 'irrelevante' || f.rating === 'off-tom')
     return negativos.slice(-limit).map((f) => ({
       rating: f.rating,
       resumo: (f.notas || `${f.rating} em msg ${f.msgId.slice(0, 8)}`).slice(0, 200),
@@ -101,14 +104,15 @@ export class FeedbackService {
   }
 
   /** Agregado de feedback por ferramenta — quais tools geram mais util vs incorreto. */
-  async toolRanking(): Promise<Array<{ tool: string; util: number; incorreto: number; irrelevante: number; score: number }>> {
+  async toolRanking(): Promise<Array<{ tool: string; util: number; incorreto: number; incompleta: number; irrelevante: number; score: number }>> {
     const all = await this.recent(500)
-    const agg = new Map<string, { util: number; incorreto: number; irrelevante: number; offTom: number }>()
+    const agg = new Map<string, { util: number; incorreto: number; incompleta: number; irrelevante: number; offTom: number }>()
     for (const f of all) {
       for (const tool of f.tools || []) {
-        const e = agg.get(tool) || { util: 0, incorreto: 0, irrelevante: 0, offTom: 0 }
+        const e = agg.get(tool) || { util: 0, incorreto: 0, incompleta: 0, irrelevante: 0, offTom: 0 }
         if (f.rating === 'util') e.util++
         else if (f.rating === 'incorreto') e.incorreto++
+        else if (f.rating === 'incompleta') e.incompleta++
         else if (f.rating === 'irrelevante') e.irrelevante++
         else if (f.rating === 'off-tom') e.offTom++
         agg.set(tool, e)
@@ -119,9 +123,10 @@ export class FeedbackService {
         tool,
         util: e.util,
         incorreto: e.incorreto,
+        incompleta: e.incompleta,
         irrelevante: e.irrelevante,
-        // Score simples: útil - incorreto*2 - irrelevante*0.5 - off*0.3
-        score: e.util - e.incorreto * 2 - e.irrelevante * 0.5 - e.offTom * 0.3,
+        // Casos incorretos e incompletos têm maior peso na melhoria semanal.
+        score: e.util - e.incorreto * 2 - e.incompleta - e.irrelevante * 0.5 - e.offTom * 0.3,
       }))
       .sort((a, b) => b.score - a.score)
   }

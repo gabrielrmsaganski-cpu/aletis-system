@@ -339,7 +339,7 @@ function buildPdfHtml(params: {
   .badge { display: inline-block; font-size: 8pt; padding: 1pt 6pt; border-radius: 99pt; background: #e5e7eb; color: #374151; }
   .badge.status-recebida, .badge.status-paga, .badge.status-pago { background: #dcfce7; color: #166534; }
   .badge.status-atrasada, .badge.status-atrasado { background: #fee2e2; color: #991b1b; }
-  .badge.status-emitida, .badge.status-pendente, .badge.status-a_pagar { background: #fef3c7; color: #92400e; }
+  .badge.status-emitida, .badge.status-pendente, .badge.status-a_pagar { background: #f0d9a8; color: #92400e; }
   .badge.status-cancelada { background: #e5e7eb; color: #6b7280; text-decoration: line-through; }
   .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 4pt 24pt; margin: 6pt 0 10pt; }
   .kv > div { display: flex; justify-content: space-between; padding: 3pt 0; border-bottom: 1px dotted #e5e7eb; }

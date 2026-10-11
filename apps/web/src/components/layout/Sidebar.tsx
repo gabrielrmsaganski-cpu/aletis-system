@@ -1,22 +1,13 @@
-/**
- * Sidebar (Barra Lateral) — v3 — Identidade Visual oficial ALETIS.
- *
- * Fundo verde-dark (#17251b) com padrão repetidor sutil em soft-light.
- * Tipografia Chakra Petch para rótulos e seções, Verdana para itens.
- * Logo oficial via <BrandMark/>.
- */
-import { useMemo } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, LogOut, Command } from 'lucide-react'
+/** Navegação principal: ferramentas fixadas, grupos e menu móvel independente. */
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import * as Dialog from '@radix-ui/react-dialog'
+import { ChevronDown, ChevronLeft, ChevronRight, Search, Star, X } from 'lucide-react'
 import Tooltip from '../ui/Tooltip'
 import BrandMark from '../ui/BrandMark'
-import BrandWatermark from '../ui/BrandWatermark'
-import {
-  CATEGORIES,
-  TOOL_CATALOG,
-  type ToolEntry,
-} from '../../navigation/toolCatalog'
+import { CATEGORIES, TOOL_CATALOG, getToolByRoute, searchTools, type ToolEntry } from '../../navigation/toolCatalog'
 import { useAuth } from '../../contexts/AuthContext'
+import { useNavigationPreferences } from '../../hooks/useNavigationPreferences'
 
 interface SidebarProps {
   collapsed: boolean
@@ -26,329 +17,85 @@ interface SidebarProps {
   onOpenPalette?: () => void
 }
 
-export default function Sidebar({
-  collapsed,
-  onToggle,
-  mobileOpen,
-  onMobileClose,
-  onOpenPalette,
-}: SidebarProps) {
+export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose, onOpenPalette }: SidebarProps) {
   const location = useLocation()
-  const navigate = useNavigate()
-  const { user, logout: doLogout } = useAuth()
+  const { user } = useAuth()
+  const { favorites, routeForTool } = useNavigationPreferences()
+  const activeTool = getToolByRoute(location.pathname)
+  const [query, setQuery] = useState('')
+  const [openSection, setOpenSection] = useState(activeTool?.category ?? 'funil')
+  const groups = useMemo(() => CATEGORIES.map((category) => ({
+    category, items: TOOL_CATALOG.filter((tool) => tool.category === category.id && tool.showInSidebar !== false),
+  })).filter((group) => group.items.length), [])
+  const pinned = favorites.map((id) => TOOL_CATALOG.find((tool) => tool.id === id)).filter((tool): tool is ToolEntry => Boolean(tool))
 
-  const grouped = useMemo(() => {
-    return CATEGORIES.map((cat) => ({
-      category: cat,
-      items: TOOL_CATALOG.filter(
-        (t) => t.category === cat.id && t.showInSidebar !== false
-      ),
-    })).filter((g) => g.items.length > 0)
-  }, [])
+  useEffect(() => {
+    if (activeTool && activeTool.category !== 'principal') setOpenSection(activeTool.category)
+    setQuery('')
+  }, [activeTool?.category, location.pathname])
+  useEffect(() => { onMobileClose?.() }, [location.pathname, location.search, onMobileClose])
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)')
+    const close = () => { if (media.matches) onMobileClose?.() }
+    media.addEventListener('change', close)
+    return () => media.removeEventListener('change', close)
+  }, [onMobileClose])
 
-  const isActive = (route: string) => {
-    if (route === '/dashboard') return location.pathname === route
-    return location.pathname === route || location.pathname.startsWith(route + '/')
-  }
-
-  const handleLogout = () => {
-    sessionStorage.clear()
-    doLogout()
-    navigate('/')
-  }
-
-  const sidebarContent = (
-    <div
-      className={`
-        relative flex flex-col h-full
-        bg-aletis-verde
-        transition-[width] duration-300 ease-out
-        ${collapsed ? 'w-16' : 'w-[272px]'}
-      `}
-      style={{
-        backgroundImage:
-          'linear-gradient(180deg, rgba(13,22,17,0.92) 0%, rgba(23,37,27,0.96) 50%, rgba(13,22,17,0.98) 100%), url(/brand/pattern/repetidor.png)',
-        backgroundSize: 'auto, 320px',
-        backgroundBlendMode: 'normal, soft-light',
-        backgroundRepeat: 'no-repeat, repeat',
-      }}
-    >
-      {/* Faixa dourada vertical à direita — assinatura sutil da marca */}
-      <span
-        aria-hidden="true"
-        className="absolute top-0 right-0 h-full w-px bg-gradient-to-b from-transparent via-aletis-gold/30 to-transparent"
-      />
-
-      {/* Watermark do símbolo bracket-A no rodapé — selo de marca */}
-      {!collapsed && (
-        <BrandWatermark
-          size={340}
-          tone="cream"
-          opacity={0.05}
-          className="absolute -right-16 -bottom-10 z-0"
-        />
-      )}
-      {collapsed && (
-        <BrandWatermark
-          size={120}
-          tone="cream"
-          opacity={0.07}
-          className="absolute -right-3 bottom-24 z-0"
-        />
-      )}
-
-      {/* Logo area */}
-      <div className="flex items-center px-4 pt-5 pb-5 border-b border-aletis-sage/15">
-        <Link
-          to="/dashboard"
-          className="flex items-center gap-3 group"
-          aria-label="Ir para Dashboard"
-        >
-          {collapsed ? (
-            <BrandMark variant="symbol" tone="cream" size={32} />
-          ) : (
-            <BrandMark variant="full" tone="cream" size={34} />
-          )}
-        </Link>
-      </div>
-
-      {/* Command palette trigger */}
-      {onOpenPalette && (
-        <div className={`px-3 pt-3 pb-1 ${collapsed ? 'flex justify-center' : ''}`}>
-          <Tooltip
-            label="Busca global"
-            description="⌘K ou Ctrl+K para abrir a paleta de comandos"
-            placement="right"
-            disabled={!collapsed}
-          >
-            <button
-              type="button"
-              onClick={onOpenPalette}
-              className={`
-                group flex items-center gap-2 rounded-xl
-                bg-aletis-cream/[0.04] hover:bg-aletis-cream/[0.10]
-                border border-aletis-sage/15 hover:border-aletis-gold/45
-                transition-all duration-200
-                ${collapsed ? 'w-9 h-9 justify-center' : 'w-full px-3 py-2'}
-              `}
-              aria-label="Abrir busca global"
-            >
-              <Command
-                size={14}
-                className="text-aletis-gold/80 group-hover:text-aletis-gold flex-shrink-0"
-              />
-              {!collapsed && (
-                <>
-                  <span className="text-[12px] font-body text-aletis-cream/55 group-hover:text-aletis-cream/85 flex-1 text-left">
-                    Buscar qualquer coisa…
-                  </span>
-                  <span className="inline-flex items-center gap-0.5 text-[10px] font-mono text-aletis-cream/45 group-hover:text-aletis-cream/70 px-1.5 py-0.5 rounded border border-aletis-sage/20">
-                    ⌘K
-                  </span>
-                </>
-              )}
-            </button>
-          </Tooltip>
+  function content(compact: boolean, mobile = false) {
+    const link = (tool: ToolEntry, prefix: string) => <SidebarItem key={`${prefix}-${tool.id}`} tool={tool} to={routeForTool(tool.id, tool.route)} compact={compact} active={tool.id === activeTool?.id} onClick={onMobileClose} />
+    return (
+      <div className="sidebar-content" data-compact={compact}>
+        <div className="sidebar-brand">
+          <Link to="/dashboard" aria-label="Abrir visão geral" className="rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-aletis-gold">
+            <span className="dark:hidden"><BrandMark variant={compact ? 'symbol' : 'full'} tone="verde" size={compact ? 30 : 30} /></span><span className="hidden dark:inline"><BrandMark variant={compact ? 'symbol' : 'full'} tone="cream" size={30} /></span>
+          </Link>
+          {mobile && <Dialog.Close className="ui-icon-button ml-auto" aria-label="Fechar menu"><X size={20} /></Dialog.Close>}
         </div>
-      )}
-
-      {/* Navigation */}
-      <nav
-        className="flex-1 overflow-y-auto custom-scrollbar py-3 px-2 space-y-5"
-        role="navigation"
-        aria-label="Menu principal"
-      >
-        {grouped.map(({ category, items }) => (
-          <div key={category.id}>
-            {!collapsed && (
-              <div className="flex items-center gap-2 px-3 mb-2">
-                <p className="text-[10px] font-display font-semibold tracking-[0.22em] text-aletis-sage/75 uppercase">
-                  {category.label}
-                </p>
-                <span className="h-px flex-1 bg-aletis-sage/15" aria-hidden="true" />
-              </div>
-            )}
-            {collapsed && (
-              <div
-                className="mb-1 mx-auto w-6 border-t border-aletis-sage/15"
-                aria-hidden="true"
-              />
-            )}
-            <ul className="space-y-0.5">
-              {items.map((item) => (
-                <SidebarItem
-                  key={item.id}
-                  tool={item}
-                  collapsed={collapsed}
-                  active={isActive(item.route)}
-                  onClick={onMobileClose}
-                />
-              ))}
-            </ul>
+        {compact ? <div className="px-3 py-3"><button type="button" onClick={onOpenPalette} aria-label="Buscar clientes, propostas e ferramentas" className="ui-icon-button"><Search size={18} /></button></div> : <div className="sidebar-filter"><Search size={14} /><input type="search" aria-label="Buscar no menu" placeholder="Buscar no menu…" value={query} onChange={event => setQuery(event.target.value)} />{query && <button type="button" aria-label="Limpar busca do menu" onClick={() => setQuery('')}><X size={13} /></button>}</div>}
+        <nav aria-label={mobile ? 'Menu principal móvel' : 'Menu principal'} className="sidebar-nav custom-scrollbar">
+          {!compact && query ? <section aria-label="Resultados do menu"><p className="sidebar-group-label">Resultados</p>{searchTools(query).map(tool => link(tool, 'search'))}{!searchTools(query).length && <p className="px-3 py-4 text-xs text-muted-foreground">Nenhum item encontrado.</p>}</section> : <>
+          {pinned.length > 0 && <section className="sidebar-group" aria-label="Ferramentas favoritas">{!compact && <p className="sidebar-group-label"><Star size={11} /> Favoritos</p>}<div className="space-y-0.5">{pinned.map((tool) => link(tool, 'pinned'))}</div></section>}
+          {groups.map(({ category, items }) => {
+            const visible = items.filter((tool) => !favorites.includes(tool.id))
+            if (!visible.length) return null
+            const open = compact || category.id === 'principal' || openSection === category.id
+            return <section key={category.id} className="sidebar-group">
+              {category.id !== 'principal' && (compact ? <div className="mx-auto mb-2 h-px w-6 bg-[var(--border-default)]" /> : <button type="button" aria-expanded={open} data-active={category.id === activeTool?.category} aria-controls={`${mobile ? 'mobile' : 'desktop'}-nav-${category.id}`} onClick={() => setOpenSection(open ? 'principal' : category.id)} className="sidebar-group-trigger"><span className="flex-1">{category.label}</span><ChevronDown size={13} className={`transition-transform ${open ? '' : '-rotate-90'}`} /></button>)}
+              {open && <div id={`${mobile ? 'mobile' : 'desktop'}-nav-${category.id}`} className="sidebar-section-items">{visible.map((tool) => link(tool, category.id))}</div>}
+            </section>
+          })}</>}
+        </nav>
+        <div className="sidebar-footer">
+          <div className={`flex items-center ${compact ? 'justify-center' : 'gap-2.5 px-1 py-1'}`}>
+            <Link to="/configuracoes?tab=perfil" aria-label="Abrir meu perfil" className="app-avatar">{user.iniciais}</Link>
+            {!compact && <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-[var(--text-strong)]">{user.nome}</p><p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{user.cargo}</p></div>}
           </div>
-        ))}
-      </nav>
-
-      {/* User area */}
-      <div className="border-t border-aletis-sage/15 p-3">
-        <div
-          className={`
-            flex items-center gap-3 rounded-xl p-2
-            hover:bg-aletis-cream/5 transition-colors duration-200
-            ${collapsed ? 'justify-center' : ''}
-          `}
-        >
-          <div
-            className="flex-shrink-0 w-9 h-9 rounded-full bg-aletis-gold/20 border border-aletis-gold/45 flex items-center justify-center"
-            aria-hidden="true"
-          >
-            <span className="text-aletis-gold font-display text-xs font-semibold tracking-wide">
-              {user.iniciais}
-            </span>
-          </div>
-          {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <p className="font-body text-aletis-cream text-sm font-bold truncate">
-                {user.nome}
-              </p>
-              <p className="font-body text-aletis-sage/80 text-[11px] truncate">
-                {user.cargo}
-              </p>
-            </div>
-          )}
-          {!collapsed && (
-            <button
-              onClick={handleLogout}
-              className="text-aletis-cream/45 hover:text-aletis-cream transition-colors p-1"
-              aria-label="Sair"
-              title="Sair"
-            >
-              <LogOut size={16} />
-            </button>
-          )}
+          {!mobile && <button type="button" onClick={onToggle} aria-label={compact ? 'Expandir menu' : 'Recolher menu'} className="ui-button ui-button--ghost mt-2 w-full">{compact ? <ChevronRight size={16} /> : <><ChevronLeft size={16} /><span className="text-[11px]">Recolher menu</span></>}</button>}
         </div>
       </div>
+    )
+  }
 
-      {/* Collapse toggle */}
-      <div className="border-t border-aletis-sage/15 p-2">
-        <button
-          onClick={onToggle}
-          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-aletis-cream/50 hover:text-aletis-cream hover:bg-aletis-cream/5 transition-all duration-200"
-          aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
-          title={collapsed ? 'Expandir menu' : 'Recolher menu'}
-        >
-          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-          {!collapsed && (
-            <span className="font-display text-[11px] uppercase tracking-[0.18em]">
-              Recolher
-            </span>
-          )}
-        </button>
-      </div>
-    </div>
-  )
-
-  return (
-    <>
-      <aside
-        className="hidden lg:flex fixed top-0 left-0 h-screen z-40 shadow-brand-lg"
-        aria-label="Barra lateral"
-      >
-        {sidebarContent}
-      </aside>
-
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 bg-aletis-verde-escuro/60 backdrop-blur-sm z-40 lg:hidden"
-          onClick={onMobileClose}
-          aria-hidden="true"
-        />
-      )}
-
-      <aside
-        className={`
-          fixed top-0 left-0 h-screen z-50 lg:hidden
-          shadow-brand-lg
-          transform transition-transform duration-300 ease-in-out
-          ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
-        `}
-        aria-label="Barra lateral"
-      >
-        {sidebarContent}
-      </aside>
-    </>
-  )
+  return <>
+    <aside aria-label="Barra lateral" className="app-sidebar" data-collapsed={collapsed}>{content(collapsed)}</aside>
+    <Dialog.Root open={Boolean(mobileOpen)} onOpenChange={(open) => { if (!open) onMobileClose?.() }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm lg:hidden" />
+        <Dialog.Content aria-describedby={undefined} onCloseAutoFocus={(event) => { event.preventDefault(); document.getElementById('mobile-nav-trigger')?.focus() }} className="fixed inset-y-0 left-0 z-50 h-dvh w-[min(88vw,310px)] outline-none lg:hidden">
+          <Dialog.Title className="sr-only">Navegação ALETIS</Dialog.Title>
+          {content(false, true)}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  </>
 }
 
-interface SidebarItemProps {
-  tool: ToolEntry
-  collapsed: boolean
-  active: boolean
-  onClick?: () => void
-}
-
-function SidebarItem({ tool, collapsed, active, onClick }: SidebarItemProps) {
+function SidebarItem({ tool, to, compact, active, onClick }: { tool: ToolEntry; to: string; compact: boolean; active: boolean; onClick?: () => void }) {
   const Icon = tool.icon
-  const badge = tool.badge
-  const link = (
-    <Link
-      to={tool.route}
-      onClick={onClick}
-      aria-current={active ? 'page' : undefined}
-      className={`
-        group relative flex items-center gap-3 rounded-xl
-        text-[13px] font-body transition-all duration-200
-        ${collapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'}
-        ${
-          active
-            ? 'bg-aletis-sage/15 text-aletis-cream'
-            : 'text-aletis-cream/65 hover:text-aletis-cream hover:bg-aletis-cream/[0.06]'
-        }
-      `}
-    >
-      {active && (
-        <span
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-aletis-gold"
-          aria-hidden="true"
-        />
-      )}
-      <Icon
-        size={18}
-        className={`flex-shrink-0 transition-colors duration-200 ${
-          active
-            ? 'text-aletis-gold'
-            : 'text-aletis-sage group-hover:text-aletis-cream'
-        }`}
-        aria-hidden="true"
-      />
-      {!collapsed && (
-        <>
-          <span className="flex-1 truncate">{tool.title}</span>
-          {badge === 'novo' && (
-            <span className="text-[8.5px] font-display font-bold tracking-[0.14em] uppercase px-1.5 py-0.5 rounded-full bg-aletis-gold text-aletis-verde">
-              novo
-            </span>
-          )}
-          {badge === 'ia' && (
-            <span className="text-[8.5px] font-display font-bold tracking-[0.14em] uppercase px-1.5 py-0.5 rounded-full bg-aletis-gold/80 text-aletis-verde">
-              IA
-            </span>
-          )}
-          {badge === 'beta' && (
-            <span className="text-[8.5px] font-display font-bold tracking-[0.14em] uppercase px-1.5 py-0.5 rounded-full bg-aletis-sage/30 text-aletis-cream">
-              beta
-            </span>
-          )}
-        </>
-      )}
+  return <div className="[&>span]:flex"><Tooltip label={tool.title} description={tool.tagline} placement="right" disabled={!compact}>
+    <Link to={to} onClick={onClick} aria-current={active ? 'page' : undefined} aria-label={compact ? tool.title : undefined} className="sidebar-link-v2">
+      <Icon size={17} aria-hidden="true" className="shrink-0" />
+      {!compact && <span className="min-w-0 flex-1 truncate">{tool.title}</span>}
     </Link>
-  )
-
-  return (
-    <li>
-      <Tooltip label={tool.title} description={tool.tagline} placement="right" disabled={!collapsed}>
-        {link}
-      </Tooltip>
-    </li>
-  )
+  </Tooltip></div>
 }

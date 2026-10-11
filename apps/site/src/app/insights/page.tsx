@@ -11,7 +11,7 @@ import { fmtDate } from '@/lib/formatters'
 export const metadata: Metadata = {
   title: 'Insights · Teses técnicas, mercado e reestruturação',
   description:
-    'Editorial da ALETIS: teses revisionais, inteligência de mercado, DSCR aplicado ao agro, tecnologia ALIX e anatomia de mesas multi-credor.',
+    'Editorial da ALETIS: teses revisionais, inteligência de mercado, DSCR aplicado ao agro, tecnologia ALIX e negociação com múltiplos credores.',
   alternates: { canonical: '/insights' },
 }
 
@@ -26,11 +26,11 @@ export default function InsightsPage() {
         eyebrow="Insights"
         titulo={
           <>
-            Teses que a mesa{' '}
-            <span className="italic text-aletis-dourado">defende</span>. Sem ornamento.
+            Teses para decidir melhor{' '}
+            <span className="italic text-aletis-dourado">antes da negociação</span>.
           </>
         }
-        subtitulo="Reflexões técnicas sobre reestruturação de dívida, revisão de crédito rural, inteligência de mercado e tecnologia aplicada — produzidas pela própria mesa ALETIS, com a mesma disciplina que entra em negociação."
+        subtitulo="Reflexões técnicas sobre reestruturação de dívida, revisão de crédito rural, inteligência de mercado e tecnologia aplicada — com linguagem direta e foco no que muda a decisão."
         breadcrumbs={[
           { label: 'Início', href: '/' },
           { label: 'Insights' },

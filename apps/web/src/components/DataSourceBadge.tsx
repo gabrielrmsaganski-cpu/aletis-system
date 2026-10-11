@@ -13,7 +13,7 @@ interface DataSourceBadgeProps {
 const CONFIG: Record<FonteOrigem, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   api: { label: 'Dados ao vivo', color: 'text-positivo', bg: 'bg-positivo/10', icon: Wifi },
   cache: { label: 'Cache recente', color: 'text-aletis-dourado', bg: 'bg-aletis-dourado/10', icon: Database },
-  fallback: { label: 'Referencia', color: 'text-aletis-grafite-claro', bg: 'bg-aletis-grafite-claro/10', icon: WifiOff },
+  fallback: { label: 'Referencia', color: 'text-muted-foreground', bg: 'bg-aletis-grafite-claro/10', icon: WifiOff },
 }
 
 export function DataSourceBadge({ fonteOrigem, fonte, atualizacao, compact }: DataSourceBadgeProps) {
@@ -26,7 +26,7 @@ export function DataSourceBadge({ fonteOrigem, fonte, atualizacao, compact }: Da
 
   if (compact) {
     return (
-      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-body font-medium ${cfg.bg} ${cfg.color}`}>
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-body font-medium ${cfg.bg} ${cfg.color}`}>
         <Icon className="w-2.5 h-2.5" />
         {cfg.label}
       </span>
@@ -36,14 +36,14 @@ export function DataSourceBadge({ fonteOrigem, fonte, atualizacao, compact }: Da
   return (
     <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${cfg.bg}`}>
       <Icon className={`w-3 h-3 ${cfg.color}`} />
-      <span className={`text-[10px] font-body font-medium ${cfg.color}`}>{cfg.label}</span>
+      <span className={`text-[11px] font-body font-medium ${cfg.color}`}>{cfg.label}</span>
       {fonte && (
-        <span className="text-[10px] font-body text-aletis-grafite-claro">
+        <span className="text-[11px] font-body text-muted-foreground">
           | {fonte}
         </span>
       )}
       {timeStr && (
-        <span className="inline-flex items-center gap-0.5 text-[10px] font-body text-aletis-grafite-claro">
+        <span className="inline-flex items-center gap-0.5 text-[11px] font-body text-muted-foreground">
           <Clock className="w-2.5 h-2.5" />
           {timeStr}
         </span>
@@ -64,7 +64,7 @@ export function DataSourceFooter({ fonteOrigem, fonte, atualizacao }: DataSource
     : null
 
   return (
-    <div className="flex items-center gap-2 text-[10px] font-body text-aletis-grafite-claro mt-2">
+    <div className="flex items-center gap-2 text-[11px] font-body text-muted-foreground mt-2">
       <span className={`inline-flex items-center gap-1 ${cfg.color}`}>
         <Icon className="w-3 h-3" />
         {cfg.label}

@@ -6,8 +6,10 @@
 import axios, { type AxiosInstance } from 'axios';
 import * as cheerio from 'cheerio';
 import NodeCache from 'node-cache';
+import { LastObservationStore } from './LastObservationStore.js';
 import type { DataSourceManager } from '../DataSourceManager.js';
 import { bypassCloudflareAndFetch } from '../captcha/CloudflareBypass.js';
+import { parseMoneyPtBr } from '../../lib/parseMoneyPtBr.js';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -20,6 +22,11 @@ export interface CotacaoCommodity {
   moeda: string;
   fonte: 'api' | 'cache' | 'fallback';
   descricao?: string;
+  estado?: 'disponivel' | 'atrasado';
+  coletadoEm?: string;
+  referencia?: string;
+  praca?: string;
+  fonteUrl?: string;
 }
 
 export interface HistoricoCommodity {
@@ -44,70 +51,7 @@ export interface SafraCultura {
   variacaoProducao: number;   // % vs safra anterior
 }
 
-// ── Fallback Data (realistic 2026 commodity prices) ──────────
-
-const FALLBACK_COTACOES: Record<string, Omit<CotacaoCommodity, 'fonte'>> = {
-  soja: {
-    commodity: 'soja',
-    preco: 138.50,
-    unidade: 'R$/saca 60kg',
-    variacao: -0.72,
-    data: '2026-04-15',
-    moeda: 'BRL',
-    descricao: 'Indicador Soja CEPEA/ESALQ — Paraná',
-  },
-  milho: {
-    commodity: 'milho',
-    preco: 68.30,
-    unidade: 'R$/saca 60kg',
-    variacao: 1.15,
-    data: '2026-04-15',
-    moeda: 'BRL',
-    descricao: 'Indicador Milho CEPEA/ESALQ — Campinas',
-  },
-  boi: {
-    commodity: 'boi_gordo',
-    preco: 245.80,
-    unidade: 'R$/@',
-    variacao: 0.33,
-    data: '2026-04-15',
-    moeda: 'BRL',
-    descricao: 'Indicador Boi Gordo CEPEA/ESALQ — São Paulo',
-  },
-  cafe: {
-    commodity: 'cafe_arabica',
-    preco: 1285.00,
-    unidade: 'R$/saca 60kg',
-    variacao: 2.18,
-    data: '2026-04-15',
-    moeda: 'BRL',
-    descricao: 'Indicador Café Arábica CEPEA/ESALQ',
-  },
-  algodao: {
-    commodity: 'algodao',
-    preco: 135.40,
-    unidade: 'R$/@',
-    variacao: -0.45,
-    data: '2026-04-15',
-    moeda: 'BRL',
-    descricao: 'Indicador Algodão CEPEA/ESALQ',
-  },
-};
-
-const FALLBACK_SAFRA: PrevisaoSafra = {
-  safra: '2025/2026',
-  culturas: [
-    { cultura: 'Soja', areaPlantada: 47200, producao: 167500, produtividade: 3548, variacaoProducao: 3.2 },
-    { cultura: 'Milho (1ª safra)', areaPlantada: 4450, producao: 28500, produtividade: 6404, variacaoProducao: 1.8 },
-    { cultura: 'Milho (2ª safra)', areaPlantada: 17800, producao: 98200, produtividade: 5517, variacaoProducao: 5.1 },
-    { cultura: 'Algodão', areaPlantada: 2050, producao: 3650, produtividade: 1780, variacaoProducao: 2.5 },
-    { cultura: 'Café (total)', areaPlantada: 2120, producao: 62800, produtividade: 29622, variacaoProducao: -8.3 },
-    { cultura: 'Trigo', areaPlantada: 3200, producao: 10500, produtividade: 3281, variacaoProducao: 6.7 },
-    { cultura: 'Arroz', areaPlantada: 1680, producao: 11200, produtividade: 6666, variacaoProducao: 0.9 },
-  ],
-  atualizadoEm: '2026-04-10',
-  fonte: 'fallback',
-};
+const COMMODITY_NAMES: Record<string, string> = { boi: 'boi_gordo', cafe: 'cafe_arabica' };
 
 // ── CEPEA URL Map ────────────────────────────────────────────
 
@@ -119,13 +63,128 @@ const CEPEA_URLS: Record<string, string> = {
   algodao: 'https://www.cepea.esalq.usp.br/br/indicador/algodao.aspx',
 };
 
+interface IndicatorIdentity {
+  descricao: string;
+  unidade: string;
+  praca: string;
+}
+
+export interface ParsedIndicatorQuote {
+  preco: number;
+  variacao: number;
+  data: string;
+  indicador: IndicatorIdentity;
+}
+
+const compact = (value: string): string => value.replace(/\s+/g, ' ').trim();
+const normalized = (value: string): string => compact(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+
+function observationDate(value: string): string | null {
+  const match = value.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
+  const iso = match ? `${match[3]}-${match[2]}-${match[1]}` : value;
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) && Number.isFinite(Date.parse(iso))
+    && new Date(iso).toISOString().slice(0, 10) === iso && iso <= new Date().toISOString().slice(0, 10) ? iso : null;
+}
+
+function indicatorIdentity(commodity: string, title: string, context: string): IndicatorIdentity | null {
+  const name = normalized(title);
+  const text = normalized(context);
+  if (!/CEPEA|ESALQ/.test(text)) return null;
+  const titleMatches: Record<string, RegExp> = {
+    soja: /SOJA.*\bPARANA\b/,
+    milho: /MILHO/,
+    boi: /BOI GORDO/,
+    cafe: /CAFE.*ARABICA/,
+    algodao: /ALGODAO/,
+  };
+  if (!titleMatches[commodity]?.test(name)) return null;
+  // Não confundir soja Paraná com Paranaguá, boi à vista com prazo, ou arábica com robusta.
+  if ((commodity === 'soja' && /PARANAGUA/.test(name)) || (commodity === 'boi' && /PRAZO|BEZERRO/.test(name))) return null;
+  const hasBRL = /R\$|REAIS/.test(text);
+  const unit = commodity === 'algodao' && /CENT(?:AVOS)?\b/.test(text) && /\b(?:LB|LP)\b|LIBRA/.test(text) && hasBRL ? 'centavos R$/libra-peso'
+    : commodity === 'boi' && /ARROBA|@/.test(text) && hasBRL ? 'R$/@'
+    : ['soja', 'milho', 'cafe'].includes(commodity) && /60\s*KG/.test(text) && hasBRL ? 'R$/saca 60kg' : null;
+  if (!unit) return null;
+  // O indicador identifica uma cesta própria de praças. Não deduzir uma cidade de um nome genérico.
+  const praca = commodity === 'soja' ? 'Paraná'
+    : /CAMPINAS/.test(name) ? 'Campinas (SP)'
+    : /SAO PAULO|\bSP\b/.test(name) ? 'São Paulo'
+    : `Referência agregada: ${compact(title)}`;
+  return { descricao: compact(title), unidade: unit, praca };
+}
+
+function quoteFromTable($: cheerio.CheerioAPI, table: Parameters<cheerio.CheerioAPI>[0], identity: IndicatorIdentity): ParsedIndicatorQuote | null {
+  const priceHeader = $(table).find('thead th').eq(1).text();
+  if (priceHeader && !/R\$|reais/i.test(priceHeader)) return null;
+  const quotes: ParsedIndicatorQuote[] = [];
+  for (const row of $(table).find('tbody tr').toArray()) {
+    const cells = $(row).find('td');
+    if (cells.length < 3) continue;
+    const data = compact(cells.eq(0).text());
+    const amount = compact(cells.eq(1).text());
+    const variation = compact(cells.eq(2).text()).replace(/%$/, '').trim();
+    // A célula toda precisa ser um número; anúncios, faixas e textos não são valores.
+    if (!observationDate(data) || !/^(?:R\$\s*)?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?$/.test(amount)
+        || !/^[+-]?\d+(?:[,.]\d{1,4})?$/.test(variation)) continue;
+    const parsed = parseMoneyPtBr(amount).amount;
+    if (!parsed || /^0\.00$/.test(parsed)) continue;
+    // Conversão somente na fronteira do contrato legado; validação monetária usa decimal/BigInt.
+    quotes.push({ preco: Number(parsed), variacao: Number(variation.replace(',', '.')), data, indicador: identity });
+  }
+  return quotes.sort((a, b) => observationDate(b.data)!.localeCompare(observationDate(a.data)!))[0] || null;
+}
+
+/** Uma tabela só recebe metadados da própria seção, nunca do ticker ou de outra commodity. */
+export function parseNoticiasAgricolasQuote(commodity: string, html: string): ParsedIndicatorQuote | null {
+  const $ = cheerio.load(html);
+  for (const table of $('table.cot-fisicas').toArray()) {
+    const section = $(table).closest('.cotacao');
+    const title = section.length
+      ? compact(section.children('.info').find('h2,h3,h4').first().text())
+      : compact([$(table).prev('h2,h3,h4').text(), $(table).parent().prev('h2,h3,h4').text()].join(' '));
+    // Texto de células adjacentes precisa de separador: "lb" + "Variação" não vira uma unidade desconhecida.
+    const headers = $(table).find('caption,thead th').toArray().map(cell => compact($(cell).text())).join(' ');
+    const source = section.length ? compact(section.children('.info').find('.fonte').text()) : '';
+    const context = compact(`${title} ${source} ${headers}`);
+    const identity = indicatorIdentity(commodity, title, context);
+    if (!identity) continue;
+    const quote = quoteFromTable($, table, identity);
+    if (quote) return quote;
+  }
+  return null;
+}
+
+/** O CEPEA publica o preço em imagenet-indicadorN e a unidade nas notas da mesma seção. */
+export function parseCepeaQuote(commodity: string, html: string): ParsedIndicatorQuote | null {
+  const $ = cheerio.load(html);
+  if (!/CEPEA|ESALQ/i.test($('title').text())) return null;
+  for (const table of $('table[id^="imagenet-indicador"]').toArray()) {
+    const section = $(table).parents('div.imagenet-col-12').first();
+    if (!section.length || section.find('table').length !== 1) continue;
+    const content = compact(section.text());
+    const position = content.indexOf(compact($(table).text()));
+    if (position < 1) continue;
+    const title = content.slice(0, position).trim();
+    const next = section.next();
+    const adjacentNote = next.find('table').length === 0 && /nota/i.test(next.text()) ? next.text() : '';
+    const identity = indicatorIdentity(commodity, title, `${content} ${adjacentNote}`);
+    // A primeira coluna monetária deve ser em reais, não a coluna de conversão para dólares.
+    if (!identity || !/R\$/i.test($(table).find('thead th').eq(1).text())) continue;
+    const quote = quoteFromTable($, table, identity);
+    if (quote) return quote;
+  }
+  return null;
+}
+
 // ── Service Class ────────────────────────────────────────────
 
 export class PrecosService {
+  private readonly observations = new LastObservationStore('cepea');
   private readonly cache: NodeCache;
   private readonly httpScraper: AxiosInstance;
   private readonly httpCONAB: AxiosInstance;
   private readonly manager: DataSourceManager;
+  private readonly inFlight = new Map<string, Promise<CotacaoCommodity>>();
 
   constructor(manager: DataSourceManager) {
     this.manager = manager;
@@ -139,7 +198,7 @@ export class PrecosService {
     this.httpScraper = axios.create({
       timeout: 5000,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'ALETIS-System/2.0',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
       },
@@ -155,66 +214,15 @@ export class PrecosService {
 
   // ── Private: CEPEA Scraper ───────────────────────────────
 
-  /**
-   * Parser do HTML CEPEA. Extrai preço/variação/data da primeira linha da
-   * tabela de indicadores. Suporta os múltiplos layouts que CEPEA publica.
-   */
-  private parseCEPEAHtml(html: string): { preco: number; variacao: number; data: string } {
-    const $ = cheerio.load(html);
-    let preco = 0;
-    let variacao = 0;
-    let data = '';
-
-    const parseNumber = (txt: string): number => {
-      const limpo = txt
-        .replace(/R\$|\s/g, '')
-        .replace(/%/g, '')
-        .replace(/\./g, '')
-        .replace(',', '.');
-      const n = parseFloat(limpo);
-      return isNaN(n) ? 0 : n;
-    };
-
-    // Layout principal: tabela #imagenet
-    const selectors = [
-      '#imagenet table tr',
-      'table#imagenet tr',
-      '.table-responsive table tr',
-      '#tab1 table tr',
-      'table.responsive tr',
-    ];
-
-    for (const selector of selectors) {
-      const rows = $(selector);
-      if (rows.length > 1) {
-        const dataRow = rows.eq(1);
-        const cells = dataRow.find('td');
-        if (cells.length >= 3) {
-          data = cells.eq(0).text().trim();
-          preco = parseNumber(cells.eq(1).text());
-          variacao = parseNumber(cells.eq(2).text());
-          if (preco > 0) break;
-        }
-      }
-    }
-
-    // Fallback: busca por elemento único com classe .valor / .preco-indicador
-    if (preco <= 0) {
-      const el = $('.valor, .preco-indicador, #ctl00_cphContent_lblValor').first();
-      if (el.length > 0) preco = parseNumber(el.text());
-    }
-
-    // Fallback final: regex por "R$ NNN,NN" no <body>
-    if (preco <= 0) {
-      const bodyText = $('body').text();
-      const m = bodyText.match(/R\$\s*([\d\.]+,\d{2})/);
-      if (m) preco = parseNumber(m[1]);
-    }
-
-    return { preco, variacao, data };
+  private async scrapeCEPEA(commodity: string): Promise<CotacaoCommodity> {
+    const pending = this.inFlight.get(commodity);
+    if (pending) return pending;
+    const request = this.fetchCEPEA(commodity).finally(() => { this.inFlight.delete(commodity); });
+    this.inFlight.set(commodity, request);
+    return request;
   }
 
-  private async scrapeCEPEA(commodity: string): Promise<CotacaoCommodity> {
+  private async fetchCEPEA(commodity: string): Promise<CotacaoCommodity> {
     const url = CEPEA_URLS[commodity];
     if (!url) throw new Error(`Commodity ${commodity} não suportada para scraping CEPEA`);
 
@@ -224,27 +232,20 @@ export class PrecosService {
     const cached = this.cache.get<CotacaoCommodity>(cacheKey);
     if (cached) {
       console.log(`[Preços] ${commodity} retornado do cache`);
-      return { ...cached, fonte: 'cache' };
+      return { ...cached, fonte: cached.fonte === 'fallback' ? 'fallback' : 'cache' };
     }
 
     const startTime = Date.now();
 
-    // Estratégia: CEPEA protege seu site com Cloudflare Managed Challenge
-    // (sitekey interno não-solvível por 2captcha direto). Por isso, usamos
-    // republicadores oficiais — sites que exibem os indicadores CEPEA/ESALQ
-    // como parte do seu conteúdo editorial. Ordem de preferência:
-    //   1. NoticiasAgricolas — estrutura limpa, atualização diária
-    //   2. CEPEA direto via Puppeteer stealth (tentativa best-effort)
-    //   3. AgroLink — última tentativa antes do fallback constante
-    //   4. FALLBACK_COTACOES — valores de referência
+    // A republicação é útil quando identifica o mesmo indicador e sua unidade.
+    // Em falhas transitórias, conserva-se a última observação com a data original.
 
     // Passo 1: NoticiasAgricolas (primário)
     try {
       const na = await this.scrapeNoticiasAgricolas(commodity);
       if (na && na.preco > 0) {
         const latencia = Date.now() - startTime;
-        console.log(`[Preços] ${commodity} via NoticiasAgricolas em ${latencia}ms: R$ ${na.preco}`);
-        return this.finalizarCotacao(commodity, sourceName, na.preco, na.variacao, na.data, latencia, cacheKey);
+        return this.finalizarCotacao(commodity, sourceName, na.preco, na.variacao, na.data, latencia, cacheKey, na.indicador, `https://www.noticiasagricolas.com.br/cotacoes/${commodity}`);
       }
     } catch (err) {
       console.warn(
@@ -256,11 +257,10 @@ export class PrecosService {
     try {
       const resp = await this.httpScraper.get(url);
       if (!/Just a moment|_cf_chl_opt|Enable JavaScript/i.test(resp.data)) {
-        const { preco, variacao, data } = this.parseCEPEAHtml(resp.data);
-        if (preco > 0) {
+        const quote = parseCepeaQuote(commodity, resp.data);
+        if (quote) {
           const latencia = Date.now() - startTime;
-          console.log(`[Preços] ${commodity} via CEPEA HTTP (CF liberado) em ${latencia}ms: R$ ${preco}`);
-          return this.finalizarCotacao(commodity, sourceName, preco, variacao, data, latencia, cacheKey);
+          return this.finalizarCotacao(commodity, sourceName, quote.preco, quote.variacao, quote.data, latencia, cacheKey, quote.indicador, url);
         }
       }
     } catch {
@@ -274,13 +274,12 @@ export class PrecosService {
       const result = await bypassCloudflareAndFetch(url, {
         maxChallengeWaitMs: 15_000,
         totalTimeoutMs: 35_000,
-        readySelector: '#imagenet',
+        readySelector: 'table[id^="imagenet-indicador"]',
       });
-      const { preco, variacao, data } = this.parseCEPEAHtml(result.html);
-      if (preco > 0) {
+      const quote = parseCepeaQuote(commodity, result.html);
+      if (quote) {
         const latencia = Date.now() - startTime;
-        console.log(`[Preços] ${commodity} via CEPEA Puppeteer em ${latencia}ms: R$ ${preco}`);
-        return this.finalizarCotacao(commodity, sourceName, preco, variacao, data, latencia, cacheKey);
+        return this.finalizarCotacao(commodity, sourceName, quote.preco, quote.variacao, quote.data, latencia, cacheKey, quote.indicador, url);
       }
     } catch (err) {
       console.warn(
@@ -288,60 +287,20 @@ export class PrecosService {
       );
     }
 
-    // Passo 4: AgroLink
-    try {
-      const agro = await this.scrapeAgroLink(commodity);
-      if (agro && agro.preco > 0) {
-        const latencia = Date.now() - startTime;
-        this.manager.updateSourceStatus(sourceName, 'degraded', latencia, 'fallback agrolink');
-        const fb = FALLBACK_COTACOES[commodity];
-        const result: CotacaoCommodity = {
-          commodity: fb?.commodity || commodity,
-          preco: agro.preco,
-          unidade: fb?.unidade || 'R$/saca 60kg',
-          variacao: agro.variacao,
-          data: agro.data || new Date().toISOString().split('T')[0],
-          moeda: 'BRL',
-          descricao: `${fb?.descricao || commodity} (via AgroLink)`,
-          fonte: 'api',
-        };
-        this.cache.set(cacheKey, result, 1800);
-        return result;
-      }
-    } catch {
-      /* segue pro fallback */
-    }
-
-    // Passo 5: fallback constante
+    // Sem coleta válida, somente uma observação real preservada pode ser exibida.
     const latencia = Date.now() - startTime;
     this.manager.updateSourceStatus(sourceName, 'offline', latencia, 'todas as fontes falharam');
-    const fb = FALLBACK_COTACOES[commodity];
-    if (!fb) {
-      return {
-        commodity,
-        preco: 0,
-        unidade: 'R$/unidade',
-        variacao: 0,
-        data: new Date().toISOString().split('T')[0],
-        moeda: 'BRL',
-        fonte: 'fallback',
-      };
-    }
-    const fallbackResult: CotacaoCommodity = { ...fb, fonte: 'fallback' };
-    this.cache.set(cacheKey, fallbackResult, 300);
-    return fallbackResult;
+    const last = this.observations.get<CotacaoCommodity>(cacheKey);
+    if (last) return { ...last, fonte: 'cache', estado: 'atrasado' };
+    throw new Error(`Cotação ${commodity} indisponível; nenhuma observação real preservada.`);
   }
 
   /**
-   * NoticiasAgricolas republica oficialmente os indicadores CEPEA/ESALQ.
+   * Republicações são aceitas apenas quando a própria tabela identifica o indicador e a unidade.
    * Formato da tabela: <table class="cot-fisicas"> com colunas
    * Data | Valor R$/Saca | Variação (%). Não usa Cloudflare.
    */
-  private async scrapeNoticiasAgricolas(commodity: string): Promise<{
-    preco: number;
-    variacao: number;
-    data: string;
-  } | null> {
+  private async scrapeNoticiasAgricolas(commodity: string): Promise<ParsedIndicatorQuote | null> {
     const NA_URLS: Record<string, string> = {
       soja: 'https://www.noticiasagricolas.com.br/cotacoes/soja',
       milho: 'https://www.noticiasagricolas.com.br/cotacoes/milho',
@@ -353,45 +312,7 @@ export class PrecosService {
     if (!url) return null;
 
     const resp = await this.httpScraper.get(url, { timeout: 12_000 });
-    const $ = cheerio.load(resp.data);
-
-    const parseNumber = (txt: string): number => {
-      const n = parseFloat(
-        txt
-          .replace(/R\$|\s|\+/g, '')
-          .replace(/%/g, '')
-          .replace(/\./g, '')
-          .replace(',', '.')
-      );
-      return isNaN(n) ? 0 : n;
-    };
-
-    // Pega a primeira tabela .cot-fisicas (primeiro indicador CEPEA/ESALQ listado)
-    let preco = 0;
-    let variacao = 0;
-    let data = '';
-
-    const tables = $('table.cot-fisicas');
-    tables.each((_i, table) => {
-      if (preco > 0) return;
-      const rows = $(table).find('tbody tr');
-      if (rows.length === 0) return;
-      const cells = rows.first().find('td');
-      if (cells.length >= 3) {
-        const dataCell = cells.eq(0).text().trim();
-        const valorCell = cells.eq(1).text().trim();
-        const varCell = cells.eq(2).text().trim();
-        const p = parseNumber(valorCell);
-        if (p > 0) {
-          preco = p;
-          variacao = parseNumber(varCell);
-          data = dataCell;
-        }
-      }
-    });
-
-    if (preco <= 0) return null;
-    return { preco, variacao, data };
+    return parseNoticiasAgricolasQuote(commodity, resp.data);
   }
 
   private finalizarCotacao(
@@ -401,20 +322,30 @@ export class PrecosService {
     variacao: number,
     data: string,
     latencia: number,
-    cacheKey: string
+    cacheKey: string,
+    indicador: IndicatorIdentity,
+    fonteUrl: string
   ): CotacaoCommodity {
+    const observed = observationDate(data);
+    if (!observed) throw new Error('Cotação sem data observada válida');
     this.manager.updateSourceStatus(sourceName, 'online', latencia);
-    const fb = FALLBACK_COTACOES[commodity];
     const result: CotacaoCommodity = {
-      commodity: fb?.commodity || commodity,
+      commodity: COMMODITY_NAMES[commodity] || commodity,
       preco,
-      unidade: fb?.unidade || 'R$/saca 60kg',
+      unidade: indicador.unidade,
       variacao: isNaN(variacao) ? 0 : variacao,
-      data: data || new Date().toISOString().split('T')[0],
+      data: observed,
+      coletadoEm: new Date().toISOString(),
       moeda: 'BRL',
-      descricao: fb?.descricao || `Indicador ${commodity} CEPEA/ESALQ`,
+      descricao: indicador.descricao,
+      referencia: indicador.descricao,
+      praca: indicador.praca,
+      fonteUrl,
       fonte: 'api',
     };
+    this.observations.set(cacheKey, result);
+    const history = this.observations.get<CotacaoCommodity[]>(`${cacheKey}_history`) || [];
+    this.observations.set(`${cacheKey}_history`, [...history.filter(h => h.data !== result.data), result].sort((a, b) => a.data.localeCompare(b.data)).slice(-500));
     this.cache.set(cacheKey, result, 1800);
     return result;
   }
@@ -531,13 +462,12 @@ export class PrecosService {
       this.getCotacaoAlgodao(),
     ]);
 
-    return {
-      soja: soja.status === 'fulfilled' ? soja.value : { ...FALLBACK_COTACOES.soja, fonte: 'fallback' as const },
-      milho: milho.status === 'fulfilled' ? milho.value : { ...FALLBACK_COTACOES.milho, fonte: 'fallback' as const },
-      boi: boi.status === 'fulfilled' ? boi.value : { ...FALLBACK_COTACOES.boi, fonte: 'fallback' as const },
-      cafe: cafe.status === 'fulfilled' ? cafe.value : { ...FALLBACK_COTACOES.cafe, fonte: 'fallback' as const },
-      algodao: algodao.status === 'fulfilled' ? algodao.value : { ...FALLBACK_COTACOES.algodao, fonte: 'fallback' as const },
-    };
+    const available: Record<string, CotacaoCommodity> = {};
+    for (const [key, result] of Object.entries({ soja, milho, boi, cafe, algodao })) {
+      if (result.status === 'fulfilled') available[key] = result.value;
+    }
+    if (!Object.keys(available).length) throw new Error('Cotações indisponíveis; nenhuma observação real preservada.');
+    return available;
   }
 
   // ── Public: Historical Commodity Data ────────────────────
@@ -546,46 +476,11 @@ export class PrecosService {
     commodity: string,
     dias: number = 30
   ): Promise<HistoricoCommodity> {
-    const cacheKey = `precos_historico_${commodity}_${dias}`;
-    const cached = this.cache.get<HistoricoCommodity>(cacheKey);
-    if (cached) {
-      console.log(`[Preços] Histórico ${commodity} retornado do cache`);
-      return { ...cached, fonte: 'cache' };
-    }
-
-    // For historical data, we generate realistic simulated data based on current price
-    // Real implementation would use a paid API or database
-    const currentQuote = await this.scrapeCEPEA(commodity);
-    const basePrice = currentQuote.preco;
-    const historico: { data: string; valor: number }[] = [];
-
-    for (let i = dias; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      // Skip weekends
-      if (date.getDay() === 0 || date.getDay() === 6) continue;
-
-      // Simulate realistic price movement (random walk with mean reversion)
-      const dayFactor = 1 + (Math.random() - 0.5) * 0.02; // +/- 1% daily
-      const trendFactor = 1 - (i / dias) * 0.03; // slight upward trend
-      const valor = parseFloat((basePrice * dayFactor * trendFactor).toFixed(2));
-
-      historico.push({
-        data: date.toISOString().split('T')[0],
-        valor,
-      });
-    }
-
-    const fb = FALLBACK_COTACOES[commodity];
-    const result: HistoricoCommodity = {
-      commodity: fb?.commodity || commodity,
-      unidade: fb?.unidade || 'R$/unidade',
-      dados: historico,
-      fonte: currentQuote.fonte === 'api' ? 'api' : 'fallback',
-    };
-
-    this.cache.set(cacheKey, result, 3600);
-    return result;
+    const points = this.observations.get<CotacaoCommodity[]>(`precos_${commodity}_history`) || [];
+    const last = points.at(-1);
+    const cutoff = Date.now() - dias * 86400000;
+    const comparable = points.filter(p => p.unidade === last?.unidade && p.descricao === last?.descricao && Date.parse(p.data) >= cutoff);
+    return { commodity, unidade: last?.unidade || '', dados: comparable.map(p => ({ data: p.data, valor: p.preco })), fonte: comparable.length ? 'cache' : 'fallback' };
   }
 
   // ── Public: CONAB Crop Forecast ──────────────────────────
@@ -595,7 +490,7 @@ export class PrecosService {
     const cached = this.cache.get<PrevisaoSafra>(cacheKey);
     if (cached) {
       console.log('[Preços] Previsão safra retornada do cache');
-      return { ...cached, fonte: 'cache' };
+      return { ...cached, fonte: cached.fonte === 'fallback' ? 'fallback' : 'cache' };
     }
 
     const startTime = Date.now();
@@ -612,14 +507,14 @@ export class PrecosService {
         throw new Error('Resposta vazia da CONAB');
       }
 
-      this.manager.updateSourceStatus('conab_safra', 'online', latencia);
 
       // Parse CONAB response (structure varies)
       const data = response.data;
       const culturas: SafraCultura[] = [];
 
-      if (Array.isArray(data)) {
-        for (const item of data) {
+      const rows = Array.isArray(data.culturas) ? data.culturas : [];
+      if (rows.length) {
+        for (const item of rows) {
           culturas.push({
             cultura: item.cultura || item.produto || '',
             areaPlantada: parseFloat(item.area_plantada || item.area || '0'),
@@ -630,13 +525,17 @@ export class PrecosService {
         }
       }
 
+      const observed = data.atualizadoEm || data.data;
+      if (!culturas.length || !data.safra || !observed || !Number.isFinite(Date.parse(observed))) throw new Error('Safra sem observações e referência verificáveis');
       const result: PrevisaoSafra = {
-        safra: data.safra || '2025/2026',
-        culturas: culturas.length > 0 ? culturas : FALLBACK_SAFRA.culturas,
-        atualizadoEm: new Date().toISOString(),
+        safra: data.safra,
+        culturas,
+        atualizadoEm: observed,
         fonte: 'api',
       };
 
+      this.observations.set(cacheKey, result);
+      this.manager.updateSourceStatus('conab_safra', 'online', latencia);
       this.cache.set(cacheKey, result, 86400);
       console.log(`[Preços] Safra CONAB OK em ${latencia}ms: ${result.culturas.length} culturas`);
       return result;
@@ -646,8 +545,9 @@ export class PrecosService {
       this.manager.updateSourceStatus('conab_safra', 'offline', latencia, msg);
       console.warn(`[Preços] Erro CONAB: ${msg}. Usando fallback.`);
 
-      this.cache.set(cacheKey, FALLBACK_SAFRA, 300);
-      return FALLBACK_SAFRA;
+      const last = this.observations.get<PrevisaoSafra>(cacheKey);
+      if (last) return { ...last, fonte: 'cache' };
+      throw new Error('Safra indisponível; nenhuma observação real preservada.');
     }
   }
 }

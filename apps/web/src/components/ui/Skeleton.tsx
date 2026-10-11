@@ -14,7 +14,7 @@ interface BaseProps {
  * Use `h-X` e `w-X` para dimensionar.
  */
 export function Skeleton({ className = '' }: BaseProps) {
-  return <div className={`bg-aletis-grafite-claro/15 rounded animate-pulse ${className}`} />
+  return <div aria-hidden="true" className={`ui-skeleton ${className}`} />
 }
 
 /**
@@ -63,7 +63,7 @@ export function SkeletonList({ count = 5, itemHeight = 'h-12' }: { count?: numbe
 export function SkeletonPage() {
   return (
     <div className="space-y-4">
-      <Skeleton className="h-24 rounded-2xl" />
+      <Skeleton className="h-24 rounded-lg" />
       <SkeletonKpiGrid />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
@@ -76,5 +76,5 @@ export function SkeletonPage() {
  * Hero/header skeleton para uso enquanto useClienteData carrega.
  */
 export function SkeletonHero() {
-  return <Skeleton className="h-24 rounded-2xl" />
+  return <Skeleton className="h-24 rounded-lg" />
 }

@@ -68,7 +68,7 @@ export default function AlixContextHint({ clienteId, tela = 'cliente-detalhes' }
         <Icon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${isCritico ? 'text-red-300' : 'text-aletis-dourado'}`} />
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-white/70 mb-1">
-            ALETÉIA · novidades sobre este cliente
+            ALIX · novidades sobre este cliente
           </p>
           {data.pendentes > 0 && (
             <p className="text-sm font-medium">

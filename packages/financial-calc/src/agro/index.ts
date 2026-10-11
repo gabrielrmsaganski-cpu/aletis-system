@@ -31,3 +31,13 @@ export {
   type FarmsResult,
   type FarmsCenario,
 } from './farms-viabilidade'
+
+export {
+  calcularFechamentoEmbarque,
+  calcularFechamentoGeralEmbarque,
+  FECHAMENTO_ARI_PRADO_2024_INPUT,
+  type FechamentoEmbarqueInput,
+  type FechamentoGeralEmbarqueInput,
+  type FechamentoEmbarqueResultado,
+  type FechamentoGeralEmbarqueResultado,
+} from './fechamento-embarque'

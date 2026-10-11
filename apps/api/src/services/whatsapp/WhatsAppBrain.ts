@@ -11,6 +11,7 @@
 import { promises as fs } from 'fs'
 import { join } from 'path'
 import type { AlixService } from '../AlixService.js'
+import { moneyToCents, parseMoneyPtBr } from '../../lib/parseMoneyPtBr.js'
 
 // ── Session types ────────────────────────────────────────────
 
@@ -28,7 +29,7 @@ export interface LeadInfo {
   cidade?: string
   uf?: string
   credor?: string
-  valorDivida?: number
+  valorDivida?: string
   culturas?: string[]
   urgencia?: 'baixa' | 'media' | 'alta' | 'critica'
   motivoUrgencia?: string
@@ -96,51 +97,14 @@ function greeting(): string {
   return 'Boa noite'
 }
 
-function parseValorBRL(texto: string): number | null {
-  // Handles: "R$ 1.250.000,00", "1.2 mi", "1,5 milhões", "500 mil", "800000"
-  const t = norm(texto).replace(/r\$/g, '').trim()
+function parseValorBRL(texto: string): string | null {
+  return parseMoneyPtBr(texto).amount
+}
 
-  // With a suffix (mi / milh / mil), the prefix number is a small magnitude,
-  // so a single dot/comma is almost always a decimal separator.
-  const withSuffix = (raw: string, factor: number): number | null => {
-    const cleaned = raw.trim()
-    // Count dots and commas to decide separator semantics
-    const dots = (cleaned.match(/\./g) || []).length
-    const commas = (cleaned.match(/,/g) || []).length
-    let normalized: string
-    if (commas === 1 && dots === 0) {
-      // "1,5" → decimal comma
-      normalized = cleaned.replace(',', '.')
-    } else if (dots === 1 && commas === 0) {
-      // "1.2" in pt-BR could be thousand separator, but with a "mi/mil" suffix
-      // the value is small enough that it's clearly decimal (e.g. "1.2 milhão")
-      normalized = cleaned
-    } else {
-      // "1.250,00" or "1,250.00" etc.: strip dots, normalize comma
-      normalized = cleaned.replace(/\./g, '').replace(',', '.')
-    }
-    const n = parseFloat(normalized)
-    return isFinite(n) && n > 0 ? n * factor : null
-  }
-
-  const miMatch = t.match(/([\d.,]+)\s*(mi\b|milh)/)
-  if (miMatch) return withSuffix(miMatch[1], 1_000_000)
-
-  const milMatch = t.match(/([\d.,]+)\s*mil\b/)
-  if (milMatch) return withSuffix(milMatch[1], 1_000)
-
-  // Plain number: pt-BR convention — dots are thousand separators, comma is decimal
-  const numMatch = t.match(/[\d.,]+/)
-  if (numMatch) {
-    const raw = numMatch[0]
-    const hasComma = raw.includes(',')
-    const normalized = hasComma
-      ? raw.replace(/\./g, '').replace(',', '.')  // "1.250.000,00" → "1250000.00"
-      : raw.replace(/\./g, '')                     // "1.250.000" → "1250000"
-    const n = parseFloat(normalized)
-    return isFinite(n) && n > 0 ? n : null
-  }
-  return null
+function formatValorBRL(amount: string): string {
+  const cents = moneyToCents(amount)
+  if (cents === null) return 'valor a confirmar'
+  return `R$ ${(cents / 100n).toLocaleString('pt-BR')},${String(cents % 100n).padStart(2, '0')}`
 }
 
 function detectaUrgencia(texto: string): { nivel: LeadInfo['urgencia']; motivo?: string } {
@@ -199,7 +163,7 @@ type WaIntent =
   | { tipo: 'apresenta_nome'; nome: string }
   | { tipo: 'apresenta_cidade'; cidade: string; uf?: string }
   | { tipo: 'apresenta_credor'; credor: string }
-  | { tipo: 'apresenta_valor'; valor: number }
+  | { tipo: 'apresenta_valor'; valor: string }
   | { tipo: 'duvida_negocio' }   // "o que voces fazem?"
   | { tipo: 'duvida_mercado' }   // dolar, selic, soja — delega ALIX
   | { tipo: 'duvida_juridica' }  // sumula, mcr, proagro — delega ALIX
@@ -277,7 +241,12 @@ export class WhatsAppBrain {
         try {
           const raw = await fs.readFile(join(this.storageDir, file), 'utf8')
           const s = JSON.parse(raw) as WhatsAppSession
-          if (s?.waId) this.sessions.set(s.waId, s)
+          if (s?.waId) {
+            if (s.lead?.valorDivida !== undefined) {
+              s.lead.valorDivida = parseMoneyPtBr(String(s.lead.valorDivida)).amount || undefined
+            }
+            this.sessions.set(s.waId, s)
+          }
         } catch { /* skip */ }
       }
     } catch { /* no storage yet */ }
@@ -447,10 +416,10 @@ export class WhatsAppBrain {
     }
     if (session.etapa === 'coletando_valor' && intent.tipo === 'apresenta_valor') {
       session.lead.valorDivida = intent.valor
-      const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(intent.valor)
+      const fmt = formatValorBRL(intent.valor)
       session.etapa = 'qualificado'
       // Auto-escalate if high value
-      if (intent.valor >= 500_000) {
+      if ((moneyToCents(intent.valor) || 0n) >= 50000000n) {
         session.etapa = 'aguardando_humano'
         session.tagsDeEscalada.push('valor_alto')
         return {
@@ -460,7 +429,7 @@ export class WhatsAppBrain {
         }
       }
       return {
-        reply: `Perfeito. Com ${fmt}, consigo te passar um panorama inicial aqui mesmo. A ALETIS trabalha com reestruturação de dívida rural usando base normativa (MCR, Plano Safra, Resolução 4966) e jurisprudência do STJ (súmula 603, juros abusivos, capitalização).\n\nPosso te explicar as estratégias possíveis para o seu caso, ou você prefere já agendar uma conversa com nosso consultor?`,
+        reply: `Perfeito. Com ${fmt}, consigo te passar um panorama inicial aqui mesmo. A ALETIS analisa os documentos da operação e as condições financeiras para avaliar alternativas de reestruturação. As normas aplicáveis precisam ser conferidas para o seu contrato.\n\nPosso te explicar as estratégias possíveis para o seu caso, ou você prefere já agendar uma conversa com nosso consultor?`,
         toolsUsed: ['qualificacao'],
       }
     }
@@ -536,7 +505,7 @@ export class WhatsAppBrain {
         return { reply: `${greeting()}! Aqui é a Alix, da ALETIS. Antes de continuar, como posso te chamar?` }
       }
       return {
-        reply: `Estou aqui${session.lead.nome ? ', ' + session.lead.nome.split(' ')[0] : ''}. Posso te ajudar com:\n\n- Estratégias pra renegociar sua dívida (${session.lead.credor || 'seu credor'})\n- Dúvidas sobre Plano Safra 2025/26, PRONAF, PRONAMP\n- Questões jurídicas (súmulas STJ, MCR, juros abusivos)\n- Dados de mercado (dólar, soja, selic, clima)\n\nO que você precisa agora?`,
+        reply: `Estou aqui${session.lead.nome ? ', ' + session.lead.nome.split(' ')[0] : ''}. Posso te ajudar com:\n\n- Estratégias pra renegociar sua dívida (${session.lead.credor || 'seu credor'})\n- Dúvidas sobre Plano Safra vigente, PRONAF, PRONAMP\n- Questões jurídicas (súmulas STJ, MCR, juros abusivos)\n- Dados de mercado (dólar, soja, selic, clima)\n\nO que você precisa agora?`,
       }
     }
 
@@ -560,13 +529,13 @@ export class WhatsAppBrain {
 
 O que a gente faz:
 - Análise jurídica e financeira do contrato de crédito rural
-- Aplicação de súmulas do STJ (603, 322, 288) contra juros abusivos e capitalização indevida
+- Conferência dos encargos contratuais e dos fundamentos aplicáveis à operação
 - Estratégias de alongamento, prorrogação e refinanciamento pelo Plano Safra (PRONAF, PRONAMP, empresarial)
 - Uso do PROAGRO para frustração de safra elegível
-- Classificação contábil pela Resolução 4966 (estágios ECL)
+- Organização das informações contábeis e da capacidade de pagamento
 - Negociação direta com o banco com base técnica, não apenas comercial
 
-Resultado típico: redução de 20% a 40% do valor total da dívida, prazos estendidos, parcelas compatíveis com o fluxo de caixa da propriedade.
+As alternativas e os resultados dependem dos documentos, das condições da operação e da análise do caso. Posso começar organizando essas informações com você.
 
 Quer que eu ${session.etapa === 'novo' ? 'comece uma análise do seu caso' : 'continue a análise do seu caso'}?`
   }
@@ -605,7 +574,7 @@ Posso ajudar com mais alguma coisa enquanto isso?`
     if (lead.cidade) linhas.push(`Local: ${lead.cidade}${lead.uf ? ' - ' + lead.uf : ''}`)
     if (lead.credor) linhas.push(`Credor: ${lead.credor}`)
     if (lead.valorDivida) {
-      const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(lead.valorDivida)
+      const fmt = formatValorBRL(lead.valorDivida)
       linhas.push(`Valor aprox.: ${fmt}`)
     }
     if (lead.urgencia && lead.urgencia !== 'baixa') linhas.push(`Urgência: ${lead.urgencia}${lead.motivoUrgencia ? ' - ' + lead.motivoUrgencia : ''}`)

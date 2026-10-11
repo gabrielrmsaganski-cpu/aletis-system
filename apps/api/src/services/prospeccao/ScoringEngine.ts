@@ -14,7 +14,8 @@ import type { LeadRaw, LeadScore, AreaEstimation } from './types'
  *   divida 30 + ajuizamento 15 + recencia 10 + agroMatch 10 +
  *   hectares 10 + velocity 10 + fitRegional 15 = 100
  *
- * Thresholds classificação: ≥75 quente · ≥55 morno · ≥35 frio · <35 reativo
+ * Bônus de convergência são limitados ao teto de 100 pontos.
+ * Thresholds classificação: ≥85 quente · ≥65 morno · ≥45 frio · <45 reativo
  */
 
 /**
@@ -49,6 +50,10 @@ const FIT_REGIONAL_LABEL: Record<string, string> = {
   PI: 'PI — agro relevante (raio ampliado)',
   RO: 'RO — agro relevante (raio ampliado)',
   PA: 'PA — agro relevante (raio ampliado)',
+}
+
+export function classifyLeadScore(total: number): LeadScore['classificacao'] {
+  return total >= 85 ? 'quente' : total >= 65 ? 'morno' : total >= 45 ? 'frio' : 'reativo'
 }
 
 export class ScoringEngine {
@@ -120,7 +125,9 @@ export class ScoringEngine {
     // 8. Multi-fonte bonus (Wave Prospecção 4) — lead que aparece em 2+ fontes
     // é infinitamente mais quente: PGFN + DOU = empresa cuja dívida ativa acabou
     // de virar RJ/falência. +15 pontos é suficiente para "fervendo".
-    const numSources = Array.isArray(lead.sources) ? lead.sources.length : 1
+    const numSources = Array.isArray(lead.sources)
+      ? new Set(lead.sources.map(source => typeof source === 'string' ? source : source.fonte).map(source => String(source || '').trim().toUpperCase()).filter(Boolean)).size
+      : 1
     let pMultiSource = 0
     let explicacaoMultiSource = ''
     if (numSources >= 3) {
@@ -136,13 +143,8 @@ export class ScoringEngine {
     const hasDouCrise = Array.isArray(lead.agroSignals) && lead.agroSignals.some(s => s.startsWith('DOU:'))
     const pDouCrise = hasDouCrise ? 10 : 0
 
-    const total = pDivida + pAjuiz + pRec + pAgro + pHa + pVel + pFit + pMultiSource + pDouCrise
-
-    let classificacao: LeadScore['classificacao']
-    if (total >= 85) classificacao = 'quente'
-    else if (total >= 65) classificacao = 'morno'
-    else if (total >= 45) classificacao = 'frio'
-    else classificacao = 'reativo'
+    const total = Math.min(100, pDivida + pAjuiz + pRec + pAgro + pHa + pVel + pFit + pMultiSource + pDouCrise)
+    const classificacao = classifyLeadScore(total)
 
     return {
       total,

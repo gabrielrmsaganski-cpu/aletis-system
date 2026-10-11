@@ -1,10 +1,11 @@
 // ============================================================
 // NarrativaModal — invoca o gerador LLM de narrativa do
-// diagnóstico (Claude Foundry) e exibe texto pronto para copiar.
+// diagnóstico por IA e exibe texto pronto para copiar.
 // ============================================================
 import { useState } from 'react'
 import { apiFetch } from '../../hooks/useApi'
-import { X, Sparkles, Copy, Check, Loader2 } from 'lucide-react'
+import { Sparkles, Copy, Check, Loader2 } from 'lucide-react'
+import AppDialog from '../ui/AppDialog'
 
 interface NarrativaResult {
   texto: string
@@ -57,27 +58,45 @@ export default function NarrativaModal({ grupoId, onClose }: Props) {
     setTimeout(() => setCopied(null), 2000)
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl">
-        <header className="px-5 py-4 border-b border-aletis-grafite-claro/15 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-aletis-verde" />
-            <div>
-              <p className="text-[10px] font-mono text-aletis-verde uppercase font-semibold">🤖 ALETÉIA · Narrativa LLM</p>
-              <h2 className="text-base font-display font-semibold text-aletis-grafite-escuro">Análise textual do diagnóstico</h2>
-            </div>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-aletis-grafite-escuro/5 flex items-center justify-center">
-            <X className="w-5 h-5 text-aletis-grafite-claro" />
-          </button>
-        </header>
+  const footer = result ? (
+    <>
+      <button onClick={() => setResult(null)} className="px-3 py-1.5 rounded-lg text-xs border border-aletis-grafite-claro/20 hover:bg-aletis-grafite-escuro/5">
+        Gerar com outro estilo
+      </button>
+      <button onClick={onClose} className="px-4 py-1.5 rounded-lg text-xs bg-aletis-verde text-white font-semibold hover:bg-aletis-verde-escuro">
+        Fechar
+      </button>
+    </>
+  ) : (
+    <>
+      <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs border border-aletis-grafite-claro/20 hover:bg-aletis-grafite-escuro/5">
+        Cancelar
+      </button>
+      <button
+        onClick={gerar}
+        disabled={loading}
+        className="px-4 py-1.5 rounded-lg text-xs bg-aletis-verde text-white font-semibold hover:bg-aletis-verde-escuro inline-flex items-center gap-1.5 disabled:opacity-50"
+      >
+        {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+        {loading ? 'Gerando…' : 'Gerar narrativa'}
+      </button>
+    </>
+  )
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+  return (
+    <AppDialog
+      title="Análise textual do diagnóstico"
+      eyebrow="ALIX · Narrativa"
+      icon={<Sparkles className="h-5 w-5" />}
+      onClose={onClose}
+      size="xl"
+      bodyClassName="space-y-4"
+      footer={<div className="flex items-center justify-end gap-2">{footer}</div>}
+    >
           {!result && (
             <>
               <div>
-                <p className="text-[11px] uppercase tracking-wider text-aletis-grafite-claro font-semibold mb-2">Escolha o estilo de escrita:</p>
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Escolha o estilo de escrita:</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {ESTILOS.map((e) => (
                     <button
@@ -91,7 +110,7 @@ export default function NarrativaModal({ grupoId, onClose }: Props) {
                       }`}
                     >
                       <p className="text-sm font-display font-semibold">{e.rotulo}</p>
-                      <p className="text-[11px] text-aletis-grafite-claro mt-0.5">{e.desc}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{e.desc}</p>
                     </button>
                   ))}
                 </div>
@@ -99,8 +118,8 @@ export default function NarrativaModal({ grupoId, onClose }: Props) {
 
               {error && <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700">{error}</div>}
 
-              <div className="text-[11px] text-aletis-grafite-claro bg-aletis-cream/30 rounded-lg p-3">
-                ⏱ Geração leva ~10-15 segundos. Custo aproximado: $0.02 por requisição (Sonnet 4.6).
+              <div className="text-[11px] text-muted-foreground bg-aletis-cream/30 rounded-lg p-3">
+                Geração leva aproximadamente 10-15 segundos.
               </div>
             </>
           )}
@@ -108,13 +127,13 @@ export default function NarrativaModal({ grupoId, onClose }: Props) {
           {result && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <p className="text-[10px] text-aletis-grafite-claro">
-                  Modelo: <strong>{result.modelo}</strong> · Tokens: in {result.tokensIn} / out {result.tokensOut}
+                <p className="text-[11px] text-muted-foreground">
+                  Processamento concluído · Tokens: in {result.tokensIn} / out {result.tokensOut}
                 </p>
                 <button
                   type="button"
                   onClick={() => copiar(result.texto, 'all')}
-                  className="px-2 py-1 rounded-lg text-[10px] font-body bg-aletis-verde/10 text-aletis-verde hover:bg-aletis-verde/20 inline-flex items-center gap-1"
+                  className="px-2 py-1 rounded-lg text-[11px] font-body bg-aletis-verde/10 text-foreground hover:bg-aletis-verde/20 inline-flex items-center gap-1"
                 >
                   {copied === 'all' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                   Copiar tudo
@@ -125,56 +144,27 @@ export default function NarrativaModal({ grupoId, onClose }: Props) {
                 Object.entries(result.secoes).map(([sec, texto]) => (
                   <section key={sec} className="card-premium p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-xs font-mono uppercase tracking-wider text-aletis-verde font-semibold">
+                      <h3 className="text-xs font-mono uppercase tracking-wider text-foreground font-semibold">
                         {sec.toUpperCase()}
                       </h3>
                       <button
                         type="button"
                         onClick={() => copiar(texto, sec)}
-                        className="px-2 py-0.5 rounded text-[10px] hover:bg-aletis-grafite-escuro/5 inline-flex items-center gap-1"
+                        className="px-2 py-0.5 rounded text-[11px] hover:bg-aletis-grafite-escuro/5 inline-flex items-center gap-1"
                       >
                         {copied === sec ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                       </button>
                     </div>
-                    <p className="text-xs font-body text-aletis-grafite-escuro leading-relaxed whitespace-pre-wrap">{texto}</p>
+                    <p className="text-xs font-body text-foreground leading-relaxed whitespace-pre-wrap">{texto}</p>
                   </section>
                 ))
               ) : (
-                <pre className="text-xs font-body text-aletis-grafite-escuro whitespace-pre-wrap leading-relaxed bg-aletis-cream/30 rounded-lg p-4">
+                <pre className="text-xs font-body text-foreground whitespace-pre-wrap leading-relaxed bg-aletis-cream/30 rounded-lg p-4">
                   {result.texto}
                 </pre>
               )}
             </div>
           )}
-        </div>
-
-        <footer className="px-5 py-3 border-t border-aletis-grafite-claro/15 bg-aletis-cream/20 flex items-center justify-end gap-2">
-          {result ? (
-            <>
-              <button onClick={() => setResult(null)} className="px-3 py-1.5 rounded-lg text-xs border border-aletis-grafite-claro/20 hover:bg-aletis-grafite-escuro/5">
-                Gerar com outro estilo
-              </button>
-              <button onClick={onClose} className="px-4 py-1.5 rounded-lg text-xs bg-aletis-verde text-white font-semibold hover:bg-aletis-verde-escuro">
-                Fechar
-              </button>
-            </>
-          ) : (
-            <>
-              <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs border border-aletis-grafite-claro/20 hover:bg-aletis-grafite-escuro/5">
-                Cancelar
-              </button>
-              <button
-                onClick={gerar}
-                disabled={loading}
-                className="px-4 py-1.5 rounded-lg text-xs bg-aletis-verde text-white font-semibold hover:bg-aletis-verde-escuro inline-flex items-center gap-1.5 disabled:opacity-50"
-              >
-                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                {loading ? 'Gerando…' : 'Gerar narrativa'}
-              </button>
-            </>
-          )}
-        </footer>
-      </div>
-    </div>
+    </AppDialog>
   )
 }

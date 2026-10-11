@@ -11,7 +11,7 @@ import { BookOpen, ArrowRight } from 'lucide-react'
 export const metadata: Metadata = {
   title: 'Glossário técnico — ALETIS',
   description:
-    'Os termos técnicos que aparecem na mesa ALETIS — explicados com a precisão necessária para você decidir.',
+    'Termos técnicos de crédito rural, negociação, mercado e gestão financeira explicados com a precisão necessária para decidir.',
   alternates: { canonical: 'https://aletis.com.br/glossario' },
 }
 
@@ -93,7 +93,7 @@ const TERMOS: Termo[] = [
     definicao:
       'Capitalização de juros sobre juros — a famosa "juros compostos" aplicada de forma a inflar a dívida sem amortização proporcional.',
     contexto:
-      'Vedado em diversos contratos de crédito rural (Súmula 93 STJ, Decreto-Lei 167/67). Quando bancos aplicam anatocismo em contrato rural, há tese sólida de revisão judicial. Mesa ALETIS revê todos contratos antes de qualquer negociação.',
+      'Vedado em diversos contratos de crédito rural (Súmula 93 STJ, Decreto-Lei 167/67). Quando bancos aplicam anatocismo em contrato rural, pode haver base para revisão judicial. ALETIS revisa os contratos antes de qualquer negociação.',
   },
   {
     termo: 'Funrural',
@@ -127,7 +127,7 @@ const TERMOS: Termo[] = [
     definicao:
       'Reorganização do passivo financeiro com objetivo de tornar honrável: novas condições de pagamento, descontos, prazos, garantias, conversão de moeda ou índice.',
     contexto:
-      'NÃO é "calote organizado" — é alinhamento entre capacidade real de pagamento e estrutura da dívida. Pode ser bilateral (1 credor) ou consolidada (vários credores numa mesa única). A mesa ALETIS conduz reestruturações de R$ 500k a R$ 50M+ com média de 47-62% de redução no saldo final.',
+      'NÃO é "calote organizado" — é alinhamento entre capacidade real de pagamento e estrutura da dívida. Pode ser bilateral (1 credor) ou consolidada (vários credores no mesmo plano). ALETIS organiza a leitura financeira, a sequência de abordagem e os documentos de apoio.',
     ondeAparece: { label: 'Calculadora de reestruturação', href: '/calculadoras/reestruturacao' },
   },
   {
@@ -146,7 +146,7 @@ const TERMOS: Termo[] = [
     definicao:
       'Imposto federal sobre propriedades rurais com base no Valor da Terra Nua. Cobrança anual via DITR (Declaração).',
     contexto:
-      'ITR atrasado bloqueia praticamente todas as operações rurais (CCIR, DAP, crédito). Regularização passa por declaração do exercício corrente + parcelamento das parcelas anteriores via PGFN. Mesa ALETIS coordena regularização ITR sempre antes de qualquer negociação financeira.',
+      'ITR atrasado bloqueia praticamente todas as operações rurais (CCIR, DAP, crédito). Regularização passa por declaração do exercício corrente + parcelamento das parcelas anteriores via PGFN. ALETIS trata esse ponto antes da negociação financeira.',
   },
   {
     termo: 'Súmula 93 STJ',
@@ -196,8 +196,8 @@ export default function GlossarioPage() {
     <>
       <PageHeader
         eyebrow="Glossário"
-        titulo="Os termos técnicos que aparecem na mesa, explicados"
-        subtitulo="DSCR, basis, Súmula 596, descaracterização, Pronamp, Funrural — quando algo entra em discussão na ALETIS, queremos que você fale a mesma língua. Aqui está o vocabulário."
+        titulo="Termos técnicos, sem dialeto"
+        subtitulo="DSCR, basis, Súmula 596, descaracterização, Pronamp, Funrural — quando algo entra em discussão financeira, queremos que você entenda o que está em jogo."
       />
 
       <Section tone="cream">

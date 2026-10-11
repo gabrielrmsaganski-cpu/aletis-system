@@ -42,9 +42,9 @@ function n(v: unknown): number {
 }
 
 const CATEGORIA_META: Record<string, { rotulo: string; cor: string }> = {
-  banca: { rotulo: 'Dívida Bancária', cor: '#0F4C35' },
-  fornecedor: { rotulo: 'Fornecedores', cor: '#D4A574' },
-  fiscal: { rotulo: 'Fiscal (PGFN/RFB)', cor: '#A0392F' },
+  banca: { rotulo: 'Dívida Bancária', cor: '#17251b' },
+  fornecedor: { rotulo: 'Fornecedores', cor: '#e3bd80' },
+  fiscal: { rotulo: 'Fiscal (PGFN/RFB)', cor: '#a83232' },
   trabalhista: { rotulo: 'Trabalhista', cor: '#7B5B30' },
   arrendamento: { rotulo: 'Arrendamento', cor: '#5A8A6E' },
   investimento: { rotulo: 'Investimentos a Realizar', cor: '#6B7280' },

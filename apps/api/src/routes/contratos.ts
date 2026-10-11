@@ -10,14 +10,26 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import {
   contratoGenerator,
   type DadosContrato,
-  type ContratoGerado,
   type TipoContrato,
 } from '../services/ContratoGenerator.js'
 import { generateContratoPdf } from '../services/PdfGenerator.js'
+import { generatedContractPersistence } from '../db/GeneratedContractRepository.js'
+import {
+  GeneratedContractCatalog,
+  GeneratedContractOriginError,
+  contractOriginSchema,
+} from '../services/contratos/GeneratedContractCatalog.js'
+import { contractGenerationRequestSchema } from '../services/contratos/ContractGenerationValidation.js'
 
-const contratos: Map<string, ContratoGerado> = new Map()
+function persistenceFailure(request: FastifyRequest, reply: FastifyReply, error: unknown) {
+  // Não inclui payloads contratuais nem parâmetros da consulta no log.
+  const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined
+  request.log.error({ code }, '[contratos] Falha de persistência do catálogo')
+  return reply.status(503).send({ success: false, error: 'Não foi possível acessar o catálogo de contratos. Tente novamente.' })
+}
 
 export default async function (fastify: FastifyInstance) {
+  const contratos = new GeneratedContractCatalog(generatedContractPersistence)
   /* ---- LIST TIPOS DISPONÍVEIS ---- */
   fastify.get('/api/contratos/tipos', async () => {
     const data = contratoGenerator.listarTipos()
@@ -29,9 +41,14 @@ export default async function (fastify: FastifyInstance) {
   })
 
   /* ---- LIST CONTRATOS GERADOS ---- */
-  fastify.get('/api/contratos', async (request: FastifyRequest) => {
+  fastify.get('/api/contratos', async (request: FastifyRequest, reply: FastifyReply) => {
     const { tipo } = request.query as { tipo?: TipoContrato }
-    let items = Array.from(contratos.values())
+    let items
+    try {
+      items = await contratos.list()
+    } catch (error) {
+      return persistenceFailure(request, reply, error)
+    }
     if (tipo) items = items.filter((c) => c.tipo === tipo)
 
     return {
@@ -44,6 +61,9 @@ export default async function (fastify: FastifyInstance) {
         partes: c.partes,
         valorTotal: c.valorTotal,
         dataVencimentoOrVigencia: c.dataVencimentoOrVigencia,
+        clienteId: c.clienteId,
+        propostaId: c.propostaId,
+        documento: c.documento,
       })),
       total: items.length,
     }
@@ -52,7 +72,12 @@ export default async function (fastify: FastifyInstance) {
   /* ---- GET CONTRATO ---- */
   fastify.get('/api/contratos/:id', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string }
-    const contrato = contratos.get(id)
+    let contrato
+    try {
+      contrato = await contratos.get(id)
+    } catch (error) {
+      return persistenceFailure(request, reply, error)
+    }
     if (!contrato) {
       reply.status(404)
       return { success: false, error: 'Contrato não encontrado' }
@@ -62,80 +87,49 @@ export default async function (fastify: FastifyInstance) {
 
   /* ---- GERAR CONTRATO ---- */
   fastify.post('/api/contratos/gerar', async (request: FastifyRequest, reply: FastifyReply) => {
-    const body = request.body as DadosContrato
-
-    // Validações mínimas
-    const errors: string[] = []
-    if (!body.tipo) errors.push('tipo é obrigatório')
-    if (!body.devedor) errors.push('devedor é obrigatório')
-    if (!body.credor) errors.push('credor é obrigatório')
-    if (!body.local) errors.push('local é obrigatório')
-    if (!body.uf) errors.push('uf é obrigatório')
-    if (body.devedor && !body.devedor.nomeCompleto) errors.push('devedor.nomeCompleto é obrigatório')
-    if (body.devedor && !body.devedor.cpfCnpj) errors.push('devedor.cpfCnpj é obrigatório')
-    if (body.credor && !body.credor.nomeCompleto) errors.push('credor.nomeCompleto é obrigatório')
-    if (body.credor && !body.credor.cpfCnpj) errors.push('credor.cpfCnpj é obrigatório')
-
-    const tiposValidos: TipoContrato[] = [
-      'cpr_financeira',
-      'cpr_fisica',
-      'confissao_divida',
-      'termo_renegociacao',
-      'acordo_extrajudicial',
-      'transacao_excepcional',
-      'prestacao_servicos_aletis',
-    ]
-    if (body.tipo && !tiposValidos.includes(body.tipo)) {
-      errors.push(`tipo inválido. Aceitos: ${tiposValidos.join(', ')}`)
+    const parsed = contractGenerationRequestSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Erro de validação', detalhes: parsed.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`) })
     }
+    const body = parsed.data as unknown as DadosContrato
 
-    // Validação extra para contrato de prestação de serviços ALETIS
-    if (body.tipo === 'prestacao_servicos_aletis') {
-      if (!body.servicos) {
-        errors.push('servicos é obrigatório para tipo prestacao_servicos_aletis')
-      } else {
-        if (!body.servicos.modeloHonorarios) {
-          errors.push('servicos.modeloHonorarios é obrigatório')
-        }
-        if (!body.servicos.prazoVigenciaMeses || body.servicos.prazoVigenciaMeses < 1) {
-          errors.push('servicos.prazoVigenciaMeses deve ser >= 1')
-        }
-        if (!body.servicos.escopo) {
-          errors.push('servicos.escopo é obrigatório')
-        }
-      }
-    }
-
-    if (errors.length > 0) {
-      reply.status(400)
-      return { success: false, error: 'Erro de validação', detalhes: errors }
+    let generated
+    try {
+      generated = contratoGenerator.gerar(body)
+    } catch {
+      request.log.error('[contratos] Falha na geração do conteúdo contratual')
+      return reply.status(500).send({ success: false, error: 'Erro ao gerar contrato. Confira os dados informados.' })
     }
 
     try {
-      const contrato = contratoGenerator.gerar(body)
-      contratos.set(contrato.id, contrato)
+      const contrato = await contratos.create(generated, contractOriginSchema.parse(parsed.data))
 
       reply.status(201)
       return {
         success: true,
         data: contrato,
         meta: {
-          pdfUrl: `/api/contratos/${contrato.id}/pdf`,
+          pdfUrl: contrato.documento.pdfUrl,
           clausulas: contrato.metadados.clausulas,
         },
       }
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Erro desconhecido'
-      console.error('[Contrato] Falha na geração:', msg)
-      reply.status(500)
-      return { success: false, error: `Erro ao gerar contrato: ${msg}` }
+      if (error instanceof GeneratedContractOriginError) {
+        return reply.status(400).send({ success: false, error: error.message })
+      }
+      return persistenceFailure(request, reply, error)
     }
   })
 
   /* ---- GET MARKDOWN ---- */
   fastify.get('/api/contratos/:id/markdown', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string }
-    const contrato = contratos.get(id)
+    let contrato
+    try {
+      contrato = await contratos.get(id)
+    } catch (error) {
+      return persistenceFailure(request, reply, error)
+    }
     if (!contrato) {
       reply.status(404)
       return { success: false, error: 'Contrato não encontrado' }
@@ -147,7 +141,12 @@ export default async function (fastify: FastifyInstance) {
   /* ---- GET PDF ---- */
   fastify.get('/api/contratos/:id/pdf', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string }
-    const contrato = contratos.get(id)
+    let contrato
+    try {
+      contrato = await contratos.get(id)
+    } catch (error) {
+      return persistenceFailure(request, reply, error)
+    }
     if (!contrato) {
       reply.status(404)
       return { success: false, error: 'Contrato não encontrado' }
@@ -170,18 +169,22 @@ export default async function (fastify: FastifyInstance) {
         .header('Content-Disposition', `inline; filename="${contrato.id}.pdf"`)
         .header('Content-Length', pdfBuffer.length)
         .send(pdfBuffer)
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Erro desconhecido'
-      console.error(`[Contrato PDF] Falha ao gerar PDF para ${id}:`, msg)
+    } catch {
+      request.log.error({ contratoId: id }, '[contratos] Falha ao renderizar PDF')
       reply.status(500)
-      return { success: false, error: `Erro ao gerar PDF: ${msg}` }
+      return { success: false, error: 'Erro ao gerar PDF. O contrato permanece salvo no catálogo.' }
     }
   })
 
   /* ---- DELETE ---- */
   fastify.delete('/api/contratos/:id', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string }
-    const existia = contratos.delete(id)
+    let existia
+    try {
+      existia = await contratos.delete(id)
+    } catch (error) {
+      return persistenceFailure(request, reply, error)
+    }
     if (!existia) {
       reply.status(404)
       return { success: false, error: 'Contrato não encontrado' }

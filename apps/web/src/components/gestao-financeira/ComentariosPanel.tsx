@@ -99,15 +99,15 @@ export default function ComentariosPanel({ grupoId }: Props) {
       <div className="card-premium p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-aletis-verde" />
+            <MessageSquare className="w-5 h-5 text-foreground" />
             <div>
-              <h3 className="text-sm font-display font-semibold text-aletis-grafite-escuro">Comentários colaborativos</h3>
-              <p className="text-[10px] text-aletis-grafite-claro">
+              <h3 className="text-sm font-display font-semibold text-foreground">Comentários colaborativos</h3>
+              <p className="text-[11px] text-muted-foreground">
                 {threads.length} threads · {threads.reduce((a, t) => a + 1 + t.respostas.length, 0)} mensagens · {threads.filter((t) => !t.resolvido).length} não-resolvidas
               </p>
             </div>
           </div>
-          <button onClick={load} disabled={loading} className="px-2 py-1 rounded-lg text-aletis-grafite-claro hover:bg-aletis-grafite-escuro/5">
+          <button onClick={load} disabled={loading} className="px-2 py-1 rounded-lg text-muted-foreground hover:bg-aletis-grafite-escuro/5">
             <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
@@ -152,7 +152,7 @@ export default function ComentariosPanel({ grupoId }: Props) {
         {threads.length === 0 ? (
           <div className="rounded-lg border border-dashed border-aletis-grafite-claro/30 p-8 text-center bg-aletis-cream/20">
             <MessageSquare className="w-6 h-6 text-aletis-grafite-claro/40 mx-auto mb-2" />
-            <p className="text-xs text-aletis-grafite-claro">Nenhum comentário ainda. Comece a colaboração acima.</p>
+            <p className="text-xs text-muted-foreground">Nenhum comentário ainda. Comece a colaboração acima.</p>
           </div>
         ) : (
           threads.map((t) => (
@@ -214,13 +214,13 @@ function ThreadCard({
             <button
               onClick={() => { onReply(thread.id, respostaTexto); }}
               disabled={!respostaTexto.trim()}
-              className="px-2 py-1.5 rounded bg-aletis-verde text-white text-[10px] font-semibold disabled:opacity-50"
+              className="px-2 py-1.5 rounded bg-aletis-verde text-white text-[11px] font-semibold disabled:opacity-50"
             >
               <Send className="w-3 h-3" />
             </button>
             <button
               onClick={() => { setRespondendoA(null); setRespostaTexto('') }}
-              className="px-2 py-1.5 rounded text-[10px] text-aletis-grafite-claro hover:bg-aletis-grafite-escuro/5"
+              className="px-2 py-1.5 rounded text-[11px] text-muted-foreground hover:bg-aletis-grafite-escuro/5"
             >
               Cancelar
             </button>
@@ -228,7 +228,7 @@ function ThreadCard({
         ) : (
           <button
             onClick={() => setRespondendoA(thread.id)}
-            className="text-[10px] text-aletis-verde hover:underline inline-flex items-center gap-1"
+            className="text-[11px] text-foreground hover:underline inline-flex items-center gap-1"
           >
             <Reply className="w-3 h-3" /> Responder
           </button>
@@ -241,27 +241,27 @@ function ThreadCard({
 function CommentRow({ c, onResolve, onDelete }: { c: Comentario; onResolve: (id: string, r: boolean) => void; onDelete: (id: string) => void }) {
   return (
     <div className="flex items-start gap-2">
-      <div className="w-7 h-7 rounded-full bg-aletis-verde/10 text-aletis-verde flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+      <div className="w-7 h-7 rounded-full bg-aletis-verde/10 text-foreground flex items-center justify-center text-[11px] font-bold flex-shrink-0">
         {(c.autorNome ?? c.autor ?? '?').slice(0, 2).toUpperCase()}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 flex-wrap">
           <span className="text-xs font-body font-semibold">{c.autorNome ?? c.autor ?? 'Anônimo'}</span>
-          <span className="text-[10px] font-mono text-aletis-grafite-claro">📌 {c.entidade}</span>
-          {c.resolvido && <span className="text-[10px] text-aletis-verde font-semibold">✓ resolvido</span>}
-          <span className="text-[10px] text-aletis-grafite-claro ml-auto">{new Date(c.criadoEm).toLocaleString('pt-BR')}</span>
+          <span className="text-[11px] font-mono text-muted-foreground">📌 {c.entidade}</span>
+          {c.resolvido && <span className="text-[11px] text-foreground font-semibold">✓ resolvido</span>}
+          <span className="text-[11px] text-muted-foreground ml-auto">{new Date(c.criadoEm).toLocaleString('pt-BR')}</span>
         </div>
-        <p className="text-xs font-body text-aletis-grafite-escuro mt-0.5 whitespace-pre-wrap">{c.conteudo}</p>
+        <p className="text-xs font-body text-foreground mt-0.5 whitespace-pre-wrap">{c.conteudo}</p>
         <div className="flex items-center gap-2 mt-1">
           <button
             onClick={() => onResolve(c.id, !c.resolvido)}
-            className="text-[9px] text-aletis-grafite-claro hover:text-aletis-verde inline-flex items-center gap-0.5"
+            className="text-[11px] text-muted-foreground hover:text-aletis-verde inline-flex items-center gap-0.5"
           >
             <CheckCircle2 className="w-3 h-3" /> {c.resolvido ? 'Reabrir' : 'Resolver'}
           </button>
           <button
             onClick={() => onDelete(c.id)}
-            className="text-[9px] text-aletis-grafite-claro hover:text-red-600 inline-flex items-center gap-0.5"
+            className="text-[11px] text-muted-foreground hover:text-red-600 inline-flex items-center gap-0.5"
           >
             <Trash2 className="w-3 h-3" /> Excluir
           </button>

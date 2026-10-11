@@ -1,5 +1,5 @@
 // ============================================================
-// LlmDocExtractor — fallback Haiku-vision para docs não classificados
+// LlmDocExtractor - fallback multimodal OpenAI para docs nao classificados
 // ============================================================
 // Quando o AgroDocClassifier (regex-based) não consegue identificar o tipo
 // do documento ou a confiança é baixa (<0.5), e temos imagem/PDF como
@@ -8,10 +8,11 @@
 // Modelo: Haiku (rápido + barato) com vision via `image_base64`.
 // Saída: mesma shape do AgroDocClassification para plug-and-play.
 // ============================================================
-import { runClaude, isLLMEnabled } from '../../llm/ClaudeFoundryClient.js'
+import { generateStructured, isOpenAIEnabled } from '../../llm/OpenAIClient.js'
+import { getModelForRole } from '../../llm/LLMConfig.js'
 import type { AgroDocClassification } from './AgroDocClassifier.js'
 
-const MODEL = process.env.ALIX_DOC_EXTRACTOR_MODEL || 'claude-haiku-4-5'
+const MODEL = getModelForRole('doc_extractor')
 
 const SYSTEM_PROMPT = `Você é um extrator de documentos agro-financeiros brasileiros. Receberá uma imagem/página de documento e deve identificar o tipo e extrair campos estruturados.
 
@@ -30,7 +31,7 @@ Responda SOMENTE com um JSON válido no formato:
     "numeroDocumento": "string opcional",
     "emissor": "string opcional (banco, cartório, órgão)",
     "area_ha": number opcional,
-    "outros": { "...": "..." }
+    "outros": [{"campo":"string","valor":"string"}]
   },
   "indicadores": ["lista", "de", "palavras-chave", "identificadas"]
 }
@@ -42,7 +43,7 @@ export async function extractDocViaLlm(params: {
   imageMediaType: string
   textContext?: string
 }): Promise<AgroDocClassification | null> {
-  if (!isLLMEnabled()) return null
+  if (!isOpenAIEnabled()) return null
   try {
     const messages = [
       {
@@ -65,18 +66,45 @@ export async function extractDocViaLlm(params: {
         ] as any,
       },
     ]
-    const result = await runClaude(messages as any, {
+    const result = await generateStructured<{
+      tipo: AgroDocClassification['tipo']
+      confianca: number
+      camposExtraidos: Record<string, unknown> & { outros?: Array<{ campo: string; valor: string }> }
+      indicadores: string[]
+    }>(messages as any, {
+      name: 'classificacao_agro_documento',
+      schema: {
+        type: 'object',
+        properties: {
+          tipo: { type: 'string', enum: ['CCIR', 'CAR', 'MATRICULA', 'EXTRATO_BANCARIO', 'CONTRATO_CREDITO_RURAL', 'DAP', 'NFE_PRODUTOR', 'LAUDO_TECNICO', 'RG', 'CPF_CNPJ_CARD', 'COMPROVANTE_RESIDENCIA', 'COMPROVANTE_RENDA', 'OUTRO'] },
+          confianca: { type: 'number', minimum: 0, maximum: 1 },
+          camposExtraidos: {
+            type: 'object',
+            properties: {
+              nome: { type: 'string' }, cpfCnpj: { type: 'string' }, endereco: { type: 'string' },
+              valorTotal: { type: 'number' }, dataEmissao: { type: 'string' }, numeroDocumento: { type: 'string' },
+              emissor: { type: 'string' }, area_ha: { type: 'number' },
+              outros: { type: 'array', items: { type: 'object', properties: { campo: { type: 'string' }, valor: { type: 'string' } }, required: ['campo', 'valor'] } },
+            },
+          },
+          indicadores: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['tipo', 'confianca', 'camposExtraidos', 'indicadores'],
+      },
       model: MODEL,
-      maxTokens: 1000,
+      maxTokens: 1_200,
       system: SYSTEM_PROMPT,
+      reasoning: { effort: 'low' },
     })
-    // Remove cercas de código caso venham
-    const raw = result.text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '')
-    const parsed = JSON.parse(raw) as Partial<AgroDocClassification>
+    const parsed = result.data
+    const { outros = [], ...knownFields } = parsed.camposExtraidos || {}
     return {
       tipo: (parsed.tipo || 'OUTRO') as AgroDocClassification['tipo'],
       confianca: Number(parsed.confianca || 0.6),
-      camposExtraidos: parsed.camposExtraidos || {},
+      camposExtraidos: {
+        ...knownFields,
+        ...Object.fromEntries(outros.map((item) => [item.campo, item.valor])),
+      },
       indicadores: Array.isArray(parsed.indicadores) ? parsed.indicadores : [],
     }
   } catch (err) {

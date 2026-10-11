@@ -5,7 +5,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '../../hooks/useApi'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { X, Thermometer } from 'lucide-react'
+import { Thermometer } from 'lucide-react'
+import AppDialog from '../ui/AppDialog'
 
 interface StressResult {
   deltaPrecoPct: number
@@ -55,22 +56,14 @@ export default function StressTestModal({ grupoId, onClose }: Props) {
   })) ?? []
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
-        <header className="px-5 py-4 border-b border-aletis-grafite-claro/15 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Thermometer className="w-5 h-5 text-amber-600" />
-            <div>
-              <h2 className="text-base font-display font-semibold text-aletis-grafite-escuro">Stress Test</h2>
-              <p className="text-[11px] text-aletis-grafite-claro">Simule queda de preço × rendimento e veja impacto na receita/EBITDA</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-aletis-grafite-escuro/5 flex items-center justify-center">
-            <X className="w-5 h-5 text-aletis-grafite-claro" />
-          </button>
-        </header>
-
-        <div className="p-4 space-y-4">
+    <AppDialog
+      title="Stress Test"
+      subtitle="Simule queda de preço x rendimento e veja impacto na receita/EBITDA"
+      icon={<Thermometer className="h-5 w-5" />}
+      onClose={onClose}
+      size="xl"
+      bodyClassName="space-y-4"
+    >
           {/* Sliders */}
           <div className="grid grid-cols-2 gap-4 p-4 bg-aletis-cream/30 rounded-lg">
             <SliderField label="Delta de preço" value={deltaPreco} onChange={setDeltaPreco} min={-50} max={50} step={1} />
@@ -94,26 +87,24 @@ export default function StressTestModal({ grupoId, onClose }: Props) {
           {/* Chart por safra */}
           {chartData.length > 0 && (
             <div className="card-premium p-3">
-              <h4 className="text-xs font-display font-semibold text-aletis-grafite-escuro mb-2">📊 Comparação por safra</h4>
+              <h4 className="text-xs font-display font-semibold text-foreground mb-2">📊 Comparação por safra</h4>
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={chartData}>
                   <XAxis dataKey="safra" tick={{ fontSize: 10 }} />
                   <YAxis tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} tick={{ fontSize: 10 }} />
                   <Tooltip formatter={(v: any) => fmtBRL(v as number)} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="Receita_Original" fill="#0F4C35" />
-                  <Bar dataKey="Receita_Stress" fill="#A0392F" />
-                  <Bar dataKey="EBITDA_Original" fill="#D4A574" />
+                  <Bar dataKey="Receita_Original" fill="#17251b" />
+                  <Bar dataKey="Receita_Stress" fill="#a83232" />
+                  <Bar dataKey="EBITDA_Original" fill="#e3bd80" />
                   <Bar dataKey="EBITDA_Stress" fill="#7B5B30" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           )}
 
-          {loading && <p className="text-[11px] text-aletis-grafite-claro text-center">⏳ recalculando…</p>}
-        </div>
-      </div>
-    </div>
+          {loading && <p className="text-[11px] text-muted-foreground text-center">⏳ recalculando…</p>}
+    </AppDialog>
   )
 }
 
@@ -121,8 +112,8 @@ function SliderField({ label, value, onChange, min, max, step }: { label: string
   return (
     <div>
       <div className="flex items-baseline justify-between">
-        <label className="text-[11px] uppercase tracking-wider text-aletis-grafite-claro font-semibold">{label}</label>
-        <span className={`text-sm font-display font-bold tabular-nums ${value < 0 ? 'text-red-600' : value > 0 ? 'text-aletis-verde' : ''}`}>
+        <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</label>
+        <span className={`text-sm font-display font-semibold tabular-nums ${value < 0 ? 'text-red-600' : value > 0 ? 'text-foreground' : ''}`}>
           {value > 0 ? '+' : ''}{value}%
         </span>
       </div>
@@ -143,8 +134,8 @@ function Kpi({ label, value, tone }: { label: string; value: string; tone?: 'goo
   const cls = tone === 'good' ? 'border-l-aletis-verde' : tone === 'bad' ? 'border-l-red-500' : 'border-l-aletis-grafite-claro/30'
   return (
     <div className={`card-premium p-2 border-l-4 ${cls}`}>
-      <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-claro">{label}</p>
-      <p className="text-sm font-display font-bold tabular-nums">{value}</p>
+      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="text-sm font-display font-semibold tabular-nums">{value}</p>
     </div>
   )
 }

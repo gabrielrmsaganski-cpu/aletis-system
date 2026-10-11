@@ -1,16 +1,14 @@
 /**
- * Layout (Estrutura Principal) — v2.
+ * Layout (Estrutura Principal) — v3.
  *
  * Envolve todas as páginas autenticadas com sidebar lateral (colapsável
- * no desktop, drawer no mobile), header superior, e hospeda a paleta
- * de comandos global (⌘K / Ctrl+K).
+ * no desktop, drawer animado no mobile), header superior com auto-hide,
+ * e hospeda a paleta de comandos global (⌘K / Ctrl+K).
  *
- * Dispatchers disponíveis para qualquer página abrir a paleta:
- *   - atalho global ⌘K / Ctrl+K
- *   - window.dispatchEvent(new Event('aletis:palette:open'))
- *   - botões/links internos podem chamar a callback via prop drilling futuro
+ * Integra AnimatedRoutes para transições suaves entre páginas.
  */
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import CommandPalette from '../ui/CommandPalette'
@@ -18,6 +16,9 @@ import BrandFooter from '../ui/BrandFooter'
 import { ToastContainer } from '../Toast'
 import { useToast } from '../../hooks/useToast'
 import { useInsightsStream, type ProactiveInsight } from '../../hooks/useInsightsStream'
+import AnimatedRoutes from '../../motion/AnimatedRoutes'
+import { WorkspaceFocusContext } from '../../contexts/WorkspaceFocusContext'
+import { rememberToolVisit } from '../../hooks/useNavigationPreferences'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -35,26 +36,33 @@ function loadSidebarCollapsed(): boolean {
 }
 
 export default function Layout({ children }: LayoutProps) {
+  const location = useLocation()
+  const [focused, setFocused] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(loadSidebarCollapsed)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const alixPage = location.pathname === '/ia'
+  const alixFocus = focused && alixPage
+  const effectiveSidebarCollapsed = focused || sidebarCollapsed
+
+  useEffect(() => { setFocused(false) }, [location.pathname])
+  useEffect(() => { rememberToolVisit(location.pathname, location.search) }, [location.pathname, location.search])
 
   // ── Wave B5: toast em tempo real para novos insights da ALIX ──
   const toastApi = useToast(7000)
   const seenIdsRef = useRef<Set<string>>(new Set())
   useInsightsStream((insight: ProactiveInsight) => {
-    // dedupe por id (evita duplicar se SSE reconectar e re-emitir)
     if (seenIdsRef.current.has(insight.id)) return
     seenIdsRef.current.add(insight.id)
-    // só mostra urgências altas — info ficaria barulhento
     if (insight.urgencia === 'critico') {
-      toastApi.show(`🔴 ${insight.titulo}`, 'error')
+      toastApi.show(`Crítico: ${insight.titulo}`, 'error')
     } else if (insight.urgencia === 'importante') {
-      toastApi.show(`🟡 ${insight.titulo}`, 'warning')
+      toastApi.show(`Importante: ${insight.titulo}`, 'warning')
     }
   })
 
   const toggleSidebar = useCallback(() => {
+    if (focused) { setFocused(false); return }
     setSidebarCollapsed((prev) => {
       const next = !prev
       try {
@@ -64,7 +72,7 @@ export default function Layout({ children }: LayoutProps) {
       }
       return next
     })
-  }, [])
+  }, [focused])
 
   const toggleMobileMenu = useCallback(() => {
     setMobileOpen((prev) => !prev)
@@ -97,43 +105,42 @@ export default function Layout({ children }: LayoutProps) {
   }, [])
 
   return (
-    <div className="min-h-screen bg-aletis-cream dark:bg-aletis-verde-escuro">
-      <Sidebar
-        collapsed={sidebarCollapsed}
+    <WorkspaceFocusContext.Provider value={{ focused, setFocused }}>
+    <div className="app-shell" data-collapsed={effectiveSidebarCollapsed} data-focus={alixFocus}>
+      <a href="#main-content" className="sr-only z-[120] rounded-lg bg-aletis-verde px-4 py-3 text-white focus:not-sr-only focus:fixed focus:left-3 focus:top-3">Ir para o conteúdo</a>
+      {!alixFocus && <Sidebar
+        collapsed={effectiveSidebarCollapsed}
         onToggle={toggleSidebar}
         mobileOpen={mobileOpen}
         onMobileClose={closeMobileMenu}
         onOpenPalette={openPalette}
-      />
+      />}
 
-      <div
-        className={`
-          flex flex-col min-h-screen
-          transition-all duration-300 ease-in-out
-          ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-[272px]'}
-        `}
-      >
-        <Header
+      <div className="app-frame">
+        {!alixFocus && <Header
           onMobileMenuToggle={toggleMobileMenu}
           onOpenPalette={openPalette}
-        />
+        />}
 
         <main
-          className="flex-1 p-4 lg:p-6 xl:p-8 overflow-x-hidden"
+          className={`app-main ${alixPage ? 'app-main--alix' : ''}`}
           role="main"
           id="main-content"
         >
-          <div className="max-w-[1600px] mx-auto animate-fade-in">
-            {children}
+          <div className={alixPage ? 'w-full min-w-0' : 'app-content'}>
+            <AnimatedRoutes>
+              {children}
+            </AnimatedRoutes>
           </div>
         </main>
 
-        {/* Rodapé global de marca — assinatura ALETIS no fim de cada página */}
-        <BrandFooter />
+        {/* Rodapé global de marca */}
+        {!focused && !alixPage && <BrandFooter />}
       </div>
 
       <CommandPalette open={paletteOpen} onClose={closePalette} />
       <ToastContainer toasts={toastApi.toasts} onDismiss={toastApi.dismiss} />
     </div>
+    </WorkspaceFocusContext.Provider>
   )
 }

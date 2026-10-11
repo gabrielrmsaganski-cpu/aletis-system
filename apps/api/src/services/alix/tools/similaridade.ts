@@ -8,7 +8,7 @@
 // Quando houver cliente com desfecho (aceitou/rejeitou/em-negociação),
 // devolve o desfecho como precedente.
 // ============================================================
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 import { getProspeccaoService } from '../../prospeccao/ProspeccaoService.js'
 import { alixGetClientes } from '../../AlixService.js'
 
@@ -61,9 +61,9 @@ function jaccard(a: Set<string>, b: Set<string>): number {
   return union > 0 ? inter / union : 0
 }
 
-export function buildSimilaridadeTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildSimilaridadeTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   tools.push({
     name: 'casos_similares',

@@ -15,7 +15,7 @@
 import { mkdirSync } from 'fs'
 import { appendFile } from 'fs/promises'
 import { join } from 'path'
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 import { getProactiveService } from '../ProactiveService.js'
 import { getProspeccaoService } from '../../prospeccao/ProspeccaoService.js'
 
@@ -49,9 +49,9 @@ async function appendResponse(resp: InsightResponse): Promise<void> {
   }
 }
 
-export function buildProactiveInsightsTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildProactiveInsightsTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   // ── listar_insights_pendentes ─────────────────────────────
   tools.push({

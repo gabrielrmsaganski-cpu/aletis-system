@@ -3,7 +3,7 @@
 // e parse server-side
 // ============================================================
 import { useState } from 'react'
-import { X, Upload, Check, AlertTriangle, Loader2 } from 'lucide-react'
+import { X, Upload, Check, AlertTriangle, Loader2, FileSpreadsheet } from 'lucide-react'
 
 interface Props {
   grupoId: string
@@ -14,9 +14,25 @@ interface Props {
 export default function ImportXlsmModal({ grupoId, onClose, onSuccess }: Props) {
   const [file, setFile] = useState<File | null>(null)
   const [versao, setVersao] = useState<'v1' | 'v2'>('v2')
+  const [replaceExisting, setReplaceExisting] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState<any | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const counters = result?.imported
+    ? [
+        ['Membros', result.imported.membros],
+        ['Culturas', result.imported.culturas],
+        ['Contratos', result.imported.contratos],
+        ['Custos', result.imported.custos],
+        ['Fazendas', result.imported.fazendas],
+        ['Demandas', result.imported.demandas],
+        ['Ativos extras', result.imported.ativosOutros],
+        ['Passivos extras', result.imported.passivosOutros],
+        ['Garantias', result.imported.garantias],
+        ['Premissas', result.imported.premissas],
+      ]
+    : []
 
   async function upload() {
     if (!file) return
@@ -25,7 +41,11 @@ export default function ImportXlsmModal({ grupoId, onClose, onSuccess }: Props) 
     try {
       const fd = new FormData()
       fd.append('file', file)
-      const resp = await fetch(`/api/gestao-financeira/grupos/${encodeURIComponent(grupoId)}/import-xlsm?versao=${versao}`, {
+      const params = new URLSearchParams({
+        versao,
+        replaceExisting: replaceExisting ? '1' : '0',
+      })
+      const resp = await fetch(`/api/gestao-financeira/grupos/${encodeURIComponent(grupoId)}/import-xlsm?${params.toString()}`, {
         method: 'POST',
         body: fd,
       })
@@ -43,24 +63,27 @@ export default function ImportXlsmModal({ grupoId, onClose, onSuccess }: Props) 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl">
+      <div className="bg-card rounded-lg w-full max-w-2xl shadow-2xl">
         <header className="px-5 py-4 border-b border-aletis-grafite-claro/15 flex items-center justify-between">
           <div>
-            <h2 className="text-base font-display font-semibold text-aletis-grafite-escuro">📤 Importar R.OP.001 .xlsm</h2>
-            <p className="text-[11px] text-aletis-grafite-claro">Upload do diagnóstico preenchido pelo cliente</p>
+            <h2 className="text-base font-display font-semibold text-foreground inline-flex items-center gap-2">
+              <FileSpreadsheet className="w-4 h-4 text-foreground" />
+              Importar R.OP.001 .xlsm
+            </h2>
+            <p className="text-[11px] text-muted-foreground">Upload do diagnóstico preenchido pelo cliente</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-aletis-grafite-escuro/5 flex items-center justify-center">
-            <X className="w-5 h-5 text-aletis-grafite-claro" />
+            <X className="w-5 h-5 text-muted-foreground" />
           </button>
         </header>
 
         <div className="p-5 space-y-4">
           <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-[11px] text-amber-900">
-            <strong>Atenção:</strong> os dados serão somados aos existentes (não há replace). Para começar do zero, delete o grupo antes de importar.
+            <strong>Atenção:</strong> por padrão esta importação substitui os dados operacionais do grupo antes de carregar a planilha. Desmarque essa opção apenas para somar dados complementares.
           </div>
 
           <div>
-            <label className="text-[11px] uppercase tracking-wider text-aletis-grafite-claro font-semibold">Versão da planilha</label>
+            <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Versão da planilha</label>
             <div className="flex gap-2 mt-1">
               {(['v2', 'v1'] as const).map((v) => (
                 <button
@@ -76,7 +99,7 @@ export default function ImportXlsmModal({ grupoId, onClose, onSuccess }: Props) 
           </div>
 
           <div>
-            <label className="text-[11px] uppercase tracking-wider text-aletis-grafite-claro font-semibold">Arquivo .xlsm</label>
+            <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Arquivo .xlsm</label>
             <input
               type="file"
               accept=".xlsm,.xlsx"
@@ -84,11 +107,24 @@ export default function ImportXlsmModal({ grupoId, onClose, onSuccess }: Props) 
               className="block w-full mt-1 text-sm file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-aletis-verde/10 file:text-aletis-verde file:font-semibold hover:file:bg-aletis-verde/20"
             />
             {file && (
-              <p className="text-[10px] text-aletis-grafite-claro mt-1">
+              <p className="text-[11px] text-muted-foreground mt-1">
                 {file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB
               </p>
             )}
           </div>
+
+          <label className="flex items-start gap-2 rounded-lg border border-aletis-grafite-claro/15 bg-aletis-cream/20 p-3">
+            <input
+              type="checkbox"
+              checked={replaceExisting}
+              onChange={(e) => setReplaceExisting(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span className="text-xs text-foreground">
+              <strong>Reimportação limpa:</strong> apagar membros, safras, custos, demandas, dívidas,
+              fazendas, passivos, garantias, premissas, insights e snapshots antes de importar.
+            </span>
+          </label>
 
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700 flex items-start gap-2">
@@ -97,23 +133,38 @@ export default function ImportXlsmModal({ grupoId, onClose, onSuccess }: Props) 
           )}
 
           {result && (
-            <div className="rounded-lg bg-aletis-verde/10 border border-aletis-verde/30 p-3 text-xs text-aletis-verde space-y-1">
+            <div className="rounded-lg bg-aletis-verde/10 border border-aletis-verde/30 p-3 text-xs text-foreground space-y-1">
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4" />
                 <strong>Importação concluída</strong>
               </div>
-              <ul className="text-[11px] space-y-0.5 mt-1">
-                <li>Membros: {result.imported.membros}</li>
-                <li>Culturas: {result.imported.culturas}</li>
-                <li>Contratos: {result.imported.contratos}</li>
-                <li>Custos: {result.imported.custos}</li>
-                <li>Fazendas: {result.imported.fazendas}</li>
-                <li>Demandas: {result.imported.demandas}</li>
-              </ul>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-2">
+                {counters.map(([label, value]) => (
+                  <div key={label} className="rounded-lg bg-white/70 border border-aletis-verde/20 p-2">
+                    <div className="text-[11px] text-muted-foreground">{label}</div>
+                    <div className="text-sm font-semibold text-foreground">{value ?? 0}</div>
+                  </div>
+                ))}
+              </div>
+              {result.coverage && (
+                <div className="mt-2 rounded-lg bg-white/70 border border-aletis-verde/20 p-2 text-[11px] text-foreground">
+                  <div>
+                    {result.coverage.sheetsRead?.length ?? 0} de {result.coverage.workbookSheets ?? 0} abas lidas ·{' '}
+                    {result.coverage.formulasDetected?.toLocaleString('pt-BR') ?? 0} fórmulas detectadas ·{' '}
+                    macros {result.coverage.macrosDetected ? 'detectadas' : 'não detectadas'}
+                  </div>
+                  {result.coverage.sheetsRead?.length > 0 && (
+                    <details className="mt-1">
+                      <summary className="cursor-pointer">Ver abas processadas</summary>
+                      <p className="mt-1 leading-relaxed">{result.coverage.sheetsRead.join(', ')}</p>
+                    </details>
+                  )}
+                </div>
+              )}
               {result.warnings?.length > 0 && (
                 <details className="mt-1">
-                  <summary className="cursor-pointer">⚠ {result.warnings.length} avisos</summary>
-                  <ul className="text-[10px] list-disc list-inside mt-1">
+                  <summary className="cursor-pointer">{result.warnings.length} avisos</summary>
+                  <ul className="text-[11px] list-disc list-inside mt-1">
                     {result.warnings.slice(0, 10).map((w: string, i: number) => <li key={i}>{w}</li>)}
                   </ul>
                 </details>

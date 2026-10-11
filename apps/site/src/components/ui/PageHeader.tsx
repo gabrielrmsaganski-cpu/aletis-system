@@ -3,6 +3,7 @@ import { ChevronRight } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
 import { Eyebrow } from '@/components/ui/Eyebrow'
 import { Reveal } from '@/components/ui/Reveal'
+import BrandWatermark from '@/components/ui/BrandWatermark'
 
 interface BreadcrumbItem {
   label: string
@@ -25,11 +26,26 @@ export function PageHeader({
   align = 'left',
 }: PageHeaderProps) {
   return (
-    <header className="relative isolate overflow-hidden bg-gradient-to-br from-aletis-verde-profundo via-aletis-verde-escuro to-aletis-verde-profundo text-white">
-      <div aria-hidden="true" className="absolute inset-0 bg-hero-radial" />
+    <header
+      className="relative isolate overflow-hidden bg-gradient-to-br from-aletis-verde-profundo via-aletis-verde-escuro to-aletis-verde-profundo text-white"
+      style={{
+        backgroundImage:
+          'linear-gradient(135deg, rgba(8,13,9,0.98) 0%, rgba(23,37,27,0.94) 100%), url(/brand/pattern/repetidor.png)',
+        backgroundSize: 'auto, 360px',
+        backgroundBlendMode: 'normal, soft-light',
+      }}
+    >
+      <div aria-hidden="true" className="absolute inset-0 bg-hero-radial opacity-80" />
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 opacity-[0.06] bg-grain mix-blend-overlay"
+      />
+      <BrandWatermark
+        size={520}
+        tone="cream"
+        opacity={0.035}
+        className="absolute -right-32 -bottom-44 hidden lg:block"
+        rotate={-6}
       />
       <Container className="relative py-24 md:py-32">
         <div className={align === 'center' ? 'mx-auto max-w-3xl text-center' : 'max-w-3xl'}>

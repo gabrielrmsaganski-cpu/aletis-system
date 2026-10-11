@@ -1,13 +1,13 @@
 // ============================================================
 // news — tool de notícias agro com cache (Fase A)
 // ============================================================
-// Usa o provider de web search (Claude nativo > Tavily) com TTL 30min
+// Usa web_search nativo da OpenAI com TTL de 30 minutos
 // para servir notícias relevantes sem burst em cada mensagem.
 //
 // Queries padrão cobrem 4 eixos: macro/SELIC, safra/produção,
 // crise/recuperação judicial, legislação rural/MCR.
 // ============================================================
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 import { WebSearchProviderFactory } from './websearch/WebSearchProviderFactory.js'
 
 type NewsCacheEntry = { at: number; data: unknown }
@@ -41,9 +41,9 @@ function setCached(q: string, data: unknown): void {
   cache.set(cacheKey(q), { at: Date.now(), data })
 }
 
-export function buildNewsTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildNewsTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   tools.push({
     name: 'noticias_agro_hoje',
@@ -70,10 +70,10 @@ export function buildNewsTools(): { tools: ClaudeTool[]; registry: ClaudeToolReg
     spec: tools[tools.length - 1],
     handler: async (input) => {
       const provider = WebSearchProviderFactory.getSync() || (await WebSearchProviderFactory.warmUp())
-      if (!provider) {
+      if (!provider || !(await provider.available())) {
         return {
-          error: 'nenhum provider de web search disponível (Claude nativo não suporta este Foundry e TAVILY_API_KEY não configurada)',
-          hint: 'Defina TAVILY_API_KEY no .env ou aguarde a Fase de auth; notícias indisponíveis hoje.',
+          error: 'OpenAI web_search indisponivel',
+          hint: 'Configure OPENAI_API_KEY para habilitar noticias atuais.',
         }
       }
 
@@ -89,34 +89,22 @@ export function buildNewsTools(): { tools: ClaudeTool[]; registry: ClaudeToolReg
                 ? [QUERIES_DEFAULT[3]]
                 : QUERIES_DEFAULT
 
-      // Se o provider é Claude nativo, delegamos via tool embutida — retornamos
-      // uma instrução pro LLM chamar `web_search` com essas queries. Se for
-      // Tavily (ou outro com .search()), executamos aqui e cacheamos.
-      if (typeof (provider as any).search === 'function' && provider.name !== 'claude-native') {
-        const out: Record<string, unknown> = { kind: provider.name, cached: false, resultados: {} }
-        for (const q of queries) {
-          const cached = getCached(q)
-          if (cached) {
-            ;(out.resultados as Record<string, unknown>)[q] = cached
-            continue
-          }
-          try {
-            const r = await (provider as any).search(q, { maxResults: 5 })
-            setCached(q, r)
-            ;(out.resultados as Record<string, unknown>)[q] = r
-          } catch (err) {
-            ;(out.resultados as Record<string, unknown>)[q] = { error: (err as Error).message }
-          }
+      const out: Record<string, unknown> = { kind: provider.name, cached: false, resultados: {} }
+      for (const q of queries) {
+        const cached = getCached(q)
+        if (cached) {
+          ;(out.resultados as Record<string, unknown>)[q] = cached
+          continue
         }
-        return out
+        try {
+          const r = await provider.search(q, { max_results: 5, brOnly: true })
+          setCached(q, r)
+          ;(out.resultados as Record<string, unknown>)[q] = r
+        } catch (err) {
+          ;(out.resultados as Record<string, unknown>)[q] = { error: (err as Error).message }
+        }
       }
-
-      // Claude nativo — retornamos hint para o LLM usar `web_search` tool.
-      return {
-        kind: provider.name,
-        hint: 'Use a tool web_search embutida do Claude nativo com cada uma destas queries — elas são cacheadas pelo infraprovider.',
-        queries,
-      }
+      return out
     },
   }
 

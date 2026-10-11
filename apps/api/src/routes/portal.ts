@@ -1,3 +1,5 @@
+import { registerPortalMatterRoutes } from '../services/portal/PortalMatterRoutes.js'
+import { registerPortalFiscalRoutes } from '../services/portal/PortalFiscalRoutes.js'
 /**
  * Rotas do Portal do Cliente
  *
@@ -12,8 +14,18 @@
  * Cliente e confirmando que está ativo.
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
-import { clientes, type PortalMensagem } from './clientes.js'
-import { propostas, propostasInteligentes } from './propostas.js'
+import { clientes } from './clientes.js'
+import { getPool, isPgEnabled } from '../db/client.js'
+import { Decimal } from 'decimal.js'
+import { portalDocumentService } from '../services/portal/PortalDocumentService.js'
+import { canClientSeeUpload, publicPortalRequest, publicPortalUpload } from '../services/portal/PortalDocumentPresentation.js'
+import { registerPortalDocumentRoutes } from '../services/portal/PortalDocumentRoutes.js'
+import { registerPortalAlixRoutes } from '../services/portal/PortalAlixRoutes.js'
+import { registerPortalConversationRoutes } from '../services/portal/PortalConversationRoutes.js'
+import { registerPortalClientRequestRoutes } from '../services/portal/PortalClientRequestRoutes.js'
+import { portalStageProjection } from '../services/portal/PortalStageProjection.js'
+import { loadPortalAccess, refreshPortalAccesses, savePortalAccess, recordPortalLogin } from '../services/portal/PortalAccountService.js'
+import { listPortalMessages, listPortalUpdates } from '../services/portal/PortalCommunicationService.js'
 import {
   verificarSenha,
   hashSenha,
@@ -32,34 +44,13 @@ import {
 } from '../services/PortalNotificationService.js'
 import {
   getVapidPublicKey,
-  enviarPush,
   type PushSubscriptionRecord,
 } from '../services/PushService.js'
 import {
   projetarHonorarios,
 } from '../services/HonorariosService.js'
-import {
-  chatPortalAlix,
-  criarSessaoPortal,
-  listarSessoesPortal,
-  obterSessaoPortal,
-  deletarSessaoPortal,
-} from '../services/PortalAlixService.js'
-import {
-  listarPendencias,
-  criarPendencia,
-  atualizarPendencia,
-  removerPendencia,
-  listarUploads,
-  adicionarUpload,
-  buscarUpload,
-  registrarEvento,
-  listarEventos,
-} from '../services/PortalStore.js'
-import { createHash, randomBytes } from 'node:crypto'
-import { mkdir, writeFile, readFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+
+import { registrarEvento, listarEventos } from '../services/PortalStore.js'
 import { parseBody } from '../lib/validate.js'
 import {
   LoginSchema,
@@ -68,8 +59,6 @@ import {
   ForgotSchema,
   ResetSchema,
   TrocarSenhaSchema,
-  MensagemBodySchema,
-  UploadJsonSchema,
 } from './portal-schemas.js'
 
 /* ========================================================================
@@ -78,29 +67,6 @@ import {
 
 const formatBRL = (v: number): string =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
-
-/** Storage local de uploads do portal (cofre digital).
- *  Em produção, plugar S3/MinIO via env ALETIS_PORTAL_UPLOAD_BUCKET. */
-const UPLOAD_DIR = process.env.ALETIS_PORTAL_UPLOAD_DIR
-  || join(process.cwd(), 'storage', 'portal-uploads')
-
-async function ensureUploadDir(): Promise<void> {
-  if (!existsSync(UPLOAD_DIR)) {
-    await mkdir(UPLOAD_DIR, { recursive: true })
-  }
-}
-
-/** Limites de upload — 25MB por arquivo, mimes seguros. */
-const UPLOAD_MAX_BYTES = 25 * 1024 * 1024
-const UPLOAD_ALLOWED_MIMES = new Set([
-  'application/pdf',
-  'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-  'application/msword',
-  'application/vnd.ms-excel',
-  'text/plain', 'text/csv',
-])
 
 /**
  * Rate limit em memória — N tentativas por chave em janela rolante.
@@ -158,16 +124,6 @@ function clientIp(req: FastifyRequest): string {
   return xfwd || req.ip || 'unknown'
 }
 
-/** Mascara IP para visualização do próprio cliente (privacy). */
-function maskIp(ip: string): string {
-  if (ip.includes('.')) {
-    const parts = ip.split('.')
-    if (parts.length === 4) return `${parts[0]}.${parts[1]}.•••.•••`
-  }
-  if (ip.includes(':')) return ip.replace(/[0-9a-f]+$/i, '••••')
-  return ip
-}
-
 /** Resolve a URL pública do portal a partir de envs ou request origin. */
 function resolvePortalBaseUrl(req: FastifyRequest): string {
   if (process.env.ALETIS_PORTAL_BASE_URL) return process.env.ALETIS_PORTAL_BASE_URL.replace(/\/$/, '')
@@ -195,63 +151,24 @@ function localizarClienteParaAuth(input: string) {
 }
 
 /** Computa pulse: estado consolidado do caso para o Hero do cliente. */
-function monthsBetween(a: Date, b: Date): number {
-  return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth())
-}
-
-function computarPulse(clienteId: string) {
+async function computarPulse(clienteId: string) {
   const c = clientes.get(clienteId)
   if (!c) return null
-  const stepper = (() => {
-    const idx = {
-      prospeccao: 0, analise: 1, negociacao: 3, acordo: 4, encerrado: 5,
-    }[c.estagio] ?? 1
-    return STEP_ORDER[Math.min(idx, STEP_ORDER.length - 1)]
-  })()
-  const proximaSugestaoMap: Record<string, string> = {
-    prospeccao: 'Aguardando análise inicial — em breve seu consultor vai pedir os primeiros documentos.',
-    analise: 'Estamos auditando contratos. Verifique se há documentos pendentes na sua caixa.',
-    negociacao: 'Estamos com sua proposta na mesa. Você será avisado a cada movimento dos credores.',
-    acordo: 'Acordo formalizado — confira o cronograma e mantenha os pagamentos em dia.',
-    encerrado: 'Caso encerrado. O Portal continua acessível para histórico e documentos.',
-  }
-  const pendencias = listarPendencias(clienteId)
-  const pendentes = pendencias.filter((p) => p.status === 'pendente')
-  const enviadosNaoRevisados = pendencias.filter((p) => p.status === 'enviado')
-  const mensagens = c.portalMensagens ?? []
-  const naoLidas = mensagens.filter((m) => m.de === 'consultor' && !m.lidaEm).length
-
-  // Última atualização: maior data entre timeline, mensagens, pagamentos
-  const candidatos: string[] = []
-  if (c.timeline?.length) candidatos.push(c.timeline[c.timeline.length - 1].data)
-  if (mensagens.length) candidatos.push(mensagens[mensagens.length - 1].criadoEm)
-  if (c.pagamentos?.length) candidatos.push(c.pagamentos[c.pagamentos.length - 1].data)
-  candidatos.sort()
-  const ultimaAtualizacao = candidatos.length ? candidatos[candidatos.length - 1] : c.dataCadastro
-
-  // Saúde rápida do caso (0-100, heurística simples)
-  const saudeBase = c.estagio === 'encerrado' ? 100 : c.estagio === 'acordo' ? 85 : c.estagio === 'negociacao' ? 70 : 55
-  const saudeAjustePend = Math.max(0, saudeBase - pendentes.length * 4)
-  const healthScore = Math.min(100, Math.max(0, saudeAjustePend))
-
+  const [requests, messages, updates] = await Promise.all([
+    portalDocumentService.listarPendencias(clienteId), listPortalMessages(clienteId), listPortalUpdates(clienteId),
+  ])
+  const active = requests.filter(p => p.status !== 'cancelado')
+  const pending = active.filter(p => p.status === 'pendente' || p.status === 'rejeitado')
+  const next = [...pending].sort((a, b) => (a.prazo || '9999').localeCompare(b.prazo || '9999') || ({urgente:0,alta:1,normal:2}[a.prioridade] - {urgente:0,alta:1,normal:2}[b.prioridade]))[0]
+  const stepper = projetarStepper(clienteId).find(step => step.current)
+  const dates = [c.dataCadastro, c.ultimaAtualizacao, ...requests.map(p => p.updatedAt), ...messages.map(m => m.criadoEm), ...updates.map(u => u.data)].filter(Boolean).sort()
   return {
-    clienteId,
-    nome: c.nome,
-    estagioAtual: { id: stepper.id, label: stepper.label, estagioRaw: c.estagio },
-    proximoPasso: proximaSugestaoMap[c.estagio] ?? 'Acompanhe seu caso pelo Portal.',
-    pendencias: {
-      total: pendencias.length,
-      pendentes: pendentes.length,
-      aguardandoRevisao: enviadosNaoRevisados.length,
-    },
-    mensagensNaoLidas: naoLidas,
-    ultimaAtualizacao,
-    healthScore,
-    consultor: c.consultor || null,
-    economiaEstimada: c.dividas.reduce(
-      (acc, d) => acc + Math.max(0, d.valorOriginal - d.valorAtualizado),
-      0,
-    ),
+    clienteId, nome: c.nome, estagioAtual: { id: stepper?.id, label: stepper?.label, estagioRaw: c.estagio },
+    proximoPasso: next ? `${next.status === 'rejeitado' ? 'Corrija e reenvie' : 'Envie'}: ${next.titulo}` : active.some(p => p.status === 'enviado') ? 'Seus documentos foram recebidos e aguardam conferência da equipe.' : 'Acompanhe as atualizações da equipe e as solicitações de documentos neste portal.',
+    pendencias: { total: active.length, pendentes: pending.length, aguardandoRevisao: active.filter(p => p.status === 'enviado').length },
+    mensagensNaoLidas: messages.filter(m => m.de === 'consultor' && !m.lidaEm).length,
+    ultimaAtualizacao: dates.at(-1), healthScore: active.length ? Math.round(active.filter(p => p.status === 'aprovado').length / active.length * 100) : 0,
+    consultor: c.consultor || null, economiaEstimada: c.dividas.reduce((sum, d) => sum.plus(Decimal.max(0, new Decimal(d.valorOriginal || 0).minus(d.valorAtualizado || 0))), new Decimal(0)).toFixed(2),
   }
 }
 
@@ -261,23 +178,15 @@ function computarPulse(clienteId: string) {
  *    1. Authorization: Bearer (padrão para fetch/XHR)
  *    2. Cookie HttpOnly `portal_token` (preferido para SSE — EventSource
  *       envia cookies automaticamente com withCredentials)
- *    3. Query string `?_t=` (fallback legado; mantido para compatibilidade
- *       até clientes antigos atualizarem)
  *
  *  A ordem importa: Bearer wins. Cookie só atua quando o header não veio
  *  (caso típico do EventSource). */
 async function autenticarPortal(request: FastifyRequest, reply: FastifyReply) {
   if (!request.headers.authorization) {
-    // 1. Tenta cookie HttpOnly primeiro (mais seguro que query string).
+    // EventSource utiliza a mesma sessão por cookie HttpOnly.
     const cookieTok = (request as FastifyRequest & { cookies?: Record<string, string> }).cookies?.portal_token
     if (cookieTok) {
       ;(request.headers as Record<string, string>).authorization = `Bearer ${cookieTok}`
-    } else {
-      // 2. Fallback legado para `?_t=`.
-      const tok = (request.query as { _t?: string } | undefined)?._t
-      if (tok) {
-        ;(request.headers as Record<string, string>).authorization = `Bearer ${tok}`
-      }
     }
   }
   try {
@@ -298,6 +207,8 @@ async function autenticarPortal(request: FastifyRequest, reply: FastifyReply) {
     })
   }
   const cliente = clientes.get(payload.sub)
+  const acessoAtual = await loadPortalAccess(payload.sub)
+  if (payload.authVersion !== acessoAtual?.atualizadoEm) return reply.status(401).send({ success: false, error: 'Sua sessão foi atualizada. Entre novamente.', code: 'UNAUTHORIZED' })
   if (!cliente || !cliente.portalAcesso || !cliente.portalAcesso.ativo) {
     return reply.status(403).send({
       success: false,
@@ -305,6 +216,7 @@ async function autenticarPortal(request: FastifyRequest, reply: FastifyReply) {
       code: 'FORBIDDEN',
     })
   }
+  reply.header('Cache-Control', 'private, no-store')
   ;(request as any).clienteId = payload.sub
   ;(request as any).cliente = cliente
 }
@@ -359,106 +271,48 @@ function projetarContrato(clienteId: string) {
   }
 }
 
-/** Estepes da negociação, sempre na mesma ordem. */
-const STEP_ORDER: Array<{
-  id: string
-  label: string
-  estagiosAnteriores: Array<'prospeccao' | 'analise' | 'negociacao' | 'acordo' | 'encerrado'>
-}> = [
-  { id: 'analise', label: 'Análise Iniciada', estagiosAnteriores: ['prospeccao'] },
-  { id: 'proposta', label: 'Proposta Elaborada', estagiosAnteriores: ['prospeccao', 'analise'] },
-  { id: 'enviada', label: 'Proposta Enviada', estagiosAnteriores: ['analise'] },
-  { id: 'negociacao', label: 'Em Negociação', estagiosAnteriores: ['analise'] },
-  { id: 'acordo', label: 'Acordo', estagiosAnteriores: ['analise', 'negociacao'] },
-  { id: 'encerrado', label: 'Concluído', estagiosAnteriores: ['acordo'] },
-]
-
 function projetarStepper(clienteId: string) {
   const c = clientes.get(clienteId)
   if (!c) return []
-  const idx = {
-    prospeccao: 0,
-    analise: 1,
-    negociacao: 3,
-    acordo: 4,
-    encerrado: 5,
-  }[c.estagio] ?? 1
-  return STEP_ORDER.map((s, i) => ({
-    id: s.id,
-    label: s.label,
-    done: i < idx,
-    current: i === idx,
-  }))
+  return portalStageProjection(c.estagio)
 }
 
 /** Timeline de eventos do cliente, ordem desc. */
-function projetarTimeline(clienteId: string) {
-  const c = clientes.get(clienteId)
-  if (!c) return []
-  return [...c.timeline]
-    .sort((a, b) => b.data.localeCompare(a.data))
-    .map((e) => ({
-      data: e.data,
-      tipo: e.tipo,
-      descricao: e.descricao,
-      detalhes: e.detalhes,
-    }))
+async function projetarTimeline(clienteId: string) {
+  const [updates, requests, uploads] = await Promise.all([listPortalUpdates(clienteId), portalDocumentService.listarPendencias(clienteId), portalDocumentService.listarUploads(clienteId)])
+  return [...updates, ...requests.map(p => ({ data: p.solicitadoEm, tipo: 'solicitacao', descricao: `Documento solicitado: ${p.titulo}`, detalhes: p.descricao })),
+    ...uploads.filter(canClientSeeUpload).map(u => ({ data: u.enviadoEm, tipo: 'documento', descricao: `${u.enviadoPor === 'cliente' ? 'Documento recebido' : 'Documento disponibilizado'}: ${u.nomeOriginal}`, detalhes: undefined }))]
+    .sort((a,b) => b.data.localeCompare(a.data)).slice(0,100)
 }
 
-/** Documentos disponíveis ao cliente — hoje compostos das propostas. */
-function projetarDocumentos(clienteId: string) {
-  const docs: Array<{
-    id: string
-    nome: string
-    data: string
-    tipo: 'proposta' | 'contrato' | 'comprovante'
-    url?: string
-    canView: boolean
-  }> = []
+async function projetarDocumentos(clienteId: string) {
+  return (await portalDocumentService.listarUploads(clienteId)).filter(u => u.enviadoPor === 'consultor' && canClientSeeUpload(u)).map(u => ({
+    id: u.id, nome: u.nomeOriginal, data: u.enviadoEm, tipo: u.categoria === 'contrato' ? 'contrato' : 'comprovante',
+    url: `/api/portal/uploads/${encodeURIComponent(u.id)}`, canView: true,
+  }))
+}
 
-  for (const p of propostas.values()) {
-    if (p.clienteId !== clienteId) continue
-    docs.push({
-      id: p.id,
-      nome: `Proposta — ${p.tipo || 'Memória de Cálculo'}`,
-      data: p.dataCriacao || new Date().toISOString(),
-      tipo: 'proposta',
-      url: p.pdfUrl || undefined,
-      canView: Boolean(p.pdfUrl),
-    })
+async function projetarInteligenciaPortal(clienteId: string) {
+  const [requests, uploads] = await Promise.all([portalDocumentService.listarPendencias(clienteId), portalDocumentService.listarUploads(clienteId)])
+  const visible = uploads.filter(canClientSeeUpload), active = requests.filter(p => p.status !== 'cancelado')
+  const pending = active.filter(p => p.status === 'pendente' || p.status === 'rejeitado')
+  const score = active.length ? Math.round(active.filter(p => p.status === 'aprovado').length / active.length * 100) : 0
+  const priority = { urgente: 'critica', alta: 'alta', normal: 'media' }
+  const porGrupo: Record<string,number> = { cadastro:0,patrimonio:0,financeiro:0,juridico:0,outros:0 }
+  for (const upload of visible) porGrupo[upload.categoria === 'identidade' ? 'cadastro' : upload.categoria === 'patrimonio' ? 'patrimonio' : upload.categoria === 'fiscal' ? 'financeiro' : upload.categoria === 'contrato' ? 'juridico' : 'outros']++
+  return {
+    score, nivel: active.length ? `${active.filter(p => p.status === 'aprovado').length} de ${active.length} solicitações conferidas` : 'Nenhuma solicitação aberta',
+    resumo: pending.length ? `Há ${pending.length} solicitação(ões) aguardando seu envio ou correção.` : active.some(p => p.status === 'enviado') ? 'A equipe está conferindo os documentos que você enviou.' : 'Os próximos pedidos e atualizações da equipe aparecerão aqui.',
+    atualizadoEm: new Date().toISOString(), documentos: { total: visible.length, porGrupo, faltantes: pending.map(p => p.titulo), revisao: active.filter(p => p.status === 'rejeitado').map(p => ({id:p.id,nome:p.titulo,motivo:p.observacao || 'Reenvio solicitado pela equipe.'})) },
+    proximasAcoes: pending.slice(0,5).map(p => ({ titulo:p.titulo,detalhe:p.observacao || p.descricao || 'Envie o arquivo pela solicitação correspondente.',prioridade:priority[p.prioridade] })),
+    pendencias: pending.map(p => ({ id:p.id,prioridade:priority[p.prioridade],titulo:p.titulo,detalhe:p.observacao || p.descricao || '',acao:'Abrir solicitação e enviar documento' })),
+    alix: { resumo:'A ALIX ajuda a entender suas solicitações, documentos enviados e atualizações compartilhadas pela equipe.',perguntasSugeridas:['Quais documentos preciso enviar agora?','Como corrijo um documento devolvido?','Qual é a última atualização do meu caso?','Meu arquivo foi recebido e está em análise?'] },
   }
+}
 
-  const cliAtual = clientes.get(clienteId)
-  const cpfCnpjLimpo = cliAtual?.cpfCnpj.replace(/\D/g, '')
-  for (const p of propostasInteligentes.values()) {
-    const matchId = p.cliente.id === clienteId
-    const matchCpf =
-      cpfCnpjLimpo && p.cliente.cpfCnpj.replace(/\D/g, '') === cpfCnpjLimpo
-    if (!matchId && !matchCpf) continue
-    docs.push({
-      id: p.id,
-      nome: 'Memória de Cálculo Inteligente',
-      data: p.dataGeracao || new Date().toISOString(),
-      tipo: 'proposta',
-      url: `/api/propostas/inteligente/${p.id}/pdf`,
-      canView: true,
-    })
-  }
-
-  const c = clientes.get(clienteId)
-  if (c) {
-    c.pagamentos.forEach((pg, i) => {
-      docs.push({
-        id: `pag-${c.id}-${i}`,
-        nome: `Comprovante — ${pg.descricao}`,
-        data: pg.data,
-        tipo: 'comprovante',
-        canView: false,
-      })
-    })
-  }
-
-  return docs.sort((a, b) => b.data.localeCompare(a.data))
+async function portalAudit(clienteId: string, limit = 80) {
+  const rows = isPgEnabled() ? (await getPool().query('SELECT id,tipo,canal,criado_em FROM portal_evento WHERE cliente_id=$1 ORDER BY criado_em DESC,id DESC LIMIT $2',[clienteId,limit])).rows.map(row => ({id:Number(row.id),tipo:row.tipo,canal:row.canal,criadoEm:new Date(row.criado_em).toISOString()})) : listarEventos(clienteId,limit).map(e => ({id:e.id,tipo:e.tipo,canal:e.canal,criadoEm:e.criadoEm}))
+  return rows
 }
 
 /* ========================================================================
@@ -466,6 +320,30 @@ function projetarDocumentos(clienteId: string) {
  * ======================================================================== */
 
 export default async function (fastify: FastifyInstance) {
+  await registerPortalDocumentRoutes(fastify, autenticarPortal)
+  await registerPortalClientRequestRoutes(fastify, autenticarPortal)
+  await registerPortalMatterRoutes(fastify, autenticarPortal)
+  await registerPortalFiscalRoutes(fastify, autenticarPortal)
+  await registerFiscalConnectionRoutes(fastify, autenticarPortal)
+  await registerPortalAlixRoutes(fastify, autenticarPortal, { rateLimit: id => rateLimitCheck(`alix:${id}`, 30, 60_000) })
+  await registerPortalConversationRoutes(fastify, autenticarPortal, {
+    afterStaffMessage: async ({ clienteId, message }) => {
+      const access = await loadPortalAccess(clienteId)
+      const subscriptions = access?.pushSubscriptions ?? []
+      if (!subscriptions.length) return
+      const { enviarPush } = await import('../services/PushService.js')
+      await enviarPush(subscriptions, {
+        title: `Mensagem de ${message.autorNome}`,
+        body: message.texto.length > 120 ? `${message.texto.slice(0, 117)}…` : message.texto,
+        url: '/portal-cliente?tab=mensagens', tag: `chat-${clienteId}`,
+      })
+    },
+  })
+  const portalCookie = (request: FastifyRequest, reply: FastifyReply, token: string) => reply.setCookie('portal_token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production' || request.protocol === 'https' || request.headers['x-forwarded-proto'] === 'https' || /^https:/.test(process.env.ALETIS_PORTAL_BASE_URL || ''),
+    sameSite: 'lax', path: '/', maxAge: 12 * 60 * 60,
+  })
   /* ── POST /api/portal/auth/login ────────────────────────────────────── */
   fastify.post(
     '/api/portal/auth/login',
@@ -487,6 +365,7 @@ export default async function (fastify: FastifyInstance) {
         return reply.status(429).send({ success: false, error: 'Muitas tentativas para este usuário.', code: 'RATE_LIMIT' })
       }
 
+      await refreshPortalAccesses()
       const digitsOnly = usuarioRaw.replace(/\D/g, '')
 
       // Busca por usuário ou CPF/CNPJ ou e-mail
@@ -509,14 +388,17 @@ export default async function (fastify: FastifyInstance) {
           code: 'INVALID_CREDENTIALS',
         })
       }
-      if (!alvo.portalAcesso.ativo) {
+      // A versão assinada deve ser a mesma credencial que passou pela verificação.
+      // Um reset concorrente durante o registro do login não pode renovar a senha antiga.
+      const acessoVerificado = { ...alvo.portalAcesso }
+      if (!acessoVerificado.ativo) {
         return reply.status(403).send({
           success: false,
           error: 'Acesso desativado. Entre em contato com seu consultor.',
           code: 'DISABLED',
         })
       }
-      const ok = verificarSenha(senha, alvo.portalAcesso.senhaHash, alvo.portalAcesso.salt)
+      const ok = verificarSenha(senha, acessoVerificado.senhaHash, acessoVerificado.salt)
       if (!ok) {
         return reply.status(401).send({
           success: false,
@@ -525,7 +407,7 @@ export default async function (fastify: FastifyInstance) {
         })
       }
 
-      alvo.portalAcesso.ultimoLoginEm = new Date().toISOString()
+      await recordPortalLogin(alvo.id)
 
       registrarEvento({
         clienteId: alvo.id,
@@ -537,21 +419,15 @@ export default async function (fastify: FastifyInstance) {
 
       const payload: PortalJwtPayload = {
         sub: alvo.id,
-        usuario: alvo.portalAcesso.usuario,
-        kind: 'portal-cliente',
+        usuario: acessoVerificado.usuario,
+        kind: 'portal-cliente', authVersion: acessoVerificado.atualizadoEm,
       }
       const token = fastify.jwt.sign(payload)
 
       // Cookie HttpOnly espelhando o token: SSE/EventSource não pode
       // setar Authorization, então a alternativa segura é cookie. O JSON
       // ainda inclui o token p/ compatibilidade com fetch existente.
-      reply.setCookie('portal_token', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 12 * 60 * 60, // 12h — alinhado com expiresIn do JWT
-      })
+      portalCookie(request, reply, token)
 
       return {
         success: true,
@@ -572,115 +448,6 @@ export default async function (fastify: FastifyInstance) {
   /* ──────────────────────────────────────────────────────────────────────
    *  ALIX no Portal — chat restrito ao caso do cliente logado
    * ────────────────────────────────────────────────────────────────────── */
-
-  /* ── GET /api/portal/alix/sessions ──────────────────────────────────── */
-  fastify.get(
-    '/api/portal/alix/sessions',
-    { preHandler: autenticarPortal },
-    async (req: FastifyRequest) => {
-      const clienteId = (req as unknown as { clienteId: string }).clienteId
-      const sessoes = listarSessoesPortal(clienteId).map((s) => ({
-        id: s.id,
-        titulo: s.titulo,
-        criadoEm: s.criadoEm,
-        atualizadoEm: s.atualizadoEm,
-        totalMensagens: s.messages.length,
-      }))
-      return { success: true, data: sessoes }
-    },
-  )
-
-  /* ── POST /api/portal/alix/sessions ─────────────────────────────────── */
-  fastify.post(
-    '/api/portal/alix/sessions',
-    { preHandler: autenticarPortal },
-    async (req: FastifyRequest) => {
-      const clienteId = (req as unknown as { clienteId: string }).clienteId
-      const body = req.body as { titulo?: string } | undefined
-      const s = criarSessaoPortal(clienteId, body?.titulo)
-      return { success: true, data: { id: s.id, titulo: s.titulo, criadoEm: s.criadoEm } }
-    },
-  )
-
-  /* ── GET /api/portal/alix/sessions/:id ──────────────────────────────── */
-  fastify.get(
-    '/api/portal/alix/sessions/:id',
-    { preHandler: autenticarPortal },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const clienteId = (req as unknown as { clienteId: string }).clienteId
-      const { id } = req.params as { id: string }
-      const s = obterSessaoPortal(id, clienteId)
-      if (!s) return reply.status(404).send({ success: false, error: 'Sessão não encontrada' })
-      return { success: true, data: s }
-    },
-  )
-
-  /* ── DELETE /api/portal/alix/sessions/:id ───────────────────────────── */
-  fastify.delete(
-    '/api/portal/alix/sessions/:id',
-    { preHandler: autenticarPortal },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const clienteId = (req as unknown as { clienteId: string }).clienteId
-      const { id } = req.params as { id: string }
-      const ok = deletarSessaoPortal(id, clienteId)
-      if (!ok) return reply.status(404).send({ success: false, error: 'Sessão não encontrada' })
-      return { success: true }
-    },
-  )
-
-  /* ── POST /api/portal/alix/stream (SSE) ─────────────────────────────── */
-  fastify.post(
-    '/api/portal/alix/stream',
-    { preHandler: autenticarPortal },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const clienteId = (req as unknown as { clienteId: string }).clienteId
-      const { sessionId, message } = (req.body ?? {}) as { sessionId?: string; message?: string }
-      if (!message || typeof message !== 'string' || message.trim().length === 0) {
-        return reply.status(400).send({ success: false, error: 'Campo "message" é obrigatório' })
-      }
-      // Rate limit simples por cliente: 30/min
-      if (!rateLimitCheck(`alix:${clienteId}`, 30, 60_000)) {
-        return reply.status(429).send({ success: false, error: 'Muitas mensagens. Aguarde 1 minuto.' })
-      }
-
-      reply.raw.setHeader('Content-Type', 'text/event-stream')
-      reply.raw.setHeader('Cache-Control', 'no-cache, no-transform')
-      reply.raw.setHeader('Connection', 'keep-alive')
-      reply.raw.setHeader('X-Accel-Buffering', 'no')
-      reply.raw.flushHeaders?.()
-
-      const send = (event: string, payload: unknown) => {
-        reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`)
-      }
-
-      send('start', { sessionId, ts: Date.now() })
-      const heartbeat = setInterval(() => send('ping', { ts: Date.now() }), 10_000)
-
-      try {
-        send('thinking', { text: 'analisando seu caso…' })
-        const { session, reply: replyMsg } = await chatPortalAlix({
-          clienteId,
-          sessionId,
-          message: message.trim(),
-          onToken: (chunk) => {
-            try { send('token', { text: chunk }) } catch { /* stream fechado */ }
-          },
-        })
-        send('done', {
-          reply: replyMsg,
-          sessionId: session.id,
-          titulo: session.titulo,
-        })
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Erro desconhecido'
-        req.log.error({ err }, '[Portal/ALIX] stream error')
-        send('error', { error: msg })
-      } finally {
-        clearInterval(heartbeat)
-        reply.raw.end()
-      }
-    },
-  )
 
   /* ──────────────────────────────────────────────────────────────────────
    *  Web Push notifications (PWA)
@@ -781,7 +548,7 @@ export default async function (fastify: FastifyInstance) {
     { preHandler: autenticarPortal },
     async (request: FastifyRequest) => {
       const clienteId = (request as any).clienteId as string
-      return { success: true, data: projetarTimeline(clienteId) }
+      return { success: true, data: await projetarTimeline(clienteId) }
     }
   )
 
@@ -791,47 +558,7 @@ export default async function (fastify: FastifyInstance) {
     { preHandler: autenticarPortal },
     async (request: FastifyRequest) => {
       const clienteId = (request as any).clienteId as string
-      return { success: true, data: projetarDocumentos(clienteId) }
-    }
-  )
-
-  /* ── GET /api/portal/mensagens ──────────────────────────────────────── */
-  fastify.get(
-    '/api/portal/mensagens',
-    { preHandler: autenticarPortal },
-    async (request: FastifyRequest) => {
-      const clienteId = (request as any).clienteId as string
-      const c = clientes.get(clienteId)
-      const mensagens = c?.portalMensagens ?? []
-      // Marcar como lidas as mensagens do consultor
-      const agora = new Date().toISOString()
-      for (const m of mensagens) {
-        if (m.de === 'consultor' && !m.lidaEm) m.lidaEm = agora
-      }
-      return { success: true, data: mensagens }
-    }
-  )
-
-  /* ── POST /api/portal/mensagens ─────────────────────────────────────── */
-  fastify.post(
-    '/api/portal/mensagens',
-    { preHandler: autenticarPortal },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const clienteId = (request as any).clienteId as string
-      const cliente = clientes.get(clienteId)
-      if (!cliente) return reply.status(404).send({ success: false, error: 'Cliente não encontrado' })
-      const parsed = parseBody(MensagemBodySchema, request, reply)
-      if (!parsed) return
-      const texto = parsed.texto
-      const msg: PortalMensagem = {
-        id: `pm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        de: 'cliente',
-        autorNome: cliente.nome,
-        texto,
-        criadoEm: new Date().toISOString(),
-      }
-      cliente.portalMensagens = [...(cliente.portalMensagens ?? []), msg]
-      return reply.status(201).send({ success: true, data: msg })
+      return { success: true, data: await projetarDocumentos(clienteId) }
     }
   )
 
@@ -851,6 +578,7 @@ export default async function (fastify: FastifyInstance) {
     if (!parsed) return
     const id = parsed.identificador
 
+    await refreshPortalAccesses()
     const cliente = localizarClienteParaAuth(id)
     // Sempre 200 — não confirmamos existência da conta para anonymous.
     if (cliente && cliente.portalAcesso?.ativo !== false) {
@@ -891,21 +619,24 @@ export default async function (fastify: FastifyInstance) {
     if (!rec) {
       return reply.status(401).send({ success: false, error: 'Link inválido ou expirado', code: 'INVALID_TOKEN' })
     }
+    await loadPortalAccess(rec.clienteId)
     const cliente = clientes.get(rec.clienteId)
     if (!cliente || !cliente.portalAcesso?.ativo) {
       return reply.status(403).send({ success: false, error: 'Acesso revogado', code: 'FORBIDDEN' })
     }
-    cliente.portalAcesso.ultimoLoginEm = new Date().toISOString()
+    const acessoVerificado = { ...cliente.portalAcesso }
+    await recordPortalLogin(cliente.id)
     registrarEvento({
       clienteId: cliente.id, tipo: 'magic_consumido', canal: 'magic',
       ip: clientIp(req), userAgent: req.headers['user-agent'] as string | undefined,
     })
     const payload: PortalJwtPayload = {
       sub: cliente.id,
-      usuario: cliente.portalAcesso.usuario,
-      kind: 'portal-cliente',
+      usuario: acessoVerificado.usuario,
+      kind: 'portal-cliente', authVersion: acessoVerificado.atualizadoEm,
     }
     const jwt = fastify.jwt.sign(payload)
+    portalCookie(req, reply, jwt)
     return { success: true, data: { token: jwt, cliente: projetarClienteMe(cliente.id) } }
   })
 
@@ -919,6 +650,7 @@ export default async function (fastify: FastifyInstance) {
     if (!parsed) return
     const id = parsed.identificador
 
+    await refreshPortalAccesses()
     const cliente = localizarClienteParaAuth(id)
     if (cliente && cliente.portalAcesso?.ativo !== false) {
       const { token } = emitirToken({ clienteId: cliente.id, tipo: 'reset' })
@@ -947,15 +679,13 @@ export default async function (fastify: FastifyInstance) {
     if (!rec) {
       return reply.status(401).send({ success: false, error: 'Link inválido ou expirado', code: 'INVALID_TOKEN' })
     }
+    await loadPortalAccess(rec.clienteId)
     const cliente = clientes.get(rec.clienteId)
     if (!cliente || !cliente.portalAcesso) {
       return reply.status(403).send({ success: false, error: 'Acesso indisponível', code: 'FORBIDDEN' })
     }
     const h = hashSenha(nova)
-    cliente.portalAcesso.senhaHash = h.senhaHash
-    cliente.portalAcesso.salt = h.salt
-    cliente.portalAcesso.forcaTrocaSenha = false
-    cliente.portalAcesso.atualizadoEm = new Date().toISOString()
+    await savePortalAccess(cliente.id, { ...cliente.portalAcesso, ...h, forcaTrocaSenha:false, atualizadoEm:new Date().toISOString() }, cliente.portalAcesso.senhaHash)
     revogarTokensCliente(cliente.id, 'reset')
     revogarTokensCliente(cliente.id, 'refresh')
     registrarEvento({
@@ -969,52 +699,12 @@ export default async function (fastify: FastifyInstance) {
    * Hero state: estágio, próximo passo, pendências, msgs não lidas, health. */
   fastify.get('/api/portal/pulse', { preHandler: autenticarPortal }, async (req) => {
     const clienteId = (req as any).clienteId as string
-    return { success: true, data: computarPulse(clienteId) }
+    return { success: true, data: await computarPulse(clienteId) }
   })
 
-  /* ── GET /api/portal/cronograma ──────────────────────────────────────
-   * Cronograma de pagamentos derivado dos contratos: distribui o saldo em
-   * aberto em parcelas mensais com a primeira parcela 30 dias à frente.
-   * Heurística simples — em produção, plugar plano real do consultor. */
-  fastify.get('/api/portal/cronograma', { preHandler: autenticarPortal }, async (req) => {
-    const clienteId = (req as any).clienteId as string
-    const c = clientes.get(clienteId)
-    const empty = { totalAberto: 0, parcelas: [], parcelaPadrao: 0, totalParcelas: 0 }
-    if (!c) return { success: true, data: empty }
-    const totalAberto = Math.max(0, c.valorTotalDivida - c.valorTotalPago)
-    if (totalAberto <= 0) return { success: true, data: empty }
-    // Heurística: 72 meses default. Ajustar quando plano real vier.
-    const N = 72
-    const valorParcela = Math.round((totalAberto / N) * 100) / 100
-    const parcelas: Array<{
-      numero: number
-      vencimento: string
-      valor: number
-      status: 'futuro' | 'proximo' | 'pago' | 'atrasado'
-      pagoEm?: string
-    }> = []
-    const hoje = new Date()
-    let pagosRestantes = c.pagamentos.length
-    for (let i = 0; i < Math.min(N, 36); i++) {
-      const d = new Date(hoje)
-      d.setMonth(d.getMonth() + i + 1 - pagosRestantes)
-      const passado = d.getTime() < hoje.getTime()
-      const proximo = !passado && i === pagosRestantes
-      parcelas.push({
-        numero: i + 1,
-        vencimento: d.toISOString(),
-        valor: valorParcela,
-        status: pagosRestantes > i
-          ? 'pago'
-          : passado
-          ? 'atrasado'
-          : proximo
-          ? 'proximo'
-          : 'futuro',
-        pagoEm: pagosRestantes > i ? c.pagamentos[i]?.data : undefined,
-      })
-    }
-    return { success: true, data: { totalAberto, parcelas, parcelaPadrao: valorParcela, totalParcelas: N } }
+  fastify.get('/api/portal/cronograma', { preHandler: autenticarPortal }, async req => {
+    const c = clientes.get((req as any).clienteId)
+    return {success:true,data:{totalAberto: c ? Decimal.max(0,new Decimal(c.valorTotalDivida || 0).minus(c.valorTotalPago || 0)).toFixed(2) : '0.00',parcelas:[],parcelaPadrao:0,totalParcelas:0,situacao:'nao_definido',mensagem:'O plano de pagamentos ainda não foi registrado pela equipe.'}}
   })
 
   /* ── GET /api/portal/honorarios ──────────────────────────────────────
@@ -1051,11 +741,12 @@ export default async function (fastify: FastifyInstance) {
     const c = clientes.get(clienteId)
     if (!c) return { success: false, error: 'Cliente não encontrado' }
 
-    const pulse = computarPulse(clienteId)
+    const pulse = await computarPulse(clienteId)
     const contrato = projetarContrato(clienteId)
     const stepper = projetarStepper(clienteId)
-    const timeline = projetarTimeline(clienteId)
-    const documentos = projetarDocumentos(clienteId)
+    const timeline = await projetarTimeline(clienteId)
+    const documentos = await projetarDocumentos(clienteId)
+    const inteligencia = await projetarInteligenciaPortal(clienteId)
 
     // Breakdown por credor
     const porCredor = new Map<string, { credor: string; original: number; atual: number; economia: number; pct: number }>()
@@ -1074,37 +765,11 @@ export default async function (fastify: FastifyInstance) {
       }))
       .sort((a, b) => b.economia - a.economia)
 
-    // Série temporal (12 meses): ramp linear até a economia atual.
     const economiaTotal = breakdownCredor.reduce((a, x) => a + x.economia, 0)
-    const inicio = new Date(c.dataCadastro)
-    const hoje = new Date()
-    const meses = Math.max(2, Math.min(24, monthsBetween(inicio, hoje) + 1))
-    const economiaSerie: Array<{ mes: string; economia: number; pago: number }> = []
-    for (let i = 0; i < meses; i++) {
-      const d = new Date(inicio)
-      d.setMonth(d.getMonth() + i)
-      const ratio = (i + 1) / meses
-      economiaSerie.push({
-        mes: d.toISOString().slice(0, 7), // YYYY-MM
-        economia: Math.round(economiaTotal * ratio * 100) / 100,
-        pago: Math.round(c.valorTotalPago * ratio * 100) / 100,
-      })
-    }
+    const economiaSerie: Array<{ mes:string; economia:number; pago:number }> = []
 
     // Marcos da negociação extraídos da timeline
-    const marcosTipos = new Set([
-      'assinatura_acordo',
-      'redução_credor',
-      'reducao_credor',
-      'proposta_aceita',
-      'pagamento_marco',
-      'documento_assinado',
-      'inicio_negociacao',
-    ])
-    const marcosNegociacao = (c.timeline ?? [])
-      .filter((t) => marcosTipos.has(t.tipo) || (t.descricao ?? '').match(/economia|acordo|reduç/i))
-      .slice(-8)
-      .map((t) => ({ data: t.data, tipo: t.tipo, descricao: t.descricao }))
+    const marcosNegociacao = (await listPortalUpdates(clienteId)).slice(0,8)
 
     // Honorários (opcional)
     let honorarios: ReturnType<typeof projetarHonorarios> | null = null
@@ -1125,6 +790,7 @@ export default async function (fastify: FastifyInstance) {
         stepper,
         timeline,
         documentos,
+        inteligencia,
         honorarios,
         economiaSerie,
         breakdownCredor,
@@ -1196,29 +862,28 @@ export default async function (fastify: FastifyInstance) {
       reply.raw.write(`data: ${JSON.stringify(data)}\n\n`)
     }
 
-    // Snapshot inicial
-    const c = clientes.get(clienteId)
-    send('snapshot', c?.portalMensagens ?? [])
-    let lastCount = c?.portalMensagens?.length ?? 0
-    let lastIds = new Set((c?.portalMensagens ?? []).map((m) => m.id))
-
-    // Poll-bridge (até WebSocket): observa mudanças no array mensagens
-    // e empurra deltas. Refresh leve a cada 3s, < polling do client.
-    const interval = setInterval(() => {
-      const current = clientes.get(clienteId)?.portalMensagens ?? []
-      if (current.length !== lastCount) {
-        const novas = current.filter((m) => !lastIds.has(m.id))
-        for (const m of novas) send('mensagem', m)
-        lastIds = new Set(current.map((m) => m.id))
-        lastCount = current.length
-      }
-    }, 3_000)
+    const initial = await listPortalMessages(clienteId)
+    send('snapshot', initial)
+    let lastIds = new Set(initial.map(m => m.id))
+    let checking = false
+    const interval = setInterval(async () => {
+      if (checking || reply.raw.destroyed) return
+      checking = true
+      try {
+        const access = await loadPortalAccess(clienteId)
+        const claims = req.user as PortalJwtPayload & { exp?: number }
+        if (!access?.ativo || claims.authVersion !== access.atualizadoEm || (claims.exp && claims.exp * 1000 <= Date.now())) { reply.raw.end(); return }
+        const current = await listPortalMessages(clienteId)
+        for (const message of current) if (!lastIds.has(message.id)) send('mensagem', message)
+        lastIds = new Set(current.map(message => message.id))
+      } catch { reply.raw.end() } finally { checking = false }
+    }, 5_000)
 
     const heartbeat = setInterval(() => {
       reply.raw.write(`: heartbeat\n\n`)
     }, 25_000)
 
-    req.raw.on('close', () => {
+    reply.raw.on('close', () => {
       clearInterval(interval)
       clearInterval(heartbeat)
     })
@@ -1230,14 +895,7 @@ export default async function (fastify: FastifyInstance) {
    * sempre pode ver tudo sobre si. */
   fastify.get('/api/portal/auditoria', { preHandler: autenticarPortal }, async (req) => {
     const clienteId = (req as any).clienteId as string
-    const eventos = listarEventos(clienteId, 80).map((e) => ({
-      id: e.id,
-      tipo: e.tipo,
-      canal: e.canal,
-      criadoEm: e.criadoEm,
-      ip: e.ip ? maskIp(e.ip) : undefined,
-      detalhes: e.detalhes,
-    }))
+    const eventos = await portalAudit(clienteId)
     return { success: true, data: eventos }
   })
 
@@ -1258,14 +916,12 @@ export default async function (fastify: FastifyInstance) {
       },
       perfil: projetarClienteMe(clienteId),
       contrato: projetarContrato(clienteId),
-      timeline: projetarTimeline(clienteId),
-      documentos: projetarDocumentos(clienteId),
-      pendencias: listarPendencias(clienteId),
-      uploads: listarUploads(clienteId).map(({ nomeStorage: _ns, ...u }) => u),
-      mensagens: c.portalMensagens ?? [],
-      auditoria: listarEventos(clienteId, 200).map((e) => ({
-        ...e, ip: e.ip ? maskIp(e.ip) : undefined,
-      })),
+      timeline: await projetarTimeline(clienteId),
+      documentos: await projetarDocumentos(clienteId),
+      pendencias: (await portalDocumentService.listarPendencias(clienteId)).map(publicPortalRequest),
+      uploads: (await portalDocumentService.listarUploads(clienteId)).filter(canClientSeeUpload).map(publicPortalUpload),
+      mensagens: await listPortalMessages(clienteId),
+      auditoria: await portalAudit(clienteId, 200),
     }
     reply.header('Content-Type', 'application/json; charset=utf-8')
     reply.header(
@@ -1284,194 +940,7 @@ export default async function (fastify: FastifyInstance) {
     const body = req.body as { documentoId?: string; provider?: 'govbr' | 'clicksign' | 'd4sign' } | undefined
     const docId = body?.documentoId
     if (!docId) return reply.status(400).send({ success: false, error: 'documentoId obrigatório' })
-    const provider = body?.provider || 'govbr'
-    // Em produção: chamar provider e devolver URL. Hoje: link de demo.
-    return {
-      success: true,
-      data: {
-        provider,
-        url: `https://assinatura.aletis.com.br/iniciar?cli=${encodeURIComponent(clienteId)}&doc=${encodeURIComponent(docId)}&p=${provider}`,
-        expiraEm: new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString(),
-        modo: 'preview',
-      },
-    }
-  })
-
-  /* ── GET /api/portal/pendencias ────────────────────────────────────────
-   * Inbox de documentos solicitados pelo consultor. */
-  fastify.get('/api/portal/pendencias', { preHandler: autenticarPortal }, async (req) => {
-    const clienteId = (req as any).clienteId as string
-    return { success: true, data: listarPendencias(clienteId) }
-  })
-
-  /* ── POST /api/portal/upload ───────────────────────────────────────────
-   * Upload de documento pelo cliente. Suporta multipart se @fastify/multipart
-   * estiver registrado; senão aceita base64 em JSON (fallback). */
-  fastify.post('/api/portal/upload', { preHandler: autenticarPortal, bodyLimit: 30 * 1024 * 1024 }, async (req, reply) => {
-    const clienteId = (req as any).clienteId as string
-    await ensureUploadDir()
-
-    let buf: Buffer | null = null
-    let nomeOriginal = 'arquivo.bin'
-    let mime = 'application/octet-stream'
-    let pendenciaId: string | undefined
-    let categoria: string | undefined
-
-    const ct = (req.headers['content-type'] || '').toString()
-    if (ct.startsWith('application/json')) {
-      const parsed = parseBody(UploadJsonSchema, req, reply)
-      if (!parsed) return
-      buf = Buffer.from(parsed.conteudoBase64, 'base64')
-      nomeOriginal = (parsed.nome || 'arquivo.bin').slice(0, 255)
-      mime = (parsed.mime || 'application/octet-stream').slice(0, 200)
-      pendenciaId = parsed.pendenciaId
-      categoria = parsed.categoria
-    } else {
-      // multipart: usa @fastify/multipart se disponível em runtime
-      try {
-        const mp = await (req as any).file?.()
-        if (!mp) {
-          return reply.status(400).send({ success: false, error: 'Arquivo ausente', code: 'BAD_REQUEST' })
-        }
-        nomeOriginal = (mp.filename || 'arquivo.bin').slice(0, 255)
-        mime = (mp.mimetype || 'application/octet-stream').slice(0, 200)
-        pendenciaId = (mp.fields?.pendenciaId?.value as string | undefined) || undefined
-        categoria = (mp.fields?.categoria?.value as string | undefined) || undefined
-        buf = await mp.toBuffer()
-      } catch {
-        return reply.status(415).send({ success: false, error: 'Formato não suportado. Use JSON com conteudoBase64 ou multipart.', code: 'UNSUPPORTED' })
-      }
-    }
-
-    if (!buf || buf.length === 0) {
-      return reply.status(400).send({ success: false, error: 'Arquivo vazio', code: 'EMPTY_FILE' })
-    }
-    if (buf.length > UPLOAD_MAX_BYTES) {
-      return reply.status(413).send({ success: false, error: 'Arquivo excede 25MB', code: 'TOO_LARGE' })
-    }
-    if (!UPLOAD_ALLOWED_MIMES.has(mime)) {
-      return reply.status(415).send({ success: false, error: `Tipo não permitido: ${mime}`, code: 'BAD_MIME' })
-    }
-
-    const sha = createHash('sha256').update(buf).digest('hex')
-    const id = `up-${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`
-    const ext = nomeOriginal.includes('.') ? nomeOriginal.split('.').pop()!.slice(0, 8) : 'bin'
-    const nomeStorage = `${clienteId}__${id}.${ext}`
-    await writeFile(join(UPLOAD_DIR, nomeStorage), buf)
-
-    const upload = adicionarUpload({
-      clienteId,
-      pendenciaId,
-      nomeOriginal,
-      nomeStorage,
-      mime,
-      tamanho: buf.length,
-      sha256: sha,
-      categoria,
-      enviadoPor: 'cliente',
-      url: `/api/portal/uploads/${id}`,
-    })
-
-    if (pendenciaId) {
-      atualizarPendencia(clienteId, pendenciaId, {
-        status: 'enviado',
-        uploadId: upload.id,
-        enviadoEm: upload.enviadoEm,
-      })
-    }
-
-    registrarEvento({
-      clienteId, tipo: 'documento_enviado', canal: 'web',
-      ip: clientIp(req), userAgent: req.headers['user-agent'] as string | undefined,
-      detalhes: { uploadId: upload.id, nome: nomeOriginal, tamanho: buf.length },
-    })
-
-    return reply.status(201).send({ success: true, data: upload })
-  })
-
-  /* ── GET /api/portal/uploads ──────────────────────────────────────────
-   * Lista do cofre digital (uploads do cliente). */
-  fastify.get('/api/portal/uploads', { preHandler: autenticarPortal }, async (req) => {
-    const clienteId = (req as any).clienteId as string
-    return { success: true, data: listarUploads(clienteId) }
-  })
-
-  /* ── GET /api/portal/uploads/:id — download ──────────────────────────
-   * Download por id; só dono pode acessar. */
-  fastify.get('/api/portal/uploads/:id', { preHandler: autenticarPortal }, async (req, reply) => {
-    const clienteId = (req as any).clienteId as string
-    const id = (req.params as { id: string }).id
-    const upload = buscarUpload(clienteId, id)
-    if (!upload) return reply.status(404).send({ success: false, error: 'Arquivo não encontrado' })
-    try {
-      const data = await readFile(join(UPLOAD_DIR, upload.nomeStorage))
-      reply.header('Content-Type', upload.mime)
-      reply.header('Content-Disposition', `inline; filename="${encodeURIComponent(upload.nomeOriginal)}"`)
-      return reply.send(data)
-    } catch {
-      return reply.status(410).send({ success: false, error: 'Arquivo indisponível', code: 'GONE' })
-    }
-  })
-
-  /* ──────────────────────────────────────────────────────────────────────
-   *  Endpoints admin (consultor) — CRUD de pendências do cliente.
-   *  Sem autenticação adicional aqui (mesmo padrão das outras rotas
-   *  /api/clientes/:id), assumindo proteção upstream do dashboard
-   *  do consultor.
-   * ────────────────────────────────────────────────────────────────────── */
-  fastify.get('/api/clientes/:id/portal/pendencias', async (req, reply) => {
-    const { id } = req.params as { id: string }
-    if (!clientes.get(id)) return reply.status(404).send({ success: false, error: 'Cliente não encontrado' })
-    return { success: true, data: listarPendencias(id) }
-  })
-
-  fastify.post('/api/clientes/:id/portal/pendencias', async (req, reply) => {
-    const { id } = req.params as { id: string }
-    if (!clientes.get(id)) return reply.status(404).send({ success: false, error: 'Cliente não encontrado' })
-    const body = req.body as {
-      titulo?: string
-      descricao?: string
-      categoria?: 'fiscal' | 'contrato' | 'identidade' | 'patrimonio' | 'agro' | 'outros'
-      obrigatorio?: boolean
-      solicitadoPor?: string
-    } | undefined
-    const titulo = body?.titulo?.trim()
-    if (!titulo) return reply.status(400).send({ success: false, error: 'titulo obrigatório' })
-    const p = criarPendencia({
-      clienteId: id,
-      titulo,
-      descricao: body?.descricao,
-      categoria: body?.categoria || 'outros',
-      obrigatorio: body?.obrigatorio !== false,
-      solicitadoPor: body?.solicitadoPor,
-    })
-    registrarEvento({ clienteId: id, tipo: 'pendencia_criada', canal: 'consultor', detalhes: { pendenciaId: p.id, titulo } })
-    return reply.status(201).send({ success: true, data: p })
-  })
-
-  fastify.patch('/api/clientes/:id/portal/pendencias/:pid', async (req, reply) => {
-    const { id, pid } = req.params as { id: string; pid: string }
-    const body = req.body as {
-      status?: 'pendente' | 'enviado' | 'aprovado' | 'rejeitado'
-      observacao?: string
-    } | undefined
-    const upd = atualizarPendencia(id, pid, {
-      status: body?.status,
-      observacao: body?.observacao,
-      revisadoEm: body?.status === 'aprovado' || body?.status === 'rejeitado' ? new Date().toISOString() : undefined,
-    })
-    if (!upd) return reply.status(404).send({ success: false, error: 'Pendência não encontrada' })
-    if (upd.status === 'aprovado' || upd.status === 'rejeitado') {
-      registrarEvento({ clienteId: id, tipo: 'pendencia_resolvida', canal: 'consultor', detalhes: { pendenciaId: pid, status: upd.status } })
-    }
-    return { success: true, data: upd }
-  })
-
-  fastify.delete('/api/clientes/:id/portal/pendencias/:pid', async (req, reply) => {
-    const { id, pid } = req.params as { id: string; pid: string }
-    const ok = removerPendencia(id, pid)
-    if (!ok) return reply.status(404).send({ success: false, error: 'Pendência não encontrada' })
-    return { success: true }
+    return reply.code(501).send({success:false,error:'A assinatura eletrônica ainda não foi configurada. Sua equipe informará como assinar este documento.',code:'SIGNATURE_NOT_CONFIGURED'})
   })
 
   /* ── POST /api/clientes/:id/portal/convidar ──────────────────────────
@@ -1535,11 +1004,11 @@ export default async function (fastify: FastifyInstance) {
       }
       const { hashSenha } = await import('../services/PortalAuthService.js')
       const novo = hashSenha(novaSenha)
-      cliente.portalAcesso.senhaHash = novo.senhaHash
-      cliente.portalAcesso.salt = novo.salt
-      cliente.portalAcesso.forcaTrocaSenha = false
-      cliente.portalAcesso.atualizadoEm = new Date().toISOString()
-      return { success: true, data: { trocada: true } }
+      const access = await savePortalAccess(cliente.id, { ...cliente.portalAcesso, ...novo, forcaTrocaSenha:false, atualizadoEm:new Date().toISOString() }, cliente.portalAcesso.senhaHash)
+      const token = fastify.jwt.sign({sub:cliente.id,usuario:access.usuario,kind:'portal-cliente',authVersion:access.atualizadoEm})
+      portalCookie(request, reply, token)
+      return { success: true, data: { trocada: true, token } }
     }
   )
 }
+import { registerFiscalConnectionRoutes } from '../services/fiscal-connection/FiscalConnectionRoutes.js'

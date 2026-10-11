@@ -11,6 +11,41 @@ import { DataSourceManager, type DataSourceCategory } from '../services/DataSour
 export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
   const manager = DataSourceManager.getInstance();
 
+  const historicoIndisponivel = (desde: Date, aviso: string) => ({
+    sucesso: true,
+    source: 'memory' as const,
+    aviso,
+    desde: desde.toISOString(),
+    total: 0,
+    eventos: [],
+  });
+
+  const uptimeRuntime = (horas: number, desde: Date, aviso: string) => {
+    const fontes = manager.getSourceStatus().map((fonte) => {
+      const statusAtual = fonte.status === 'unknown' ? 'offline' : fonte.status;
+      const uptimePct = statusAtual === 'online' ? 100 : statusAtual === 'degraded' ? 50 : 0;
+      return {
+        nome: fonte.nome,
+        statusAtual,
+        transitions: 0,
+        uptimePct,
+      };
+    });
+    const media = fontes.length === 0
+      ? 0
+      : Number((fontes.reduce((total, fonte) => total + fonte.uptimePct, 0) / fontes.length).toFixed(1));
+
+    return {
+      sucesso: true,
+      source: 'memory' as const,
+      aviso,
+      janelaHoras: horas,
+      desde: desde.toISOString(),
+      media,
+      fontes: fontes.sort((a, b) => a.uptimePct - b.uptimePct),
+    };
+  };
+
   // Dispara uma sondagem leve na primeira consulta de status quando
   // nenhuma fonte foi ainda verificada. Isso elimina o estado "desconhecido"
   // inicial sem bloquear a resposta do endpoint.
@@ -325,23 +360,19 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
   //   - desde=ISO          recorta a partir de uma data (default: 7 dias)
   //   - limit=N            máximo de eventos (default: 100, max 500)
   fastify.get('/api/fontes/historico', async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const q = request.query as { fonte?: string; desde?: string; limit?: string }
-      const limit = Math.min(Math.max(Number(q.limit) || 100, 1), 500)
-      const desde = q.desde ? new Date(q.desde) : new Date(Date.now() - 7 * 24 * 3600 * 1000)
-      if (isNaN(desde.getTime())) {
-        return reply.status(400).send({ sucesso: false, erro: '`desde` deve ser ISO 8601 válido' })
-      }
+    const q = request.query as { fonte?: string; desde?: string; limit?: string }
+    const limit = Math.min(Math.max(Number(q.limit) || 100, 1), 500)
+    const desde = q.desde ? new Date(q.desde) : new Date(Date.now() - 7 * 24 * 3600 * 1000)
+    if (isNaN(desde.getTime())) {
+      return reply.status(400).send({ sucesso: false, erro: '`desde` deve ser ISO 8601 válido' })
+    }
 
+    try {
       const { isPgEnabled, getDb } = await import('../db/client.js')
       if (!isPgEnabled()) {
-        return reply.status(200).send({
-          sucesso: true,
-          aviso: 'PG desligado — sem histórico persistido. Habilite ALETIS_PG_ENABLED=1.',
-          desde: desde.toISOString(),
-          total: 0,
-          eventos: [],
-        })
+        return reply.status(200).send(
+          historicoIndisponivel(desde, 'Histórico persistido indisponível; exibindo somente o snapshot desta instância.'),
+        )
       }
 
       const { auditLog } = await import('../db/schema.js')
@@ -375,13 +406,16 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
 
       return reply.status(200).send({
         sucesso: true,
+        source: 'postgres',
         desde: desde.toISOString(),
         total: eventos.length,
         eventos,
       })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'erro desconhecido'
-      return reply.status(500).send({ sucesso: false, erro: msg })
+      request.log.warn({ err }, '[Fontes] Histórico persistido indisponível; usando memória.')
+      return reply.status(200).send(
+        historicoIndisponivel(desde, 'Histórico persistido indisponível; exibindo somente o snapshot desta instância.'),
+      )
     }
   })
 
@@ -391,21 +425,16 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
   // Heurística: a fonte está no estado atual desde a última transition
   // ou desde a primeira observação (se não houver transition no período).
   fastify.get('/api/fontes/uptime', async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const q = request.query as { horas?: string }
-      const horas = Math.min(Math.max(Number(q.horas) || 24, 1), 720)
-      const desde = new Date(Date.now() - horas * 3600 * 1000)
+    const q = request.query as { horas?: string }
+    const horas = Math.min(Math.max(Number(q.horas) || 24, 1), 720)
+    const desde = new Date(Date.now() - horas * 3600 * 1000)
 
+    try {
       const { isPgEnabled, getDb } = await import('../db/client.js')
       if (!isPgEnabled()) {
-        return reply.status(200).send({
-          sucesso: true,
-          aviso: 'PG desligado — uptime indisponível.',
-          janelaHoras: horas,
-          desde: desde.toISOString(),
-          media: 0,
-          fontes: [],
-        })
+        return reply.status(200).send(
+          uptimeRuntime(horas, desde, 'Telemetria persistida indisponível; uptime calculado do snapshot desta instância.'),
+        )
       }
 
       const { listFonteStatus } = await import('../db/FonteStatusRepository.js')
@@ -479,14 +508,17 @@ export async function fontesRoutes(fastify: FastifyInstance): Promise<void> {
 
       return reply.status(200).send({
         sucesso: true,
+        source: 'postgres',
         janelaHoras: horas,
         desde: desde.toISOString(),
         media: mediaUptime,
         fontes: fontes.sort((a, b) => a.uptimePct - b.uptimePct),
       })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'erro desconhecido'
-      return reply.status(500).send({ sucesso: false, erro: msg })
+      request.log.warn({ err }, '[Fontes] Uptime persistido indisponível; usando memória.')
+      return reply.status(200).send(
+        uptimeRuntime(horas, desde, 'Telemetria persistida indisponível; uptime calculado do snapshot desta instância.'),
+      )
     }
   })
 

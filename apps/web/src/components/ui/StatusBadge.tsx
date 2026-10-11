@@ -40,7 +40,7 @@ export function inferStatusTone(label: string): StatusTone {
 
 export default function StatusBadge({ label, tone, size = 'sm', prefix, uppercase = true }: Props) {
   const finalTone = tone ?? inferStatusTone(label)
-  const sizeCls = size === 'sm' ? 'text-[10px] px-1.5 py-0.5' : 'text-xs px-2 py-0.5'
+  const sizeCls = size === 'sm' ? 'text-[11px] px-1.5 py-0.5' : 'text-xs px-2 py-0.5'
   return (
     <span
       className={`inline-flex items-center gap-1 rounded ring-1 font-bold tracking-wider ${

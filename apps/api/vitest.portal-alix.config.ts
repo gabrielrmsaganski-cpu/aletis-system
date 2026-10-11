@@ -1,0 +1,2 @@
+import { defineConfig } from 'vitest/config'
+export default defineConfig({test:{include:['tests/api/portal-alix-persistence.test.ts','tests/api/portal-alix-public-context.test.ts','tests/api/portal-alix-routes.test.ts'],environment:'node',testTimeout:30000,hookTimeout:30000,maxWorkers:1,fileParallelism:false,env:{NODE_ENV:'test',ALETIS_PG_ENABLED:'0',ALIX_LLM_ENABLED:'false',ALETIS_PORTAL_PROCESSOR_ENABLED:'false'}}})

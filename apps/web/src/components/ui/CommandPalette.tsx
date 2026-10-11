@@ -1,424 +1,155 @@
-/**
- * CommandPalette — busca global + navegação rápida (⌘K / Ctrl+K).
- *
- * Overlay fullscreen-blur com:
- *   - input de busca sempre focado
- *   - resultados agrupados por categoria
- *   - navegação por teclado (↑ ↓ Enter Esc)
- *   - "recentes" persistidos em localStorage
- *
- * Registrado globalmente no Layout. Dispara por:
- *   - Cmd+K / Ctrl+K em qualquer página
- *   - Clique na barra de busca do Header
- *   - Evento custom window.dispatchEvent(new Event('aletis:palette:open'))
- */
+/** Busca global: registros reais do CRM, propostas e catálogo de ferramentas. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, X, CornerDownLeft, Clock, Command, ArrowUp, ArrowDown } from 'lucide-react'
-import {
-  CATEGORIES,
-  searchTools,
-  TOOL_CATALOG,
-  type ToolEntry,
-} from '../../navigation/toolCatalog'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { Search, X, CornerDownLeft, Clock, Command, Users, FileText, Loader2, AlertCircle, type LucideIcon } from 'lucide-react'
+import { CATEGORIES, searchTools, TOOL_CATALOG, type ToolEntry } from '../../navigation/toolCatalog'
+import { useEntitySearch } from '../../hooks/useEntitySearch'
+import type { SearchEntity } from '../../navigation/entitySearch'
 import BrandMark from './BrandMark'
+import { useNavigationPreferences } from '../../hooks/useNavigationPreferences'
 
-const RECENT_KEY = 'aletis:palette:recent'
-const RECENT_MAX = 5
-
-function getRecent(): string[] {
-  try {
-    const raw = localStorage.getItem(RECENT_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.slice(0, RECENT_MAX) : []
-  } catch {
-    return []
-  }
+interface PaletteResult {
+  id: string
+  title: string
+  description: string
+  route: string
+  icon: LucideIcon
+  label: string
+  toolId?: string
 }
 
-function pushRecent(id: string) {
-  try {
-    const current = getRecent().filter((x) => x !== id)
-    current.unshift(id)
-    localStorage.setItem(RECENT_KEY, JSON.stringify(current.slice(0, RECENT_MAX)))
-  } catch {
-    /* noop */
-  }
-}
+interface ResultGroup { id: string; label: string; items: PaletteResult[]; total?: number }
 
-type GroupedResults = Array<{
-  category: (typeof CATEGORIES)[number]
-  tools: ToolEntry[]
-}>
+const toolResult = (tool: ToolEntry): PaletteResult => ({ id: `tool:${tool.id}`, title: tool.title, description: tool.tagline, route: tool.route, icon: tool.icon, label: 'Ferramenta', toolId: tool.id })
+const entityResult = (entity: SearchEntity): PaletteResult => ({ ...entity, icon: entity.kind === 'cliente' ? Users : FileText, label: entity.status || (entity.kind === 'cliente' ? 'Cliente' : 'Proposta') })
 
-function groupByCategory(tools: ToolEntry[]): GroupedResults {
-  return CATEGORIES.map((category) => ({
-    category,
-    tools: tools.filter((t) => t.category === category.id),
-  })).filter((g) => g.tools.length > 0)
-}
-
-interface CommandPaletteProps {
-  open: boolean
-  onClose: () => void
-}
-
-export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
+export default function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate()
+  const reducedMotion = useReducedMotion()
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
-  const [recent, setRecent] = useState<string[]>([])
+  const { recent, favorites } = useNavigationPreferences()
   const inputRef = useRef<HTMLInputElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const search = useEntitySearch(query, open)
+  const hasQuery = Boolean(query.trim())
 
   useEffect(() => {
-    if (open) {
-      setQuery('')
-      setActiveIndex(0)
-      setRecent(getRecent())
-      const t = window.setTimeout(() => inputRef.current?.focus(), 20)
-      return () => window.clearTimeout(t)
+    if (!open) return
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    setQuery('')
+    setActiveIndex(0)
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 20)
+    return () => {
+      window.clearTimeout(timer)
+      document.body.style.overflow = previousOverflow
+      previousFocus?.focus()
     }
-    return
   }, [open])
 
-  const results = useMemo(() => searchTools(query), [query])
-  const groupedAll = useMemo(() => groupByCategory(results), [results])
-
-  /** Lista plana na ordem visual, para resolver activeIndex → tool */
-  const flatVisible: ToolEntry[] = useMemo(() => {
-    if (!query && recent.length > 0) {
-      const recentTools = recent
-        .map((id) => TOOL_CATALOG.find((t) => t.id === id))
-        .filter((t): t is ToolEntry => !!t)
-      const others = TOOL_CATALOG.filter((t) => !recent.includes(t.id))
-      return [...recentTools, ...others]
+  const groups = useMemo<ResultGroup[]>(() => {
+    const tools = searchTools(query)
+    const resultForTool = (tool: ToolEntry): PaletteResult => ({ ...toolResult(tool), route: recent.find((item) => item.toolId === tool.id)?.route ?? tool.route })
+    if (hasQuery) {
+      return [
+        { id: 'clients', label: 'Clientes', items: search.clients.map(entityResult), total: search.totalClients },
+        { id: 'proposals', label: 'Propostas', items: search.proposals.map(entityResult), total: search.totalProposals },
+        { id: 'tools', label: 'Ferramentas e páginas', items: tools.slice(0, 12).map(resultForTool), total: tools.length },
+      ].filter((group) => group.items.length)
     }
-    return groupedAll.flatMap((g) => g.tools)
-  }, [query, recent, groupedAll])
+    const recentTools = recent.map((item) => TOOL_CATALOG.find((tool) => tool.id === item.toolId)).filter((tool): tool is ToolEntry => Boolean(tool) && !favorites.includes(tool!.id))
+    const favoriteTools = favorites.map((id) => TOOL_CATALOG.find((tool) => tool.id === id)).filter((tool): tool is ToolEntry => Boolean(tool))
+    const featured = new Set([...favorites, ...recent.map((item) => item.toolId)])
+    return [
+      { id: 'favorites', label: 'Seus favoritos', items: favoriteTools.map(resultForTool) },
+      { id: 'recent', label: 'Ferramentas recentes', items: recentTools.map(resultForTool) },
+      ...CATEGORIES.map((category) => ({ id: category.id, label: category.label, items: tools.filter((tool) => tool.category === category.id && !featured.has(tool.id)).map(resultForTool) })),
+    ].filter((group) => group.items.length)
+  }, [query, hasQuery, recent, favorites, search.clients, search.proposals, search.totalClients, search.totalProposals])
+  const results = useMemo(() => groups.flatMap((group) => group.items), [groups])
+  const activeId = results[activeIndex]?.id
 
-  const activate = useCallback(
-    (tool: ToolEntry) => {
-      pushRecent(tool.id)
-      onClose()
-      navigate(tool.route)
-    },
-    [navigate, onClose]
-  )
+  useEffect(() => { setActiveIndex(0) }, [query, search.query, search.loading])
+  useEffect(() => {
+    if (!open) return
+    panelRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
+  }, [activeId, open])
 
-  const onKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onClose()
-        return
-      }
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        setActiveIndex((i) => Math.min(i + 1, flatVisible.length - 1))
-        return
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        setActiveIndex((i) => Math.max(i - 1, 0))
-        return
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        const tool = flatVisible[activeIndex]
-        if (tool) activate(tool)
-        return
-      }
-    },
-    [activeIndex, flatVisible, activate, onClose]
-  )
+  const activate = useCallback((result: PaletteResult) => {
+    onClose()
+    navigate(result.route)
+  }, [navigate, onClose])
 
-  if (!open) return null
-
-  const showingRecents = !query && recent.length > 0
-  const recentTools = showingRecents
-    ? recent
-        .map((id) => TOOL_CATALOG.find((t) => t.id === id))
-        .filter((t): t is ToolEntry => !!t)
-    : []
-  const groupedStart = showingRecents
-    ? recentTools.length
-    : 0
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') { event.preventDefault(); onClose(); return }
+    if (event.key === 'Tab') {
+      const focusable = panelRef.current?.querySelectorAll<HTMLElement>('input, button:not([tabindex="-1"]):not(:disabled)')
+      const first = focusable?.[0]
+      const last = focusable?.[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+    }
+    if (event.target !== inputRef.current) return
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      setActiveIndex((index) => Math.max(0, Math.min(results.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1))))
+    }
+    if (event.key === 'Enter' && results[activeIndex]) { event.preventDefault(); activate(results[activeIndex]) }
+  }
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-start justify-center px-4 pt-[10vh] md:pt-[14vh]"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Paleta de comandos"
-      onKeyDown={onKeyDown}
-    >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-aletis-grafite-escuro/50 backdrop-blur-md animate-fade-in"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* Panel */}
-      <div
-        className="
-          relative w-full max-w-2xl
-          bg-white dark:bg-[#1a1a1e]
-          border border-aletis-borda dark:border-white/10
-          rounded-2xl
-          shadow-[0_30px_80px_-20px_rgba(15,76,53,0.45)]
-          animate-slide-up overflow-hidden
-          flex flex-col max-h-[75vh]
-        "
-      >
-        {/* Brand header — assinatura ALETIS na abertura da paleta */}
-        <div
-          className="px-5 py-3.5 border-b border-aletis-cream-escuro/60 flex items-center justify-between"
-          style={{
-            backgroundImage:
-              'linear-gradient(180deg, rgba(23,37,27,0.96) 0%, rgba(13,22,17,0.98) 100%), url(/brand/pattern/repetidor.png)',
-            backgroundSize: 'auto, 240px',
-            backgroundBlendMode: 'normal, soft-light',
-          }}
-        >
-          <BrandMark variant="full" tone="cream" size={28} />
-          <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-display font-semibold tracking-[0.18em] uppercase text-aletis-gold/85">
-            <Command size={11} />
-            Paleta de comandos
-          </span>
-        </div>
-
-        {/* Search bar */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-aletis-borda dark:border-white/10">
-          <Search size={18} className="text-aletis-grafite-medio dark:text-white/40 flex-shrink-0" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value)
-              setActiveIndex(0)
-            }}
-            placeholder="Buscar ferramenta, cliente, relatório..."
-            className="flex-1 bg-transparent outline-none text-[15px] text-aletis-grafite-escuro dark:text-white placeholder:text-aletis-grafite-claro dark:placeholder:text-white/30"
-            aria-label="Buscar"
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-aletis-grafite-claro hover:bg-aletis-bege dark:hover:bg-white/5 transition-colors"
-            aria-label="Fechar"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Results */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar py-2">
-          {flatVisible.length === 0 && (
-            <div className="px-5 py-12 text-center">
-              <p className="text-sm text-aletis-grafite-medio dark:text-white/50">
-                Nenhum resultado para <span className="font-semibold">"{query}"</span>
-              </p>
-              <p className="mt-1 text-xs text-aletis-grafite-claro dark:text-white/40">
-                Tente "custeio", "alix", "propostas" ou "cotações".
-              </p>
+    <AnimatePresence>
+      {open && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reducedMotion ? 0 : 0.15 }} className="fixed inset-0 z-[100] flex items-start justify-center px-3 pt-[5dvh] sm:px-4 sm:pt-[10dvh]" onKeyDown={onKeyDown}>
+          <div className="absolute inset-0 bg-aletis-grafite-escuro/50 backdrop-blur-md" onClick={onClose} aria-hidden="true" />
+          <motion.div ref={panelRef} role="dialog" aria-modal="true" aria-label="Busca global ALETIS" initial={{ opacity: 0, y: reducedMotion ? 0 : 12 }} animate={{ opacity: 1, y: 0 }} className="relative flex max-h-[85dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-aletis-borda bg-card shadow-2xl dark:border-white/10 dark:bg-[#1a1a1e]">
+            <div className="flex items-center justify-between bg-aletis-verde-escuro px-5 py-3">
+              <BrandMark variant="full" tone="cream" size={28} />
+              <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-aletis-gold"><Command size={12} /> Busca global</span>
             </div>
-          )}
-
-          {showingRecents && recentTools.length > 0 && (
-            <Section label="Recentes" icon={<Clock size={11} />}>
-              {recentTools.map((tool, i) => (
-                <ResultRow
-                  key={tool.id}
-                  tool={tool}
-                  active={activeIndex === i}
-                  onMouseEnter={() => setActiveIndex(i)}
-                  onClick={() => activate(tool)}
-                />
-              ))}
-            </Section>
-          )}
-
-          {showingRecents &&
-            CATEGORIES.map((cat) => {
-              const tools = TOOL_CATALOG.filter(
-                (t) => t.category === cat.id && !recent.includes(t.id)
-              )
-              if (tools.length === 0) return null
-              return (
-                <Section key={cat.id} label={cat.label}>
-                  {tools.map((tool) => {
-                    const idx = flatVisible.findIndex((t) => t.id === tool.id)
+            <div className="flex items-center gap-3 border-b border-aletis-borda px-4 py-4 dark:border-white/10 sm:px-5">
+              {search.loading ? <Loader2 size={19} className="shrink-0 animate-spin text-foreground" /> : <Search size={19} className="shrink-0 text-[var(--text-soft)] dark:text-white/50" />}
+              <input ref={inputRef} type="text" value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0) }} placeholder="Buscar clientes, propostas ou ferramentas…" className="min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-aletis-grafite-claro dark:text-white" role="combobox" aria-label="Buscar clientes, propostas ou ferramentas" aria-autocomplete="list" aria-expanded="true" aria-controls="aletis-search-results" aria-activedescendant={activeId ? `palette-${activeId}` : undefined} autoComplete="off" spellCheck={false} />
+              <button type="button" onClick={onClose} aria-label="Fechar busca" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[var(--text-soft)] hover:bg-aletis-bege focus-visible:outline focus-visible:outline-2 focus-visible:outline-aletis-verde dark:text-white/60 dark:hover:bg-white/10"><X size={18} /></button>
+            </div>
+            <div className="border-b border-aletis-borda/60 bg-aletis-bege/30 px-5 py-2 text-xs text-[var(--text-soft)] dark:border-white/10 dark:bg-white/5 dark:text-white/60" aria-live="polite" role="status">
+              {search.loading ? 'Consultando clientes e propostas…' : query.trim().length < 2 ? 'Digite ao menos 2 caracteres para encontrar clientes e propostas. As ferramentas estão abaixo.' : `${search.totalClients} cliente(s) · ${search.totalProposals} proposta(s) · ${results.filter((item) => item.toolId).length} ferramenta(s) exibida(s)`}
+            </div>
+            {search.errors.length > 0 && (
+              <div className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-5 py-3 text-xs text-amber-900" role="alert">
+                <AlertCircle size={16} className="shrink-0" /><span className="flex-1">{search.errors.join(' ')} Os demais resultados continuam disponíveis.</span>
+                <button type="button" onClick={search.retry} className="shrink-0 rounded font-semibold underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-800">Tentar novamente</button>
+              </div>
+            )}
+            <div id="aletis-search-results" role="listbox" aria-label="Resultados da busca" aria-busy={search.loading} className="custom-scrollbar flex-1 overflow-y-auto py-2">
+              {!results.length && !search.loading && (
+                <div className="px-5 py-10 text-center"><p className="text-sm text-foreground dark:text-white">Nenhum resultado para “{query.trim()}”.</p><p className="mt-2 text-xs text-[var(--text-soft)] dark:text-white/50">Busque pelo nome do cliente, título ou identificador da proposta, ou nome de uma ferramenta. Documentos e conversas ainda não fazem parte desta busca.</p></div>
+              )}
+              {groups.map((group) => (
+                <div key={group.id} role="group" aria-labelledby={`palette-group-${group.id}`} className="mb-2">
+                  <div id={`palette-group-${group.id}`} className="flex items-center gap-1.5 px-5 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--text-soft)] dark:text-white/50">{group.id === 'recent' && <Clock size={11} />}{group.label}{group.total != null && <span className="ml-auto tracking-normal">{group.items.length < group.total ? `${group.items.length} de ${group.total} · refine a busca` : group.total}</span>}</div>
+                  {group.items.map((result) => {
+                    const Icon = result.icon
+                    const active = result.id === activeId
                     return (
-                      <ResultRow
-                        key={tool.id}
-                        tool={tool}
-                        active={activeIndex === idx}
-                        onMouseEnter={() => setActiveIndex(idx)}
-                        onClick={() => activate(tool)}
-                      />
+                      <button id={`palette-${result.id}`} key={result.id} type="button" role="option" aria-selected={active} tabIndex={-1} onMouseEnter={() => setActiveIndex(results.findIndex((item) => item.id === result.id))} onClick={() => activate(result)} className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors sm:px-5 ${active ? 'bg-aletis-verde/[0.07] dark:bg-white/10' : 'hover:bg-aletis-bege/50 dark:hover:bg-white/5'}`}>
+                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${active ? 'bg-aletis-verde text-white' : 'bg-aletis-bege text-foreground dark:bg-white/5 dark:text-aletis-gold'}`}><Icon size={18} /></span>
+                        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-foreground dark:text-white">{result.title}</span><span className="mt-0.5 block truncate text-xs text-[var(--text-soft)] dark:text-white/50">{result.description}</span></span>
+                        <span className="hidden max-w-28 truncate rounded-full border border-aletis-borda px-2 py-1 text-[10px] capitalize text-[var(--text-soft)] dark:border-white/10 dark:text-white/60 sm:block">{result.label}</span>
+                        {active && <CornerDownLeft size={14} className="shrink-0 text-foreground dark:text-aletis-gold" />}
+                      </button>
                     )
                   })}
-                </Section>
-              )
-            })}
-
-          {!showingRecents &&
-            groupedAll.map((g) => (
-              <Section key={g.category.id} label={g.category.label}>
-                {g.tools.map((tool) => {
-                  const idx = flatVisible.findIndex((t) => t.id === tool.id)
-                  return (
-                    <ResultRow
-                      key={tool.id}
-                      tool={tool}
-                      active={activeIndex === idx}
-                      onMouseEnter={() => setActiveIndex(idx)}
-                      onClick={() => activate(tool)}
-                    />
-                  )
-                })}
-              </Section>
-            ))}
-
-          {/* groupedStart é usado apenas para referência; silenciar warning de linter */}
-          <span className="hidden">{groupedStart}</span>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-aletis-borda dark:border-white/10 bg-aletis-bege/40 dark:bg-white/[0.02] text-[11px] text-aletis-grafite-medio dark:text-white/50">
-          <div className="flex items-center gap-3">
-            <Hint icon={<ArrowUp size={10} />} label="↑" text="navegar" />
-            <Hint icon={<ArrowDown size={10} />} label="↓" text="navegar" />
-            <Hint icon={<CornerDownLeft size={11} />} label="↵" text="abrir" />
-            <Hint label="Esc" text="fechar" />
-          </div>
-          <div className="hidden sm:flex items-center gap-1.5">
-            <Command size={11} />
-            <span>
-              {flatVisible.length} {flatVisible.length === 1 ? 'ferramenta' : 'ferramentas'}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function Section({
-  label,
-  icon,
-  children,
-}: {
-  label: string
-  icon?: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <div className="mb-2">
-      <div className="flex items-center gap-1.5 px-5 pt-3 pb-1.5 text-[10px] font-semibold tracking-[0.2em] uppercase text-aletis-grafite-medio dark:text-white/40">
-        {icon}
-        {label}
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function ResultRow({
-  tool,
-  active,
-  onMouseEnter,
-  onClick,
-}: {
-  tool: ToolEntry
-  active: boolean
-  onMouseEnter: () => void
-  onClick: () => void
-}) {
-  const Icon = tool.icon
-  return (
-    <button
-      type="button"
-      onMouseEnter={onMouseEnter}
-      onClick={onClick}
-      className={`
-        w-full flex items-center gap-3 px-5 py-2.5
-        text-left transition-colors
-        ${
-          active
-            ? 'bg-aletis-verde/[0.06] dark:bg-white/[0.05]'
-            : 'hover:bg-aletis-bege/50 dark:hover:bg-white/[0.03]'
-        }
-      `}
-    >
-      <span
-        className={`
-          flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors
-          ${active ? 'bg-aletis-verde text-white' : 'bg-aletis-bege dark:bg-white/5 text-aletis-verde dark:text-aletis-dourado'}
-        `}
-      >
-        <Icon size={16} />
-      </span>
-      <span className="flex-1 min-w-0">
-        <span className="flex items-center gap-2">
-          <span className="text-[14px] font-semibold text-aletis-grafite-escuro dark:text-white truncate">
-            {tool.title}
-          </span>
-          {tool.badge === 'novo' && (
-            <span className="text-[9px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded-full bg-aletis-dourado/20 text-aletis-dourado-escuro">
-              novo
-            </span>
-          )}
-          {tool.badge === 'ia' && (
-            <span className="text-[9px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded-full bg-aletis-verde/15 text-aletis-verde">
-              IA
-            </span>
-          )}
-          {tool.badge === 'beta' && (
-            <span className="text-[9px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded-full bg-aletis-grafite-medio/15 text-aletis-grafite-medio">
-              beta
-            </span>
-          )}
-        </span>
-        <span className="block text-[12px] text-aletis-grafite-medio dark:text-white/50 truncate">
-          {tool.tagline}
-        </span>
-      </span>
-      {tool.shortcut && (
-        <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono text-aletis-grafite-claro dark:text-white/40 px-2 py-1 rounded border border-aletis-borda dark:border-white/10">
-          {tool.shortcut}
-        </span>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-aletis-borda bg-aletis-bege/30 px-5 py-3 text-[11px] text-[var(--text-soft)] dark:border-white/10 dark:bg-white/5 dark:text-white/50"><span>↑ ↓ navegar · Enter abrir · Esc fechar</span><span className="hidden sm:inline">{results.length} resultados exibidos</span></div>
+          </motion.div>
+        </motion.div>
       )}
-      {active && (
-        <CornerDownLeft
-          size={14}
-          className="flex-shrink-0 text-aletis-verde dark:text-aletis-dourado"
-          aria-hidden="true"
-        />
-      )}
-    </button>
-  )
-}
-
-function Hint({
-  icon,
-  label,
-  text,
-}: {
-  icon?: React.ReactNode
-  label: string
-  text: string
-}) {
-  return (
-    <span className="inline-flex items-center gap-1">
-      <kbd className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded border border-aletis-borda dark:border-white/10 text-[10px] font-mono text-aletis-grafite-medio dark:text-white/60 bg-white dark:bg-white/5">
-        {icon ?? label}
-      </kbd>
-      <span>{text}</span>
-    </span>
+    </AnimatePresence>
   )
 }

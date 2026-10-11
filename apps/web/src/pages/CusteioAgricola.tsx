@@ -1,3 +1,4 @@
+import PageHeader from '../components/ui/PageHeader'
 /**
  * CusteioAgricola — Plano Simples de Custeio Agrícola 2026.
  *
@@ -13,13 +14,13 @@
  */
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Wheat,
   Plus,
   Download,
   Copy,
   Trash2,
-  X,
   Loader2,
   User,
   Map as MapIcon,
@@ -33,7 +34,11 @@ import {
   CheckCircle2,
   Search,
 } from 'lucide-react'
-import { apiFetch } from '../hooks/useApi'
+import { apiFetch, useApi } from '../hooks/useApi'
+import { MotionDialog } from '../components/ui'
+import AppDialog from '../components/ui/AppDialog'
+import { uiAction } from '../components/ui/foundation'
+import { staggerContainer, staggerItem, slideUp } from '../motion/tokens'
 import type {
   PlanoCusteio,
   PlanoCusteioCreatePayload,
@@ -101,6 +106,24 @@ function genId(prefix = 'tmp'): string {
   return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
 }
 
+interface ClienteCusteioOption {
+  id: string
+  nome: string
+  cpfCnpj?: string
+  tipo?: 'pessoa_fisica' | 'pessoa_juridica'
+  email?: string
+  telefone?: string
+  whatsapp?: string
+  cidade?: string
+  uf?: string
+  car?: {
+    codImovel?: string
+    areaImovel?: number
+    municipio?: string
+    uf?: string
+  }
+}
+
 // ────────────────────────────────────────────────────────
 // Página raiz
 // ────────────────────────────────────────────────────────
@@ -118,6 +141,7 @@ export default function CusteioAgricola() {
   const [planoAtual, setPlanoAtual] = useState<PlanoCusteio | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [modalNovoOpen, setModalNovoOpen] = useState(false)
+  const { data: clientes } = useApi<ClienteCusteioOption[]>('/clientes', [])
 
   const loadList = useCallback(async () => {
     setLoading(true)
@@ -211,40 +235,32 @@ export default function CusteioAgricola() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-aletis-verde dark:text-white flex items-center gap-2">
-            <Wheat className="text-aletis-dourado" size={28} />
-            Plano Simples de Custeio Agrícola
-          </h1>
-          <p className="text-sm text-aletis-grafite-medio dark:text-white/60 mt-1">
+      <PageHeader title={<><Wheat className="text-aletis-dourado" size={28} />Plano Simples de Custeio Agrícola</>} description={<> <p className="text-sm text-[var(--text-soft)] dark:text-white/60 mt-1">
             Gera o pleito de crédito de custeio de safra no padrão BNDES/Sicredi (V. 1.1/2026).
-          </p>
-        </div>
-        <button
+          </p> </>} actions={<> <button
           onClick={() => setModalNovoOpen(true)}
           className="bg-aletis-verde text-white px-4 py-2 rounded-lg hover:bg-aletis-verde-escuro transition flex items-center gap-2 shadow-sm"
         >
           <Plus size={18} /> Novo Plano
-        </button>
-      </div>
+        </button> </>} />
 
       {/* Filtros */}
-      <div className="bg-white dark:bg-white/5 rounded-xl p-4 shadow-sm flex gap-3 flex-wrap items-end">
+      <div className="bg-card dark:bg-white/5 rounded-xl p-4 shadow-sm flex gap-3 flex-wrap items-end">
         <div className="flex-1 min-w-[180px]">
-          <label className="text-xs font-semibold text-aletis-grafite-medio dark:text-white/60 uppercase tracking-wide">
-            Cliente ID
+          <label className="text-xs font-semibold text-[var(--text-soft)] dark:text-white/60 uppercase tracking-wide">
+            Cliente
           </label>
-          <input
-            type="text"
+          <select
             value={fClienteId}
             onChange={(e) => setFClienteId(e.target.value)}
-            placeholder="ex: cli_abc"
-            className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-white/10 rounded-lg bg-white dark:bg-white/5 text-sm focus:outline-none focus:border-aletis-dourado"
-          />
+            className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-white/10 rounded-lg bg-card dark:bg-white/5 text-sm focus:outline-none focus:border-aletis-dourado"
+          >
+            <option value="">Todos os clientes</option>
+            {clientes.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.nome}</option>)}
+          </select>
         </div>
         <div className="w-40">
-          <label className="text-xs font-semibold text-aletis-grafite-medio dark:text-white/60 uppercase tracking-wide">
+          <label className="text-xs font-semibold text-[var(--text-soft)] dark:text-white/60 uppercase tracking-wide">
             Safra
           </label>
           <input
@@ -252,17 +268,17 @@ export default function CusteioAgricola() {
             value={fSafra}
             onChange={(e) => setFSafra(e.target.value)}
             placeholder="2025/26"
-            className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-white/10 rounded-lg bg-white dark:bg-white/5 text-sm focus:outline-none focus:border-aletis-dourado"
+            className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-white/10 rounded-lg bg-card dark:bg-white/5 text-sm focus:outline-none focus:border-aletis-dourado"
           />
         </div>
         <div className="w-44">
-          <label className="text-xs font-semibold text-aletis-grafite-medio dark:text-white/60 uppercase tracking-wide">
+          <label className="text-xs font-semibold text-[var(--text-soft)] dark:text-white/60 uppercase tracking-wide">
             Status
           </label>
           <select
             value={fStatus}
             onChange={(e) => setFStatus(e.target.value as typeof fStatus)}
-            className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-white/10 rounded-lg bg-white dark:bg-white/5 text-sm focus:outline-none focus:border-aletis-dourado"
+            className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-white/10 rounded-lg bg-card dark:bg-white/5 text-sm focus:outline-none focus:border-aletis-dourado"
           >
             <option value="">Todos</option>
             <option value="rascunho">Rascunho</option>
@@ -273,33 +289,33 @@ export default function CusteioAgricola() {
         </div>
         <button
           onClick={loadList}
-          className="px-3 py-2 border border-gray-200 dark:border-white/10 rounded-lg text-sm text-aletis-grafite-medio dark:text-white/70 hover:bg-gray-50 dark:hover:bg-white/5 transition flex items-center gap-2"
+          className="px-3 py-2 border border-gray-200 dark:border-white/10 rounded-lg text-sm text-[var(--text-soft)] dark:text-white/70 hover:bg-gray-50 dark:hover:bg-white/5 transition flex items-center gap-2"
         >
           <Search size={14} /> Filtrar
         </button>
       </div>
 
       {/* Lista */}
-      <div className="bg-white dark:bg-white/5 rounded-xl shadow-sm overflow-x-auto custom-scrollbar">
+      <div className="bg-card dark:bg-white/5 rounded-xl shadow-sm overflow-x-auto custom-scrollbar">
         {loading ? (
           <div className="p-10 flex items-center justify-center">
             <Loader2 className="animate-spin text-aletis-dourado" size={28} />
           </div>
         ) : planos.length === 0 ? (
-          <div className="p-10 text-center text-aletis-grafite-medio dark:text-white/50">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-10 text-center text-[var(--text-soft)] dark:text-white/50">
             <Wheat size={40} className="mx-auto mb-3 opacity-40" />
             <p>Nenhum plano de custeio encontrado.</p>
-            <button
+            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
               onClick={() => setModalNovoOpen(true)}
               className="mt-3 text-sm text-aletis-dourado underline"
             >
               Criar primeiro plano
-            </button>
-          </div>
+            </motion.button>
+          </motion.div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="ui-table w-full text-sm">
             <thead className="bg-gray-50 dark:bg-white/5 border-b border-gray-100 dark:border-white/10">
-              <tr className="text-left text-[11px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/60">
+              <tr className="text-left text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/60">
                 <th className="px-4 py-3">Proponente</th>
                 <th className="px-4 py-3">Safra</th>
                 <th className="px-4 py-3">Cultura(s)</th>
@@ -310,13 +326,13 @@ export default function CusteioAgricola() {
                 <th className="px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody>
+            <motion.tbody variants={staggerContainer} initial="hidden" animate="visible">
               {planos.map((p) => {
                 const culturas = Array.from(new Set(p.glebas.map((g) => g.cultura).filter(Boolean)))
                 const area = p.glebas.reduce((a, g) => a + (g.areaHa || 0), 0)
                 return (
-                  <tr
-                    key={p.id}
+                  <motion.tr
+                    key={p.id} variants={staggerItem}
                     className="border-b border-gray-50 dark:border-white/5 hover:bg-gray-50/70 dark:hover:bg-white/5 transition cursor-pointer"
                     onClick={() => abrirPlano(p)}
                   >
@@ -324,12 +340,12 @@ export default function CusteioAgricola() {
                       <div className="font-medium text-aletis-grafite dark:text-white">
                         {p.proponente.nome}
                       </div>
-                      <div className="text-[11px] text-aletis-grafite-medio dark:text-white/50">
+                      <div className="text-[11px] text-[var(--text-soft)] dark:text-white/50">
                         {p.clienteId}
                       </div>
                     </td>
                     <td className="px-4 py-3">{p.safra}</td>
-                    <td className="px-4 py-3 text-aletis-grafite-medio dark:text-white/70">
+                    <td className="px-4 py-3 text-[var(--text-soft)] dark:text-white/70">
                       {culturas.join(', ') || '—'}
                     </td>
                     <td className="px-4 py-3">{area.toFixed(2)}</td>
@@ -341,48 +357,50 @@ export default function CusteioAgricola() {
                         {STATUS_LABEL[p.status]}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-aletis-grafite-medio dark:text-white/50">
+                    <td className="px-4 py-3 text-xs text-[var(--text-soft)] dark:text-white/50">
                       {fmtDate(p.atualizadoEm)}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
-                        <button
+                        <motion.button whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
                           title="Baixar PDF"
                           onClick={() => baixarPdf(p)}
-                          className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-white/10 text-aletis-grafite-medio"
+                          className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-white/10 text-[var(--text-soft)]"
                         >
                           <Download size={14} />
-                        </button>
-                        <button
+                        </motion.button>
+                        <motion.button whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
                           title="Duplicar para nova safra"
                           onClick={() => duplicarPlano(p)}
-                          className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-white/10 text-aletis-grafite-medio"
+                          className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-white/10 text-[var(--text-soft)]"
                         >
                           <Copy size={14} />
-                        </button>
-                        <button
+                        </motion.button>
+                        <motion.button whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
                           title="Excluir"
                           onClick={() => deletarPlano(p)}
                           className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-500/10 text-red-500"
                         >
                           <Trash2 size={14} />
-                        </button>
+                        </motion.button>
                       </div>
                     </td>
-                  </tr>
+                  </motion.tr>
                 )
               })}
-            </tbody>
+            </motion.tbody>
           </table>
         )}
       </div>
 
       {/* Modal Novo Plano */}
-      {modalNovoOpen && (
-        <ModalNovoPlano onClose={() => setModalNovoOpen(false)} onCriar={criarPlano} />
-      )}
+      <AnimatePresence>
+        {modalNovoOpen && (
+          <ModalNovoPlano key="novo-plano" clientes={clientes} onClose={() => setModalNovoOpen(false)} onCriar={criarPlano} />
+        )}
+      </AnimatePresence>
 
-      {/* Drawer Editor */}
+      {/* Editor */}
       {drawerOpen && planoAtual && (
         <PlanoEditor
           plano={planoAtual}
@@ -399,9 +417,11 @@ export default function CusteioAgricola() {
 // ────────────────────────────────────────────────────────
 
 function ModalNovoPlano({
+  clientes,
   onClose,
   onCriar,
 }: {
+  clientes: ClienteCusteioOption[]
   onClose: () => void
   onCriar: (p: PlanoCusteioCreatePayload) => void
 }) {
@@ -410,14 +430,41 @@ function ModalNovoPlano({
   const [nome, setNome] = useState('')
   const [tipo, setTipo] = useState<'PF' | 'PJ'>('PF')
   const [cpfCnpj, setCpfCnpj] = useState('')
+  const [clienteCompleto, setClienteCompleto] = useState<ClienteCusteioOption | null>(null)
+  const [loadingCliente, setLoadingCliente] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  async function selecionarCliente(id: string) {
+    setClienteId(id)
+    setClienteCompleto(null)
+    const summary = clientes.find((cliente) => cliente.id === id)
+    setNome(summary?.nome || '')
+    if (!id) {
+      setCpfCnpj('')
+      return
+    }
+    setLoadingCliente(true)
+    try {
+      const cliente = await apiFetch<ClienteCusteioOption>(`/clientes/${id}`)
+      setClienteCompleto(cliente)
+      const digits = String(cliente.cpfCnpj || '').replace(/\D/g, '')
+      setNome(cliente.nome || summary?.nome || '')
+      setCpfCnpj(digits)
+      setTipo(cliente.tipo === 'pessoa_juridica' || digits.length === 14 ? 'PJ' : 'PF')
+    } catch (error) {
+      alert(`Não foi possível carregar o cadastro canônico: ${(error as Error).message}`)
+    } finally {
+      setLoadingCliente(false)
+    }
+  }
 
   function submit() {
     if (!clienteId || !safra || !nome || !cpfCnpj) {
-      alert('Preencha clienteId, safra, nome e CPF/CNPJ.')
+      alert('Selecione um cliente do CRM e confira safra, nome e CPF/CNPJ.')
       return
     }
     setSaving(true)
+    const car = clienteCompleto?.car
     onCriar({
       clienteId,
       safra,
@@ -425,85 +472,90 @@ function ModalNovoPlano({
         nome,
         tipo,
         cpfCnpj: cpfCnpj.replace(/\D/g, ''),
+        email: clienteCompleto?.email,
+        telefone1: clienteCompleto?.whatsapp || clienteCompleto?.telefone,
       },
+      imoveis: car?.areaImovel && (car.municipio || clienteCompleto?.cidade) && (car.uf || clienteCompleto?.uf) ? [{
+        id: genId('imovel'),
+        nome: car.codImovel ? `Imóvel CAR ${car.codImovel}` : 'Imóvel rural principal',
+        car: car.codImovel,
+        areaTotalHa: car.areaImovel,
+        regimeExploracao: 'proprietario',
+        municipio: car.municipio || clienteCompleto?.cidade || '',
+        uf: car.uf || clienteCompleto?.uf || '',
+      }] : undefined,
     })
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-aletis-verde-escuro rounded-xl shadow-xl w-full max-w-md p-6">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold text-aletis-verde dark:text-white flex items-center gap-2">
-            <Plus size={20} /> Novo Plano de Custeio
-          </h2>
-          <button onClick={onClose} aria-label="Fechar modal" className="p-1.5 rounded-lg text-aletis-grafite-medio hover:text-aletis-grafite">
-            <X size={20} />
-          </button>
-        </div>
-        <div className="space-y-3">
-          <Field label="Cliente ID">
-            <input
-              value={clienteId}
-              onChange={(e) => setClienteId(e.target.value)}
-              className="form-input"
-              placeholder="cli_..."
-            />
-          </Field>
-          <Field label="Safra">
-            <input
-              value={safra}
-              onChange={(e) => setSafra(e.target.value)}
-              className="form-input"
-              placeholder="2025/26"
-            />
-          </Field>
-          <Field label="Nome do Proponente">
-            <input value={nome} onChange={(e) => setNome(e.target.value)} className="form-input" />
-          </Field>
-          <div className="grid grid-cols-[100px_1fr] gap-3">
-            <Field label="Tipo">
-              <select
-                value={tipo}
-                onChange={(e) => setTipo(e.target.value as 'PF' | 'PJ')}
-                className="form-input"
-              >
-                <option value="PF">PF</option>
-                <option value="PJ">PJ</option>
-              </select>
-            </Field>
-            <Field label="CPF/CNPJ">
-              <input
-                value={cpfCnpj}
-                onChange={(e) => setCpfCnpj(e.target.value)}
-                className="form-input"
-                placeholder="somente dígitos"
-              />
-            </Field>
-          </div>
-        </div>
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-aletis-grafite-medio hover:bg-gray-100 dark:hover:bg-white/10 rounded"
+    <MotionDialog
+      title="Novo Plano de Custeio"
+      onClose={onClose}
+      size="md"
+      icon={<Plus size={20} />}
+      swipeToDismiss={!saving}
+    >
+      <div className="space-y-3">
+        <Field label="Cliente do CRM">
+          <select
+            value={clienteId}
+            onChange={(e) => void selecionarCliente(e.target.value)}
+            className="form-input"
+            disabled={loadingCliente}
           >
-            Cancelar
-          </button>
-          <button
-            onClick={submit}
-            disabled={saving}
+            <option value="">Selecione o cliente</option>
+            {clientes.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.nome}</option>)}
+          </select>
+        </Field>
+        <Field label="Safra">
+          <input
+            value={safra}
+            onChange={(e) => setSafra(e.target.value)}
+            className="form-input"
+            placeholder="2025/26"
+          />
+        </Field>
+        <Field label="Nome do Proponente">
+          <input value={nome} readOnly className="form-input bg-gray-50 dark:bg-white/5" />
+        </Field>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[100px_1fr]">
+          <Field label="Tipo">
+            <select
+              value={tipo}
+              onChange={(e) => setTipo(e.target.value as 'PF' | 'PJ')}
+              className="form-input"
+            >
+              <option value="PF">PF</option>
+              <option value="PJ">PJ</option>
+            </select>
+          </Field>
+          <Field label="CPF/CNPJ">
+            <input
+              value={cpfCnpj}
+              readOnly
+              className="form-input bg-gray-50 dark:bg-white/5"
+              placeholder="Não informado no CRM"
+            />
+          </Field>
+        </div>
+      </div>
+      <div className="mt-5 flex justify-end gap-2">
+        <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+          onClick={onClose}
+          className="px-4 py-2 text-sm text-[var(--text-soft)] hover:bg-gray-100 dark:hover:bg-white/10 rounded"
+        >
+          Cancelar
+        </motion.button>
+        <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+          onClick={submit}
+          disabled={saving}
             className="px-4 py-2 text-sm bg-aletis-verde text-white rounded hover:bg-aletis-verde-escuro transition disabled:opacity-50 flex items-center gap-2"
           >
             {saving && <Loader2 size={14} className="animate-spin" />}
             Criar Plano
-          </button>
+          </motion.button>
         </div>
-      </div>
-      <style>{`
-        .form-input { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; font-size: 0.875rem; }
-        .form-input:focus { outline: none; border-color: #c9a84c; }
-        .dark .form-input { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); color: white; }
-      `}</style>
-    </div>
+    </MotionDialog>
   )
 }
 
@@ -590,94 +642,114 @@ function PlanoEditor({
     window.open(`/api/custeio/${draft.id}/pdf`, '_blank')
   }
 
+  const saveStatus = saving ? (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-aletis-borda bg-card px-2.5 py-1 text-xs font-medium text-[var(--text-soft)] dark:border-white/10 dark:bg-white/5 dark:text-aletis-sage">
+      <Loader2 size={12} className="animate-spin" /> Salvando...
+    </span>
+  ) : !dirty ? (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+      <CheckCircle2 size={12} /> Salvo
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+      <AlertCircle size={12} /> Alterações pendentes
+    </span>
+  )
+
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-stretch justify-end">
-      <div className="bg-white dark:bg-aletis-verde-escuro w-full max-w-6xl h-full flex flex-col shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-white/10">
-          <div>
-            <div className="text-xs text-aletis-grafite-medio dark:text-white/50 uppercase tracking-wider">
-              Plano de Custeio — Safra {draft.safra} · v{draft.versao}
-            </div>
-            <h2 className="text-lg font-bold text-aletis-verde dark:text-white flex items-center gap-2">
-              <Wheat size={18} className="text-aletis-dourado" />
-              {draft.proponente.nome || '(sem nome)'}
-            </h2>
-          </div>
-          <div className="flex items-center gap-2">
-            {saving && (
-              <span className="text-xs text-aletis-grafite-medio flex items-center gap-1">
-                <Loader2 size={12} className="animate-spin" /> Salvando…
-              </span>
-            )}
-            {!saving && !dirty && (
-              <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-                <CheckCircle2 size={12} /> Salvo
-              </span>
-            )}
-            <button
-              onClick={baixarPdf}
-              className="px-3 py-1.5 text-sm bg-aletis-verde text-white rounded hover:bg-aletis-verde-escuro flex items-center gap-1"
-            >
-              <Download size={14} /> PDF
-            </button>
-            <button
-              onClick={onClose}
-              className="p-2 text-aletis-grafite-medio hover:bg-gray-100 dark:hover:bg-white/10 rounded"
-            >
-              <X size={18} />
-            </button>
-          </div>
+    <AppDialog
+      title={draft.proponente.nome || 'Plano de custeio'}
+      eyebrow={`Plano de Custeio · Safra ${draft.safra} · v${draft.versao}`}
+      subtitle={`${STATUS_LABEL[draft.status]} · ${draft.clienteId}`}
+      icon={<Wheat className="h-5 w-5" />}
+      size="full"
+      onClose={onClose}
+      bodyClassName="p-0 overflow-hidden"
+      className="md:max-h-[min(94dvh,1040px)]"
+      headerActions={(
+        <>
+          {saveStatus}
+          <button onClick={baixarPdf} className={uiAction.primary}>
+            <Download size={14} /> PDF
+          </button>
+        </>
+      )}
+    >
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-aletis-borda/70 bg-card px-4 py-2 dark:border-white/10 dark:bg-white/[0.03] md:hidden">
+          {saveStatus}
+          <button onClick={baixarPdf} className={`${uiAction.primary} px-3 py-1.5 text-xs`}>
+            <Download size={13} /> PDF
+          </button>
         </div>
 
-        {/* Tabs + content */}
-        <div className="flex-1 flex overflow-hidden">
-          <nav className="w-48 border-r border-gray-100 dark:border-white/10 overflow-y-auto">
-            {TABS.map((t) => {
-              const Icon = t.icon
-              const active = tab === t.key
-              return (
-                <button
-                  key={t.key}
-                  onClick={() => setTab(t.key)}
-                  className={`w-full flex items-center gap-2 px-4 py-3 text-sm transition ${
-                    active
-                      ? 'bg-aletis-verde/5 dark:bg-white/5 text-aletis-verde dark:text-white border-l-4 border-aletis-dourado font-medium'
-                      : 'text-aletis-grafite-medio dark:text-white/60 hover:bg-gray-50 dark:hover:bg-white/5 border-l-4 border-transparent'
-                  }`}
-                >
-                  <Icon size={16} /> {t.label}
-                </button>
-              )
-            })}
+        <div className="min-h-0 flex-1 overflow-y-auto lg:flex lg:overflow-hidden">
+          <nav className="shrink-0 border-b border-aletis-borda/70 bg-card dark:border-white/10 dark:bg-white/[0.02] lg:w-52 lg:border-r lg:border-b-0 lg:bg-transparent">
+            <div className="flex min-w-max overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:block lg:min-w-0 lg:overflow-y-auto">
+              {TABS.map((t) => {
+                const Icon = t.icon
+                const active = tab === t.key
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => setTab(t.key)}
+                    className={`relative flex min-w-max items-center gap-2 px-4 py-3 text-sm transition lg:w-full ${
+                      active
+                        ? 'bg-aletis-verde/5 text-foreground dark:bg-white/5 dark:text-white font-medium'
+                        : 'text-[var(--text-soft)] hover:bg-aletis-cream-papel dark:text-white/60 dark:hover:bg-white/5'
+                    }`}
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId="custeio-tab-indicator"
+                        className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full bg-aletis-dourado lg:left-0 lg:right-auto lg:top-1/2 lg:h-6 lg:w-[3px] lg:-translate-y-1/2 lg:rounded-r-full"
+                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                      />
+                    )}
+                    <Icon size={16} /> {t.label}
+                  </button>
+                )
+              })}
+            </div>
           </nav>
 
-          <div className="flex-1 overflow-y-auto p-6">
-            {tab === 'proponente' && <TabProponente draft={draft} setDraft={(v) => patch('proponente', v)} />}
-            {tab === 'imoveis' && <TabImoveis draft={draft} setDraft={(v) => patch('imoveis', v)} />}
-            {tab === 'glebas' && (
-              <TabGlebas
-                draft={draft}
-                setGlebas={(v) => patch('glebas', v)}
-                imoveis={draft.imoveis}
-              />
-            )}
-            {tab === 'orcamento' && <TabOrcamento draft={draft} setOrcamento={(v) => patch('orcamento', v)} />}
-            {tab === 'cronograma' && <TabCronograma draft={draft} setCronograma={(v) => patch('cronograma', v)} />}
-            {tab === 'comercializacao' && (
-              <TabComercializacao
-                draft={draft}
-                setProjeto={(v) => patch('projeto', v)}
-                setComercializacao={(v) => patch('comercializacao', v)}
-              />
-            )}
-            {tab === 'avais' && <TabAvalistas draft={draft} setAvalistas={(v) => patch('avalistas', v)} />}
+          <div className="lg:flex lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+            <div className="min-w-0 p-4 md:p-6 lg:flex-1 lg:overflow-y-auto">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={tab}
+                initial={{ opacity: 0, x: 8 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                {tab === 'proponente' && <TabProponente draft={draft} setDraft={(v) => patch('proponente', v)} />}
+                {tab === 'imoveis' && <TabImoveis draft={draft} setDraft={(v) => patch('imoveis', v)} />}
+                {tab === 'glebas' && (
+                  <TabGlebas
+                    draft={draft}
+                    setGlebas={(v) => patch('glebas', v)}
+                    imoveis={draft.imoveis}
+                  />
+                )}
+                {tab === 'orcamento' && <TabOrcamento draft={draft} setOrcamento={(v) => patch('orcamento', v)} />}
+                {tab === 'cronograma' && <TabCronograma draft={draft} setCronograma={(v) => patch('cronograma', v)} />}
+                {tab === 'comercializacao' && (
+                  <TabComercializacao
+                    draft={draft}
+                    setProjeto={(v) => patch('projeto', v)}
+                    setComercializacao={(v) => patch('comercializacao', v)}
+                  />
+                )}
+                {tab === 'avais' && <TabAvalistas draft={draft} setAvalistas={(v) => patch('avalistas', v)} />}
+              </motion.div>
+            </AnimatePresence>
           </div>
 
           {/* Side panel — indicadores */}
-          <aside className="w-72 border-l border-gray-100 dark:border-white/10 bg-gray-50 dark:bg-white/5 overflow-y-auto p-4">
+            <aside className="border-t border-aletis-borda/70 bg-aletis-cream-papel/70 p-4 dark:border-white/10 dark:bg-white/[0.04] lg:w-80 lg:shrink-0 lg:overflow-y-auto lg:border-t-0 lg:border-l">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-aletis-grafite-medio dark:text-white/60 flex items-center gap-1">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-soft)] dark:text-white/60 flex items-center gap-1">
                 <TrendingUp size={14} /> Indicadores
               </h3>
               <button
@@ -690,7 +762,7 @@ function PlanoEditor({
               </button>
             </div>
             {!indicadores ? (
-              <p className="text-xs text-aletis-grafite-medio dark:text-white/50">
+              <p className="text-xs text-[var(--text-soft)] dark:text-white/50">
                 Clique em "Recalcular" para gerar VPL, TIR, payback e margem.
               </p>
             ) : (
@@ -715,22 +787,23 @@ function PlanoEditor({
                 )}
               </div>
             )}
-          </aside>
+            </aside>
+          </div>
         </div>
       </div>
-    </div>
+    </AppDialog>
   )
 }
 
 function KV({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50">
+      <div className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50">
         {label}
       </div>
       <div
         className={`text-sm font-medium ${
-          highlight ? 'text-aletis-verde dark:text-aletis-dourado text-base' : 'text-aletis-grafite dark:text-white'
+          highlight ? 'text-foreground dark:text-aletis-dourado text-base' : 'text-aletis-grafite dark:text-white'
         }`}
       >
         {value}
@@ -746,7 +819,7 @@ function KV({ label, value, highlight = false }: { label: string; value: string;
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-xs font-semibold text-aletis-grafite-medio dark:text-white/60 uppercase tracking-wide">
+      <span className="text-xs font-semibold text-[var(--text-soft)] dark:text-white/60 uppercase tracking-wide">
         {label}
       </span>
       <div className="mt-1">{children}</div>
@@ -755,7 +828,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const inputCls =
-  'w-full px-3 py-2 border border-gray-200 dark:border-white/10 rounded-lg bg-white dark:bg-white/5 text-sm focus:outline-none focus:border-aletis-dourado'
+  'w-full px-3 py-2 border border-gray-200 dark:border-white/10 rounded-lg bg-card dark:bg-white/5 text-sm focus:outline-none focus:border-aletis-dourado'
 
 // ── Proponente ──
 function TabProponente({
@@ -776,8 +849,8 @@ function TabProponente({
   return (
     <div className="space-y-5 max-w-2xl">
       <section>
-        <h3 className="text-sm font-bold text-aletis-verde dark:text-white mb-3">Proponente</h3>
-        <div className="grid grid-cols-2 gap-3">
+        <h3 className="text-sm font-bold text-foreground dark:text-white mb-3">Proponente</h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Nome">
             <input className={inputCls} value={p.nome} onChange={(e) => up('nome', e.target.value)} />
           </Field>
@@ -817,8 +890,8 @@ function TabProponente({
         </div>
       </section>
       <section>
-        <h3 className="text-sm font-bold text-aletis-verde dark:text-white mb-3">ATER</h3>
-        <div className="grid grid-cols-2 gap-3">
+        <h3 className="text-sm font-bold text-foreground dark:text-white mb-3">ATER</h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Empresa ATER">
             <input className={inputCls} value={ater.nomeEmpresa ?? ''} onChange={(e) => upAter('nomeEmpresa', e.target.value)} />
           </Field>
@@ -862,7 +935,7 @@ function TabImoveis({ draft, setDraft }: { draft: PlanoCusteio; setDraft: (v: Im
   return (
     <div className="space-y-4 max-w-3xl">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-aletis-verde dark:text-white">Imóveis Rurais</h3>
+        <h3 className="text-sm font-bold text-foreground dark:text-white">Imóveis Rurais</h3>
         <button
           onClick={add}
           className="text-xs text-aletis-dourado hover:underline flex items-center gap-1"
@@ -871,7 +944,7 @@ function TabImoveis({ draft, setDraft }: { draft: PlanoCusteio; setDraft: (v: Im
         </button>
       </div>
       {imoveis.length === 0 && (
-        <p className="text-sm text-aletis-grafite-medio dark:text-white/50">Nenhum imóvel cadastrado.</p>
+        <p className="text-sm text-[var(--text-soft)] dark:text-white/50">Nenhum imóvel cadastrado.</p>
       )}
       {imoveis.map((im, i) => (
         <div
@@ -887,7 +960,7 @@ function TabImoveis({ draft, setDraft }: { draft: PlanoCusteio; setDraft: (v: Im
               <Trash2 size={12} />
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Nome do Imóvel">
               <input className={inputCls} value={im.nome} onChange={(e) => up(i, { nome: e.target.value })} />
             </Field>
@@ -978,7 +1051,7 @@ function TabGlebas({
   return (
     <div className="space-y-4 max-w-3xl">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-aletis-verde dark:text-white">
+        <h3 className="text-sm font-bold text-foreground dark:text-white">
           Glebas Beneficiadas ({glebas.length}/15)
         </h3>
         <button
@@ -990,7 +1063,7 @@ function TabGlebas({
         </button>
       </div>
       {glebas.length === 0 && (
-        <p className="text-sm text-aletis-grafite-medio dark:text-white/50">Nenhuma gleba cadastrada.</p>
+        <p className="text-sm text-[var(--text-soft)] dark:text-white/50">Nenhuma gleba cadastrada.</p>
       )}
       {glebas.map((g, i) => (
         <div
@@ -1006,7 +1079,7 @@ function TabGlebas({
               <Trash2 size={12} />
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Nome da Gleba">
               <input className={inputCls} value={g.nomeGleba} onChange={(e) => up(i, { nomeGleba: e.target.value })} />
             </Field>
@@ -1136,7 +1209,7 @@ function TabOrcamento({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-aletis-verde dark:text-white">
+        <h3 className="text-sm font-bold text-foreground dark:text-white">
           Orçamento ({itens.length}/120) — Total {fmtBRL(total)}
         </h3>
         <button
@@ -1148,11 +1221,11 @@ function TabOrcamento({
         </button>
       </div>
       {itens.length === 0 && (
-        <p className="text-sm text-aletis-grafite-medio dark:text-white/50">Nenhum item.</p>
+        <p className="text-sm text-[var(--text-soft)] dark:text-white/50">Nenhum item.</p>
       )}
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead className="bg-gray-50 dark:bg-white/5 text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/60">
+        <table className="ui-table w-full text-xs">
+          <thead className="bg-gray-50 dark:bg-white/5 text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/60">
             <tr>
               <th className="p-2 text-left">Categoria</th>
               <th className="p-2 text-left">Fase</th>
@@ -1251,7 +1324,7 @@ function TabCronograma({
   return (
     <div className="space-y-3 max-w-3xl">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-aletis-verde dark:text-white">
+        <h3 className="text-sm font-bold text-foreground dark:text-white">
           Cronograma de Desembolso — Total {fmtBRL(total)}
         </h3>
         <button onClick={add} className="text-xs text-aletis-dourado hover:underline flex items-center gap-1">
@@ -1259,7 +1332,7 @@ function TabCronograma({
         </button>
       </div>
       {parcelas.length === 0 && (
-        <p className="text-sm text-aletis-grafite-medio dark:text-white/50">Nenhuma parcela.</p>
+        <p className="text-sm text-[var(--text-soft)] dark:text-white/50">Nenhuma parcela.</p>
       )}
       {parcelas.map((p, i) => (
         <div key={p.id} className="bg-gray-50 dark:bg-white/5 rounded-lg p-3 border border-gray-100 dark:border-white/10 grid grid-cols-1 sm:grid-cols-[1fr_150px_150px_auto] gap-3 items-end">
@@ -1323,8 +1396,8 @@ function TabComercializacao({
   return (
     <div className="space-y-5 max-w-2xl">
       <section>
-        <h3 className="text-sm font-bold text-aletis-verde dark:text-white mb-3">Projeto / Fontes</h3>
-        <div className="grid grid-cols-2 gap-3">
+        <h3 className="text-sm font-bold text-foreground dark:text-white mb-3">Projeto / Fontes</h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Ciclo">
             <select
               className={inputCls}
@@ -1362,8 +1435,8 @@ function TabComercializacao({
         </div>
       </section>
       <section>
-        <h3 className="text-sm font-bold text-aletis-verde dark:text-white mb-3">Comercialização</h3>
-        <div className="grid grid-cols-2 gap-3">
+        <h3 className="text-sm font-bold text-foreground dark:text-white mb-3">Comercialização</h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Canal de Venda">
             <select
               className={inputCls}
@@ -1425,13 +1498,13 @@ function TabAvalistas({
   return (
     <div className="space-y-3 max-w-3xl">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-aletis-verde dark:text-white">Avalistas e Garantias</h3>
+        <h3 className="text-sm font-bold text-foreground dark:text-white">Avalistas e Garantias</h3>
         <button onClick={add} className="text-xs text-aletis-dourado hover:underline flex items-center gap-1">
           <Plus size={12} /> Adicionar avalista
         </button>
       </div>
       {avalistas.length === 0 && (
-        <p className="text-sm text-aletis-grafite-medio dark:text-white/50">Nenhum avalista cadastrado.</p>
+        <p className="text-sm text-[var(--text-soft)] dark:text-white/50">Nenhum avalista cadastrado.</p>
       )}
       {avalistas.map((a, i) => (
         <div key={a.id} className="bg-gray-50 dark:bg-white/5 rounded-lg p-4 border border-gray-100 dark:border-white/10">
@@ -1441,7 +1514,7 @@ function TabAvalistas({
               <Trash2 size={12} />
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Nome"><input className={inputCls} value={a.nome} onChange={(e) => up(i, { nome: e.target.value })} /></Field>
             <Field label="CPF/CNPJ"><input className={inputCls} value={a.cpfCnpj} onChange={(e) => up(i, { cpfCnpj: e.target.value })} /></Field>
             <Field label="Tipo">

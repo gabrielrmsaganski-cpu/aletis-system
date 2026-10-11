@@ -15,6 +15,7 @@ import type {
   PlanoCusteioUpdatePayload,
   PlanoCusteioListFilters,
 } from '@aletis/shared-types'
+import { clientes } from './clientes.js'
 
 /** Sanitiza id no path (alfanumérico + - _). Evita "/"- based path traversal. */
 function safeId(raw: string): string {
@@ -33,18 +34,47 @@ export default async function (fastify: FastifyInstance) {
       reply.status(400)
       return {
         success: false,
-        error: 'Campos obrigatórios: clienteId, safra, proponente { nome, tipo, cpfCnpj }',
+        error: 'Campos obrigatórios: clienteId, safra, proponente { nome, tipo }',
       }
     }
-    if (!body.proponente.nome || !body.proponente.cpfCnpj || !body.proponente.tipo) {
+    if (!body.proponente.nome || !body.proponente.tipo) {
       reply.status(400)
       return {
         success: false,
-        error: 'Proponente incompleto — nome, tipo e cpfCnpj são obrigatórios',
+        error: 'Proponente incompleto — nome e tipo são obrigatórios. CPF/CNPJ é opcional no CRM ALETIS.',
       }
     }
+    const cliente = clientes.get(body.clienteId)
+    if (!cliente) {
+      return reply.status(404).send({
+        success: false,
+        error: 'Cliente não encontrado no CRM. Selecione uma entidade canônica antes de criar o plano.',
+      })
+    }
     try {
-      const plano = service.criar(body)
+      const digits = String(cliente.cpfCnpj || '').replace(/\D/g, '')
+      const car = cliente.car
+      const canonicalBody: PlanoCusteioCreatePayload = {
+        ...body,
+        proponente: {
+          ...body.proponente,
+          nome: cliente.nome,
+          tipo: cliente.tipo === 'pessoa_juridica' || digits.length === 14 ? 'PJ' : 'PF',
+          cpfCnpj: digits || body.proponente.cpfCnpj,
+          email: cliente.email || body.proponente.email,
+          telefone1: cliente.whatsapp || cliente.telefone || body.proponente.telefone1,
+        },
+        imoveis: body.imoveis?.length ? body.imoveis : car?.areaImovel ? [{
+          id: `imovel_${Date.now().toString(36)}`,
+          nome: car.codImovel ? `Imóvel CAR ${car.codImovel}` : 'Imóvel rural principal',
+          car: car.codImovel,
+          areaTotalHa: car.areaImovel,
+          regimeExploracao: 'proprietario',
+          municipio: car.municipio || cliente.cidade,
+          uf: car.uf || cliente.uf,
+        }] : undefined,
+      }
+      const plano = service.criar(canonicalBody)
       return { success: true, data: plano }
     } catch (err) {
       reply.status(500)

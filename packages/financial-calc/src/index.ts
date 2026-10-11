@@ -38,8 +38,10 @@ export type { PontoCDI, ProvedorCDI } from './indices/cdi.js';
 export * from './cet.js';
 export * from './spread.js';
 export * from './recalculo.js';
+export * from './recalculo-acordo.js';
 export * from './projecao.js';
 export * from './taxas.js';
+export * from './simulador-operacao.js';
 
 // ── Calculadoras Agro (Wave SUPERPOWER) ────────────────────
 // Reimplementação nativa de planilhas em /ALETIS2/novos/sistema agro/

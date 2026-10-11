@@ -1,371 +1,76 @@
-// ============================================================
-// Portal — ALIX restrita: FAB + painel + streaming SSE.
-// ============================================================
-// Uma conversa por cliente, persistida no localStorage. Streaming
-// token-a-token. ALIX só vê dados do próprio cliente; backend bloqueia
-// qualquer tentativa de extrair dados de terceiros.
-// ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  MessageSquare,
-  Send,
-  X,
-  Sparkles,
-  Loader2,
-  Trash2,
-  AlertCircle,
-} from 'lucide-react'
-import type { ClienteMe, PortalAlixSessionMessage } from './types'
+import { Sparkles, Send, X, Loader2, Trash2, Plus, RotateCcw, ArrowUpRight, MessageSquare } from 'lucide-react'
+import type { ClienteMe } from './types'
 
-interface Props {
-  cliente: ClienteMe
-  token: string
-}
+interface Action { id:string;label:string;view:'documentos'|'mensagens'|'historico'|'assuntos'|'fiscal';requestId?:string;draft?:string }
+interface Source { id:string;label:string;type:string;recordId?:string;updatedAt?:string }
+interface Message { id:string;role:'user'|'assistant';content:string;ts:number;turnId:string;requestId:string;sources?:Source[];actions?:Action[] }
+interface Turn { id:string;requestId:string;ordinal:number;question:string;status:'processing'|'completed'|'failed';error?:{message:string;retryable:boolean} }
+interface Session { id:string;titulo:string;messages:Message[];turns:Turn[];pagination:{hasMore:boolean;beforeOrdinal:number|null} }
+interface Summary {id:string;titulo:string;atualizadoEm:number;status:string}
+interface Attempt {sessionId?:string;requestId:string;text:string}
+interface Props {cliente:ClienteMe;token:string;hideTrigger?:boolean;embedded?:boolean;initialPrompt?:string}
 
-interface LocalMsg extends PortalAlixSessionMessage {
-  /** Mensagem ainda streaming (último assistant). */
-  streaming?: boolean
-}
+export function AlixPortalChat({cliente,token,hideTrigger=false,embedded=false,initialPrompt}:Props) {
+  const[open,setOpen]=useState(embedded),[sessions,setSessions]=useState<Summary[]>([]),[nextCursor,setNextCursor]=useState<string|null>(null)
+  const[session,setSession]=useState<Session|null>(null),[input,setInput]=useState(initialPrompt||''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(false)
+  const[error,setError]=useState<string|null>(null),[attempt,setAttempt]=useState<Attempt|null>(null),[confirmDelete,setConfirmDelete]=useState(false)
+  const sendInFlight=useRef(false),sessionLoad=useRef(0),activeSession=useRef<string|null>(null)
+  const abort=useRef<AbortController|null>(null),epoch=useRef(0),newSessionKey=useRef(crypto.randomUUID()),newConversation=useRef(false),scroll=useRef<HTMLDivElement>(null)
+  const visible=embedded||open
+  const auth=useCallback(()=>({Authorization:`Bearer ${token}`}),[token])
+  const request=useCallback(async(path:string,options:RequestInit={})=>{const response=await fetch(path,{credentials:'same-origin',...options,headers:{...auth(),...(options.body?{'Content-Type':'application/json'}:{}),...options.headers}});const result=await response.json().catch(()=>({}));if(!response.ok||result.success===false)throw new Error(result.error||'Não foi possível carregar a conversa.');return result.data},[auth])
+  const loadSession=useCallback(async(id:string,beforeOrdinal?:number)=>{const version=epoch.current,ticket=++sessionLoad.current;activeSession.current=id;const value=await request(`/api/portal/alix/sessions/${encodeURIComponent(id)}?limit=20${beforeOrdinal?`&beforeOrdinal=${beforeOrdinal}`:''}`) as Session;if(version!==epoch.current||ticket!==sessionLoad.current)return null;setSession(previous=>beforeOrdinal&&previous?.id===id?{...value,messages:[...value.messages,...previous.messages.filter(item=>!value.messages.some(old=>old.id===item.id))],turns:[...value.turns,...previous.turns.filter(item=>!value.turns.some(old=>old.id===item.id))]}:value);setAttempt(current=>value.turns.some(turn=>turn.requestId===current?.requestId&&turn.status==='completed')?null:current);return value},[request])
+  const loadSessions=useCallback(async(resume=false,cursor?:string)=>{const version=epoch.current;setLoading(true);try{const page=await request(`/api/portal/alix/sessions?limit=20${cursor?`&cursor=${encodeURIComponent(cursor)}`:''}`) as {items:Summary[];nextCursor:string|null};if(version!==epoch.current)return;setSessions(previous=>cursor?[...previous,...page.items.filter(item=>!previous.some(old=>old.id===item.id))]:page.items);setNextCursor(page.nextCursor);if(resume&&!newConversation.current&&(activeSession.current||page.items[0]))await loadSession(activeSession.current||page.items[0].id)}catch(e){if(version===epoch.current)setError(e instanceof Error?e.message:'Falha ao carregar histórico.')}finally{if(version===epoch.current)setLoading(false)}},[request,loadSession])
+  useEffect(()=>{epoch.current++;sessionLoad.current++;activeSession.current=null;sendInFlight.current=false;abort.current?.abort();setBusy(false);setSessions([]);setSession(null);setAttempt(null);setError(null);setInput(initialPrompt||'');newSessionKey.current=crypto.randomUUID();newConversation.current=false;try{localStorage.removeItem(`aletis.portal.alix.session.${cliente.id}`)}catch{/* Remove apenas cache legado do cliente atual. */}return()=>{epoch.current++;abort.current?.abort()}},[cliente.id])
+  useEffect(()=>{if(initialPrompt)setInput(initialPrompt)},[initialPrompt])
+  useEffect(()=>{if(visible)void loadSessions(true)},[visible,cliente.id,loadSessions])
+  useEffect(()=>{const openChat=(event:Event)=>{setOpen(true);const detail=(event as CustomEvent<{prompt?:string}>).detail;if(detail?.prompt)setInput(detail.prompt.slice(0,4000))};window.addEventListener('aletis:portal-alix-open',openChat);return()=>window.removeEventListener('aletis:portal-alix-open',openChat)},[])
+  useEffect(()=>{if(visible&&scroll.current)scroll.current.scrollTop=scroll.current.scrollHeight},[session?.messages.length,busy,visible])
+  const processing=session?.turns.some(turn=>turn.status==='processing')||false
+  useEffect(()=>{if(!visible||!session||!processing||busy)return;const timer=setInterval(()=>{void loadSession(session.id).catch(()=>{})},3000);return()=>clearInterval(timer)},[visible,session?.id,processing,busy,loadSession])
 
-const STORAGE_KEY = (clienteId: string) => `aletis.portal.alix.session.${clienteId}`
-
-export function AlixPortalChat({ cliente, token }: Props) {
-  const [open, setOpen] = useState(false)
-  const [sessionId, setSessionId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<LocalMsg[]>([])
-  const [input, setInput] = useState('')
-  const [streaming, setStreaming] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const abortRef = useRef<AbortController | null>(null)
-
-  // Hidrata sessão do localStorage
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY(cliente.id))
-      if (raw) {
-        const parsed = JSON.parse(raw) as { sessionId: string | null; messages: LocalMsg[] }
-        setSessionId(parsed.sessionId ?? null)
-        setMessages(parsed.messages ?? [])
-      }
-    } catch { /* corrupted, ignora */ }
-  }, [cliente.id])
-
-  // Persiste a cada mudança
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        STORAGE_KEY(cliente.id),
-        JSON.stringify({ sessionId, messages }),
-      )
-    } catch { /* quota cheia, ignora */ }
-  }, [cliente.id, sessionId, messages])
-
-  // Auto-scroll
-  useEffect(() => {
-    if (!open) return
-    const el = scrollRef.current
-    if (!el) return
-    el.scrollTop = el.scrollHeight
-  }, [messages, open, streaming])
-
-  // Cancela stream ao desmontar
-  useEffect(() => {
-    return () => {
-      abortRef.current?.abort()
-    }
-  }, [])
-
-  const enviar = useCallback(async () => {
-    const texto = input.trim()
-    if (!texto || streaming) return
-    setError(null)
-    setInput('')
-
-    const userMsg: LocalMsg = {
-      id: `u-${Date.now()}`,
-      role: 'user',
-      content: texto,
-      ts: Date.now(),
-    }
-    const assistantPlaceholder: LocalMsg = {
-      id: `a-${Date.now()}`,
-      role: 'assistant',
-      content: '',
-      ts: Date.now(),
-      streaming: true,
-    }
-    setMessages((prev) => [...prev, userMsg, assistantPlaceholder])
-    setStreaming(true)
-
-    const ctrl = new AbortController()
-    abortRef.current = ctrl
-
-    try {
-      const resp = await fetch('/api/portal/alix/stream', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          Accept: 'text/event-stream',
-        },
-        body: JSON.stringify({ sessionId, message: texto }),
-        signal: ctrl.signal,
-      })
-      if (!resp.ok || !resp.body) {
-        const j = await resp.json().catch(() => ({}))
-        throw new Error((j as { error?: string }).error || `Erro ${resp.status}`)
-      }
-      const reader = resp.body.getReader()
-      const decoder = new TextDecoder('utf-8')
-      let buffer = ''
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const events = buffer.split(/\n\n/)
-        buffer = events.pop() ?? ''
-        for (const block of events) {
-          processEvent(block)
-        }
-      }
-      // flush
-      if (buffer.length > 0) processEvent(buffer)
-    } catch (err) {
-      if ((err as { name?: string })?.name === 'AbortError') return
-      setError(err instanceof Error ? err.message : 'Falha na conversa')
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.streaming ? { ...m, streaming: false, content: m.content || '(erro ao gerar resposta)' } : m,
-        ),
-      )
-    } finally {
-      setStreaming(false)
-      abortRef.current = null
-    }
-
-    function processEvent(block: string) {
-      if (!block.trim()) return
-      const lines = block.split('\n')
-      let event = 'message'
-      const data: string[] = []
-      for (const ln of lines) {
-        if (ln.startsWith('event:')) event = ln.slice(6).trim()
-        else if (ln.startsWith('data:')) data.push(ln.slice(5).trim())
-      }
-      const payload = data.join('\n')
-      let json: unknown = null
-      try { json = payload ? JSON.parse(payload) : null } catch { return }
-      if (event === 'token') {
-        const txt = (json as { text?: string })?.text ?? ''
-        setMessages((prev) =>
-          prev.map((m, idx) =>
-            idx === prev.length - 1 && m.streaming ? { ...m, content: m.content + txt } : m,
-          ),
-        )
-      } else if (event === 'done') {
-        const id = (json as { sessionId?: string })?.sessionId
-        if (id) setSessionId(id)
-        setMessages((prev) =>
-          prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)),
-        )
-      } else if (event === 'error') {
-        const msg = (json as { error?: string })?.error || 'Erro'
-        throw new Error(msg)
-      }
-    }
-  }, [input, streaming, sessionId, token])
-
-  const limpar = useCallback(async () => {
-    abortRef.current?.abort()
-    if (sessionId) {
-      // Best-effort no backend
-      fetch(`/api/portal/alix/sessions/${encodeURIComponent(sessionId)}`, {
-        method: 'DELETE',
-        credentials: 'same-origin',
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => { /* swallow */ })
-    }
-    setSessionId(null)
-    setMessages([])
-    setError(null)
-  }, [sessionId, token])
-
-  return (
-    <>
-      {/* FAB */}
-      {!open && (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label="Abrir chat com Aletéia"
-          className="fixed bottom-5 right-5 z-40 group flex items-center gap-2.5 rounded-full bg-aletis-verde shadow-2xl shadow-aletis-verde/40 hover:shadow-aletis-gold/40 transition-all px-4 py-3 hover:scale-105 active:scale-95"
-        >
-          <span className="relative flex h-7 w-7 items-center justify-center rounded-full bg-aletis-gold text-aletis-verde">
-            <Sparkles size={14} />
-            <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-aletis-gold opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-aletis-gold" />
-            </span>
-          </span>
-          <span className="font-display text-[12px] font-bold uppercase tracking-wider text-aletis-cream pr-1">
-            Falar com Aletéia
-          </span>
-        </button>
-      )}
-
-      {/* Painel */}
-      {open && (
-        <div className="fixed inset-x-0 bottom-0 z-50 sm:bottom-5 sm:right-5 sm:inset-x-auto sm:max-w-[420px] sm:w-[420px]">
-          <div className="bg-white border border-aletis-cream-escuro/70 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col h-[80vh] sm:h-[640px] max-h-[90vh] overflow-hidden">
-            {/* Header */}
-            <header className="bg-gradient-to-r from-aletis-verde-escuro to-aletis-verde px-4 py-3 flex items-center gap-3 flex-shrink-0">
-              <div className="w-9 h-9 rounded-full bg-aletis-gold flex items-center justify-center flex-shrink-0">
-                <Sparkles size={16} className="text-aletis-verde" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-display text-[13px] font-bold text-white leading-none">
-                  Aletéia no seu caso
-                </p>
-                <p className="font-body text-[11px] text-aletis-cream/75 mt-0.5">
-                  Inteligência ALETIS · responde só sobre você
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={limpar}
-                disabled={streaming || messages.length === 0}
-                className="p-1.5 rounded-lg text-aletis-cream/70 hover:text-aletis-gold disabled:opacity-30 transition"
-                title="Apagar conversa"
-                aria-label="Apagar conversa"
-              >
-                <Trash2 size={15} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="p-1.5 rounded-lg text-aletis-cream/70 hover:text-white transition"
-                aria-label="Fechar"
-              >
-                <X size={18} />
-              </button>
-            </header>
-
-            {/* Histórico */}
-            <div ref={scrollRef} className="flex-1 overflow-auto px-4 py-4 bg-aletis-cream-papel space-y-3">
-              {messages.length === 0 && (
-                <div className="text-center mt-8">
-                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-aletis-gold/15 border border-aletis-gold/40 mb-3">
-                    <Sparkles size={20} className="text-aletis-gold-escuro" />
-                  </div>
-                  <p className="font-display text-[14px] font-bold text-aletis-verde">
-                    Olá, {cliente.nome.split(' ')[0]}!
-                  </p>
-                  <p className="mt-1 font-body text-[12.5px] text-aletis-verde-medio leading-relaxed max-w-[260px] mx-auto">
-                    Posso ajudar com dúvidas sobre seu caso. Pergunte coisas como:
-                  </p>
-                  <div className="mt-3 space-y-1.5">
-                    {[
-                      'Quanto eu ainda devo no total?',
-                      'Quanto eu vou pagar de honorário ALETIS?',
-                      'Como funciona o êxito sobre a economia?',
-                      'O que é o documento que ainda está pendente?',
-                    ].map((q) => (
-                      <button
-                        key={q}
-                        type="button"
-                        onClick={() => setInput(q)}
-                        className="block w-full text-left px-3 py-1.5 rounded-lg border border-aletis-cream-escuro bg-white hover:border-aletis-gold hover:bg-aletis-gold/5 transition font-body text-[12px] text-aletis-verde"
-                      >
-                        {q}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {messages.map((m) => (
-                <Bubble key={m.id} msg={m} />
-              ))}
-              {error && (
-                <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 flex items-start gap-2">
-                  <AlertCircle size={14} className="text-red-600 flex-shrink-0 mt-0.5" />
-                  <p className="font-body text-[12px] text-red-700">{error}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Composer */}
-            <div className="border-t border-aletis-cream-escuro/70 bg-white px-3 py-3 flex-shrink-0">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  enviar()
-                }}
-                className="flex items-end gap-2"
-              >
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      enviar()
-                    }
-                  }}
-                  rows={1}
-                  placeholder="Pergunte sobre seu caso…"
-                  disabled={streaming}
-                  className="flex-1 resize-none rounded-xl border border-aletis-cream-escuro bg-white px-3 py-2 font-body text-[13px] text-aletis-verde placeholder:text-aletis-verde-claro focus:outline-none focus:border-aletis-verde focus:ring-2 focus:ring-aletis-verde/20 max-h-32"
-                />
-                <button
-                  type="submit"
-                  disabled={streaming || !input.trim()}
-                  className="flex items-center justify-center w-10 h-10 rounded-xl bg-aletis-verde text-white hover:bg-aletis-verde-escuro disabled:opacity-50 disabled:cursor-not-allowed transition flex-shrink-0"
-                  aria-label="Enviar"
-                >
-                  {streaming ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                </button>
-              </form>
-              <p className="mt-2 font-body text-[10px] text-aletis-verde-medio leading-snug">
-                Aletéia responde com base nos dados do seu caso. Para decisões sensíveis (assinar, aceitar valores), confirme com {cliente.consultor || 'seu consultor'}.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  )
-}
-
-function Bubble({ msg }: { msg: LocalMsg }) {
-  const isUser = msg.role === 'user'
-  return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} gap-2`}>
-      {!isUser && (
-        <div className="w-7 h-7 rounded-full bg-aletis-gold flex items-center justify-center flex-shrink-0 mt-0.5">
-          <Sparkles size={12} className="text-aletis-verde" />
-        </div>
-      )}
-      <div
-        className={`max-w-[80%] rounded-2xl px-3.5 py-2 font-body text-[13px] leading-relaxed whitespace-pre-wrap ${
-          isUser
-            ? 'bg-aletis-verde text-aletis-cream rounded-br-md'
-            : 'bg-white text-aletis-grafite-escuro border border-aletis-cream-escuro rounded-bl-md'
-        }`}
-      >
-        {msg.content || (msg.streaming ? <PulsingDots /> : <em className="opacity-50">…</em>)}
-        {msg.streaming && msg.content && <span className="inline-block w-1.5 h-4 ml-0.5 bg-aletis-gold-escuro animate-pulse align-middle" />}
+  const send=async(retry?:Attempt)=>{
+    const text=(retry?.text??input).trim();if(!text||busy||sendInFlight.current)return
+    sendInFlight.current=true
+    const version=epoch.current;const pending:Attempt=retry??{sessionId:session?.id,requestId:crypto.randomUUID(),text}
+    setAttempt(pending);setInput('');setError(null);setBusy(true);const controller=new AbortController();abort.current=controller
+    try{
+      if(!pending.sessionId){const created=await request('/api/portal/alix/sessions',{method:'POST',body:JSON.stringify({titulo:text.slice(0,100),requestId:newSessionKey.current}),signal:controller.signal}) as Session;pending.sessionId=created.id;if(version!==epoch.current)return;activeSession.current=created.id;setSession(created);setAttempt({...pending})}
+      const response=await fetch('/api/portal/alix/stream',{method:'POST',credentials:'same-origin',headers:{...auth(),'Content-Type':'application/json',Accept:'text/event-stream'},body:JSON.stringify({sessionId:pending.sessionId,requestId:pending.requestId,message:text}),signal:controller.signal})
+      if(!response.ok||!response.body){const data=await response.json().catch(()=>({}));throw new Error(data.error||'Não foi possível enviar a pergunta.')}
+      const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',completed=false
+      const block=(value:string)=>{const lines=value.split(/\r?\n/);const event=lines.find(line=>line.startsWith('event:'))?.slice(6).trim();const raw=lines.filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trim()).join('\n');if(!raw)return;const data=JSON.parse(raw);if(event==='error')throw new Error(data.error||'A resposta não foi concluída.');if(event==='done')completed=true}
+      while(true){const{value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});const blocks=buffer.split(/\r?\n\r?\n/);buffer=blocks.pop()||'';for(const item of blocks)block(item)}buffer+=decoder.decode();if(buffer.trim())block(buffer)
+      if(version!==epoch.current)return
+      const saved=await loadSession(pending.sessionId)
+      if(!completed&&!saved?.turns.some(turn=>turn.requestId===pending.requestId&&turn.status==='completed'))throw new Error('A conexão foi interrompida. Sua pergunta pode ser retomada com segurança.')
+      setAttempt(null);newConversation.current=false;await loadSessions(false)
+    }catch(e){if(version!==epoch.current)return;if((e as Error).name!=='AbortError')setError(e instanceof Error?e.message:'Não foi possível concluir a resposta.');if(pending.sessionId)await loadSession(pending.sessionId).catch(()=>{})}
+    finally{if(version===epoch.current){setBusy(false);sendInFlight.current=false;abort.current=null}}
+  }
+  const startNew=()=>{if(busy||sendInFlight.current)return;sessionLoad.current++;activeSession.current=null;newConversation.current=true;newSessionKey.current=crypto.randomUUID();setSession(null);setAttempt(null);setInput('');setError(null);setConfirmDelete(false)}
+  const remove=async()=>{if(!session||busy)return;setLoading(true);try{await request(`/api/portal/alix/sessions/${encodeURIComponent(session.id)}`,{method:'DELETE'});startNew();await loadSessions(false)}catch(e){setError(e instanceof Error?e.message:'Não foi possível apagar.')}finally{setLoading(false)}}
+  const navigate=(action:Action)=>{if(!['documentos','mensagens','historico','assuntos','fiscal'].includes(action.view))return;window.dispatchEvent(new CustomEvent('portal:navigate',{detail:{view:action.view,...(action.requestId?{requestId:action.requestId}:{}),...(action.draft?{draft:action.draft}:{})}}));if(!embedded)setOpen(false)}
+  const lastTurn=session?.turns.at(-1)
+  const retryAttempt=attempt??(lastTurn?.status==='failed'?{sessionId:session!.id,requestId:lastTurn.requestId,text:lastTurn.question}:null)
+  return <>
+    {!visible&&!hideTrigger&&<button type="button" onClick={()=>setOpen(true)} aria-label="Abrir ALIX" className="fixed bottom-20 right-3 z-40 flex h-11 w-11 items-center justify-center rounded-full bg-aletis-verde text-white shadow-lg sm:bottom-5 sm:right-5 sm:w-auto sm:gap-2 sm:px-4"><Sparkles size={18}/><span className="hidden text-sm font-semibold sm:inline">ALIX</span></button>}
+    {visible&&<section aria-label="Conversa com ALIX" className={embedded?'flex min-h-[620px] w-full flex-col overflow-hidden rounded-2xl border border-aletis-cream-escuro bg-card shadow-sm':'fixed inset-x-0 bottom-0 z-50 flex h-[88dvh] max-h-[800px] flex-col overflow-hidden rounded-t-3xl border border-aletis-cream-escuro bg-card shadow-2xl sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[480px] sm:rounded-3xl'}>
+      <header className="flex items-center gap-3 bg-aletis-verde px-4 py-3 text-white"><Sparkles size={22}/><div className="min-w-0 flex-1"><h2 className="font-semibold">ALIX, com você</h2><p className="text-xs text-white/75">Orientações com base no que foi compartilhado no seu portal</p></div>{!embedded&&<button aria-label="Fechar ALIX" onClick={()=>setOpen(false)}><X size={20}/></button>}</header>
+      <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2"><select aria-label="Histórico de conversas" value={session?.id||''} disabled={busy} onChange={event=>{setError(null);setAttempt(null);setConfirmDelete(false);if(event.target.value){newConversation.current=false;void loadSession(event.target.value).catch(e=>setError(e.message))}else startNew()}} className="min-w-0 flex-1 rounded-lg border px-2 py-2 text-sm"><option value="">Nova conversa</option>{sessions.map(item=><option key={item.id} value={item.id}>{item.titulo}</option>)}</select><button type="button" aria-label="Nova conversa" disabled={busy} onClick={startNew} className="rounded-lg border p-2"><Plus size={17}/></button><button type="button" aria-label="Apagar conversa" disabled={!session||busy||processing} onClick={()=>setConfirmDelete(true)} className="rounded-lg border p-2 disabled:opacity-30"><Trash2 size={17}/></button>{nextCursor&&<button className="text-xs underline" disabled={loading} onClick={()=>void loadSessions(false,nextCursor)}>Mais conversas</button>}</div>
+      {confirmDelete&&<div className="flex flex-wrap items-center gap-2 border-b bg-amber-50 p-3 text-sm"><p className="flex-1">Apagar esta conversa e seu histórico?</p><button onClick={()=>void remove()} disabled={loading} className="rounded-lg bg-red-700 px-3 py-1 text-white">Apagar</button><button onClick={()=>setConfirmDelete(false)}>Cancelar</button></div>}
+      <div ref={scroll} className={`min-h-0 flex-1 space-y-4 overflow-y-auto bg-muted p-4 ${embedded?'max-h-[65dvh]':''}`}>
+        {loading&&!session&&<p role="status" className="flex items-center gap-2 text-sm"><Loader2 size={16} className="animate-spin"/>Carregando conversas…</p>}
+        {session?.pagination.hasMore&&<button onClick={()=>void loadSession(session.id,session.pagination.beforeOrdinal??undefined).catch(e=>setError(e.message))} className="w-full rounded-lg border bg-card py-2 text-sm">Carregar mensagens anteriores</button>}
+        {!session?.messages.length&&!busy&&<div className="mx-auto max-w-md py-5"><h3 className="text-lg font-semibold text-foreground">Olá, {cliente.nome.split(' ')[0]}.</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Vamos entender suas solicitações e o andamento do atendimento. Você pode continuar uma conversa anterior ou começar por uma destas perguntas.</p><div className="mt-4 space-y-2">{['Quais documentos preciso enviar agora?','Como corrijo um documento devolvido?','Qual é a última atualização da equipe?'].map(question=><button key={question} onClick={()=>setInput(question)} className="block w-full rounded-xl border bg-card px-3 py-2 text-left text-sm">{question}</button>)}</div></div>}
+        {session?.messages.map(message=><article key={message.id} className={message.role==='user'?'ml-6 rounded-2xl rounded-br-sm bg-aletis-verde p-3 text-sm text-white':'mr-3 rounded-2xl rounded-bl-sm border bg-card p-3 text-sm text-foreground'}><p className="mb-1 text-xs font-semibold opacity-70">{message.role==='user'?'Você':'ALIX'}</p><p className="whitespace-pre-wrap break-words leading-relaxed">{message.content}</p>{message.sources?.length? <div className="mt-3 border-t pt-2 text-xs"><p className="font-semibold">Fontes desta resposta</p>{message.sources.map(source=><p key={source.id} className="mt-1">[{source.id}] {source.label}</p>)}</div>:null}{message.actions?.length?<div className="mt-3 flex flex-wrap gap-2">{message.actions.map(action=><button key={action.id} onClick={()=>navigate(action)} className="inline-flex max-w-full items-center gap-1 rounded-lg border border-aletis-verde/25 px-2 py-1.5 text-left text-xs font-semibold text-foreground">{action.label}<ArrowUpRight size={13}/></button>)}</div>:null}</article>)}
+        {attempt&&!session?.turns.some(turn=>turn.requestId===attempt.requestId)&&<div className="ml-6 rounded-2xl bg-aletis-verde p-3 text-sm text-white">{attempt.text}</div>}
+        {(busy||processing)&&<p role="status" className="flex items-center gap-2 text-sm text-foreground"><Loader2 size={16} className="animate-spin"/>A ALIX está preparando sua resposta. Você pode voltar depois.</p>}
+        {error&&<div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
+        {retryAttempt&&!busy&&!processing&&<div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm"><p>A resposta desta pergunta ainda não foi concluída.</p><button onClick={()=>void send(retryAttempt)} className="mt-2 flex items-center gap-2 font-semibold text-foreground"><RotateCcw size={15}/>Tentar novamente</button></div>}
       </div>
-    </div>
-  )
-}
-
-function PulsingDots() {
-  return (
-    <span className="inline-flex items-center gap-1 text-aletis-verde-medio">
-      <MessageSquare size={12} className="animate-pulse" />
-      <span>pensando…</span>
-    </span>
-  )
+      <form onSubmit={event=>{event.preventDefault();void send()}} className="border-t bg-card p-3"><div className="flex items-end gap-2"><textarea aria-label="Pergunta para ALIX" value={input} onChange={event=>setInput(event.target.value)} maxLength={4000} rows={2} disabled={busy||processing} placeholder="Escreva sua pergunta…" className="min-w-0 flex-1 resize-none rounded-xl border p-3 text-sm"/><button type="submit" aria-label="Enviar pergunta" disabled={!input.trim()||busy||processing} className="rounded-xl bg-aletis-verde p-3 text-white disabled:opacity-40"><Send size={18}/></button></div><p className="mt-2 text-xs text-muted-foreground">Respostas e histórico ficam no seu portal. Para decisões ou informações ainda não publicadas, <button type="button" onClick={()=>navigate({id:'contato',label:'Falar com a equipe',view:'mensagens'})} className="underline">fale com a equipe <MessageSquare size={11} className="inline"/></button>.</p></form>
+    </section>}
+  </>
 }

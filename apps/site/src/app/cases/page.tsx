@@ -9,9 +9,9 @@ import { ButtonLink } from '@/components/ui/Button'
 import { TrendingDown, ShieldCheck, Wheat, Building2, Sprout, ArrowRight } from 'lucide-react'
 
 export const metadata: Metadata = {
-  title: 'Cases reais — ALETIS',
+  title: 'Recortes de atuação — ALETIS',
   description:
-    'Cinco cases anonimizados de reestruturação, diagnóstico e estruturação de crédito conduzidos pela mesa ALETIS. Antes/depois com números auditados.',
+    'Recortes anonimizados de situações em que a ALETIS organiza diagnóstico, reestruturação, crédito, governança e gestão financeira no agro.',
   alternates: { canonical: 'https://aletis.com.br/cases' },
 }
 
@@ -34,8 +34,8 @@ interface Case {
   privacidade: string
 }
 
-// Cases REAIS conduzidos pela mesa, anonimizados conforme LGPD.
-// Aprovação documentada nos contratos de cada um.
+// Recortes anonimizados para explicar padrões de atuação.
+// Saldos e detalhes sensíveis devem permanecer genéricos por sigilo e LGPD.
 const CASES: Case[] = [
   {
     slug: 'reestruturacao-pj-mt-soja-milho',
@@ -99,7 +99,7 @@ const CASES: Case[] = [
     desafio:
       'Cliente queria converter 600ha (50% da área) para sistema integração lavoura-floresta + soja não-OGM premium (mercado europeu). Custo de investimento estimado em R$ 2,4M. Banco principal vinha negando crédito por enquadramento Funrural irregular e DAP em revisão (DAP-PF caducada há 4 meses). Janela de plantio em 70 dias.',
     abordagem: [
-      'Regularização DAP-PF + ITR em paralelo (mesa fiscal + agro)',
+      'Regularização DAP-PF + ITR em paralelo (frente fiscal + agro)',
       'Estruturação financeira: Pronamp (R$ 1,5M) + FCO Verde (R$ 600k) com taxa subsidiada por enquadramento agroecológico',
       'Modelagem de fluxo de caixa de transição (ano 1 produtividade -18%, ano 2 paridade, ano 3-5 prêmio sobre commodity convencional)',
       'Coordenação com banco operador (Banco do Brasil) e SEAB-PR (laudo técnico de enquadramento)',
@@ -188,9 +188,9 @@ export default function CasesPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Cases"
-        titulo="Cinco operações que mostram como nossa mesa entrega"
-        subtitulo="Cases reais conduzidos pela ALETIS, anonimizados conforme LGPD. Antes/depois auditados pela mesa, com prazos e desafios reais. Cada um foi autorizado pelo cliente."
+        eyebrow="Recortes de atuação"
+        titulo="Situações em que método financeiro muda a conversa"
+        subtitulo="Exemplos anonimizados de problemas que aparecem no agro: dívida concentrada, caixa sem visibilidade, captação travada, governança frágil e contratos que merecem revisão."
       />
 
       <Section tone="cream">
@@ -298,14 +298,13 @@ export default function CasesPage() {
       <Section tone="bege">
         <Container>
           <div className="mx-auto max-w-3xl rounded-2xl border border-aletis-borda bg-aletis-cream-marfim p-8 text-center sm:p-12">
-            <Eyebrow className="justify-center">Sua operação aqui</Eyebrow>
+            <Eyebrow className="justify-center">Seu cenário</Eyebrow>
             <h2 className="mt-3 font-display text-2xl font-bold text-aletis-verde sm:text-3xl">
-              Cada case começou com um diagnóstico de 72 horas
+              Todo trabalho começa por uma primeira leitura organizada
             </h2>
             <p className="mx-auto mt-4 max-w-2xl text-sm font-body leading-relaxed text-aletis-verde-medio sm:text-base">
-              A mesa ALETIS aceita apenas 4 novos diagnósticos por mês para preservar profundidade.
-              Se sua operação tem características semelhantes a um destes cases, agende a primeira
-              conversa — todo escopo é discutido com NDA assinado antes de qualquer detalhe técnico.
+              Se sua operação se parece com algum desses recortes, a primeira conversa serve
+              para entender urgência, documentos disponíveis e se há base para avançar com NDA.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <ButtonLink href="/contato" className="inline-flex items-center gap-1.5">

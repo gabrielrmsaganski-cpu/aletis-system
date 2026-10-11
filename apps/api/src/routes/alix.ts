@@ -1,3 +1,4 @@
+import { z } from 'zod'
 // ============================================================
 // ALETIS — ALIX Routes
 // Chat endpoint + persistent session history (CRUD)
@@ -7,16 +8,31 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { join } from 'path'
 import { DataSourceManager } from '../services/DataSourceManager.js'
 import { AlixService, registerStores, registerCrmWriteBackends } from '../services/AlixService.js'
-import { pingFoundry, isLLMEnabled, CLAUDE_MODEL_SONNET } from '../services/llm/ClaudeFoundryClient.js'
+import { pingOpenAI, isOpenAIEnabled } from '../services/llm/OpenAIClient.js'
+import { getModelForRole, MODEL_REGISTRY } from '../services/llm/LLMConfig.js'
 import { WebSearchProviderFactory } from '../services/alix/tools/websearch/WebSearchProviderFactory.js'
 import { OrchestratorService } from '../services/alix/OrchestratorService.js'
 import { getProspeccaoService } from '../services/prospeccao/ProspeccaoService.js'
 import { aggregateTelemetry, telemetryPath, type TelemetryRecord } from '../services/alix/telemetry.js'
+import { applyAlixAuth } from '../middleware/alixAuth.js'
+import { alixAccessError, assertAlixSessionAccess, canAccessAlixOwner, filterAlixSessions, isAlixAccessEnforced, isAlixLegacySharedSession } from '../services/alix/AlixAccessService.js'
 import { readFileSync, existsSync } from 'fs'
 import { clientes } from './clientes.js'
-import { propostas, propostasInteligentes } from './propostas.js'
-import { upsertCliente as pgUpsertCliente } from '../db/ClienteRepository.js'
+import { propostas, propostasInteligentes, updatePropostaCommand } from './propostas.js'
+import { getAlixTurnContext } from '../services/alix/AlixTurnContext.js'
+import { normalizeAlixProposalPatch } from '../services/alix/crm/proposal-patch.js'
+import { deleteCliente as pgDeleteCliente, upsertClienteStrict as pgUpsertClienteStrict } from '../db/ClienteRepository.js'
 import { upsertProposta as pgUpsertProposta } from '../db/PropostaRepository.js'
+import type { AlixWorkMode } from '../services/alix/workspace/AlixMissionService.js'
+import { getAlixMissionService } from '../services/alix/workspace/AlixMissionService.js'
+import { isConfirmationMessage } from '../services/alix/ConfirmationChat.js'
+import type { GoogleWorkspaceActor } from '../services/google-workspace/schemas.js'
+
+function workspaceActor(request: FastifyRequest): GoogleWorkspaceActor | undefined {
+  const auth = request.alixUser && request.alixUser.id !== 'anonymous' ? request.alixUser : (request as FastifyRequest & { user?: Record<string, unknown> }).user
+  if (!auth || !(auth.id || auth.sub)) return undefined
+  return { userId: String(auth.id || auth.sub), userName: String(auth.nome || 'Consultor'), role: String(auth.role || 'consultor'), tenantId: process.env.ALETIS_TENANT_ID || 'default' }
+}
 
 // ── Singleton ─────────────────────────────────────────────
 
@@ -52,38 +68,44 @@ function getAlixService(): AlixService {
   registerStores({
     clientes: () => Array.from(clientes.values()),
     propostas: () => Array.from(propostas.values()),
-    propostasInteligentes: () => Array.from(propostasInteligentes.values()).map((p: any) => ({
-      id: p.id,
-      clienteNome: p.clienteNome || p.dadosCliente?.nome || '—',
-      estrategia: p.estrategia || p.metadata?.estrategiaRecomendada || 'padrão',
-      dividaTotal: p.dividaTotal || p.contexto?.dividaTotal || 0,
-      secoes: Array.isArray(p.secoes) ? p.secoes.length : 15,
-    })),
+    propostasInteligentes: () => Array.from(propostasInteligentes.values()),
   })
 
-  // Alix Insano F4 — backends de escrita no CRM
-  // Cada `setCliente`/`setPropostaInteligente`/`updateProposta` agora faz
-  // dual-write: Map em memória (source of truth runtime) + Postgres
-  // (best-effort via flag ALETIS_PG_ENABLED). Mesmo padrão dos handlers
-  // tradicionais — ALIX não pode ser exceção, ou perdemos as escritas dela
-  // quando o servidor reiniciar.
+  // Alix Insano F4 — backends de escrita no CRM.
+  // Para clientes, quando PG está ativo, o upsert PG roda antes do Map:
+  // o banco é a barreira principal de unicidade e o Map vira cache runtime.
   registerCrmWriteBackends({
-    setCliente: (c) => {
+    setCliente: async (c) => {
+      await pgUpsertClienteStrict(c as unknown as Parameters<typeof pgUpsertClienteStrict>[0])
       clientes.set(c.id as string, c as any)
-      void pgUpsertCliente(c as unknown as Parameters<typeof pgUpsertCliente>[0])
+    },
+    getCliente: (id) => clientes.get(id),
+    deleteCliente: async (id) => {
+      await pgDeleteCliente(id)
+      clientes.delete(id)
+    },
+    patchCliente: async (id, partial, timelineEvent) => {
+      const cliente = clientes.get(id)
+      if (!cliente) return null
+      const now = new Date().toISOString()
+      const hoje = now.slice(0, 10)
+      const currentTimeline = Array.isArray((cliente as any).timeline) ? (cliente as any).timeline : []
+      const updated = {
+        ...(cliente as any),
+        ...partial,
+        timeline: timelineEvent ? [...currentTimeline, timelineEvent] : currentTimeline,
+        ultimaAtualizacao: hoje,
+        atualizadoEm: now,
+      }
+      await pgUpsertClienteStrict(updated as unknown as Parameters<typeof pgUpsertClienteStrict>[0])
+      clientes.set(id, updated as any)
+      return updated
     },
     setPropostaInteligente: (p) => {
       propostasInteligentes.set(p.id as string, p as any)
       void pgUpsertProposta(p as unknown as Parameters<typeof pgUpsertProposta>[0])
     },
-    updateProposta: (id, partial) => {
-      const p = propostas.get(id)
-      if (!p) return false
-      Object.assign(p as any, partial, { atualizadoEm: new Date().toISOString() })
-      propostas.set(id, p)
-      void pgUpsertProposta(p as unknown as Parameters<typeof pgUpsertProposta>[0])
-      return true
-    },
+    updateProposta: (id, partial) => updatePropostaCommand(id, normalizeAlixProposalPatch(partial), getAlixTurnContext()?.actor || { nome: 'ALIX' }),
     getLead: (cpfCnpj) => getProspeccaoService().getLead(cpfCnpj),
   });
 
@@ -103,7 +125,37 @@ function getAlixService(): AlixService {
 // ── Route plugin ──────────────────────────────────────────
 
 export default async function alixRoutes(fastify: FastifyInstance): Promise<void> {
+  applyAlixAuth(fastify)
   const alix = getAlixService()
+
+  fastify.addHook('preHandler', async (request) => {
+    if (!isAlixAccessEnforced(request.alixUser)) return
+    const path = request.routeOptions.url || ''
+    const params = request.params as Record<string, string>
+    const body = request.body as Record<string, unknown> | undefined
+    const query = request.query as Record<string, unknown> | undefined
+    let sessionId: unknown
+    if (path.startsWith('/api/alix/chat')) sessionId = body?.sessionId
+    else if (path === '/api/alix/session/:id') sessionId = params.id
+    else if (path.startsWith('/api/alix/telemetry/') || path.startsWith('/api/alix/audit/')) sessionId = params.sessionId
+    else if (path === '/api/alix/documents/analyze') sessionId = query?.sessionId
+    if (sessionId !== undefined) {
+      if (typeof sessionId !== 'string') throw alixAccessError(400, 'Identificador de sessão inválido.')
+      const session = await assertAlixSessionAccess(request.alixUser, sessionId)
+      if (path.startsWith('/api/alix/chat') && typeof body?.message === 'string' && isConfirmationMessage(body.message)
+        && body.clienteId !== undefined && body.clienteId !== session.clienteId) {
+        throw alixAccessError(409, 'A confirmação deve usar o contexto atual salvo da conversa. Revise o cliente antes de executar.')
+      }
+    }
+    if (path.startsWith('/api/alix/chat') && body?.missionId !== undefined) {
+      if (typeof body.missionId !== 'string' || !sessionId) throw alixAccessError(400, 'A retomada exige missão e sessão válidas.')
+      const mission = await getAlixMissionService().get(body.missionId)
+      const session = await assertAlixSessionAccess(request.alixUser, String(sessionId))
+      if (!mission || mission.sessionId !== sessionId || (!session.legacyShared && !canAccessAlixOwner(request.alixUser, mission.consultorId))) {
+        throw alixAccessError(404, 'Missão não encontrada ou indisponível para este usuário.')
+      }
+    }
+  })
 
   // ── POST /api/alix/chat ─────────────────────────────────
   // Body: { sessionId?: string, message: string, attachments?: string[], clienteId?: string }
@@ -112,7 +164,7 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
   // Returns the reply plus the full (updated) session
   fastify.post('/api/alix/chat', {
     config: {
-      // Rate limit dedicado: ALIX/Foundry custa $0.015–$0.075 por chamada;
+      // Rate limit dedicado: chamadas de IA possuem custo e latência variáveis.
       // sem cap específico, abuso pode gerar centenas de USD em minutos.
       // 30 req/min por IP é suficiente para uso interno legítimo.
       rateLimit: { max: 30, timeWindow: '1 minute' },
@@ -123,11 +175,15 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
       message?: string
       attachments?: string[]
       clienteId?: string
+      analysisMode?: 'standard' | 'deep'
+      workMode?: AlixWorkMode
+      missionId?: string
+      modelPreference?: string
     } }>,
     reply: FastifyReply,
   ) => {
     try {
-      const { sessionId, message, attachments, clienteId } = request.body ?? {}
+      const { sessionId, message, attachments, clienteId, analysisMode, workMode, missionId, modelPreference } = request.body ?? {}
       if (!message || typeof message !== 'string' || message.trim().length === 0) {
         return reply.status(400).send({
           success: false,
@@ -135,15 +191,25 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
         })
       }
 
+      const selection = z.string().trim().min(1).max(160).optional().safeParse(modelPreference)
+      if (!selection.success) return reply.status(400).send({ success: false, error: 'Preferência de modelo inválida.' })
       const multi = isMultiagentEnabled()
       const safeAttachments = Array.isArray(attachments) ? attachments.filter((x) => typeof x === 'string') : undefined
       const safeClienteId = typeof clienteId === 'string' && clienteId.trim() ? clienteId.trim() : undefined
       const result = multi
         ? await (await getOrchestrator()).chat(sessionId, message.trim(), {
+            modelPreference: selection.data,
             attachments: safeAttachments,
             clienteId: safeClienteId,
+            analysisMode: analysisMode === 'deep' ? 'deep' : 'standard',
+            workMode,
+            missionId: typeof missionId === 'string' ? missionId : undefined,
+            consultorId: request.alixUser?.consultorId || request.alixUser?.id,
+            actor: workspaceActor(request),
           })
         : await alix.chat(sessionId, message.trim(), {
+            actor: { id: request.alixUser?.id, nome: request.alixUser?.nome },
+            consultorId: request.alixUser?.consultorId || request.alixUser?.id,
             attachments: safeAttachments,
             clienteId: safeClienteId,
           })
@@ -157,6 +223,7 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
               content: result.reply,
               timestamp: result.session.messages[result.session.messages.length - 1]?.timestamp ?? Date.now(),
               toolsUsed: result.session.messages[result.session.messages.length - 1]?.toolsUsed,
+              metadata: result.session.messages[result.session.messages.length - 1]?.metadata,
             }
           : result.reply
       // ALIX Auditável — anexa trail da resposta (tools usadas + source + confidence)
@@ -183,6 +250,7 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
           },
           mode: multi ? 'multiagent' : 'legacy',
           audit,
+          mission: 'mission' in result ? result.mission : undefined,
         },
       })
     } catch (err) {
@@ -198,7 +266,7 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
   //          'done' (payload final), 'error'.
   // Implementação pragmática: roda o chat completo e faz stream por
   // chunking de palavras (latência similar à real, sem refatorar o
-  // tool-loop do runClaude).
+  // tool-loop do runOpenAI).
   fastify.post('/api/alix/chat/stream', {
     config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
   }, async (
@@ -207,10 +275,14 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
       message?: string
       attachments?: string[]
       clienteId?: string
+      analysisMode?: 'standard' | 'deep'
+      workMode?: AlixWorkMode
+      missionId?: string
+      modelPreference?: string
     } }>,
     reply: FastifyReply,
   ) => {
-    const { sessionId, message, attachments, clienteId } = request.body ?? {}
+    const { sessionId, message, attachments, clienteId, analysisMode, workMode, missionId, modelPreference } = request.body ?? {}
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return reply.status(400).send({ success: false, error: 'Campo "message" é obrigatório' })
     }
@@ -237,18 +309,33 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
 
       const multi = isMultiagentEnabled()
       const toolsUsed: string[] = []
+      let emittedText = false
 
       let replyContent: string
       let replySessionId: string
       let replyObj: any
+      let mission: unknown = null
 
       if (multi) {
-        // Caminho principal: Orchestrator (Opus + 60+ tools, inclusive
+      // Caminho principal: Orchestrator OpenAI com ferramentas selecionadas,
         // prospeccao_buscar, delegate_deal_analyzer, inventário, etc.)
         const orch = await getOrchestrator()
         const result = await orch.chat(sessionId, message.trim(), {
           attachments: Array.isArray(attachments) ? attachments.filter((x) => typeof x === 'string') : undefined,
           clienteId: typeof clienteId === 'string' && clienteId.trim() ? clienteId.trim() : undefined,
+          analysisMode: analysisMode === 'deep' ? 'deep' : 'standard',
+          workMode,
+          missionId: typeof missionId === 'string' ? missionId : undefined,
+          consultorId: request.alixUser?.consultorId || request.alixUser?.id,
+          actor: workspaceActor(request),
+          onMission: (value) => {
+            mission = value
+            try { send('mission', value) } catch { /* stream fechado */ }
+          },
+          onTextDelta: (text) => {
+            emittedText = true
+            try { send('token', { text }) } catch { /* stream fechado */ }
+          },
           onToolCall: (name) => {
             toolsUsed.push(name)
             try { send('tool', { name }) } catch { /* stream fechado */ }
@@ -256,18 +343,26 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
         })
         replyContent = result.reply
         replySessionId = result.session.id
+        mission = result.mission || mission
         replyObj = {
           id: result.session.messages[result.session.messages.length - 1]?.id,
           role: 'assistant',
           content: result.reply,
           timestamp: Date.now(),
           toolsUsed,
+          metadata: result.session.messages[result.session.messages.length - 1]?.metadata,
         }
       } else {
         // Legacy — mantido apenas para cenários com ALIX_MULTIAGENT_ENABLED=false
         const result = await alix.chat(sessionId, message.trim(), {
+            actor: { id: request.alixUser?.id, nome: request.alixUser?.nome },
+          consultorId: request.alixUser?.consultorId || request.alixUser?.id,
           attachments: Array.isArray(attachments) ? attachments.filter((x) => typeof x === 'string') : undefined,
           clienteId: typeof clienteId === 'string' && clienteId.trim() ? clienteId.trim() : undefined,
+          onTextDelta: (text) => {
+            emittedText = true
+            try { send('token', { text }) } catch { /* stream fechado */ }
+          },
           onToolCall: (name: string) => {
             toolsUsed.push(name)
             try { send('tool', { name }) } catch { /* stream fechado */ }
@@ -278,18 +373,15 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
         replyObj = result.reply
       }
 
-      // Stream palavra-a-palavra — delay 4ms. Fica natural sem drenar CPU.
-      const words = replyContent.split(/(\s+)/) // preserva espaços/quebras
-      for (const w of words) {
-        send('token', { text: w })
-        if (w.trim().length > 0) await new Promise((r) => setTimeout(r, 4))
-      }
+      // Respostas deterministicas (por exemplo confirmacoes HITL) nao passam pelo LLM.
+      if (!emittedText && replyContent) send('token', { text: replyContent })
 
       send('done', {
         reply: replyObj,
         sessionId: replySessionId,
         sources: replyObj?.sources || [],
         toolsUsed: replyObj?.toolsUsed || toolsUsed,
+        mission,
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro desconhecido'
@@ -301,11 +393,148 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
     }
   })
 
+  // ── POST /api/alix/chat/stream-v2 (SSE — streaming via Orchestrator + tools) ──
+  // Esta versão usa o OrchestratorService completo (60+ tools, sub-agentes,
+  // CRM, prospeccao, websearch). A diferença para /chat é apenas o streaming
+  // SSE da resposta final.
+  fastify.post('/api/alix/chat/stream-v2', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (
+    request: FastifyRequest<{ Body: {
+      sessionId?: string
+      message?: string
+      attachments?: string[]
+      clienteId?: string
+      analysisMode?: 'standard' | 'deep'
+      workMode?: AlixWorkMode
+      missionId?: string
+      modelPreference?: string
+    } }>,
+    reply: FastifyReply,
+  ) => {
+    const { sessionId, message, attachments, clienteId, analysisMode, workMode, missionId, modelPreference } = request.body ?? {}
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      return reply.status(400).send({ success: false, error: 'Campo "message" é obrigatório' })
+    }
+
+    const selection = z.string().trim().min(1).max(160).optional().safeParse(modelPreference)
+    if (!selection.success) return reply.status(400).send({ success: false, error: 'Preferência de modelo inválida.' })
+    const abort = new AbortController()
+    const disconnect = () => abort.abort(new Error('A conexão da conversa foi encerrada.'))
+    reply.raw.on('close', disconnect)
+
+    reply.raw.setHeader('Content-Type', 'text/event-stream')
+    reply.raw.setHeader('Cache-Control', 'no-cache, no-transform')
+    reply.raw.setHeader('Connection', 'keep-alive')
+    reply.raw.setHeader('X-Accel-Buffering', 'no')
+    reply.raw.flushHeaders?.()
+
+    const send = (event: string, payload: unknown) => {
+      if (reply.raw.destroyed || reply.raw.writableEnded) return
+      reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`)
+    }
+
+    send('start', { sessionId, ts: Date.now() })
+
+    const heartbeat = setInterval(() => send('ping', { ts: Date.now() }), 10_000)
+
+    try {
+      const multi = isMultiagentEnabled()
+      const toolsUsed: string[] = []
+      let emittedText = false
+
+      let replyText: string
+      let replySessionId: string
+      let replyObj: any
+      let mission: unknown = null
+
+      if (multi) {
+        // CAMINHO PRINCIPAL: OrchestratorService com 60+ tools
+        const orch = await getOrchestrator()
+        const result = await orch.chat(sessionId, message.trim(), {
+          modelPreference: selection.data,
+          signal: abort.signal,
+          onRouting: (routing) => send('routing', routing),
+          onProgress: (event) => send('progress', event),
+          attachments: Array.isArray(attachments) ? attachments.filter((x) => typeof x === 'string') : undefined,
+          clienteId: typeof clienteId === 'string' && clienteId.trim() ? clienteId.trim() : undefined,
+          analysisMode: analysisMode === 'deep' ? 'deep' : 'standard',
+          workMode,
+          missionId: typeof missionId === 'string' ? missionId : undefined,
+          consultorId: request.alixUser?.consultorId || request.alixUser?.id,
+          actor: workspaceActor(request),
+          onMission: (value) => {
+            mission = value
+            try { send('mission', value) } catch { /* stream fechado */ }
+          },
+          onTextDelta: (text) => {
+            emittedText = true
+            try { send('token', { text }) } catch { /* stream fechado */ }
+          },
+          onToolCall: (name) => {
+            toolsUsed.push(name)
+            try { send('tool', { name }) } catch { /* stream fechado */ }
+          },
+        })
+        replyText = result.reply
+        replySessionId = result.session.id
+        mission = result.mission || mission
+
+        const lastMsg = result.session.messages[result.session.messages.length - 1]
+        replyObj = {
+          id: lastMsg?.id,
+          role: 'assistant',
+          content: replyText,
+          timestamp: Date.now(),
+          toolsUsed,
+          metadata: lastMsg?.metadata,
+        }
+      } else {
+        // Legacy — mantido apenas para cenários com ALIX_MULTIAGENT_ENABLED=false
+        const result = await alix.chat(sessionId, message.trim(), {
+            actor: { id: request.alixUser?.id, nome: request.alixUser?.nome },
+          consultorId: request.alixUser?.consultorId || request.alixUser?.id,
+          attachments: Array.isArray(attachments) ? attachments.filter((x) => typeof x === 'string') : undefined,
+          clienteId: typeof clienteId === 'string' && clienteId.trim() ? clienteId.trim() : undefined,
+          onTextDelta: (text) => {
+            emittedText = true
+            try { send('token', { text }) } catch { /* stream fechado */ }
+          },
+          onToolCall: (name: string) => {
+            toolsUsed.push(name)
+            try { send('tool', { name }) } catch { /* stream fechado */ }
+          },
+        })
+        replyText = result.reply.content || ''
+        replySessionId = result.session.id
+        replyObj = result.reply
+      }
+
+      if (!emittedText && replyText) send('token', { text: replyText })
+
+      send('done', {
+        reply: replyObj,
+        sessionId: replySessionId,
+        sources: replyObj?.sources || [],
+        toolsUsed: replyObj?.toolsUsed || toolsUsed,
+        mission,
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro desconhecido'
+      request.log.error({ err }, '[ALIX] stream-v2 error')
+      send('error', { error: msg })
+    } finally {
+      clearInterval(heartbeat)
+      reply.raw.off('close', disconnect)
+      reply.raw.end()
+    }
+  })
+
   // ── GET /api/alix/sessions ──────────────────────────────
   // Lists all persisted sessions (most recent first)
-  fastify.get('/api/alix/sessions', async (_request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/api/alix/sessions', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const sessions = await alix.listSessions()
+      const sessions = await filterAlixSessions(request.alixUser, await alix.listSessions())
       return reply.status(200).send({ success: true, data: sessions, total: sessions.length })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro desconhecido'
@@ -325,7 +554,7 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
       if (!session) {
         return reply.status(404).send({ success: false, error: 'Sessão não encontrada' })
       }
-      return reply.status(200).send({ success: true, data: session })
+      return reply.status(200).send({ success: true, data: { ...session, ...(isAlixLegacySharedSession(request.alixUser, session) ? { legacyShared: true } : {}) } })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro desconhecido'
       return reply.status(500).send({ success: false, error: 'Erro ao buscar sessão', detalhes: msg })
@@ -340,11 +569,36 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
   ) => {
     try {
       const { title } = request.body ?? {}
-      const session = await alix.createSession(title)
+      const session = await alix.createSession(title, request.alixUser?.consultorId || request.alixUser?.id)
       return reply.status(201).send({ success: true, data: session })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro desconhecido'
       return reply.status(500).send({ success: false, error: 'Erro ao criar sessão', detalhes: msg })
+    }
+  })
+
+  // ── PATCH /api/alix/session/:id ───────────────────────────
+  // Atualiza metadados operacionais sem apagar o histórico.
+  fastify.patch('/api/alix/session/:id', async (
+    request: FastifyRequest<{
+      Params: { id: string }
+      Body: { title?: string; archived?: boolean; pinned?: boolean; clienteId?: string | null }
+    }>,
+    reply: FastifyReply,
+  ) => {
+    try {
+      const body = request.body ?? {}
+      const hasPatch = ['title', 'archived', 'pinned', 'clienteId'].some((key) => Object.prototype.hasOwnProperty.call(body, key))
+      if (!hasPatch) return reply.status(400).send({ success: false, error: 'Nenhuma alteração informada' })
+      if (body.title !== undefined && typeof body.title !== 'string') {
+        return reply.status(400).send({ success: false, error: 'Título inválido' })
+      }
+      const session = await alix.updateSession(request.params.id, body, { strict: true })
+      if (!session) return reply.status(404).send({ success: false, error: 'Sessão não encontrada' })
+      return reply.status(200).send({ success: true, data: session })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro desconhecido'
+      return reply.status(500).send({ success: false, error: 'Erro ao atualizar sessão', detalhes: msg })
     }
   })
 
@@ -365,14 +619,17 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
   })
 
   // ── GET /api/alix/llm/health ─────────────────────────────
-  // Health-check do cérebro LLM (Foundry / Claude Sonnet 4.6)
+  // Health-check do cérebro LLM na plataforma OpenAI.
   fastify.get('/api/alix/llm/health', async (_request: FastifyRequest, reply: FastifyReply) => {
-    const ping = await pingFoundry()
+    const model = getModelForRole('orchestrator')
+    const ping = await pingOpenAI(model)
     return reply.status(ping.ok ? 200 : 503).send({
       success: ping.ok,
       data: {
-        enabled: isLLMEnabled(),
-        model: CLAUDE_MODEL_SONNET,
+        enabled: isOpenAIEnabled(),
+        operational: ping.ok,
+        activeRole: 'orchestrator',
+        availableModels: Object.keys(MODEL_REGISTRY).length,
         ping,
       },
     })
@@ -590,6 +847,9 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
         let sugestao: string | null = null
         if (top) {
           if (top.tipo === 'stage-stuck') sugestao = `Deal travado há mais de 14 dias — sugestão: pedir atualização de status ou rebaixar estágio.`
+          else if (top.tipo === 'crm-acao-vencida') sugestao = `Próxima ação vencida — sugestão: registrar contato agora ou reagendar com motivo.`
+          else if (top.tipo === 'crm-acao-hoje') sugestao = `Existe ação marcada para hoje — sugestão: executar contato e registrar resultado no CRM.`
+          else if (top.tipo === 'crm-sem-proxima-acao') sugestao = `Cliente ativo sem próximo passo — sugestão: definir próxima ação com prazo e responsável.`
           else if (top.tipo === 'whatsapp-mudo') sugestao = `Cliente parou de responder no WhatsApp — sugestão: msg curta de retomada ou template fora-da-janela 24h.`
           else if (top.tipo === 'doc-vencendo') sugestao = `Documento pendente há tempo — sugestão: cobrar via WhatsApp ou reenviar magic-link do portal.`
           else if (top.tipo === 'alerta-preco-disparado') sugestao = `Alerta de preço disparou — sugestão: revisar exposição e propor hedge.`
@@ -719,5 +979,47 @@ export default async function alixRoutes(fastify: FastifyInstance): Promise<void
     }
   })
 
-  console.log('[ALIX] Rotas registradas: chat, sessions, llm/health, telemetry, push/health, push/test, briefing/run, rules CRUD + evaluate-now, weekly-report')
+  // ── Wave 11 — Document Analysis para frontend ─────────
+  fastify.get('/api/alix/documents/analyze', async (req: FastifyRequest<{ Querystring: { documentoId?: string; sessionId?: string } }>, reply) => {
+    try {
+      const { getDocumentIntakeService } = await import('../services/alix/intake/DocumentIntakeService.js')
+      const docId = req.query.documentoId
+      const sessionId = req.query.sessionId
+      if (!docId || !sessionId) {
+        return reply.status(400).send({ success: false, error: 'documentoId e sessionId são obrigatórios' })
+      }
+      const doc = await getDocumentIntakeService().get(sessionId, docId)
+      if (!doc) {
+        return reply.status(404).send({ success: false, error: 'Documento não encontrado' })
+      }
+      const smartExtraction = (doc.metadata as any)?.smartExtraction as import('@aletis/shared-types').DocumentExtractionResult | undefined
+      if (!smartExtraction) {
+        return reply.status(202).send({
+          success: true,
+          data: null,
+          message: 'Documento ainda em processamento. Tente novamente em alguns segundos.',
+        })
+      }
+      const data = {
+        documentoId: doc.id,
+        tipoDocumento: smartExtraction.tipoDocumento,
+        confianca: smartExtraction.confianca,
+        entidades: smartExtraction.entidades.slice(0, 20),
+        clienteNome: smartExtraction.clienteData?.nome,
+        clienteCpfCnpj: smartExtraction.clienteData?.cpfCnpj,
+        dividaTotal: smartExtraction.clienteData?.cpfCnpj
+          ? smartExtraction.dividas.reduce((sum, d) => sum + (d.valorAtualizado || d.valorOriginal || 0), 0)
+          : undefined,
+        lacunas: smartExtraction.lacunas,
+        riscos: smartExtraction.riscos,
+        acoesSugeridas: smartExtraction.acoesSugeridas,
+        ready: smartExtraction.lacunas.filter((l) => !/cpf|cnpj/i.test(l)).length === 0 && !!smartExtraction.clienteData?.nome,
+      }
+      return reply.send({ success: true, data })
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  console.log('[ALIX] Rotas registradas: chat, sessions, llm/health, telemetry, push/health, push/test, briefing/run, rules CRUD + evaluate-now, weekly-report, document-analysis')
 }

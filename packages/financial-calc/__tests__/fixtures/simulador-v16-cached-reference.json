@@ -1,0 +1,517 @@
+{
+  "source": "Simulador v16 (1).xlsm",
+  "sha256": "cd9812d37f7f42ec9d3978157f88c03ce55c53cf52bad3bb6fb602634e33fac8",
+  "scope": "Somente cenário salvo sem custos; caches das colunas finais. Não executa VBA.",
+  "systems": {
+    "PRICE": [
+      {
+        "data": "2027-04-30",
+        "juros": 57602.511783844755,
+        "amortizacao": 0.0,
+        "prestacao": 57602.511783844755,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "PRICE!O7:U7"
+      },
+      {
+        "data": "2027-10-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "PRICE!O8:U8"
+      },
+      {
+        "data": "2028-04-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "PRICE!O9:U9"
+      },
+      {
+        "data": "2028-10-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "PRICE!O10:U10"
+      },
+      {
+        "data": "2029-04-30",
+        "juros": 27702.541911873264,
+        "amortizacao": 0.0,
+        "prestacao": 27702.541911873264,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "PRICE!O11:U11"
+      },
+      {
+        "data": "2029-10-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "PRICE!O12:U12"
+      },
+      {
+        "data": "2030-04-30",
+        "juros": 27702.541911873264,
+        "amortizacao": 0.0,
+        "prestacao": 27702.541911873264,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "PRICE!O13:U13"
+      },
+      {
+        "data": "2030-10-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "PRICE!O14:U14"
+      },
+      {
+        "data": "2031-04-30",
+        "juros": 27702.541911873264,
+        "amortizacao": 0.0,
+        "prestacao": 27702.541911873264,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "PRICE!O15:U15"
+      },
+      {
+        "data": "2031-10-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "PRICE!O16:U16"
+      },
+      {
+        "data": "2032-04-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "PRICE!O17:U17"
+      },
+      {
+        "data": "2032-08-30",
+        "juros": 18352.70845005858,
+        "amortizacao": 35104.69876795616,
+        "prestacao": 53457.407218014734,
+        "saldoDevedor": 343275.50123204384,
+        "sourceRange": "PRICE!O18:U18"
+      },
+      {
+        "data": "2033-02-28",
+        "juros": 25132.40375738476,
+        "amortizacao": 28325.003460629974,
+        "prestacao": 53457.407218014734,
+        "saldoDevedor": 314950.4977714139,
+        "sourceRange": "PRICE!O19:U19"
+      },
+      {
+        "data": "2033-08-30",
+        "juros": 23189.88083608672,
+        "amortizacao": 30267.526381928015,
+        "prestacao": 53457.407218014734,
+        "saldoDevedor": 284682.9713894859,
+        "sourceRange": "PRICE!O20:U20"
+      },
+      {
+        "data": "2034-02-28",
+        "juros": 20842.639087652708,
+        "amortizacao": 32614.768130362027,
+        "prestacao": 53457.407218014734,
+        "saldoDevedor": 252068.20325912387,
+        "sourceRange": "PRICE!O21:U21"
+      },
+      {
+        "data": "2034-08-30",
+        "juros": 18559.842380017737,
+        "amortizacao": 34897.56483799699,
+        "prestacao": 53457.407218014734,
+        "saldoDevedor": 217170.63842112685,
+        "sourceRange": "PRICE!O22:U22"
+      },
+      {
+        "data": "2035-02-28",
+        "juros": 15899.824337768045,
+        "amortizacao": 37557.582880246686,
+        "prestacao": 53457.407218014734,
+        "saldoDevedor": 179613.05554088016,
+        "sourceRange": "PRICE!O23:U23"
+      },
+      {
+        "data": "2035-08-30",
+        "juros": 13224.952441959553,
+        "amortizacao": 40232.45477605518,
+        "prestacao": 53457.407218014734,
+        "saldoDevedor": 139380.60076482498,
+        "sourceRange": "PRICE!O24:U24"
+      },
+      {
+        "data": "2036-02-29",
+        "juros": 10262.627128611059,
+        "amortizacao": 43194.78008940368,
+        "prestacao": 53457.407218014734,
+        "saldoDevedor": 96185.8206754213,
+        "sourceRange": "PRICE!O25:U25"
+      },
+      {
+        "data": "2036-08-30",
+        "juros": 7082.185090569743,
+        "amortizacao": 46375.22212744499,
+        "prestacao": 53457.407218014734,
+        "saldoDevedor": 49810.59854797632,
+        "sourceRange": "PRICE!O26:U26"
+      },
+      {
+        "data": "2037-02-28",
+        "juros": 3646.808670038251,
+        "amortizacao": 49810.598547976486,
+        "prestacao": 53457.407218014734,
+        "saldoDevedor": -1.673470251262188e-10,
+        "sourceRange": "PRICE!O27:U27"
+      }
+    ],
+    "SAC": [
+      {
+        "data": "2027-04-30",
+        "juros": 57602.511783844755,
+        "amortizacao": 0.0,
+        "prestacao": 57602.511783844755,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SAC!O7:U7"
+      },
+      {
+        "data": "2027-10-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SAC!O8:U8"
+      },
+      {
+        "data": "2028-04-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SAC!O9:U9"
+      },
+      {
+        "data": "2028-10-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SAC!O10:U10"
+      },
+      {
+        "data": "2029-04-30",
+        "juros": 27702.541911873264,
+        "amortizacao": 0.0,
+        "prestacao": 27702.541911873264,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SAC!O11:U11"
+      },
+      {
+        "data": "2029-10-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SAC!O12:U12"
+      },
+      {
+        "data": "2030-04-30",
+        "juros": 27702.541911873264,
+        "amortizacao": 0.0,
+        "prestacao": 27702.541911873264,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SAC!O13:U13"
+      },
+      {
+        "data": "2030-10-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SAC!O14:U14"
+      },
+      {
+        "data": "2031-04-30",
+        "juros": 27702.541911873264,
+        "amortizacao": 0.0,
+        "prestacao": 27702.541911873264,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SAC!O15:U15"
+      },
+      {
+        "data": "2031-10-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SAC!O16:U16"
+      },
+      {
+        "data": "2032-04-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SAC!O17:U17"
+      },
+      {
+        "data": "2032-08-30",
+        "juros": 18352.70845005858,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 56190.72845005858,
+        "saldoDevedor": 340542.18000000005,
+        "sourceRange": "SAC!O18:U18"
+      },
+      {
+        "data": "2033-02-28",
+        "juros": 24932.28772068594,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 62770.307720685945,
+        "saldoDevedor": 302704.16000000003,
+        "sourceRange": "SAC!O19:U19"
+      },
+      {
+        "data": "2033-08-30",
+        "juros": 22288.18004308251,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 60126.200043082514,
+        "saldoDevedor": 264866.14,
+        "sourceRange": "SAC!O20:U20"
+      },
+      {
+        "data": "2034-02-28",
+        "juros": 19391.779338311284,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 57229.79933831129,
+        "saldoDevedor": 227028.12,
+        "sourceRange": "SAC!O21:U21"
+      },
+      {
+        "data": "2034-08-30",
+        "juros": 16716.13503231188,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 54554.155032311886,
+        "saldoDevedor": 189190.09999999998,
+        "sourceRange": "SAC!O22:U22"
+      },
+      {
+        "data": "2035-02-28",
+        "juros": 13851.27095593663,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 51689.29095593664,
+        "saldoDevedor": 151352.07999999996,
+        "sourceRange": "SAC!O23:U23"
+      },
+      {
+        "data": "2035-08-30",
+        "juros": 11144.09002154125,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 48982.11002154125,
+        "saldoDevedor": 113514.05999999997,
+        "sourceRange": "SAC!O24:U24"
+      },
+      {
+        "data": "2036-02-29",
+        "juros": 8358.067516155937,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 46196.08751615594,
+        "saldoDevedor": 75676.03999999996,
+        "sourceRange": "SAC!O25:U25"
+      },
+      {
+        "data": "2036-08-30",
+        "juros": 5572.045010770624,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 43410.06501077063,
+        "saldoDevedor": 37838.01999999996,
+        "sourceRange": "SAC!O26:U26"
+      },
+      {
+        "data": "2037-02-28",
+        "juros": 2770.2541911873236,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 40608.27419118733,
+        "saldoDevedor": -4.3655745685100555e-11,
+        "sourceRange": "SAC!O27:U27"
+      }
+    ],
+    "SACRE": [
+      {
+        "data": "2027-04-30",
+        "juros": 57602.511783844755,
+        "amortizacao": 0.0,
+        "prestacao": 57602.511783844755,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SACRE!AC7:AI7"
+      },
+      {
+        "data": "2027-10-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SACRE!AC8:AI8"
+      },
+      {
+        "data": "2028-04-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SACRE!AC9:AI9"
+      },
+      {
+        "data": "2028-10-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SACRE!AC10:AI10"
+      },
+      {
+        "data": "2029-04-30",
+        "juros": 27702.541911873264,
+        "amortizacao": 0.0,
+        "prestacao": 27702.541911873264,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SACRE!AC11:AI11"
+      },
+      {
+        "data": "2029-10-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SACRE!AC12:AI12"
+      },
+      {
+        "data": "2030-04-30",
+        "juros": 27702.541911873264,
+        "amortizacao": 0.0,
+        "prestacao": 27702.541911873264,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SACRE!AC13:AI13"
+      },
+      {
+        "data": "2030-10-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SACRE!AC14:AI14"
+      },
+      {
+        "data": "2031-04-30",
+        "juros": 27702.541911873264,
+        "amortizacao": 0.0,
+        "prestacao": 27702.541911873264,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SACRE!AC15:AI15"
+      },
+      {
+        "data": "2031-10-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SACRE!AC16:AI16"
+      },
+      {
+        "data": "2032-04-30",
+        "juros": 27860.225053853133,
+        "amortizacao": 0.0,
+        "prestacao": 27860.225053853133,
+        "saldoDevedor": 378380.2,
+        "sourceRange": "SACRE!AC17:AI17"
+      },
+      {
+        "data": "2032-08-30",
+        "juros": 1835.270845005858,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 39673.29084500586,
+        "saldoDevedor": 340542.18000000005,
+        "sourceRange": "SACRE!AC18:AI18"
+      },
+      {
+        "data": "2033-02-28",
+        "juros": 4739.891653430074,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 42577.91165343008,
+        "saldoDevedor": 302704.16000000003,
+        "sourceRange": "SACRE!AC19:AI19"
+      },
+      {
+        "data": "2033-08-30",
+        "juros": 7874.913520292124,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 45712.93352029213,
+        "saldoDevedor": 264866.1400000001,
+        "sourceRange": "SACRE!AC20:AI20"
+      },
+      {
+        "data": "2034-02-28",
+        "juros": 11221.71775783039,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 49059.73775783039,
+        "saldoDevedor": 227028.12000000008,
+        "sourceRange": "SACRE!AC21:AI21"
+      },
+      {
+        "data": "2034-08-30",
+        "juros": 14833.998038395182,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 52672.01803839519,
+        "saldoDevedor": 189190.1000000001,
+        "sourceRange": "SACRE!AC22:AI22"
+      },
+      {
+        "data": "2035-02-28",
+        "juros": 18690.301268034556,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 56528.32126803456,
+        "saldoDevedor": 151352.08000000007,
+        "sourceRange": "SACRE!AC23:AI23"
+      },
+      {
+        "data": "2035-08-30",
+        "juros": 22852.49514721733,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 60690.51514721733,
+        "saldoDevedor": 113514.06000000007,
+        "sourceRange": "SACRE!AC24:AI24"
+      },
+      {
+        "data": "2036-02-29",
+        "juros": 27321.15236193352,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 65159.172361933524,
+        "saldoDevedor": 75676.04000000008,
+        "sourceRange": "SACRE!AC25:AI25"
+      },
+      {
+        "data": "2036-08-30",
+        "juros": 32118.8378812241,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 69956.8578812241,
+        "saldoDevedor": 37838.02000000008,
+        "sourceRange": "SACRE!AC26:AI26"
+      },
+      {
+        "data": "2037-02-28",
+        "juros": 37240.62487609744,
+        "amortizacao": 37838.020000000004,
+        "prestacao": 75078.64487609745,
+        "saldoDevedor": 7.275957614183426e-11,
+        "sourceRange": "SACRE!AC27:AI27"
+      }
+    ]
+  }
+}

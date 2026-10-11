@@ -35,14 +35,13 @@ export function initOtel(): void {
   const semconv = require('@opentelemetry/semantic-conventions')
 
   const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4318/v1/traces'
-
-  const sdk = new NodeSDK({
+  const useLangfuse = process.env.LANGFUSE_ENABLED === '1'
+  const config: Record<string, unknown> = {
     resource: resourceFromAttributes({
       [semconv.ATTR_SERVICE_NAME || 'service.name']: 'aletis-api',
       [semconv.ATTR_SERVICE_VERSION || 'service.version']: process.env.npm_package_version ?? '0.1.0',
       'deployment.environment': process.env.NODE_ENV ?? 'development',
     }),
-    traceExporter: new OTLPTraceExporter({ url: endpoint }),
     instrumentations: [
       getNodeAutoInstrumentations({
         // Sleep '@opentelemetry/instrumentation-fs' — barulhento e
@@ -53,12 +52,25 @@ export function initOtel(): void {
         // HTTP, pg, fastify, undici, fetch ficam ligados (default).
       }),
     ],
-  })
+  }
+
+  if (useLangfuse) {
+    // @langfuse/otel usa variáveis LANGFUSE_PUBLIC_KEY,
+    // LANGFUSE_SECRET_KEY e LANGFUSE_HOST. Mantemos OTLP genérico como
+    // fallback quando LANGFUSE_ENABLED != 1.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { LangfuseSpanProcessor } = require('@langfuse/otel')
+    config.spanProcessors = [new LangfuseSpanProcessor()]
+  } else {
+    config.traceExporter = new OTLPTraceExporter({ url: endpoint })
+  }
+
+  const sdk = new NodeSDK(config)
 
   try {
     sdk.start()
     // eslint-disable-next-line no-console
-    console.log(`[otel] iniciado — exporter: ${endpoint}`)
+    console.log(useLangfuse ? '[otel] iniciado — exporter: Langfuse' : `[otel] iniciado — exporter: ${endpoint}`)
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[otel] falha ao iniciar:', (err as Error).message)

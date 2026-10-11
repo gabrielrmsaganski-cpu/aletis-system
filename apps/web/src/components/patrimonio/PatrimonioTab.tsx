@@ -65,7 +65,7 @@ interface InventarioCliente {
 
 // ────────── Metadata por tipo ──────────
 const TIPO_META: Record<TipoPatrimonio, { label: string; icon: React.ElementType; tone: string }> = {
-  maquinario:   { label: 'Maquinário',     icon: Tractor,   tone: 'bg-aletis-verde/10 text-aletis-verde border-aletis-verde/30' },
+  maquinario:   { label: 'Maquinário',     icon: Tractor,   tone: 'bg-aletis-verde/10 text-foreground border-aletis-verde/30' },
   veiculo:      { label: 'Veículos',       icon: Truck,     tone: 'bg-sky-500/10 text-sky-600 border-sky-500/30' },
   imovel_rural: { label: 'Imóveis Rurais', icon: Map,       tone: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' },
   benfeitoria:  { label: 'Benfeitorias',   icon: Warehouse, tone: 'bg-amber-500/10 text-amber-600 border-amber-500/30' },
@@ -204,11 +204,11 @@ export default function PatrimonioTab({ clienteId }: { clienteId: string }) {
 
           {/* Lista de ativos */}
           {loading ? (
-            <div className="flex items-center gap-2 text-xs text-aletis-grafite-medio py-6 justify-center">
+            <div className="flex items-center gap-2 text-xs text-[var(--text-soft)] py-6 justify-center">
               <Loader2 size={14} className="animate-spin" /> Carregando inventário...
             </div>
           ) : ativosFiltrados.length === 0 ? (
-            <div className="text-center py-10 text-sm text-aletis-grafite-medio dark:text-white/45">
+            <div className="text-center py-10 text-sm text-[var(--text-soft)] dark:text-white/45">
               <Package size={32} className="mx-auto mb-2 opacity-40" />
               {inv?.ativos.length === 0
                 ? 'Nenhum patrimônio cadastrado ainda. Clique em "Adicionar" para começar.'
@@ -253,10 +253,10 @@ function ResumoKpi({ label, value, tone }: { label: string; value: string; tone?
   const accent =
     tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400'
     : tone === 'gold' ? 'text-aletis-dourado'
-    : 'text-aletis-grafite-escuro dark:text-white'
+    : 'text-foreground dark:text-white'
   return (
-    <div className="rounded-xl border border-aletis-borda dark:border-white/5 bg-white dark:bg-white/[0.02] px-3 py-2.5">
-      <p className="text-[10px] uppercase tracking-[0.12em] text-aletis-grafite-medio dark:text-white/45 font-medium">{label}</p>
+    <div className="rounded-xl border border-aletis-borda dark:border-white/5 bg-card dark:bg-white/[0.02] px-3 py-2.5">
+      <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--text-soft)] dark:text-white/45 font-medium">{label}</p>
       <p className={`font-display text-[19px] font-bold tabular-nums truncate ${accent}`}>{value}</p>
     </div>
   )
@@ -271,7 +271,7 @@ function FiltroChip({
       className={`h-7 px-2.5 rounded-full border text-[11px] font-medium inline-flex items-center gap-1 transition ${
         ativo
           ? 'bg-aletis-verde text-white border-aletis-verde'
-          : 'bg-white dark:bg-white/[0.02] border-aletis-borda dark:border-white/10 text-aletis-grafite-escuro dark:text-white/70 hover:border-aletis-verde/40'
+          : 'bg-card dark:bg-white/[0.02] border-aletis-borda dark:border-white/10 text-foreground dark:text-white/70 hover:border-aletis-verde/40'
       }`}
     >
       {icon}
@@ -288,25 +288,25 @@ function PatrimonioRow({
   const valor = ativo.valorAtual ?? ativo.valorAquisicao ?? 0
   const garantia = ativo.valorGarantia ?? (ativo.garantiaDisponivel ? valor * 0.7 : 0)
   return (
-    <div className="rounded-xl border border-aletis-borda dark:border-white/5 bg-white dark:bg-white/[0.02] px-3 py-3 flex items-center gap-3 group hover:border-aletis-verde/30 transition">
+    <div className="rounded-xl border border-aletis-borda dark:border-white/5 bg-card dark:bg-white/[0.02] px-3 py-3 flex items-center gap-3 group hover:border-aletis-verde/30 transition">
       <div className={`w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 ${meta.tone}`}>
         <Icon size={16} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="font-semibold text-sm text-aletis-grafite-escuro dark:text-white truncate">{ativo.nome}</p>
+          <p className="font-semibold text-sm text-foreground dark:text-white truncate">{ativo.nome}</p>
           <Chip size="xs" tone="slate" label={meta.label} />
           {ativo.status !== 'ativo' && <Chip size="xs" tone="amber" label={ativo.status} />}
           {ativo.garantiaDisponivel && <Chip size="xs" tone="gold" label="Garantia" />}
         </div>
-        <p className="text-[11px] text-aletis-grafite-medio dark:text-white/45 mt-0.5 truncate">
+        <p className="text-[11px] text-[var(--text-soft)] dark:text-white/45 mt-0.5 truncate">
           {subtitleFor(ativo)}
         </p>
       </div>
       <div className="text-right shrink-0 hidden sm:block">
-        <p className="font-display text-[14px] font-bold tabular-nums text-aletis-grafite-escuro dark:text-white">{fmtBRL(valor)}</p>
+        <p className="font-display text-[14px] font-bold tabular-nums text-foreground dark:text-white">{fmtBRL(valor)}</p>
         {garantia > 0 && (
-          <p className="text-[10px] text-aletis-dourado tabular-nums">garantia {fmtBRL(garantia)}</p>
+          <p className="text-[11px] text-aletis-dourado tabular-nums">garantia {fmtBRL(garantia)}</p>
         )}
       </div>
       <div className="flex items-center gap-1 shrink-0 opacity-50 group-hover:opacity-100 transition">
@@ -368,11 +368,11 @@ function AddPatrimonioModal({
   const up = (patch: Partial<Patrimonio>) => setForm({ ...form, ...patch })
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-aletis-grafite-escuro rounded-2xl border border-aletis-borda dark:border-white/10 shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <header className="px-5 py-4 border-b border-aletis-borda dark:border-white/5 flex items-center justify-between sticky top-0 bg-white dark:bg-aletis-grafite-escuro">
+      <div className="bg-card dark:bg-card rounded-lg border border-aletis-borda dark:border-white/10 shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <header className="px-5 py-4 border-b border-aletis-borda dark:border-white/5 flex items-center justify-between sticky top-0 bg-card dark:bg-card">
           <div>
-            <h3 className="font-semibold text-sm text-aletis-grafite-escuro dark:text-white">Adicionar ao inventário</h3>
-            <p className="text-[11px] text-aletis-grafite-medio dark:text-white/45">Campos variam conforme o tipo escolhido.</p>
+            <h3 className="font-semibold text-sm text-foreground dark:text-white">Adicionar ao inventário</h3>
+            <p className="text-[11px] text-[var(--text-soft)] dark:text-white/45">Campos variam conforme o tipo escolhido.</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-aletis-borda/50 dark:hover:bg-white/10">
             <X size={16} />
@@ -381,7 +381,7 @@ function AddPatrimonioModal({
         <div className="p-5 flex flex-col gap-4">
           {/* Tipo */}
           <div>
-            <label className="text-[11px] uppercase tracking-wider font-semibold text-aletis-grafite-medio dark:text-white/55">Tipo *</label>
+            <label className="text-[11px] uppercase tracking-wider font-semibold text-[var(--text-soft)] dark:text-white/55">Tipo *</label>
             <div className="flex flex-wrap gap-1.5 mt-1.5">
               {TIPOS_ORDEM.map((t) => {
                 const meta = TIPO_META[t]
@@ -394,7 +394,7 @@ function AddPatrimonioModal({
                     className={`h-8 px-3 rounded-lg border text-[11px] font-medium inline-flex items-center gap-1.5 ${
                       tipo === t
                         ? 'bg-aletis-verde text-white border-aletis-verde'
-                        : 'border-aletis-borda dark:border-white/10 text-aletis-grafite-escuro dark:text-white/70 hover:border-aletis-verde/40'
+                        : 'border-aletis-borda dark:border-white/10 text-foreground dark:text-white/70 hover:border-aletis-verde/40'
                     }`}
                   >
                     <Icon size={12} />
@@ -422,7 +422,7 @@ function AddPatrimonioModal({
                 onChange={(e) => up({ garantiaDisponivel: e.target.checked })}
                 className="w-4 h-4 accent-aletis-dourado"
               />
-              <label htmlFor="garantia" className="text-xs text-aletis-grafite-escuro dark:text-white/80">
+              <label htmlFor="garantia" className="text-xs text-foreground dark:text-white/80">
                 Disponível como garantia bancária
               </label>
             </div>
@@ -480,7 +480,7 @@ function AddPatrimonioModal({
         <footer className="px-5 py-4 border-t border-aletis-borda dark:border-white/5 bg-aletis-bege/30 dark:bg-white/[0.02] flex items-center justify-end gap-2 sticky bottom-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-aletis-borda dark:border-white/10 text-xs font-medium text-aletis-grafite-escuro dark:text-white/80 hover:bg-aletis-borda/50 dark:hover:bg-white/5"
+            className="px-4 py-2 rounded-lg border border-aletis-borda dark:border-white/10 text-xs font-medium text-foreground dark:text-white/80 hover:bg-aletis-borda/50 dark:hover:bg-white/5"
           >
             Cancelar
           </button>
@@ -508,13 +508,13 @@ function Field({
 }) {
   return (
     <div>
-      <label className="text-[11px] uppercase tracking-wider font-semibold text-aletis-grafite-medio dark:text-white/55">{label}</label>
+      <label className="text-[11px] uppercase tracking-wider font-semibold text-[var(--text-soft)] dark:text-white/55">{label}</label>
       <input
         type={type}
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full h-9 px-3 rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-white/[0.02] text-sm text-aletis-grafite-escuro dark:text-white focus:outline-none focus:border-aletis-verde"
+        className="mt-1 w-full h-9 px-3 rounded-lg border border-aletis-borda dark:border-white/10 bg-card dark:bg-white/[0.02] text-sm text-foreground dark:text-white focus:outline-none focus:border-aletis-verde"
       />
     </div>
   )
@@ -587,7 +587,7 @@ function CalculadoraCustoOperacional() {
       <div className="flex flex-col gap-3">
         {/* Cultura chips */}
         <div>
-          <label className="text-[11px] uppercase tracking-wider font-semibold text-aletis-grafite-medio dark:text-white/55 flex items-center gap-1">
+          <label className="text-[11px] uppercase tracking-wider font-semibold text-[var(--text-soft)] dark:text-white/55 flex items-center gap-1">
             <Sprout size={11} /> Cultura
           </label>
           <div className="flex flex-wrap gap-1.5 mt-1.5">
@@ -599,7 +599,7 @@ function CalculadoraCustoOperacional() {
                 className={`h-7 px-2.5 rounded-full border text-[11px] font-medium ${
                   cultura === c
                     ? 'bg-aletis-verde text-white border-aletis-verde'
-                    : 'border-aletis-borda dark:border-white/10 text-aletis-grafite-escuro dark:text-white/70 hover:border-aletis-verde/40'
+                    : 'border-aletis-borda dark:border-white/10 text-foreground dark:text-white/70 hover:border-aletis-verde/40'
                 }`}
               >
                 {CULTURA_LABEL[c]}
@@ -647,16 +647,16 @@ function CustoResultado({ r }: { r: CustoResult }) {
     <div className="mt-2 flex flex-col gap-3">
       {/* Totais */}
       <div className="rounded-xl border border-aletis-verde/30 bg-aletis-verde/5 p-3.5">
-        <p className="text-[10px] uppercase tracking-[0.12em] text-aletis-verde/80 font-semibold">Custo total de diesel</p>
-        <p className="font-display text-[26px] font-bold tabular-nums text-aletis-verde">{fmtBRL(r.totais.custoDieselTotal)}</p>
+        <p className="text-[11px] uppercase tracking-[0.12em] text-aletis-verde/80 font-semibold">Custo total de diesel</p>
+        <p className="font-display text-[26px] font-bold tabular-nums text-foreground">{fmtBRL(r.totais.custoDieselTotal)}</p>
         <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-aletis-verde/20">
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/55">por hectare</p>
-            <p className="font-display text-[14px] font-bold tabular-nums text-aletis-grafite-escuro dark:text-white">{fmtBRL(r.totais.custoDieselPorHa)}</p>
+            <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/55">por hectare</p>
+            <p className="font-display text-[14px] font-bold tabular-nums text-foreground dark:text-white">{fmtBRL(r.totais.custoDieselPorHa)}</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/55">litros totais</p>
-            <p className="font-display text-[14px] font-bold tabular-nums text-aletis-grafite-escuro dark:text-white">
+            <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/55">litros totais</p>
+            <p className="font-display text-[14px] font-bold tabular-nums text-foreground dark:text-white">
               {fmtNum(Math.round(r.totais.litrosTotais))} L
             </p>
           </div>
@@ -664,26 +664,26 @@ function CustoResultado({ r }: { r: CustoResult }) {
       </div>
 
       {/* Ref diesel */}
-      <div className="flex items-center justify-between text-[11px] text-aletis-grafite-medio dark:text-white/55 px-1">
-        <span>Diesel ref.: <strong className="text-aletis-grafite-escuro dark:text-white">R$ {r.precoDieselRef.valor.toFixed(2)}/L</strong></span>
+      <div className="flex items-center justify-between text-[11px] text-[var(--text-soft)] dark:text-white/55 px-1">
+        <span>Diesel ref.: <strong className="text-foreground dark:text-white">R$ {r.precoDieselRef.valor.toFixed(2)}/L</strong></span>
         <span className="truncate ml-2">{r.precoDieselRef.fonte}</span>
       </div>
 
       {/* Decomposição */}
       <div className="rounded-xl border border-aletis-borda dark:border-white/5 overflow-hidden">
         <header className="px-3 py-2 bg-aletis-bege/30 dark:bg-white/[0.02] border-b border-aletis-borda dark:border-white/5">
-          <p className="text-[11px] font-semibold text-aletis-grafite-escuro dark:text-white">Decomposição por operação</p>
+          <p className="text-[11px] font-semibold text-foreground dark:text-white">Decomposição por operação</p>
         </header>
         <div className="flex flex-col">
           {aplicaveis.map((d) => (
             <div key={d.operacao} className="px-3 py-2 flex items-center gap-2 border-b border-aletis-borda/50 dark:border-white/5 last:border-b-0">
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-medium text-aletis-grafite-escuro dark:text-white capitalize">{d.operacao.replace(/_/g, ' ')}</p>
-                <p className="text-[10px] text-aletis-grafite-medio dark:text-white/45 truncate">{d.descricao}</p>
+                <p className="text-[12px] font-medium text-foreground dark:text-white capitalize">{d.operacao.replace(/_/g, ' ')}</p>
+                <p className="text-[11px] text-[var(--text-soft)] dark:text-white/45 truncate">{d.descricao}</p>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-[11px] font-semibold tabular-nums text-aletis-grafite-escuro dark:text-white">{fmtBRL(d.custoTotal)}</p>
-                <p className="text-[10px] tabular-nums text-aletis-grafite-medio dark:text-white/55">
+                <p className="text-[11px] font-semibold tabular-nums text-foreground dark:text-white">{fmtBRL(d.custoTotal)}</p>
+                <p className="text-[11px] tabular-nums text-[var(--text-soft)] dark:text-white/55">
                   {d.litrosPorHa.toFixed(1)} L/ha{d.frequencia < 1 ? ` · freq ${(d.frequencia * 100).toFixed(0)}%` : ''}
                 </p>
               </div>
@@ -693,12 +693,12 @@ function CustoResultado({ r }: { r: CustoResult }) {
       </div>
 
       {/* Observações */}
-      <div className="text-[10.5px] text-aletis-grafite-medio dark:text-white/45 leading-relaxed">
+      <div className="text-xs text-[var(--text-soft)] dark:text-white/45 leading-relaxed">
         {r.observacoes.map((obs, i) => (
           <p key={i}>· {obs}</p>
         ))}
         <p className="mt-1">
-          Produtividade média de referência: <strong className="text-aletis-grafite-escuro dark:text-white">{r.produtividadeMediaRef.valor} {r.produtividadeMediaRef.unidade}</strong>
+          Produtividade média de referência: <strong className="text-foreground dark:text-white">{r.produtividadeMediaRef.valor} {r.produtividadeMediaRef.unidade}</strong>
         </p>
       </div>
     </div>

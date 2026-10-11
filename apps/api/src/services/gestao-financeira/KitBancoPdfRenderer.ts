@@ -42,35 +42,35 @@ async function buildHtml(grupoId: string): Promise<{ html: string; nomeGrupo: st
     @page { size: A4; margin: 18mm 16mm; }
     * { box-sizing: border-box; }
     body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 10pt; color: #1F2937; line-height: 1.45; margin: 0; }
-    h1 { font-size: 22pt; color: #0F4C35; margin: 0 0 4px; letter-spacing: -0.5px; }
-    h2 { font-size: 13pt; color: #0F4C35; margin: 18px 0 6px; padding-bottom: 4px; border-bottom: 2px solid #D4A574; }
+    h1 { font-size: 22pt; color: #17251b; margin: 0 0 4px; letter-spacing: -0.5px; }
+    h2 { font-size: 13pt; color: #17251b; margin: 18px 0 6px; padding-bottom: 4px; border-bottom: 2px solid #e3bd80; }
     h3 { font-size: 11pt; color: #1F2937; margin: 10px 0 4px; }
     p { margin: 4px 0; }
-    .header { border-bottom: 3px solid #0F4C35; padding-bottom: 10px; margin-bottom: 14px; }
+    .header { border-bottom: 3px solid #17251b; padding-bottom: 10px; margin-bottom: 14px; }
     .header .meta { color: #6B7280; font-size: 8.5pt; margin-top: 4px; }
-    .codigo { font-family: 'Courier New', monospace; font-size: 8pt; color: #0F4C35; letter-spacing: 1px; font-weight: 700; }
+    .codigo { font-family: 'Courier New', monospace; font-size: 8pt; color: #17251b; letter-spacing: 1px; font-weight: 700; }
     .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .kpi { padding: 8px 10px; border-radius: 6px; background: #F9FAFB; border-left: 4px solid #0F4C35; }
+    .kpi { padding: 8px 10px; border-radius: 6px; background: #F9FAFB; border-left: 4px solid #17251b; }
     .kpi-label { font-size: 7.5pt; color: #6B7280; text-transform: uppercase; letter-spacing: 0.5px; }
-    .kpi-value { font-size: 13pt; font-weight: 700; color: #0F4C35; margin-top: 2px; }
+    .kpi-value { font-size: 13pt; font-weight: 700; color: #17251b; margin-top: 2px; }
     .kpi-sub { font-size: 8pt; color: #6B7280; margin-top: 1px; }
     .kpi.warn { border-left-color: #F59E0B; }
     .kpi.warn .kpi-value { color: #B45309; }
     .kpi.bad { border-left-color: #DC2626; }
     .kpi.bad .kpi-value { color: #DC2626; }
     table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 9pt; }
-    th { background: #0F4C35; color: white; text-align: left; padding: 6px 8px; font-weight: 600; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.5px; }
+    th { background: #17251b; color: white; text-align: left; padding: 6px 8px; font-weight: 600; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.5px; }
     td { padding: 5px 8px; border-bottom: 1px solid #E5E7EB; }
     tr:nth-child(even) td { background: #FAFAF9; }
     .right { text-align: right; }
     .center { text-align: center; }
     .nowrap { white-space: nowrap; }
-    .total-row td { font-weight: 700; background: #FEF3C7 !important; border-top: 2px solid #D4A574; }
+    .total-row td { font-weight: 700; background: #f0d9a8 !important; border-top: 2px solid #e3bd80; }
     .footer { position: fixed; bottom: 8mm; left: 16mm; right: 16mm; text-align: center; font-size: 7pt; color: #6B7280; border-top: 1px solid #E5E7EB; padding-top: 4px; }
     .pagebreak { page-break-after: always; }
     .narrative { background: #F9FAFB; padding: 10px 12px; border-radius: 6px; font-size: 9.5pt; line-height: 1.55; }
-    .badge { display: inline-block; padding: 1px 6px; border-radius: 4px; background: #D4A574; color: #0F4C35; font-size: 7.5pt; font-weight: 700; letter-spacing: 0.5px; }
+    .badge { display: inline-block; padding: 1px 6px; border-radius: 4px; background: #e3bd80; color: #17251b; font-size: 7.5pt; font-weight: 700; letter-spacing: 0.5px; }
     ul { padding-left: 16px; }
     li { margin: 2px 0; }
   `

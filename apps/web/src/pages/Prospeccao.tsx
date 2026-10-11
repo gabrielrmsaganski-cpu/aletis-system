@@ -1,6 +1,14 @@
+import PageHeader from '../components/ui/PageHeader'
+import { SectionNav } from '../components/ui/SectionNav'
+import { KpiTile as SharedKpiTile } from '../components/ui/primitives'
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import VirtualizedList from '../components/VirtualizedList'
+import { AnimatedTabs } from '../components/ui'
+import AppDialog from '../components/ui/AppDialog'
+import { uiAction } from '../components/ui/foundation'
+import { staggerContainer, staggerItem, slideUp } from '../motion/tokens'
 import {
   Target,
   Flame,
@@ -622,12 +630,24 @@ export default function Prospeccao() {
   useEffect(() => { loadSicarStatus() }, [loadSicarStatus])
   useEffect(() => { loadHotLeads() }, [loadHotLeads])
   useEffect(() => { search() }, [search])
-  // Polling da fila — só ativa enquanto houver jobs em voo ou pendentes.
+  useEffect(() => { loadFilaStats() }, [loadFilaStats])
+  const shouldPollFila =
+    batch.phase === 'running' ||
+    batch.phase === 'starting' ||
+    (filaStats?.pending ?? 0) > 0 ||
+    (filaStats?.running ?? 0) > 0
+
+  // Polling da fila — ativa só com batch/jobs vivos e pausa quando a aba está oculta.
   useEffect(() => {
-    loadFilaStats()
-    const id = setInterval(loadFilaStats, 3000)
+    if (!shouldPollFila) return
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+      loadFilaStats()
+    }
+    tick()
+    const id = setInterval(tick, 3000)
     return () => clearInterval(id)
-  }, [loadFilaStats])
+  }, [loadFilaStats, shouldPollFila])
   // reset para página 1 quando a aba de status muda
   useEffect(() => { setPage(1) }, [statusTab])
 
@@ -825,6 +845,20 @@ export default function Prospeccao() {
     }
   }, [search, loadStats])
 
+  const leadItemKey = useCallback((lead: LeadFull) => lead.cpfCnpjClean, [])
+
+  const renderLeadItem = useCallback((lead: LeadFull) => (
+    <LeadRow
+      lead={lead}
+      onOpen={() => setSelectedLead(lead)}
+      onEnrich={() => handleEnrich(lead.cpfCnpjClean)}
+      onExcluir={(motivo) => handleExcluir(lead.cpfCnpjClean, motivo)}
+      onRestaurar={() => handleRestaurar(lead.cpfCnpjClean)}
+      enriching={enriching === lead.cpfCnpjClean}
+      deleting={deleting === lead.cpfCnpjClean}
+    />
+  ), [deleting, enriching, handleEnrich, handleExcluir, handleRestaurar])
+
   const handleEnrichLote = useCallback(async (concurrency: number, customFilters?: Record<string, any>) => {
     setBatch({
       phase: 'starting', batchId: null, total: 0, processed: 0, ok: 0, fail: 0, errors: [], lastLead: null,
@@ -934,6 +968,8 @@ export default function Prospeccao() {
     URL.revokeObjectURL(url)
   }, [uf, minHectares, minDivida, maxDivida, tipoPessoa, apenasAjuizadas, apenasAgroProvavel, apenasPfRural, apenasJudicialAgro, judicialTipos, termo, sortBy])
 
+  const [workspace, setWorkspace] = useState<'busca' | 'prioridades'>('busca')
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   return (
@@ -941,6 +977,11 @@ export default function Prospeccao() {
       {/* Hero OODA */}
       <HeroOODA stats={stats} loading={loadingStats} sicarStatus={sicarStatus} />
 
+      <SectionNav label="Áreas de prospecção" active={workspace} onChange={setWorkspace} items={[
+        { id: 'busca', label: 'Buscar oportunidades', icon: Search },
+        { id: 'prioridades', label: 'Prioridades e consulta rápida', icon: Flame },
+      ]} />
+      <div hidden={workspace !== 'prioridades'} className="space-y-5">
       {/* Roteamento de hot-leads + reengajamento (feedback loop) */}
       <HotLeadsPanel
         alerts={hotLeads}
@@ -952,6 +993,8 @@ export default function Prospeccao() {
       {/* Wave-PG-12: query rápida via SQL indexado (39k leads PGFN no PG) */}
       <QuickSqlPanel onOpen={openLeadByCpf} />
 
+      </div>
+
       {/* Fila persistente de enriquecimento — visível só se tem trabalho ativo */}
       {filaStats && (filaStats.pending + filaStats.running + filaStats.failed > 0) && (
         <FilaEnriquecimentoPanel stats={filaStats} onRetry={async (id) => {
@@ -960,6 +1003,7 @@ export default function Prospeccao() {
         }} />
       )}
 
+      <div hidden={workspace !== 'busca'} className="space-y-5">
       {/* Toolbar de filtros */}
       <FilterPanel
         uf={uf} setUf={setUf}
@@ -980,29 +1024,29 @@ export default function Prospeccao() {
       />
 
       {/* Grid de resultados */}
-      <div className="bg-white dark:bg-aletis-grafite-escuro rounded-2xl border border-aletis-borda dark:border-white/5 overflow-hidden shadow-sm">
+      <div className="bg-card dark:bg-card rounded-lg border border-aletis-borda dark:border-white/5 overflow-hidden shadow-sm">
         <div className="px-6 py-4 border-b border-aletis-borda dark:border-white/5 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-aletis-verde/10 flex items-center justify-center">
-              <Target size={18} className="text-aletis-verde" />
+              <Target size={18} className="text-foreground" />
             </div>
             <div>
-              <h2 className="font-display text-lg font-bold text-aletis-grafite-escuro dark:text-white">
+              <h2 className="font-display text-lg font-bold text-foreground dark:text-white">
                 Leads encontrados
               </h2>
-              <p className="text-xs text-aletis-grafite-medio dark:text-white/50">
+              <p className="text-xs text-[var(--text-soft)] dark:text-white/50">
                 {loading ? 'Buscando…' : `${fmtNum(total)} resultados — página ${page}/${totalPages}`}
               </p>
             </div>
           </div>
-          <button
+          <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
             onClick={() => setBulkOpen(true)}
             disabled={counts.pendentes === 0 && batch.phase !== 'running'}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-gradient-to-r from-aletis-verde to-aletis-verde-escuro text-white hover:brightness-110 disabled:opacity-40 transition shadow-sm"
             title="Enriquecer em lote os leads que correspondem aos filtros"
           >
             <Zap size={13} /> Enriquecer em lote
-          </button>
+          </motion.button>
         </div>
 
         {/* Tabs de status */}
@@ -1020,10 +1064,10 @@ export default function Prospeccao() {
 
         {loading && leads.length === 0 ? (
           <div className="p-12 flex items-center justify-center">
-            <Loader2 className="animate-spin text-aletis-verde" size={32} />
+            <Loader2 className="animate-spin text-foreground" size={32} />
           </div>
         ) : leads.length === 0 ? (
-          <div className="p-12 text-center text-aletis-grafite-medio dark:text-white/50">
+          <div className="p-12 text-center text-[var(--text-soft)] dark:text-white/50">
             <Search size={32} className="mx-auto mb-3 opacity-40" />
             Nenhum lead corresponde aos filtros aplicados.
           </div>
@@ -1034,21 +1078,11 @@ export default function Prospeccao() {
                 sem travar o browser. */}
             <VirtualizedList
               items={leads}
-              itemKey={(l) => l.cpfCnpjClean}
+              itemKey={leadItemKey}
               itemSize={120}
               threshold={50}
               height={Math.min(800, leads.length * 120)}
-              renderItem={(lead) => (
-                <LeadRow
-                  lead={lead}
-                  onOpen={() => setSelectedLead(lead)}
-                  onEnrich={() => handleEnrich(lead.cpfCnpjClean)}
-                  onExcluir={(motivo) => handleExcluir(lead.cpfCnpjClean, motivo)}
-                  onRestaurar={() => handleRestaurar(lead.cpfCnpjClean)}
-                  enriching={enriching === lead.cpfCnpjClean}
-                  deleting={deleting === lead.cpfCnpjClean}
-                />
-              )}
+              renderItem={renderLeadItem}
             />
           </div>
         )}
@@ -1056,25 +1090,27 @@ export default function Prospeccao() {
         {/* Paginação */}
         {totalPages > 1 && (
           <div className="px-6 py-3 border-t border-aletis-borda dark:border-white/5 flex items-center justify-between text-sm">
-            <button
+            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-3 py-1.5 rounded-lg border border-aletis-borda dark:border-white/10 text-aletis-grafite-medio dark:text-white/60 hover:bg-aletis-bege dark:hover:bg-white/5 disabled:opacity-40 transition"
+              className="px-3 py-1.5 rounded-lg border border-aletis-borda dark:border-white/10 text-[var(--text-soft)] dark:text-white/60 hover:bg-aletis-bege dark:hover:bg-white/5 disabled:opacity-40 transition"
             >
               Anterior
-            </button>
-            <span className="text-aletis-grafite-medio dark:text-white/50">
+            </motion.button>
+            <span className="text-[var(--text-soft)] dark:text-white/50">
               {page} de {totalPages}
             </span>
-            <button
+            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="px-3 py-1.5 rounded-lg border border-aletis-borda dark:border-white/10 text-aletis-grafite-medio dark:text-white/60 hover:bg-aletis-bege dark:hover:bg-white/5 disabled:opacity-40 transition"
+              className="px-3 py-1.5 rounded-lg border border-aletis-borda dark:border-white/10 text-[var(--text-soft)] dark:text-white/60 hover:bg-aletis-bege dark:hover:bg-white/5 disabled:opacity-40 transition"
             >
               Próxima
-            </button>
+            </motion.button>
           </div>
         )}
+      </div>
+
       </div>
 
       {/* Drawer de detalhes */}
@@ -1176,34 +1212,17 @@ function HeroOODA({
   sicarStatus: SicarStatus | null
 }) {
   return (
-    <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-aletis-verde via-aletis-verde-escuro to-[#06281c] text-white shadow-[0_30px_60px_-20px_rgba(6,40,28,0.55)]">
-      <div
-        className="absolute inset-0 opacity-[0.12] pointer-events-none"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 12% 20%, #C9A84C 0%, transparent 45%), radial-gradient(circle at 92% 85%, #2A8F64 0%, transparent 45%)',
-        }}
-      />
+    <section className="space-y-5">
 
-      <div className="relative px-6 py-7 lg:px-10 lg:py-9 space-y-7">
+
+      <div className="space-y-5">
         {/* LINHA 1 — título + status */}
-        <header className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-6 items-start">
-          <div className="min-w-0">
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-aletis-dourado/15 border border-aletis-dourado/30 text-aletis-dourado text-[10.5px] font-semibold uppercase tracking-[0.16em]">
-              <Cpu size={12} /> OODA · Prospecção cirúrgica
-            </span>
-            <h1 className="mt-3 font-display text-[28px] lg:text-[36px] font-bold leading-[1.1] tracking-tight">
-              Leads agro com dívida ativa
-            </h1>
-            <p className="mt-2 text-white/70 text-sm lg:text-[13.5px] max-w-2xl leading-relaxed">
-              Busca profunda no <b className="text-white/90">PGFN</b> + enriquecimento{' '}
-              <b className="text-white/90">BrasilAPI</b> + área oficial via{' '}
-              <b className="text-white/90">SICAR</b> · scoring multi-dimensional.
-            </p>
-          </div>
-
-          <div className="flex flex-col items-start lg:items-end gap-2 min-w-0">
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] text-white/60">
+        <PageHeader eyebrow="Prospecção · PGFN e fontes públicas" title="Prospecção" description={<> <p className="mt-2 text-[var(--text-strong)] text-sm lg:text-[13.5px] max-w-2xl leading-relaxed">
+              Consulte dados do <b className="text-[var(--text-strong)]">PGFN</b> + enriquecimento{' '}
+              <b className="text-[var(--text-strong)]">BrasilAPI</b> + área oficial via{' '}
+              <b className="text-[var(--text-strong)]">SICAR</b> · priorização de oportunidades.
+            </p> </>} actions={<> <div className="flex flex-col items-start lg:items-end gap-2 min-w-0">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-[var(--bg-surface-soft)] border border-aletis-borda text-[11px] text-[var(--text-strong)]">
               <Sparkles size={12} className="text-aletis-dourado" />
               {loading ? 'carregando…' : stats ? `${fmtNum(stats.totalLeads)} leads indexados` : '—'}
             </div>
@@ -1213,16 +1232,39 @@ function HeroOODA({
                   <span
                     key={f.fonte}
                     title={`${f.descricao}${f.lastIngestAt ? ' · ' + new Date(f.lastIngestAt).toLocaleDateString('pt-BR') : ''}`}
-                    className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-white/10 bg-white/[0.04] text-white/55"
+                    className="text-[11px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-aletis-borda bg-white/[0.04] text-[var(--text-strong)]"
                   >
                     {f.fonte} · {fmtNum(f.contagem)}
                   </span>
                 ))}
               </div>
             )}
-          </div>
-        </header>
+          </div> </>} />
 
+        {/* LINHA 4 — avisos de feedback-loop (hot-leads, reengajar, judicial) */}
+        {stats && (stats.hotLeadsPendentes > 0 || stats.leadsParaReengajar > 0 || stats.porJudicialTipo.length > 0) && (
+          <div className="flex flex-wrap gap-2">
+            {stats.hotLeadsPendentes > 0 && (
+              <AlertChip icon={Siren} tone="red" value={stats.hotLeadsPendentes} suffix={`hot-lead${stats.hotLeadsPendentes === 1 ? '' : 's'} aguardando contato`} />
+            )}
+            {stats.leadsParaReengajar > 0 && (
+              <AlertChip icon={RotateCw} tone="gold" value={stats.leadsParaReengajar} suffix={`lead${stats.leadsParaReengajar === 1 ? '' : 's'} para reengajar`} />
+            )}
+            {stats.porJudicialTipo.slice(0, 3).map((item) => (
+              <AlertChip
+                key={item.tipo}
+                icon={Gavel}
+                tone={item.tipo === 'falencia' || item.tipo === 'recuperacao_judicial' ? 'red' : 'amber'}
+                value={item.count}
+                suffix={JUDICIAL_LABEL[item.tipo]}
+              />
+            ))}
+          </div>
+        )}
+
+        <details className="rounded-lg border border-aletis-borda bg-card px-4 py-3">
+          <summary className="cursor-pointer text-sm font-medium text-foreground">Panorama da base e fontes <span className="ml-2 text-xs font-normal text-muted-foreground">Indicadores, perfil agro e disponibilidade do SICAR</span></summary>
+          <div className="mt-4 space-y-4">
         {/* LINHA 2 — status SICAR consolidado */}
         <SicarStatusBadge status={sicarStatus} />
 
@@ -1262,7 +1304,7 @@ function HeroOODA({
           />
           <KpiTile
             icon={Flame}
-            label="Quentes · score ≥ 75"
+            label="Quentes · score ≥ 85"
             value={stats ? fmtNum(stats.leadsQuentes) : '…'}
             sub={stats ? `${((stats.leadsQuentes / Math.max(stats.totalLeads, 1)) * 100).toFixed(1)}% do total` : ''}
             accent="vermelho"
@@ -1294,50 +1336,31 @@ function HeroOODA({
           />
         </div>
 
-        {/* LINHA 4 — avisos de feedback-loop (hot-leads, reengajar, judicial) */}
-        {stats && (stats.hotLeadsPendentes > 0 || stats.leadsParaReengajar > 0 || stats.porJudicialTipo.length > 0) && (
-          <div className="flex flex-wrap gap-2">
-            {stats.hotLeadsPendentes > 0 && (
-              <AlertChip icon={Siren} tone="red" value={stats.hotLeadsPendentes} suffix={`hot-lead${stats.hotLeadsPendentes === 1 ? '' : 's'} aguardando contato`} />
-            )}
-            {stats.leadsParaReengajar > 0 && (
-              <AlertChip icon={RotateCw} tone="gold" value={stats.leadsParaReengajar} suffix={`lead${stats.leadsParaReengajar === 1 ? '' : 's'} para reengajar`} />
-            )}
-            {stats.porJudicialTipo.slice(0, 3).map((item) => (
-              <AlertChip
-                key={item.tipo}
-                icon={Gavel}
-                tone={item.tipo === 'falencia' || item.tipo === 'recuperacao_judicial' ? 'red' : 'amber'}
-                value={item.count}
-                suffix={JUDICIAL_LABEL[item.tipo]}
-              />
-            ))}
-          </div>
-        )}
-
         {/* LINHA 5 — Sinais agro identificados */}
         {stats && stats.topSignals.length > 0 && (
-          <div className="pt-6 border-t border-white/10">
+          <div className="pt-6 border-t border-aletis-borda">
             <div className="flex items-center justify-between gap-4 mb-3">
-              <p className="text-[10.5px] uppercase tracking-[0.18em] text-white/45 font-medium">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-strong)] font-medium">
                 Sinais agro identificados
               </p>
-              <span className="text-[10px] text-white/40">top {Math.min(12, stats.topSignals.length)} de {fmtNum(stats.topSignals.length)}</span>
+              <span className="text-[11px] text-[var(--text-strong)]">top {Math.min(12, stats.topSignals.length)} de {fmtNum(stats.topSignals.length)}</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {stats.topSignals.slice(0, 12).map((s) => (
                 <span
                   key={s.signal}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.06] border border-white/10 text-[11px] text-white/80 hover:bg-white/10 transition"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.06] border border-aletis-borda text-[11px] text-[var(--text-strong)] hover:bg-[var(--bg-surface-soft)] transition"
                 >
                   <Wheat size={10} className="text-aletis-dourado shrink-0" />
                   <span className="truncate max-w-[180px]">{s.signal}</span>
-                  <span className="text-white/45 font-mono text-[10px]">{fmtNum(s.count)}</span>
+                  <span className="text-[var(--text-strong)] font-mono text-[11px]">{fmtNum(s.count)}</span>
                 </span>
               ))}
             </div>
           </div>
         )}
+          </div>
+        </details>
       </div>
     </section>
   )
@@ -1356,9 +1379,9 @@ function AlertChip({
   suffix: string
 }) {
   const toneCls = {
-    red: 'bg-red-500/15 border-red-400/30 text-red-200',
-    amber: 'bg-amber-500/15 border-amber-400/30 text-amber-200',
-    gold: 'bg-aletis-dourado/15 border-aletis-dourado/40 text-aletis-dourado',
+    red: 'bg-red-50 border-red-200 text-red-800 dark:bg-red-500/15 dark:border-red-400/30 dark:text-red-200',
+    amber: 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-500/15 dark:border-amber-400/30 dark:text-amber-200',
+    gold: 'bg-aletis-dourado/10 border-aletis-dourado/30 text-aletis-dourado-escuro dark:text-aletis-dourado',
   }[tone]
   return (
     <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-[11.5px] ${toneCls}`}>
@@ -1372,7 +1395,7 @@ function AlertChip({
 function SicarStatusBadge({ status }: { status: SicarStatus | null }) {
   if (!status) {
     return (
-      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[11px] text-white/50">
+      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--bg-surface-soft)] border border-aletis-borda text-[11px] text-[var(--text-strong)]">
         <Loader2 size={11} className="animate-spin" /> SICAR · aferindo status…
       </div>
     )
@@ -1381,40 +1404,40 @@ function SicarStatusBadge({ status }: { status: SicarStatus | null }) {
   const online = sicar.online
   const StatusIcon = online ? ShieldCheck : ShieldAlert
   const balance = captcha.balanceUsd != null ? `$${captcha.balanceUsd.toFixed(2)}` : '—'
-  const balanceTone = (captcha.balanceUsd ?? 0) < 0.5 ? 'text-red-300' : 'text-white/70'
+  const balanceTone = (captcha.balanceUsd ?? 0) < 0.5 ? 'text-red-700 dark:text-red-300' : 'text-[var(--text-strong)]'
   const indexLoaded = !!index?.loaded
   const individualDisponivel = online && captcha.enabled && (captcha.balanceUsd ?? 0) > 0
 
-  const sicarTone = online ? 'text-emerald-300' : 'text-amber-300'
-  const bulkTone = indexLoaded ? 'text-emerald-300' : 'text-white/55'
-  const indivTone = individualDisponivel ? 'text-emerald-300' : 'text-white/55'
+  const sicarTone = online ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'
+  const bulkTone = indexLoaded ? 'text-emerald-700 dark:text-emerald-300' : 'text-[var(--text-strong)]'
+  const indivTone = individualDisponivel ? 'text-emerald-700 dark:text-emerald-300' : 'text-[var(--text-strong)]'
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-0 sm:divide-x sm:divide-white/10">
+    <div className="rounded-lg border border-aletis-borda bg-white/[0.04] px-4 py-3 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-0 sm:divide-x sm:divide-white/10">
       {/* Portal oficial */}
       <div className="sm:pr-4 min-w-0">
-        <p className="text-[10px] uppercase tracking-[0.16em] text-white/40 mb-1">Portal SICAR</p>
+        <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-strong)] mb-1">Portal SICAR</p>
         <div className="flex items-center gap-1.5">
           <StatusIcon size={13} className={sicarTone} />
           <span className={`text-xs font-semibold ${sicarTone}`}>
             {online ? 'Online' : 'Em manutenção'}
           </span>
         </div>
-        <p className="text-[10.5px] text-white/50 truncate mt-0.5" title={sicar.reason || ''}>
+        <p className="text-xs text-[var(--text-strong)] truncate mt-0.5" title={sicar.reason || ''}>
           {sicar.reason || 'Consulta de CAR individual habilitada'}
         </p>
       </div>
 
       {/* Bulk offline */}
       <div className="sm:px-4 min-w-0">
-        <p className="text-[10px] uppercase tracking-[0.16em] text-white/40 mb-1">Bulk offline</p>
+        <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-strong)] mb-1">Bulk offline</p>
         <div className="flex items-center gap-1.5">
           <Trees size={13} className={bulkTone} />
           <span className={`text-xs font-semibold ${bulkTone}`}>
             {indexLoaded ? `${fmtNum(index.totalImoveis)} imóveis` : 'Aguardando portal'}
           </span>
         </div>
-        <p className="text-[10.5px] text-white/50 truncate mt-0.5">
+        <p className="text-xs text-[var(--text-strong)] truncate mt-0.5">
           {indexLoaded && Object.keys(index.byUf).length > 0
             ? Object.entries(index.byUf).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([uf, n]) => `${uf}:${n >= 1000 ? (n / 1000).toFixed(0) + 'k' : n}`).join(' · ')
             : 'Retry automático 2×/dia'}
@@ -1423,14 +1446,14 @@ function SicarStatusBadge({ status }: { status: SicarStatus | null }) {
 
       {/* Consulta individual + saldo captcha */}
       <div className="sm:pl-4 min-w-0">
-        <p className="text-[10px] uppercase tracking-[0.16em] text-white/40 mb-1">Consulta individual</p>
+        <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-strong)] mb-1">Consulta individual</p>
         <div className="flex items-center gap-1.5">
           <ShieldCheck size={13} className={indivTone} />
           <span className={`text-xs font-semibold ${indivTone}`}>
             {individualDisponivel ? 'Disponível' : online ? 'Sem saldo' : 'Indisponível'}
           </span>
         </div>
-        <p className={`text-[10.5px] mt-0.5 flex items-center gap-1 ${balanceTone}`}>
+        <p className={`text-xs mt-0.5 flex items-center gap-1 ${balanceTone}`}>
           <Satellite size={10} /> 2captcha {captcha.enabled ? balance : 'off'}
         </p>
       </div>
@@ -1453,39 +1476,7 @@ function KpiTile({
   accent: 'dourado' | 'vermelho' | 'ambar' | 'verde'
   loading?: boolean
 }) {
-  const accentColor = {
-    dourado: 'text-aletis-dourado bg-aletis-dourado/10',
-    vermelho: 'text-red-300 bg-red-500/15',
-    ambar: 'text-amber-300 bg-amber-500/15',
-    verde: 'text-emerald-300 bg-emerald-500/15',
-  }[accent]
-
-  return (
-    <div className="group h-[128px] bg-white/[0.04] backdrop-blur rounded-2xl border border-white/10 p-3.5 flex flex-col gap-2 hover:bg-white/[0.08] hover:border-white/15 transition">
-      <div className="flex items-center gap-2">
-        <div className={`w-8 h-8 rounded-lg ${accentColor} flex items-center justify-center shrink-0`}>
-          <Icon size={16} />
-        </div>
-        <p className="text-[10.5px] uppercase tracking-[0.12em] text-white/55 font-medium leading-tight line-clamp-2">
-          {label}
-        </p>
-      </div>
-      <div className="flex-1 flex flex-col justify-end min-h-0">
-        {loading ? (
-          <div className="h-7 w-20 rounded bg-white/10 animate-pulse" />
-        ) : (
-          <p className="font-display text-[26px] leading-none font-bold tabular-nums tracking-tight truncate" title={value}>
-            {value}
-          </p>
-        )}
-        {sub && (
-          <p className="text-[10.5px] text-white/45 mt-1 truncate" title={sub}>
-            {sub}
-          </p>
-        )}
-      </div>
-    </div>
-  )
+  return <SharedKpiTile icon={Icon} label={label} value={value} sub={sub} accent={accent} loading={loading} variant="light" />
 }
 
 // ────────────────────────────────────────────────────────────
@@ -1528,17 +1519,17 @@ function FilterPanel(props: {
   } = props
 
   return (
-    <div className="bg-white dark:bg-aletis-grafite-escuro rounded-2xl border border-aletis-borda dark:border-white/5 shadow-sm">
+    <div className="bg-card dark:bg-card rounded-lg border border-aletis-borda dark:border-white/5 shadow-sm">
       <div className="px-5 lg:px-6 py-4 border-b border-aletis-borda/70 dark:border-white/5 flex items-center gap-3 flex-wrap">
-        <Filter size={16} className="text-aletis-verde" />
-        <h3 className="font-semibold text-sm text-aletis-grafite-escuro dark:text-white">Filtros cirúrgicos</h3>
-        <span className="text-[11px] text-aletis-grafite-medio dark:text-white/45">
-          refine o universo antes da ação
+        <Filter size={16} className="text-foreground" />
+        <h3 className="font-semibold text-sm text-foreground dark:text-white">Filtrar oportunidades</h3>
+        <span className="text-[11px] text-[var(--text-soft)] dark:text-white/45">
+          Selecione os critérios e aplique a busca
         </span>
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={onExport}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-aletis-bege dark:bg-white/5 text-aletis-grafite-escuro dark:text-white hover:bg-aletis-verde/10 transition"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-aletis-bege dark:bg-white/5 text-foreground dark:text-white hover:bg-aletis-verde/10 transition"
           >
             <Download size={13} /> Exportar CSV
           </button>
@@ -1556,7 +1547,7 @@ function FilterPanel(props: {
       <div className="px-5 lg:px-6 py-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {/* Termo */}
         <label className="block">
-          <span className="text-[11px] font-medium text-aletis-grafite-medio dark:text-white/50 mb-1 flex items-center gap-1">
+          <span className="text-[11px] font-medium text-[var(--text-soft)] dark:text-white/50 mb-1 flex items-center gap-1">
             <Search size={11} /> Buscar por nome/CPF/CNPJ
           </span>
           <input
@@ -1565,19 +1556,19 @@ function FilterPanel(props: {
             onChange={(e) => setTermo(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && onApply()}
             placeholder="ex.: AGROPECUARIA…"
-            className="w-full px-3 py-2 text-sm rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-aletis-grafite-escuro focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-aletis-borda dark:border-white/10 bg-card dark:bg-card focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
           />
         </label>
 
         {/* UF */}
         <label className="block">
-          <span className="text-[11px] font-medium text-aletis-grafite-medio dark:text-white/50 mb-1 flex items-center gap-1">
+          <span className="text-[11px] font-medium text-[var(--text-soft)] dark:text-white/50 mb-1 flex items-center gap-1">
             <MapPin size={11} /> UF
           </span>
           <select
             value={uf}
             onChange={(e) => setUf(e.target.value)}
-            className="w-full px-3 py-2 text-sm rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-aletis-grafite-escuro focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-aletis-borda dark:border-white/10 bg-card dark:bg-card focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
           >
             <option value="">todas</option>
             {UFS.map((u) => <option key={u} value={u}>{u}</option>)}
@@ -1586,8 +1577,8 @@ function FilterPanel(props: {
 
         {/* Hectares min */}
         <label className="block">
-          <span className="text-[11px] font-medium text-aletis-grafite-medio dark:text-white/50 mb-1 flex items-center gap-1">
-            <Tractor size={11} /> Hectares mín. <span className="text-aletis-verde font-semibold">{fmtHa(minHectares)}</span>
+          <span className="text-[11px] font-medium text-[var(--text-soft)] dark:text-white/50 mb-1 flex items-center gap-1">
+            <Tractor size={11} /> Hectares mín. <span className="text-foreground font-semibold">{fmtHa(minHectares)}</span>
           </span>
           <input
             type="range"
@@ -1602,8 +1593,8 @@ function FilterPanel(props: {
 
         {/* Dívida min */}
         <label className="block">
-          <span className="text-[11px] font-medium text-aletis-grafite-medio dark:text-white/50 mb-1 flex items-center gap-1">
-            <DollarSign size={11} /> Dívida mín. <span className="text-aletis-verde font-semibold">{fmtBRLShort(minDivida)}</span>
+          <span className="text-[11px] font-medium text-[var(--text-soft)] dark:text-white/50 mb-1 flex items-center gap-1">
+            <DollarSign size={11} /> Dívida mín. <span className="text-foreground font-semibold">{fmtBRLShort(minDivida)}</span>
           </span>
           <input
             type="range"
@@ -1618,13 +1609,13 @@ function FilterPanel(props: {
 
         {/* Tipo pessoa */}
         <label className="block">
-          <span className="text-[11px] font-medium text-aletis-grafite-medio dark:text-white/50 mb-1 flex items-center gap-1">
+          <span className="text-[11px] font-medium text-[var(--text-soft)] dark:text-white/50 mb-1 flex items-center gap-1">
             <Building2 size={11} /> Tipo
           </span>
           <select
             value={tipoPessoa}
             onChange={(e) => setTipoPessoa(e.target.value as any)}
-            className="w-full px-3 py-2 text-sm rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-aletis-grafite-escuro focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-aletis-borda dark:border-white/10 bg-card dark:bg-card focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
           >
             <option value="">PF e PJ</option>
             <option value="PJ">Pessoa jurídica</option>
@@ -1634,13 +1625,13 @@ function FilterPanel(props: {
 
         {/* Ordenação */}
         <label className="block">
-          <span className="text-[11px] font-medium text-aletis-grafite-medio dark:text-white/50 mb-1 flex items-center gap-1">
+          <span className="text-[11px] font-medium text-[var(--text-soft)] dark:text-white/50 mb-1 flex items-center gap-1">
             <BarChart3 size={11} /> Ordenar por
           </span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
-            className="w-full px-3 py-2 text-sm rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-aletis-grafite-escuro focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-aletis-borda dark:border-white/10 bg-card dark:bg-card focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
           >
             <option value="score">Score (potencial)</option>
             <option value="divida">Valor da dívida</option>
@@ -1652,8 +1643,8 @@ function FilterPanel(props: {
 
       <div className="px-5 lg:px-6 py-4 border-t border-aletis-borda/70 dark:border-white/5 grid gap-3">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.16em] text-aletis-grafite-medio dark:text-white/40 font-medium mb-2">
-            Toggles cirúrgicos
+          <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-soft)] dark:text-white/40 font-medium mb-2">
+            Perfil da oportunidade
           </p>
           <div className="flex flex-wrap gap-x-5 gap-y-2">
             <FilterToggle icon={Gavel} label="Apenas com ajuizamento" checked={apenasAjuizadas} onChange={setApenasAjuizadas} />
@@ -1663,7 +1654,7 @@ function FilterPanel(props: {
           </div>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-[0.16em] text-aletis-grafite-medio dark:text-white/40 font-medium mb-2">
+          <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-soft)] dark:text-white/40 font-medium mb-2">
             Tipos de evento judicial · clique para combinar
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -1677,7 +1668,7 @@ function FilterPanel(props: {
                   className={`px-2.5 py-1 rounded-full text-[11px] border transition ${
                     active
                       ? 'bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800'
-                      : 'bg-white dark:bg-white/[0.04] text-aletis-grafite-medio dark:text-white/55 border-aletis-borda dark:border-white/10 hover:border-red-300 dark:hover:border-red-800 hover:text-red-700 dark:hover:text-red-300'
+                      : 'bg-card dark:bg-white/[0.04] text-[var(--text-soft)] dark:text-white/55 border-aletis-borda dark:border-white/10 hover:border-red-300 dark:hover:border-red-800 hover:text-red-700 dark:hover:text-red-300'
                   }`}
                 >
                   {JUDICIAL_LABEL[tipo]}
@@ -1704,14 +1695,14 @@ function FilterToggle({
   onChange: (v: boolean) => void
 }) {
   return (
-    <label className="inline-flex items-center gap-2 text-xs text-aletis-grafite-escuro dark:text-white/75 cursor-pointer select-none">
+    <label className="inline-flex items-center gap-2 text-xs text-foreground dark:text-white/75 cursor-pointer select-none">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
         className="accent-aletis-verde w-3.5 h-3.5"
       />
-      <Icon size={12} className="text-aletis-grafite-medio dark:text-white/45" />
+      <Icon size={12} className="text-[var(--text-soft)] dark:text-white/45" />
       <span>{label}</span>
     </label>
   )
@@ -1741,7 +1732,7 @@ function Chip({
     gold: 'bg-aletis-dourado/10 text-aletis-dourado border-aletis-dourado/30',
   }[tone]
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border ${cls}`}>
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold border ${cls}`}>
       <Icon size={10} /> {label}
     </span>
   )
@@ -1751,8 +1742,8 @@ function Chip({
 function Metric({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
   return (
     <div>
-      <p className="text-[9.5px] uppercase tracking-[0.14em] text-aletis-grafite-medio dark:text-white/40 font-medium">{label}</p>
-      <p className={`font-mono text-sm font-semibold mt-0.5 ${valueClass ?? 'text-aletis-grafite-escuro dark:text-white'}`}>
+      <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-soft)] dark:text-white/40 font-medium">{label}</p>
+      <p className={`font-mono text-sm font-semibold mt-0.5 ${valueClass ?? 'text-foreground dark:text-white'}`}>
         {value}
       </p>
     </div>
@@ -1807,20 +1798,20 @@ function LeadRow({
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 lg:gap-5">
         {/* Score bubble */}
         <div
-          className={`flex-shrink-0 w-16 h-16 rounded-2xl border ${cls.border} ${cls.bg} flex flex-col items-center justify-center`}
+          className={`flex-shrink-0 w-16 h-16 rounded-lg border ${cls.border} ${cls.bg} flex flex-col items-center justify-center`}
           title={`${cls.label} · ${lead.score.total} pts`}
         >
           <span className={`font-display text-2xl font-bold leading-none tabular-nums ${cls.text}`}>{lead.score.total}</span>
-          <span className={`text-[9px] uppercase tracking-[0.14em] mt-1 font-semibold ${cls.text}`}>{cls.label}</span>
+          <span className={`text-[11px] uppercase tracking-[0.14em] mt-1 font-semibold ${cls.text}`}>{cls.label}</span>
         </div>
 
         {/* Ficha */}
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <h3 className="font-semibold text-[14px] text-aletis-grafite-escuro dark:text-white truncate max-w-full">
+            <h3 className="font-semibold text-[14px] text-foreground dark:text-white truncate max-w-full">
               {lead.nome}
             </h3>
-            <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono text-aletis-grafite-medio dark:text-white/50 bg-aletis-bege dark:bg-white/5">
+            <span className="shrink-0 px-1.5 py-0.5 rounded text-[11px] font-mono text-[var(--text-soft)] dark:text-white/50 bg-aletis-bege dark:bg-white/5">
               {lead.tipoPessoa}
             </span>
           </div>
@@ -1834,7 +1825,7 @@ function LeadRow({
               <Chip key={tipo} tone="red" icon={AlertTriangle} label={JUDICIAL_LABEL[tipo]} />
             ))}
           </div>
-          <div className="flex items-center gap-3 flex-wrap text-[11.5px] text-aletis-grafite-medio dark:text-white/50">
+          <div className="flex items-center gap-3 flex-wrap text-[11.5px] text-[var(--text-soft)] dark:text-white/50">
             <span className="inline-flex items-center gap-1 shrink-0"><MapPin size={11} /> {lead.uf}</span>
             <span className="inline-flex items-center gap-1 shrink-0 font-mono"><Hash size={11} /> {lead.cpfCnpj}</span>
             <span className="inline-flex items-center gap-1 shrink-0"><FileText size={11} /> {lead.qtdInscricoes} inscrições</span>
@@ -1875,8 +1866,8 @@ function LeadRow({
               }
               className={`px-2.5 py-1.5 rounded-lg border transition text-xs font-medium flex items-center gap-1 disabled:opacity-50 ${
                 isCompleta
-                  ? 'border-aletis-borda dark:border-white/10 text-aletis-grafite-medio dark:text-white/60 hover:border-aletis-verde/30 hover:text-aletis-verde'
-                  : 'border-aletis-verde/30 text-aletis-verde hover:bg-aletis-verde/10'
+                  ? 'border-aletis-borda dark:border-white/10 text-[var(--text-soft)] dark:text-white/60 hover:border-aletis-verde/30 hover:text-aletis-verde'
+                  : 'border-aletis-verde/30 text-foreground hover:bg-aletis-verde/10'
               }`}
             >
               {enriching ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
@@ -1897,12 +1888,12 @@ function LeadRow({
               onClick={(e) => { e.stopPropagation(); onRestaurar() }}
               disabled={deleting}
               title="Restaurar lead"
-              className="px-2 py-1.5 rounded-lg border border-aletis-borda dark:border-white/10 text-aletis-grafite-medio dark:text-white/60 hover:bg-aletis-bege dark:hover:bg-white/5 transition disabled:opacity-50"
+              className="px-2 py-1.5 rounded-lg border border-aletis-borda dark:border-white/10 text-[var(--text-soft)] dark:text-white/60 hover:bg-aletis-bege dark:hover:bg-white/5 transition disabled:opacity-50"
             >
               {deleting ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
             </button>
           )}
-          <ChevronRight size={18} className="text-aletis-grafite-medio dark:text-white/30 group-hover:text-aletis-verde transition" />
+          <ChevronRight size={18} className="text-[var(--text-soft)] dark:text-white/30 group-hover:text-aletis-verde transition" />
         </div>
       </div>
     </div>
@@ -1910,7 +1901,7 @@ function LeadRow({
 }
 
 // ────────────────────────────────────────────────────────────
-// StatusTabs — pendentes / completas / excluídos
+// StatusTabs — pendentes / completas / excluídos (Animated)
 // ────────────────────────────────────────────────────────────
 function StatusTabs({
   active,
@@ -1921,39 +1912,20 @@ function StatusTabs({
   counts: BuscaCounts
   onChange: (v: 'todos' | 'pendente' | 'completa' | 'excluido') => void
 }) {
-  const tabs = [
-    { id: 'todos' as const, label: 'Todos (ativos)', count: counts.todos, icon: ListChecks, color: 'text-aletis-grafite-escuro dark:text-white' },
-    { id: 'pendente' as const, label: 'Pendentes', count: counts.pendentes, icon: Package, color: 'text-amber-600 dark:text-amber-400' },
-    { id: 'completa' as const, label: 'Completas', count: counts.completas, icon: CheckCircle2, color: 'text-emerald-600 dark:text-emerald-400' },
-    { id: 'excluido' as const, label: 'Excluídos', count: counts.excluidos, icon: Archive, color: 'text-slate-500 dark:text-slate-400' },
-  ]
   return (
     <div className="px-6 pt-3 pb-0 border-b border-aletis-borda dark:border-white/5 flex gap-1 flex-wrap bg-aletis-bege/40 dark:bg-white/[0.02]">
-      {tabs.map((t) => {
-        const Icon = t.icon
-        const isActive = active === t.id
-        return (
-          <button
-            key={t.id}
-            onClick={() => onChange(t.id)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-t-lg transition ${
-              isActive
-                ? `bg-white dark:bg-aletis-grafite-escuro ${t.color} border-b-2 border-aletis-verde -mb-px`
-                : 'text-aletis-grafite-medio dark:text-white/50 hover:text-aletis-verde'
-            }`}
-          >
-            <Icon size={13} />
-            {t.label}
-            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
-              isActive
-                ? 'bg-aletis-verde/10 text-aletis-verde'
-                : 'bg-white/60 dark:bg-white/5 text-aletis-grafite-medio dark:text-white/40'
-            }`}>
-              {fmtNum(t.count)}
-            </span>
-          </button>
-        )
-      })}
+      <AnimatedTabs
+        variant="underline"
+        size="sm"
+        tabs={[
+          { id: 'todos', label: `Todos (${fmtNum(counts.todos)})`, icon: ListChecks },
+          { id: 'pendente', label: `Pendentes (${fmtNum(counts.pendentes)})`, icon: Package },
+          { id: 'completa', label: `Completas (${fmtNum(counts.completas)})`, icon: CheckCircle2 },
+          { id: 'excluido', label: `Excluídos (${fmtNum(counts.excluidos)})`, icon: Archive },
+        ]}
+        active={active}
+        onChange={(id) => onChange(id as 'todos' | 'pendente' | 'completa' | 'excluido')}
+      />
     </div>
   )
 }
@@ -2063,49 +2035,35 @@ function BulkEnrichModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={running ? undefined : onClose} aria-hidden="true" />
-      <div className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto bg-white dark:bg-aletis-grafite-escuro rounded-2xl shadow-2xl border border-aletis-borda dark:border-white/10">
-        {/* Header */}
-        <div className="sticky top-0 z-10 px-6 py-4 bg-gradient-to-r from-aletis-verde to-aletis-verde-escuro text-white flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
-              <Zap size={18} />
-            </div>
-            <div>
-              <h3 className="font-display text-lg font-bold">Enriquecimento em lote</h3>
-              <p className="text-xs text-white/70">
-                BrasilAPI + SICAR aprofundado — automático, zero captcha consumido
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            disabled={running}
-            className="p-2 rounded-lg hover:bg-white/10 disabled:opacity-40 transition"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-4">
+    <AppDialog
+      title="Enriquecimento em lote"
+      eyebrow="Prospecção"
+      subtitle="BrasilAPI + SICAR aprofundado, automático e sem consumo de captcha."
+      icon={<Zap className="h-5 w-5" />}
+      size="lg"
+      onClose={() => {
+        if (!running) onClose()
+      }}
+      closeOnBackdrop={!running}
+      bodyClassName="space-y-4"
+    >
           {/* Controles de filtro — só editáveis antes de iniciar */}
           {batch.phase === 'idle' && (
             <div className="space-y-3">
               <div className="p-3 rounded-xl bg-aletis-bege/40 dark:bg-white/5 border border-aletis-borda dark:border-white/10">
-                <p className="text-[11px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-2 flex items-center gap-1">
+                <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50 mb-2 flex items-center gap-1">
                   <Filter size={11} /> Escopo do lote
                 </p>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <label className="block">
-                    <span className="text-[11px] font-medium text-aletis-grafite-medio dark:text-white/50 mb-1 flex items-center gap-1">
+                    <span className="text-[11px] font-medium text-[var(--text-soft)] dark:text-white/50 mb-1 flex items-center gap-1">
                       <MapPin size={11} /> UF
                     </span>
                     <select
                       value={bulkUf}
                       onChange={(e) => setBulkUf(e.target.value)}
-                      className="w-full px-2 py-1.5 text-sm rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-aletis-grafite-escuro focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
+                      className="w-full px-2 py-1.5 text-sm rounded-lg border border-aletis-borda dark:border-white/10 bg-card dark:bg-card focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
                     >
                       <option value="">todas</option>
                       {UFS.map((u) => <option key={u} value={u}>{u}</option>)}
@@ -2113,13 +2071,13 @@ function BulkEnrichModal({
                   </label>
 
                   <label className="block">
-                    <span className="text-[11px] font-medium text-aletis-grafite-medio dark:text-white/50 mb-1 flex items-center gap-1">
+                    <span className="text-[11px] font-medium text-[var(--text-soft)] dark:text-white/50 mb-1 flex items-center gap-1">
                       <Building2 size={11} /> Tipo
                     </span>
                     <select
                       value={bulkTipoPessoa}
                       onChange={(e) => setBulkTipoPessoa(e.target.value as any)}
-                      className="w-full px-2 py-1.5 text-sm rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-aletis-grafite-escuro focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
+                      className="w-full px-2 py-1.5 text-sm rounded-lg border border-aletis-borda dark:border-white/10 bg-card dark:bg-card focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
                     >
                       <option value="">PF e PJ</option>
                       <option value="PJ">Pessoa jurídica</option>
@@ -2128,13 +2086,13 @@ function BulkEnrichModal({
                   </label>
 
                   <label className="block">
-                    <span className="text-[11px] font-medium text-aletis-grafite-medio dark:text-white/50 mb-1 flex items-center gap-1">
+                    <span className="text-[11px] font-medium text-[var(--text-soft)] dark:text-white/50 mb-1 flex items-center gap-1">
                       <Hash size={11} /> Limite
                     </span>
                     <select
                       value={limite}
                       onChange={(e) => setLimite(e.target.value as any)}
-                      className="w-full px-2 py-1.5 text-sm rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-aletis-grafite-escuro focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
+                      className="w-full px-2 py-1.5 text-sm rounded-lg border border-aletis-borda dark:border-white/10 bg-card dark:bg-card focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
                     >
                       <option value="">todos</option>
                       <option value="100">primeiros 100 (top score)</option>
@@ -2146,8 +2104,8 @@ function BulkEnrichModal({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                   <label className="block">
-                    <span className="text-[11px] font-medium text-aletis-grafite-medio dark:text-white/50 mb-1 flex items-center gap-1">
-                      <DollarSign size={11} /> Dívida mín. <span className="text-aletis-verde font-semibold">{fmtBRLShort(bulkMinDivida)}</span>
+                    <span className="text-[11px] font-medium text-[var(--text-soft)] dark:text-white/50 mb-1 flex items-center gap-1">
+                      <DollarSign size={11} /> Dívida mín. <span className="text-foreground font-semibold">{fmtBRLShort(bulkMinDivida)}</span>
                     </span>
                     <input
                       type="range"
@@ -2161,8 +2119,8 @@ function BulkEnrichModal({
                   </label>
 
                   <label className="block">
-                    <span className="text-[11px] font-medium text-aletis-grafite-medio dark:text-white/50 mb-1 flex items-center gap-1">
-                      <Tractor size={11} /> Hectares mín. <span className="text-aletis-verde font-semibold">{fmtHa(bulkMinHectares)}</span>
+                    <span className="text-[11px] font-medium text-[var(--text-soft)] dark:text-white/50 mb-1 flex items-center gap-1">
+                      <Tractor size={11} /> Hectares mín. <span className="text-foreground font-semibold">{fmtHa(bulkMinHectares)}</span>
                     </span>
                     <input
                       type="range"
@@ -2178,7 +2136,7 @@ function BulkEnrichModal({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                   <label className="block">
-                    <span className="text-[11px] font-medium text-aletis-grafite-medio dark:text-white/50 mb-1 flex items-center gap-1">
+                    <span className="text-[11px] font-medium text-[var(--text-soft)] dark:text-white/50 mb-1 flex items-center gap-1">
                       <Search size={11} /> Termo (nome/CPF/CNPJ)
                     </span>
                     <input
@@ -2186,12 +2144,12 @@ function BulkEnrichModal({
                       value={bulkTermo}
                       onChange={(e) => setBulkTermo(e.target.value)}
                       placeholder="(opcional)"
-                      className="w-full px-2 py-1.5 text-sm rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-aletis-grafite-escuro focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
+                      className="w-full px-2 py-1.5 text-sm rounded-lg border border-aletis-borda dark:border-white/10 bg-card dark:bg-card focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
                     />
                   </label>
 
                   <div className="flex flex-wrap gap-3 md:mt-6">
-                    <label className="inline-flex items-center gap-2 text-xs text-aletis-grafite-medio dark:text-white/60 cursor-pointer">
+                    <label className="inline-flex items-center gap-2 text-xs text-[var(--text-soft)] dark:text-white/60 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={bulkApenasAjuizadas}
@@ -2200,7 +2158,7 @@ function BulkEnrichModal({
                       />
                       <Gavel size={12} /> Apenas com ajuizamento
                     </label>
-                    <label className="inline-flex items-center gap-2 text-xs text-aletis-grafite-medio dark:text-white/60 cursor-pointer">
+                    <label className="inline-flex items-center gap-2 text-xs text-[var(--text-soft)] dark:text-white/60 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={bulkApenasAgroProvavel}
@@ -2209,7 +2167,7 @@ function BulkEnrichModal({
                       />
                       <Wheat size={12} /> Agro provável
                     </label>
-                    <label className="inline-flex items-center gap-2 text-xs text-aletis-grafite-medio dark:text-white/60 cursor-pointer">
+                    <label className="inline-flex items-center gap-2 text-xs text-[var(--text-soft)] dark:text-white/60 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={bulkApenasPfRural}
@@ -2218,7 +2176,7 @@ function BulkEnrichModal({
                       />
                       <Users size={12} /> PF rural
                     </label>
-                    <label className="inline-flex items-center gap-2 text-xs text-aletis-grafite-medio dark:text-white/60 cursor-pointer">
+                    <label className="inline-flex items-center gap-2 text-xs text-[var(--text-soft)] dark:text-white/60 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={bulkApenasJudicialAgro}
@@ -2241,7 +2199,7 @@ function BulkEnrichModal({
                         className={`px-2.5 py-1 rounded-full text-xs border transition ${
                           active
                             ? 'bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800'
-                            : 'bg-white dark:bg-white/5 text-aletis-grafite-medio dark:text-white/50 border-aletis-borda dark:border-white/10 hover:border-red-300 dark:hover:border-red-800'
+                            : 'bg-card dark:bg-white/5 text-[var(--text-soft)] dark:text-white/50 border-aletis-borda dark:border-white/10 hover:border-red-300 dark:hover:border-red-800'
                         }`}
                       >
                         {JUDICIAL_LABEL[tipo]}
@@ -2253,50 +2211,50 @@ function BulkEnrichModal({
 
               {/* Preview */}
               <div className="p-3 rounded-xl bg-gradient-to-br from-aletis-verde/10 to-aletis-dourado/5 border border-aletis-verde/20">
-                <p className="text-[11px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-2 flex items-center gap-1">
+                <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50 mb-2 flex items-center gap-1">
                   {loadingPreview ? <Loader2 size={11} className="animate-spin" /> : <Info size={11} />}
                   Preview do lote
                 </p>
                 {!preview ? (
-                  <p className="text-xs text-aletis-grafite-medio dark:text-white/50">calculando…</p>
+                  <p className="text-xs text-[var(--text-soft)] dark:text-white/50">calculando…</p>
                 ) : (
                   <>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
                       <div className="text-center">
-                        <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50">Elegíveis</p>
-                        <p className="font-display text-xl font-bold text-aletis-verde">{fmtNum(elegiveisAposLimite)}</p>
+                        <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50">Elegíveis</p>
+                        <p className="font-display text-xl font-bold text-foreground">{fmtNum(elegiveisAposLimite)}</p>
                         {limite && preview.elegiveis > elegiveisAposLimite && (
-                          <p className="text-[10px] text-aletis-grafite-medio dark:text-white/40">de {fmtNum(preview.elegiveis)}</p>
+                          <p className="text-[11px] text-[var(--text-soft)] dark:text-white/40">de {fmtNum(preview.elegiveis)}</p>
                         )}
                       </div>
                       <div className="text-center">
-                        <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50">Já completos</p>
-                        <p className="font-display text-xl font-bold text-aletis-grafite-medio dark:text-white/50">{fmtNum(preview.jaCompletos)}</p>
-                        <p className="text-[10px] text-aletis-grafite-medio dark:text-white/40">ignorados</p>
+                        <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50">Já completos</p>
+                        <p className="font-display text-xl font-bold text-[var(--text-soft)] dark:text-white/50">{fmtNum(preview.jaCompletos)}</p>
+                        <p className="text-[11px] text-[var(--text-soft)] dark:text-white/40">ignorados</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400">CAR provável</p>
+                        <p className="text-[11px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400">CAR provável</p>
                         <p className="font-display text-xl font-bold text-emerald-700 dark:text-emerald-300">{fmtNum(preview.comCarProvavel)}</p>
-                        <p className="text-[10px] text-aletis-grafite-medio dark:text-white/40">índice offline</p>
+                        <p className="text-[11px] text-[var(--text-soft)] dark:text-white/40">índice offline</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-[10px] uppercase tracking-wider text-amber-700 dark:text-amber-400">Sem CAR</p>
+                        <p className="text-[11px] uppercase tracking-wider text-amber-700 dark:text-amber-400">Sem CAR</p>
                         <p className="font-display text-xl font-bold text-amber-700 dark:text-amber-300">{fmtNum(preview.semCarProvavel)}</p>
-                        <p className="text-[10px] text-aletis-grafite-medio dark:text-white/40">estimativa composta</p>
+                        <p className="text-[11px] text-[var(--text-soft)] dark:text-white/40">estimativa composta</p>
                       </div>
                     </div>
                     {preview.porUf.length > 1 && (
                       <div className="pt-2 border-t border-aletis-verde/20">
-                        <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-1">
+                        <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50 mb-1">
                           Distribuição por UF
                         </p>
                         <div className="flex flex-wrap gap-1">
                           {preview.porUf.slice(0, 10).map((u) => (
                             <span
                               key={u.uf}
-                              className="px-2 py-0.5 rounded-full bg-white/60 dark:bg-white/5 border border-aletis-borda dark:border-white/10 text-[10px] font-mono text-aletis-grafite-escuro dark:text-white"
+                              className="px-2 py-0.5 rounded-full bg-white/60 dark:bg-white/5 border border-aletis-borda dark:border-white/10 text-[11px] font-mono text-foreground dark:text-white"
                             >
-                              {u.uf} <span className="text-aletis-verde font-semibold">{fmtNum(u.count)}</span>
+                              {u.uf} <span className="text-foreground font-semibold">{fmtNum(u.count)}</span>
                             </span>
                           ))}
                         </div>
@@ -2322,8 +2280,8 @@ function BulkEnrichModal({
 
               {/* Concorrência */}
               <label className="block">
-                <span className="text-[11px] font-medium text-aletis-grafite-medio dark:text-white/50 mb-1 block">
-                  Concorrência <span className="text-aletis-verde font-semibold">{concurrency} em paralelo</span>
+                <span className="text-[11px] font-medium text-[var(--text-soft)] dark:text-white/50 mb-1 block">
+                  Concorrência <span className="text-foreground font-semibold">{concurrency} em paralelo</span>
                 </span>
                 <input
                   type="range"
@@ -2334,7 +2292,7 @@ function BulkEnrichModal({
                   onChange={(e) => setConcurrency(Number(e.target.value))}
                   className="w-full accent-aletis-verde"
                 />
-                <p className="text-[11px] text-aletis-grafite-medio dark:text-white/40 mt-1">
+                <p className="text-[11px] text-[var(--text-soft)] dark:text-white/40 mt-1">
                   Recomendado 3. Acima de 5 pode disparar rate-limit na BrasilAPI.
                 </p>
               </label>
@@ -2355,13 +2313,13 @@ function BulkEnrichModal({
             <div className="space-y-3">
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-semibold text-aletis-grafite-escuro dark:text-white">
+                  <span className="text-xs font-semibold text-foreground dark:text-white">
                     {batch.phase === 'running' ? 'Processando…' :
                      batch.phase === 'starting' ? 'Iniciando lote…' :
                      batch.phase === 'done' ? 'Concluído' :
                      batch.phase === 'cancelled' ? 'Cancelado' : 'Erro'}
                   </span>
-                  <span className="text-xs font-mono text-aletis-grafite-medio dark:text-white/60">
+                  <span className="text-xs font-mono text-[var(--text-soft)] dark:text-white/60">
                     {fmtNum(batch.processed)} / {fmtNum(batch.total)} · {pct}%
                   </span>
                 </div>
@@ -2379,33 +2337,33 @@ function BulkEnrichModal({
 
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800">
-                  <p className="text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400">OK</p>
+                  <p className="text-[11px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400">OK</p>
                   <p className="font-display text-lg font-bold text-emerald-700 dark:text-emerald-300">{fmtNum(batch.ok)}</p>
                 </div>
                 <div className="p-2 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
-                  <p className="text-[10px] uppercase tracking-wider text-red-700 dark:text-red-400">Falhas</p>
+                  <p className="text-[11px] uppercase tracking-wider text-red-700 dark:text-red-400">Falhas</p>
                   <p className="font-display text-lg font-bold text-red-700 dark:text-red-300">{fmtNum(batch.fail)}</p>
                 </div>
                 <div className="p-2 rounded-lg bg-aletis-bege dark:bg-white/5 border border-aletis-borda dark:border-white/10">
-                  <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50">Restantes</p>
-                  <p className="font-display text-lg font-bold text-aletis-grafite-escuro dark:text-white">
+                  <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50">Restantes</p>
+                  <p className="font-display text-lg font-bold text-foreground dark:text-white">
                     {fmtNum(Math.max(0, batch.total - batch.processed))}
                   </p>
                 </div>
               </div>
 
               {batch.lastLead && (
-                <div className="p-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-aletis-borda dark:border-white/10 text-xs font-mono text-aletis-grafite-medio dark:text-white/60 truncate">
-                  <span className="text-aletis-grafite-medio dark:text-white/40">último:</span>{' '}
-                  <b className="text-aletis-grafite-escuro dark:text-white">{batch.lastLead.nome}</b>{' '}
-                  <span className="text-aletis-verde">({batch.lastLead.uf})</span>
+                <div className="p-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-aletis-borda dark:border-white/10 text-xs font-mono text-[var(--text-soft)] dark:text-white/60 truncate">
+                  <span className="text-[var(--text-soft)] dark:text-white/40">último:</span>{' '}
+                  <b className="text-foreground dark:text-white">{batch.lastLead.nome}</b>{' '}
+                  <span className="text-foreground">({batch.lastLead.uf})</span>
                   {batch.lastLead.carSource && (
-                    <span className="ml-2 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px]">
+                    <span className="ml-2 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[11px]">
                       SICAR {batch.lastLead.carSource}
                     </span>
                   )}
                   {batch.lastLead.hectares != null && batch.lastLead.hectares > 0 && (
-                    <span className="ml-2 text-aletis-verde">{fmtHa(batch.lastLead.hectares)}</span>
+                    <span className="ml-2 text-foreground">{fmtHa(batch.lastLead.hectares)}</span>
                   )}
                   {batch.lastLead.error && (
                     <span className="ml-2 text-red-500">— {batch.lastLead.error}</span>
@@ -2445,9 +2403,7 @@ function BulkEnrichModal({
               </div>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </AppDialog>
   )
 }
 
@@ -2510,18 +2466,25 @@ function LeadDrawer({
   }, [enrichFlash, dismissEnrichFlash])
 
   return (
-    <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true">
-      <div className="flex-1 bg-black/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
-      <aside className="w-full max-w-3xl bg-white dark:bg-aletis-grafite-escuro shadow-2xl overflow-y-auto animate-slide-in-right">
+    <AppDialog
+      title="Detalhe do lead"
+      eyebrow="Prospecção"
+      subtitle={`${lead.cpfCnpj} · ${lead.uf} · ${lead.tipoPessoa === 'PJ' ? 'Pessoa jurídica' : 'Pessoa física'}`}
+      icon={<Flame className="h-5 w-5" />}
+      size="xl"
+      onClose={onClose}
+      bodyClassName="p-0"
+      className="md:max-h-[min(94dvh,1080px)]"
+    >
         {/* Header */}
         <div className="sticky top-0 z-10 bg-gradient-to-br from-aletis-verde to-aletis-verde-escuro text-white px-6 py-5">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${cls.bg} ${cls.text} border ${cls.border}`}>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${cls.bg} ${cls.text} border ${cls.border}`}>
                   <Flame size={10} /> {cls.label}
                 </span>
-                <span className="text-[10px] text-white/50 font-mono">{lead.cpfCnpj}</span>
+                <span className="text-[11px] text-white/50 font-mono">{lead.cpfCnpj}</span>
               </div>
               <h2 className="font-display text-2xl font-bold leading-tight">{lead.nome}</h2>
               <p className="text-white/70 text-xs mt-1 flex items-center gap-3 flex-wrap">
@@ -2532,12 +2495,12 @@ function LeadDrawer({
                 {lead.pfProfile?.relevante && <span>PF rural</span>}
                 {lead.judicialProfile?.ativo && <span>crise judicial {lead.judicialProfile.severidade}</span>}
                 {lead.status === 'completa' && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200 text-[10px] font-semibold">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200 text-[11px] font-semibold">
                     <CheckCircle2 size={10} /> enriquecido
                   </span>
                 )}
                 {isExcluido && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-500/30 text-slate-200 text-[10px] font-semibold">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-500/30 text-slate-200 text-[11px] font-semibold">
                     <Archive size={10} /> excluído
                   </span>
                 )}
@@ -2565,13 +2528,6 @@ function LeadDrawer({
                   {deleting ? <Loader2 size={18} className="animate-spin" /> : <RotateCcw size={18} />}
                 </button>
               )}
-              <button
-                onClick={onClose}
-                className="p-2 rounded-lg hover:bg-white/10 transition"
-                aria-label="Fechar"
-              >
-                <X size={20} />
-              </button>
             </div>
           </div>
 
@@ -2619,7 +2575,7 @@ function LeadDrawer({
               <button
                 onClick={onIniciarProspeccao}
                 disabled={iniciando}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-aletis-verde-escuro font-semibold text-sm shadow-lg hover:bg-aletis-bege transition disabled:opacity-60"
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-card text-aletis-verde-escuro font-semibold text-sm shadow-lg hover:bg-aletis-bege transition disabled:opacity-60"
               >
                 {iniciando ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
                 {iniciando ? 'Importando…' : 'Iniciar prospecção · levar ao CRM'}
@@ -2671,60 +2627,59 @@ function LeadDrawer({
         )}
 
         {/* Tabs — scroll horizontal suave em viewports estreitos */}
-        <div className="sticky top-[112px] z-[5] bg-white dark:bg-aletis-grafite-escuro border-b border-aletis-borda dark:border-white/5">
+        <div className="sticky top-[112px] z-[5] bg-card dark:bg-card border-b border-aletis-borda dark:border-white/5">
           <div className="px-6 pt-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="flex gap-1 w-max">
-              {([
-                { id: 'identidade', label: 'Identidade', icon: Building2 },
-                { id: 'divida', label: 'Dívida ativa', icon: Gavel },
-                { id: 'agro', label: 'Sinais agro', icon: Wheat },
-                { id: 'judicial', label: 'Crise judicial', icon: AlertTriangle },
-                { id: 'car', label: 'CAR real', icon: Trees },
-                { id: 'socios', label: 'Sócios/QSA', icon: Users },
-                { id: 'score', label: 'Score', icon: Gauge },
-                { id: 'contatos', label: 'Contatos', icon: PhoneCall },
-              ] as const).map((t) => {
-                const Icon = t.icon
-                const active = tab === t.id
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => setTab(t.id)}
-                    className={`flex items-center gap-1.5 px-3 py-2.5 text-[12.5px] font-medium rounded-t-lg transition whitespace-nowrap ${
-                      active
-                        ? 'bg-aletis-bege dark:bg-white/5 text-aletis-verde border-b-2 border-aletis-verde -mb-px'
-                        : 'text-aletis-grafite-medio dark:text-white/50 border-b-2 border-transparent -mb-px hover:text-aletis-verde hover:border-aletis-verde/30'
-                    }`}
-                  >
-                    <Icon size={13} /> {t.label}
-                  </button>
-                )
-              })}
+              <AnimatedTabs
+                variant="underline"
+                size="sm"
+                tabs={[
+                  { id: 'identidade', label: 'Identidade', icon: Building2 },
+                  { id: 'divida', label: 'Dívida ativa', icon: Gavel },
+                  { id: 'agro', label: 'Sinais agro', icon: Wheat },
+                  { id: 'judicial', label: 'Crise judicial', icon: AlertTriangle },
+                  { id: 'car', label: 'CAR real', icon: Trees },
+                  { id: 'socios', label: 'Sócios/QSA', icon: Users },
+                  { id: 'score', label: 'Score', icon: Gauge },
+                  { id: 'contatos', label: 'Contatos', icon: PhoneCall },
+                ]}
+                active={tab}
+                onChange={(id) => setTab(id as typeof tab)}
+              />
             </div>
           </div>
         </div>
 
         {/* Content */}
         <div className="p-6 space-y-4 text-sm">
-          {tab === 'identidade' && <TabIdentidade lead={lead} onEnrich={onEnrich} enriching={enriching} />}
-          {tab === 'divida' && <TabDivida lead={lead} />}
-          {tab === 'agro' && <TabAgro lead={lead} />}
-          {tab === 'judicial' && <TabJudicial lead={lead} />}
-          {tab === 'car' && (
-            <TabCar
-              lead={lead}
-              loading={carLoading}
-              error={carError}
-              sicarStatus={sicarStatus}
-              onConsultar={onConsultarCar}
-            />
-          )}
-          {tab === 'socios' && <TabSocios lead={lead} />}
-          {tab === 'score' && <TabScore lead={lead} />}
-          {tab === 'contatos' && <TabContatos lead={lead} onAbrirContato={onAbrirContato} />}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={tab}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.2 }}
+            >
+              {tab === 'identidade' && <TabIdentidade lead={lead} onEnrich={onEnrich} enriching={enriching} />}
+              {tab === 'divida' && <TabDivida lead={lead} />}
+              {tab === 'agro' && <TabAgro lead={lead} />}
+              {tab === 'judicial' && <TabJudicial lead={lead} />}
+              {tab === 'car' && (
+                <TabCar
+                  lead={lead}
+                  loading={carLoading}
+                  error={carError}
+                  sicarStatus={sicarStatus}
+                  onConsultar={onConsultarCar}
+                />
+              )}
+              {tab === 'socios' && <TabSocios lead={lead} />}
+              {tab === 'score' && <TabScore lead={lead} />}
+              {tab === 'contatos' && <TabContatos lead={lead} onAbrirContato={onAbrirContato} />}
+            </motion.div>
+          </AnimatePresence>
         </div>
-      </aside>
-    </div>
+    </AppDialog>
   )
 }
 
@@ -2738,10 +2693,10 @@ function TabContatos({ lead, onAbrirContato }: { lead: LeadFull; onAbrirContato:
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h3 className="font-display text-base font-bold text-aletis-grafite-escuro dark:text-white flex items-center gap-2">
-            <History size={16} className="text-aletis-verde" /> Histórico de contatos
+          <h3 className="font-display text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+            <History size={16} className="text-foreground" /> Histórico de contatos
           </h3>
-          <p className="text-xs text-aletis-grafite-medio dark:text-white/50">
+          <p className="text-xs text-[var(--text-soft)] dark:text-white/50">
             Outcomes alimentam o feedback loop — scoring é recalculado automaticamente.
           </p>
         </div>
@@ -2767,7 +2722,7 @@ function TabContatos({ lead, onAbrirContato }: { lead: LeadFull; onAbrirContato:
       )}
 
       {ordenados.length === 0 ? (
-        <div className="p-8 text-center text-aletis-grafite-medio dark:text-white/50 text-sm">
+        <div className="p-8 text-center text-[var(--text-soft)] dark:text-white/50 text-sm">
           <PhoneCall size={28} className="mx-auto mb-2 opacity-40" />
           Nenhum contato registrado ainda. Use "Novo contato" para iniciar o histórico.
         </div>
@@ -2786,17 +2741,17 @@ function TabContatos({ lead, onAbrirContato }: { lead: LeadFull; onAbrirContato:
             return (
               <li key={`${c.registradoEm}-${i}`} className={`rounded-lg border px-3 py-2 ${toneCls}`}>
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-xs font-semibold text-aletis-grafite-escuro dark:text-white">
+                  <span className="text-xs font-semibold text-foreground dark:text-white">
                     {cfg.label}
-                    {c.canal && <span className="ml-2 text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50">· {c.canal}</span>}
+                    {c.canal && <span className="ml-2 text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50">· {c.canal}</span>}
                   </span>
-                  <span className="text-[11px] text-aletis-grafite-medio dark:text-white/50">
+                  <span className="text-[11px] text-[var(--text-soft)] dark:text-white/50">
                     {fmtDate(c.registradoEm)}
                     {c.registradoPor ? ` · ${c.registradoPor}` : ''}
                   </span>
                 </div>
                 {c.notas && (
-                  <p className="mt-1 text-xs text-aletis-grafite-medio dark:text-white/70 whitespace-pre-wrap">
+                  <p className="mt-1 text-xs text-[var(--text-soft)] dark:text-white/70 whitespace-pre-wrap">
                     {c.notas}
                   </p>
                 )}
@@ -2823,10 +2778,10 @@ function KpiLine({
       ? 'text-emerald-700 dark:text-emerald-300'
       : accent === 'red'
       ? 'text-red-700 dark:text-red-300'
-      : 'text-aletis-grafite-escuro dark:text-white'
+      : 'text-foreground dark:text-white'
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50">{label}</p>
+      <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50">{label}</p>
       <p className={`font-display text-sm font-bold ${tone}`}>{value}</p>
     </div>
   )
@@ -2835,9 +2790,9 @@ function KpiLine({
 function DrawerKpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="bg-white/[0.08] backdrop-blur rounded-xl border border-white/10 px-3 py-2.5 min-w-0">
-      <p className="text-[10px] uppercase tracking-[0.14em] text-white/55 mb-0.5 truncate">{label}</p>
+      <p className="text-[11px] uppercase tracking-[0.14em] text-white/55 mb-0.5 truncate">{label}</p>
       <p className="font-display text-lg font-bold leading-tight tabular-nums truncate" title={value}>{value}</p>
-      {sub && <p className="text-[10px] text-white/50 truncate mt-0.5" title={sub}>{sub}</p>}
+      {sub && <p className="text-[11px] text-white/50 truncate mt-0.5" title={sub}>{sub}</p>}
     </div>
   )
 }
@@ -2877,17 +2832,17 @@ function TabIdentidade({ lead, onEnrich, enriching }: { lead: LeadFull; onEnrich
         ? 'border-aletis-borda dark:border-white/10 bg-aletis-bege/40 dark:bg-white/5'
         : 'border-dashed border-aletis-verde/40 bg-aletis-verde/5'}`}>
         <div className="flex items-center gap-2 mb-2 flex-wrap">
-          <Sparkles size={14} className={jaEnriquecido ? 'text-aletis-grafite-medio' : 'text-aletis-verde'} />
-          <p className={`font-semibold text-sm ${jaEnriquecido ? 'text-aletis-grafite-escuro dark:text-white' : 'text-aletis-verde'}`}>
+          <Sparkles size={14} className={jaEnriquecido ? 'text-[var(--text-soft)]' : 'text-foreground'} />
+          <p className={`font-semibold text-sm ${jaEnriquecido ? 'text-foreground dark:text-white' : 'text-foreground'}`}>
             {jaEnriquecido ? 'Reenriquecer dados' : 'Enriquecimento completo disponível'}
           </p>
           {enriching && (
-            <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-aletis-verde/15 text-aletis-verde text-[10px] font-semibold">
+            <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-aletis-verde/15 text-foreground text-[11px] font-semibold">
               <Loader2 size={10} className="animate-spin" /> em andamento…
             </span>
           )}
         </div>
-        <p className="text-xs text-aletis-grafite-medio dark:text-white/60 mb-3">
+        <p className="text-xs text-[var(--text-soft)] dark:text-white/60 mb-3">
           {isPseudoPfDoc
             ? 'Tenta match no índice SICAR offline por razão social + UF. Não há BrasilAPI/QSA para PF.'
             : jaEnriquecido
@@ -2902,7 +2857,7 @@ function TabIdentidade({ lead, onEnrich, enriching }: { lead: LeadFull; onEnrich
           aria-busy={enriching}
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-50 ${
             jaEnriquecido
-              ? 'border border-aletis-verde/30 text-aletis-verde hover:bg-aletis-verde/10'
+              ? 'border border-aletis-verde/30 text-foreground hover:bg-aletis-verde/10'
               : 'bg-aletis-verde text-white hover:bg-aletis-verde-escuro'
           }`}
         >
@@ -2914,8 +2869,8 @@ function TabIdentidade({ lead, onEnrich, enriching }: { lead: LeadFull; onEnrich
       {lead.cnpj && (
         <div className="mt-4 p-4 rounded-xl bg-aletis-bege/50 dark:bg-white/5 border border-aletis-borda dark:border-white/10">
           <div className="flex items-center gap-2 mb-3">
-            <CheckCircle2 size={14} className="text-aletis-verde" />
-            <p className="font-semibold text-sm text-aletis-grafite-escuro dark:text-white">Dados RFB (via BrasilAPI)</p>
+            <CheckCircle2 size={14} className="text-foreground" />
+            <p className="font-semibold text-sm text-foreground dark:text-white">Dados RFB (via BrasilAPI)</p>
           </div>
           <InfoRow icon={Building2} label="Razão social" value={lead.cnpj.razaoSocial} />
           {lead.cnpj.nomeFantasia && <InfoRow icon={Building2} label="Nome fantasia" value={lead.cnpj.nomeFantasia} />}
@@ -2963,8 +2918,8 @@ function TabCar({
     <>
       <div className="rounded-xl border border-aletis-borda dark:border-white/10 p-4 bg-gradient-to-br from-aletis-verde/5 to-transparent">
         <div className="flex items-center gap-2 mb-3">
-          <Trees size={16} className="text-aletis-verde" />
-          <p className="font-semibold text-sm text-aletis-grafite-escuro dark:text-white">
+          <Trees size={16} className="text-foreground" />
+          <p className="font-semibold text-sm text-foreground dark:text-white">
             Cadastro Ambiental Rural (SICAR)
           </p>
           <span className={`ml-auto text-[11px] font-semibold flex items-center gap-1 ${
@@ -2975,8 +2930,8 @@ function TabCar({
           </span>
         </div>
 
-        <p className="text-[11px] text-aletis-grafite-medio dark:text-white/60 mb-3 leading-relaxed">
-          Consulta pública em <code className="font-mono text-aletis-verde">consultapublica.car.gov.br</code> —
+        <p className="text-[11px] text-[var(--text-soft)] dark:text-white/60 mb-3 leading-relaxed">
+          Consulta pública em <code className="font-mono text-foreground">consultapublica.car.gov.br</code> —
           reCAPTCHA v2 resolvido automaticamente via <b>2captcha</b>. Informe o código CAR do imóvel
           (formato <span className="font-mono">UF-XXXXXXX-…</span>) para obter a área oficial, módulos fiscais e
           reserva legal.
@@ -2988,7 +2943,7 @@ function TabCar({
             value={codigo}
             onChange={(e) => setCodigo(e.target.value.toUpperCase())}
             placeholder="Ex.: MT-5107578-ABCD1234…"
-            className="flex-1 px-3 py-2 text-sm font-mono rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-aletis-grafite-escuro focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
+            className="flex-1 px-3 py-2 text-sm font-mono rounded-lg border border-aletis-borda dark:border-white/10 bg-card dark:bg-card focus:border-aletis-verde focus:ring-1 focus:ring-aletis-verde outline-none transition"
           />
           <button
             onClick={() => onConsultar(codigo.trim())}
@@ -3019,19 +2974,19 @@ function TabCar({
         <div className="rounded-xl border border-emerald-400/40 bg-emerald-50/50 dark:bg-emerald-950/15 p-4">
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400" />
-            <p className="font-semibold text-sm text-aletis-grafite-escuro dark:text-white">
+            <p className="font-semibold text-sm text-foreground dark:text-white">
               Dados oficiais do imóvel
             </p>
             {lead.carSource === 'offline' ? (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-aletis-verde/15 text-aletis-verde border border-aletis-verde/30 flex items-center gap-1">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-aletis-verde/15 text-foreground border border-aletis-verde/30 flex items-center gap-1">
                 <Trees size={10} /> índice offline
               </span>
             ) : lead.carSource === 'live' ? (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-400/30 flex items-center gap-1">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-400/30 flex items-center gap-1">
                 <Satellite size={10} /> consulta ao vivo (2captcha)
               </span>
             ) : null}
-            <span className="ml-auto text-[10px] font-mono text-aletis-grafite-medio dark:text-white/40">
+            <span className="ml-auto text-[11px] font-mono text-[var(--text-soft)] dark:text-white/40">
               {new Date(car.consultadoEm).toLocaleString('pt-BR')}
             </span>
           </div>
@@ -3040,21 +2995,21 @@ function TabCar({
             <span className="font-display text-4xl font-bold text-emerald-700 dark:text-emerald-400">
               {fmtNum(Math.round(lead.area.hectaresSicar ?? car.areaImovel))}
             </span>
-            <span className="text-sm text-aletis-grafite-medio dark:text-white/60">
+            <span className="text-sm text-[var(--text-soft)] dark:text-white/60">
               hectares {lead.carOutrosImoveis && lead.carOutrosImoveis.length > 1 ? '— total do proprietário' : '— área do imóvel'}
             </span>
           </div>
 
           {lead.carOutrosImoveis && lead.carOutrosImoveis.length > 1 && (
             <div className="mb-3 p-2.5 rounded-lg bg-white/60 dark:bg-black/20 border border-aletis-borda dark:border-white/10">
-              <p className="text-[11px] font-semibold text-aletis-grafite-escuro dark:text-white mb-1.5">
+              <p className="text-[11px] font-semibold text-foreground dark:text-white mb-1.5">
                 Proprietário com {lead.carOutrosImoveis.length} imóveis:
               </p>
               <div className="space-y-1 max-h-32 overflow-y-auto">
                 {lead.carOutrosImoveis.map((im) => (
                   <div key={im.codImovel} className="flex items-center justify-between text-[11px]">
-                    <span className="font-mono text-aletis-grafite-medio dark:text-white/60 truncate mr-2">{im.codImovel}</span>
-                    <span className="text-aletis-grafite-medio dark:text-white/50">{im.municipio}/{im.uf}</span>
+                    <span className="font-mono text-[var(--text-soft)] dark:text-white/60 truncate mr-2">{im.codImovel}</span>
+                    <span className="text-[var(--text-soft)] dark:text-white/50">{im.municipio}/{im.uf}</span>
                     <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400 ml-2">
                       {fmtNum(Math.round(im.areaImovel))} ha
                     </span>
@@ -3088,14 +3043,14 @@ function TabCar({
             )}
           </div>
 
-          <p className="text-[10px] text-aletis-grafite-medio dark:text-white/50 mt-3 italic">
+          <p className="text-[11px] text-[var(--text-soft)] dark:text-white/50 mt-3 italic">
             Fonte: SFB/SICAR · consulta pública via 2captcha. A estimativa da aba "Sinais agro" foi substituída pela área real.
           </p>
         </div>
       ) : (
         <div className="rounded-xl border border-dashed border-aletis-borda dark:border-white/10 p-4 text-center">
-          <Satellite size={24} className="mx-auto mb-2 text-aletis-grafite-medio dark:text-white/40" />
-          <p className="text-xs text-aletis-grafite-medio dark:text-white/50">
+          <Satellite size={24} className="mx-auto mb-2 text-[var(--text-soft)] dark:text-white/40" />
+          <p className="text-xs text-[var(--text-soft)] dark:text-white/50">
             Nenhuma consulta CAR ainda. Informe o código do imóvel acima para trazer a área oficial do SICAR.
           </p>
         </div>
@@ -3117,9 +3072,9 @@ function InfoRow({
 }) {
   return (
     <div className="flex items-start gap-2 py-1.5 text-sm">
-      <Icon size={13} className="text-aletis-grafite-medio dark:text-white/40 mt-0.5 flex-shrink-0" />
-      <span className="text-aletis-grafite-medio dark:text-white/50 w-32 flex-shrink-0">{label}</span>
-      <span className={`text-aletis-grafite-escuro dark:text-white flex-1 ${mono ? 'font-mono text-xs' : ''}`}>
+      <Icon size={13} className="text-[var(--text-soft)] dark:text-white/40 mt-0.5 flex-shrink-0" />
+      <span className="text-[var(--text-soft)] dark:text-white/50 w-32 flex-shrink-0">{label}</span>
+      <span className={`text-foreground dark:text-white flex-1 ${mono ? 'font-mono text-xs' : ''}`}>
         {value}
       </span>
     </div>
@@ -3179,7 +3134,7 @@ function QuickSqlPanel({ onOpen }: { onOpen: (cpfCnpj: string) => void }) {
   }, [uf, minDividaMi, ajuizado, orderBy, limit])
 
   return (
-    <div className="rounded-2xl border border-aletis-borda dark:border-white/5 bg-white dark:bg-aletis-grafite-escuro shadow-sm overflow-hidden">
+    <div className="rounded-lg border border-aletis-borda dark:border-white/5 bg-card dark:bg-card shadow-sm overflow-hidden">
       <button
         onClick={() => {
           const next = !open
@@ -3189,19 +3144,19 @@ function QuickSqlPanel({ onOpen }: { onOpen: (cpfCnpj: string) => void }) {
         className="w-full px-6 py-4 flex items-center justify-between hover:bg-aletis-bege/30 transition-colors"
       >
         <div className="flex items-center gap-3">
-          <Database size={18} className="text-aletis-verde" />
+          <Database size={18} className="text-foreground" />
           <div className="text-left">
-            <h2 className="font-display text-base font-bold text-aletis-grafite-escuro dark:text-white">
+            <h2 className="font-display text-base font-bold text-foreground dark:text-white">
               Query rápida via SQL (Postgres)
             </h2>
-            <p className="text-xs text-aletis-grafite-medio dark:text-white/60">
+            <p className="text-xs text-[var(--text-soft)] dark:text-white/60">
               Filtros indexados nos 39k leads PGFN — bem mais rápido que filtros em RAM
             </p>
           </div>
         </div>
         <ChevronRight
           size={16}
-          className={`text-aletis-grafite-claro transition-transform ${open ? 'rotate-90' : ''}`}
+          className={`text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`}
         />
       </button>
 
@@ -3209,32 +3164,32 @@ function QuickSqlPanel({ onOpen }: { onOpen: (cpfCnpj: string) => void }) {
         <div className="px-6 pb-6 space-y-4 border-t border-aletis-borda/50">
           <div className="pt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
             <label className="block text-xs">
-              <span className="text-aletis-grafite-medio dark:text-white/60">UF</span>
+              <span className="text-[var(--text-soft)] dark:text-white/60">UF</span>
               <input
                 type="text"
                 value={uf}
                 maxLength={2}
                 onChange={(e) => setUf(e.target.value.toUpperCase())}
                 placeholder="PR"
-                className="mt-1 w-full px-2 py-1.5 rounded border border-aletis-borda bg-white text-sm"
+                className="mt-1 w-full px-2 py-1.5 rounded border border-aletis-borda bg-card text-sm"
               />
             </label>
             <label className="block text-xs">
-              <span className="text-aletis-grafite-medio dark:text-white/60">Dívida mín (R$ mi)</span>
+              <span className="text-[var(--text-soft)] dark:text-white/60">Dívida mín (R$ mi)</span>
               <input
                 type="number"
                 value={minDividaMi}
                 onChange={(e) => setMinDividaMi(e.target.value)}
                 placeholder="50"
-                className="mt-1 w-full px-2 py-1.5 rounded border border-aletis-borda bg-white text-sm"
+                className="mt-1 w-full px-2 py-1.5 rounded border border-aletis-borda bg-card text-sm"
               />
             </label>
             <label className="block text-xs">
-              <span className="text-aletis-grafite-medio dark:text-white/60">Ajuizado</span>
+              <span className="text-[var(--text-soft)] dark:text-white/60">Ajuizado</span>
               <select
                 value={ajuizado}
                 onChange={(e) => setAjuizado(e.target.value as 'all' | 'true' | 'false')}
-                className="mt-1 w-full px-2 py-1.5 rounded border border-aletis-borda bg-white text-sm"
+                className="mt-1 w-full px-2 py-1.5 rounded border border-aletis-borda bg-card text-sm"
               >
                 <option value="all">Todos</option>
                 <option value="true">Sim</option>
@@ -3242,11 +3197,11 @@ function QuickSqlPanel({ onOpen }: { onOpen: (cpfCnpj: string) => void }) {
               </select>
             </label>
             <label className="block text-xs">
-              <span className="text-aletis-grafite-medio dark:text-white/60">Ordenar por</span>
+              <span className="text-[var(--text-soft)] dark:text-white/60">Ordenar por</span>
               <select
                 value={orderBy}
                 onChange={(e) => setOrderBy(e.target.value as 'divida' | 'score' | 'nome')}
-                className="mt-1 w-full px-2 py-1.5 rounded border border-aletis-borda bg-white text-sm"
+                className="mt-1 w-full px-2 py-1.5 rounded border border-aletis-borda bg-card text-sm"
               >
                 <option value="divida">Dívida (maior primeiro)</option>
                 <option value="score">Score agro (maior primeiro)</option>
@@ -3254,11 +3209,11 @@ function QuickSqlPanel({ onOpen }: { onOpen: (cpfCnpj: string) => void }) {
               </select>
             </label>
             <label className="block text-xs">
-              <span className="text-aletis-grafite-medio dark:text-white/60">Limite</span>
+              <span className="text-[var(--text-soft)] dark:text-white/60">Limite</span>
               <select
                 value={limit}
                 onChange={(e) => setLimit(Number(e.target.value))}
-                className="mt-1 w-full px-2 py-1.5 rounded border border-aletis-borda bg-white text-sm"
+                className="mt-1 w-full px-2 py-1.5 rounded border border-aletis-borda bg-card text-sm"
               >
                 <option value={50}>50</option>
                 <option value={100}>100</option>
@@ -3274,7 +3229,7 @@ function QuickSqlPanel({ onOpen }: { onOpen: (cpfCnpj: string) => void }) {
             >
               {loading ? 'Consultando…' : 'Buscar via PG'}
             </button>
-            <p className="text-xs text-aletis-grafite-claro tabular-nums">
+            <p className="text-xs text-muted-foreground tabular-nums">
               {total > 0 ? `${total.toLocaleString('pt-BR')} leads (mostrando ${rows.length})` : ''}
             </p>
           </div>
@@ -3283,8 +3238,8 @@ function QuickSqlPanel({ onOpen }: { onOpen: (cpfCnpj: string) => void }) {
           )}
           {rows.length > 0 && (
             <div className="overflow-x-auto rounded-lg border border-aletis-borda/50 bg-aletis-bege/30">
-              <table className="w-full text-sm">
-                <thead className="bg-aletis-grafite-escuro/5 text-[10px] uppercase tracking-wider text-aletis-grafite-medio">
+              <table className="ui-table w-full text-sm">
+                <thead className="bg-aletis-grafite-escuro/5 text-[11px] uppercase tracking-wider text-[var(--text-soft)]">
                   <tr>
                     <th className="text-left px-3 py-2">Nome</th>
                     <th className="text-left px-3 py-2">CNPJ/CPF</th>
@@ -3302,33 +3257,33 @@ function QuickSqlPanel({ onOpen }: { onOpen: (cpfCnpj: string) => void }) {
                       onClick={() => onOpen(r.cnpjCpf)}
                       className="cursor-pointer hover:bg-white"
                     >
-                      <td className="px-3 py-2 font-medium text-aletis-grafite-escuro truncate max-w-[280px]">
+                      <td className="px-3 py-2 font-medium text-foreground truncate max-w-[280px]">
                         {r.nome ?? '—'}
                       </td>
-                      <td className="px-3 py-2 font-mono text-[11px] text-aletis-grafite-medio">
+                      <td className="px-3 py-2 font-mono text-[11px] text-[var(--text-soft)]">
                         {r.cnpjCpf}
                       </td>
                       <td className="px-3 py-2">
-                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-aletis-verde/10 text-aletis-verde-escuro">
+                        <span className="px-1.5 py-0.5 rounded text-[11px] bg-aletis-verde/10 text-aletis-verde-escuro">
                           {r.uf ?? '—'}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-aletis-grafite-escuro">
+                      <td className="px-3 py-2 text-right tabular-nums text-foreground">
                         {r.totalDivida
                           ? `${(Number(r.totalDivida) / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`
                           : '—'}
                       </td>
-                      <td className="px-3 py-2 text-center tabular-nums text-aletis-grafite-medio">
+                      <td className="px-3 py-2 text-center tabular-nums text-[var(--text-soft)]">
                         {r.inscricoesCount ?? '—'}
                       </td>
-                      <td className="px-3 py-2 text-center tabular-nums text-aletis-grafite-medio">
+                      <td className="px-3 py-2 text-center tabular-nums text-[var(--text-soft)]">
                         {r.agroScore ?? '—'}
                       </td>
                       <td className="px-3 py-2 text-center">
                         {r.ajuizado ? (
                           <span className="text-red-600">⚖</span>
                         ) : (
-                          <span className="text-aletis-grafite-claro">—</span>
+                          <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                     </tr>
@@ -3362,12 +3317,12 @@ function HotLeadsPanel({
 
   if (!loading && alerts.length === 0) {
     return (
-      <div className="rounded-2xl border border-aletis-borda dark:border-white/5 bg-white dark:bg-aletis-grafite-escuro px-6 py-4 shadow-sm flex items-center gap-3 text-sm text-aletis-grafite-medio dark:text-white/60">
-        <Siren size={18} className="text-aletis-verde flex-shrink-0" />
+      <div className="rounded-lg border border-aletis-borda dark:border-white/5 bg-card dark:bg-card px-6 py-4 shadow-sm flex items-center gap-3 text-sm text-[var(--text-soft)] dark:text-white/60">
+        <Siren size={18} className="text-foreground flex-shrink-0" />
         <span>Nenhum hot-lead aguardando contato — todos os leads quentes foram trabalhados recentemente.</span>
         <button
           onClick={onRefresh}
-          className="ml-auto inline-flex items-center gap-1 text-xs text-aletis-verde hover:underline"
+          className="ml-auto inline-flex items-center gap-1 text-xs text-foreground hover:underline"
         >
           <RotateCw size={12} /> atualizar
         </button>
@@ -3376,17 +3331,17 @@ function HotLeadsPanel({
   }
 
   return (
-    <div className="rounded-2xl border border-red-200 dark:border-red-900/60 bg-gradient-to-br from-red-50/80 to-amber-50/40 dark:from-red-950/20 dark:to-amber-950/10 shadow-sm overflow-hidden">
+    <div className="rounded-lg border border-red-200 dark:border-red-900/60 bg-gradient-to-br from-red-50/80 to-amber-50/40 dark:from-red-950/20 dark:to-amber-950/10 shadow-sm overflow-hidden">
       <div className="px-6 py-4 border-b border-red-100 dark:border-red-900/40 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-red-500/15 flex items-center justify-center">
             <Siren size={18} className="text-red-600 dark:text-red-400" />
           </div>
           <div>
-            <h2 className="font-display text-base font-bold text-aletis-grafite-escuro dark:text-white">
+            <h2 className="font-display text-base font-bold text-foreground dark:text-white">
               Hot-leads pendentes de ação
             </h2>
-            <p className="text-xs text-aletis-grafite-medio dark:text-white/60">
+            <p className="text-xs text-[var(--text-soft)] dark:text-white/60">
               Leads quentes sem contato nos últimos 14 dias — ordenados por urgência
             </p>
           </div>
@@ -3394,7 +3349,7 @@ function HotLeadsPanel({
         <button
           onClick={onRefresh}
           disabled={loading}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs text-aletis-grafite-medio dark:text-white/60 hover:bg-white/50 dark:hover:bg-white/5 transition disabled:opacity-50"
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs text-[var(--text-soft)] dark:text-white/60 hover:bg-white/50 dark:hover:bg-white/5 transition disabled:opacity-50"
         >
           {loading ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
           atualizar
@@ -3403,7 +3358,7 @@ function HotLeadsPanel({
 
       {loading && alerts.length === 0 ? (
         <div className="p-8 flex items-center justify-center">
-          <Loader2 size={22} className="animate-spin text-aletis-verde" />
+          <Loader2 size={22} className="animate-spin text-foreground" />
         </div>
       ) : (
         <ul className="divide-y divide-red-100/60 dark:divide-red-900/30">
@@ -3415,32 +3370,32 @@ function HotLeadsPanel({
                 className="px-6 py-3 flex items-center gap-3 hover:bg-white/50 dark:hover:bg-white/5 transition cursor-pointer"
                 onClick={() => onOpen(a.cpfCnpj)}
               >
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${u.bg} ${u.text} ${u.border} flex-shrink-0`}>
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${u.bg} ${u.text} ${u.border} flex-shrink-0`}>
                   {u.label}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-aletis-grafite-escuro dark:text-white truncate">
+                  <p className="text-sm font-semibold text-foreground dark:text-white truncate">
                     {a.nome}
                     <span className="mx-2 text-aletis-grafite-medio/50" aria-hidden="true">·</span>
-                    <span className="text-[10px] font-normal text-aletis-grafite-medio dark:text-white/50 font-mono">
+                    <span className="text-[11px] font-normal text-[var(--text-soft)] dark:text-white/50 font-mono">
                       {a.cpfCnpj}
                     </span>
                   </p>
-                  <p className="text-[11px] text-aletis-grafite-medio dark:text-white/60 truncate">
+                  <p className="text-[11px] text-[var(--text-soft)] dark:text-white/60 truncate">
                     {a.motivo} · {a.uf} · dívida {fmtBRLShort(a.totalDivida)}
                   </p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-sm font-bold text-aletis-grafite-escuro dark:text-white">
+                  <p className="text-sm font-bold text-foreground dark:text-white">
                     {a.scoreTotal}
                   </p>
-                  <p className="text-[10px] text-aletis-grafite-medio dark:text-white/50">
+                  <p className="text-[11px] text-[var(--text-soft)] dark:text-white/50">
                     {Number.isFinite(a.diasSemContato) && a.diasSemContato < 9999
                       ? `${a.diasSemContato}d sem contato`
                       : 'nunca contatado'}
                   </p>
                 </div>
-                <ChevronRight size={16} className="text-aletis-grafite-medio dark:text-white/40 flex-shrink-0" />
+                <ChevronRight size={16} className="text-[var(--text-soft)] dark:text-white/40 flex-shrink-0" />
               </li>
             )
           })}
@@ -3451,7 +3406,7 @@ function HotLeadsPanel({
         <div className="px-6 py-2 border-t border-red-100 dark:border-red-900/40 text-center">
           <button
             onClick={() => setExpanded((v) => !v)}
-            className="text-xs text-aletis-verde hover:underline font-semibold"
+            className="text-xs text-foreground hover:underline font-semibold"
           >
             {expanded ? 'ver menos' : `ver todos (${alerts.length})`}
           </button>
@@ -3502,31 +3457,42 @@ function RegistrarContatoModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !saving && onCancel()} />
-      <div className="relative w-full max-w-lg bg-white dark:bg-aletis-grafite-escuro rounded-2xl shadow-2xl">
-        <div className="px-6 py-4 border-b border-aletis-borda dark:border-white/10 flex items-center justify-between">
-          <div>
-            <h3 className="font-display text-base font-bold text-aletis-grafite-escuro dark:text-white flex items-center gap-2">
-              <MessageSquare size={16} className="text-aletis-verde" /> Registrar contato
-            </h3>
-            <p className="text-xs text-aletis-grafite-medio dark:text-white/50 truncate max-w-[28rem]">
-              {lead.nome} · {lead.cpfCnpj}
-            </p>
-          </div>
+    <AppDialog
+      title="Registrar contato"
+      eyebrow={lead.nome}
+      subtitle={lead.cpfCnpj}
+      icon={<MessageSquare className="h-5 w-5" />}
+      size="md"
+      onClose={() => {
+        if (!saving) onCancel()
+      }}
+      closeOnBackdrop={!saving}
+      bodyClassName="space-y-4"
+      footerClassName="flex justify-end gap-2"
+      footer={(
+        <>
           <button
+            type="button"
             onClick={onCancel}
             disabled={saving}
-            className="p-2 rounded-lg hover:bg-aletis-bege dark:hover:bg-white/5 text-aletis-grafite-medio dark:text-white/60 transition disabled:opacity-40"
-            aria-label="Cancelar"
+            className={uiAction.secondary}
           >
-            <X size={18} />
+            Cancelar
           </button>
-        </div>
-
-        <div className="p-6 space-y-4">
+          <button
+            type="button"
+            onClick={submit}
+            disabled={saving}
+            className={uiAction.primary}
+          >
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+            Registrar
+          </button>
+        </>
+      )}
+    >
           <div>
-            <label className="block text-xs font-semibold text-aletis-grafite-escuro dark:text-white/80 mb-2">
+            <label className="block text-xs font-semibold text-foreground dark:text-white/80 mb-2">
               Resultado do contato
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -3557,11 +3523,11 @@ function RegistrarContatoModal({
                     disabled={saving}
                     className={`text-left rounded-lg border px-3 py-2 text-xs transition ${toneCls}`}
                   >
-                    <span className="block font-semibold text-aletis-grafite-escuro dark:text-white">
+                    <span className="block font-semibold text-foreground dark:text-white">
                       {cfg.label}
                     </span>
                     {excluiLead[t] && (
-                      <span className="block mt-0.5 text-[10px] text-red-600 dark:text-red-400">
+                      <span className="block mt-0.5 text-[11px] text-red-600 dark:text-red-400">
                         move lead para blacklist
                       </span>
                     )}
@@ -3573,14 +3539,14 @@ function RegistrarContatoModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-aletis-grafite-escuro dark:text-white/80 mb-1">
+              <label className="block text-xs font-semibold text-foreground dark:text-white/80 mb-1">
                 Canal
               </label>
               <select
                 value={canal}
                 onChange={(e) => setCanal(e.target.value as ContactCanal)}
                 disabled={saving}
-                className="w-full px-3 py-2 rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-aletis-grafite-escuro text-sm text-aletis-grafite-escuro dark:text-white"
+                className="w-full px-3 py-2 rounded-lg border border-aletis-borda dark:border-white/10 bg-card dark:bg-card text-sm text-foreground dark:text-white"
               >
                 <option value="whatsapp">WhatsApp</option>
                 <option value="telefone">Telefone</option>
@@ -3590,7 +3556,7 @@ function RegistrarContatoModal({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-aletis-grafite-escuro dark:text-white/80 mb-1">
+              <label className="block text-xs font-semibold text-foreground dark:text-white/80 mb-1">
                 Registrado por
               </label>
               <input
@@ -3599,13 +3565,13 @@ function RegistrarContatoModal({
                 onChange={(e) => setRegistradoPor(e.target.value)}
                 disabled={saving}
                 placeholder="seu nome"
-                className="w-full px-3 py-2 rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-aletis-grafite-escuro text-sm text-aletis-grafite-escuro dark:text-white"
+                className="w-full px-3 py-2 rounded-lg border border-aletis-borda dark:border-white/10 bg-card dark:bg-card text-sm text-foreground dark:text-white"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-aletis-grafite-escuro dark:text-white/80 mb-1">
+            <label className="block text-xs font-semibold text-foreground dark:text-white/80 mb-1">
               Notas
             </label>
             <textarea
@@ -3614,30 +3580,10 @@ function RegistrarContatoModal({
               disabled={saving}
               rows={3}
               placeholder="Detalhes úteis para o próximo contato…"
-              className="w-full px-3 py-2 rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-aletis-grafite-escuro text-sm text-aletis-grafite-escuro dark:text-white"
+              className="w-full px-3 py-2 rounded-lg border border-aletis-borda dark:border-white/10 bg-card dark:bg-card text-sm text-foreground dark:text-white"
             />
           </div>
-        </div>
-
-        <div className="px-6 py-4 border-t border-aletis-borda dark:border-white/10 flex items-center justify-end gap-2">
-          <button
-            onClick={onCancel}
-            disabled={saving}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-aletis-grafite-medio dark:text-white/60 hover:bg-aletis-bege dark:hover:bg-white/5 transition"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={submit}
-            disabled={saving}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-aletis-verde text-white hover:brightness-110 transition disabled:opacity-50"
-          >
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-            Registrar
-          </button>
-        </div>
-      </div>
-    </div>
+    </AppDialog>
   )
 }
 
@@ -3655,17 +3601,17 @@ function FilaEnriquecimentoPanel({
 }) {
   const totalAtivo = stats.pending + stats.running
   return (
-    <div className="bg-white dark:bg-aletis-grafite-escuro rounded-2xl border border-aletis-borda dark:border-white/5 p-5">
+    <div className="bg-card dark:bg-card rounded-lg border border-aletis-borda dark:border-white/5 p-5">
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-lg bg-aletis-dourado/10 flex items-center justify-center">
             <RefreshCw className={'w-4 h-4 text-aletis-dourado' + (stats.running > 0 ? ' animate-spin' : '')} />
           </div>
           <div>
-            <h3 className="text-base font-display font-semibold text-aletis-grafite-escuro dark:text-white">
+            <h3 className="text-base font-display font-semibold text-foreground dark:text-white">
               Fila de enriquecimento
             </h3>
-            <p className="text-[11px] font-body text-aletis-grafite-claro dark:text-white/50">
+            <p className="text-[11px] font-body text-muted-foreground dark:text-white/50">
               {totalAtivo > 0
                 ? `${totalAtivo} em processamento · ${stats.failed} falhas`
                 : `${stats.failed} falhas pendentes — clique retry para reprocessar`}
@@ -3682,12 +3628,12 @@ function FilaEnriquecimentoPanel({
 
       {stats.emVoo.length > 0 && (
         <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50/60 dark:bg-sky-500/5 p-2.5">
-          <p className="text-[10px] font-body font-semibold uppercase tracking-wider text-sky-800 dark:text-sky-300 mb-1.5">
+          <p className="text-[11px] font-body font-semibold uppercase tracking-wider text-sky-800 dark:text-sky-300 mb-1.5">
             Processando agora ({stats.emVoo.length})
           </p>
           <ul className="space-y-1">
             {stats.emVoo.slice(0, 3).map((j) => (
-              <li key={j.id} className="text-[11px] font-mono text-aletis-grafite-escuro dark:text-white/80">
+              <li key={j.id} className="text-[11px] font-mono text-foreground dark:text-white/80">
                 {j.cpfCnpj} · tentativa {j.attempts}
               </li>
             ))}
@@ -3697,21 +3643,21 @@ function FilaEnriquecimentoPanel({
 
       {stats.ultimasFalhas.length > 0 && (
         <div className="rounded-lg border border-red-200 bg-red-50/60 dark:bg-red-500/5 p-2.5">
-          <p className="text-[10px] font-body font-semibold uppercase tracking-wider text-red-800 dark:text-red-300 mb-1.5">
+          <p className="text-[11px] font-body font-semibold uppercase tracking-wider text-red-800 dark:text-red-300 mb-1.5">
             Últimas falhas ({stats.ultimasFalhas.length})
           </p>
           <ul className="space-y-1.5">
             {stats.ultimasFalhas.slice(0, 5).map((j) => (
               <li key={j.id} className="flex items-start gap-2 text-[11px]">
-                <span className="font-mono text-aletis-grafite-escuro dark:text-white/80 flex-shrink-0">
+                <span className="font-mono text-foreground dark:text-white/80 flex-shrink-0">
                   {j.cpfCnpj}
                 </span>
-                <span className="flex-1 text-aletis-grafite-medio dark:text-white/60 truncate italic">
+                <span className="flex-1 text-[var(--text-soft)] dark:text-white/60 truncate italic">
                   {j.lastError || 'erro desconhecido'}
                 </span>
                 <button
                   onClick={() => onRetry(j.id)}
-                  className="text-[10px] font-body font-semibold text-aletis-verde hover:underline flex-shrink-0"
+                  className="text-[11px] font-body font-semibold text-foreground hover:underline flex-shrink-0"
                 >
                   Retry
                 </button>
@@ -3733,7 +3679,7 @@ function BadgeFila({ label, valor, tone }: { label: string; valor: number; tone:
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-mono font-semibold text-[11px] ${classes}`}>
       {valor}
-      <span className="text-[9px] font-body uppercase tracking-wider opacity-80">{label}</span>
+      <span className="text-[11px] font-body uppercase tracking-wider opacity-80">{label}</span>
     </span>
   )
 }

@@ -1,39 +1,37 @@
-import { Wheat, Building2, Sprout, ShieldCheck, ArrowUpRight } from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
 import Link from 'next/link'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { Reveal } from '@/components/ui/Reveal'
 import { Eyebrow } from '@/components/ui/Eyebrow'
+import { BrandIcon } from '@/components/ui/BrandIcon'
 
 /**
  * Pilares — 4 verticais de serviço da ALETIS conforme Manual de
  * Identidade Visual: Agro, Corporate, Fomento e Gestão.
- * Cada pilar tem ícone temático, número, descrição e os 3 entregáveis
- * principais como chips. Hover revela rail dourado lateral.
+ * Cada pilar usa ícone oficial do kit visual e os 3 entregáveis principais.
  */
-const ICONS = { Wheat, Building2, Sprout, ShieldCheck }
-
 const itens = [
   {
-    icone: 'Wheat' as const,
+    icone: 1,
     numero: '01',
     titulo: 'ALETIS Agro',
     selo: 'Finanças Estratégicas & Agrobusiness',
     descricao:
-      'A pilastra original — diagnóstico financeiro auditável, reestruturação multi-credor e revisional contratual para o produtor rural. Visão de safra, basis e clima junto à mesa.',
+      'Diagnóstico de dívida rural, revisão contratual e reorganização de fluxo para o produtor decidir antes que a safra vire urgência.',
     detalhes: [
       'Reestruturação de dívida rural',
       'Revisional CPR / crédito rural',
-      'Mesa multi-credor',
+      'Cenário por credor',
     ],
   },
   {
-    icone: 'Building2' as const,
+    icone: 6,
     numero: '02',
     titulo: 'ALETIS Corporate',
     selo: 'BPO & Gestão Financeira para Empresas',
     descricao:
-      'BPO financeiro completo, fechamento mensal contábil-fiscal, planejamento orçamentário e relatórios DRE/DSCR para empresas que querem clareza sem manter departamento interno.',
+      'Rotina financeira, fechamento gerencial e leitura de caixa para empresas que precisam ganhar controle sem inflar estrutura.',
     detalhes: [
       'BPO financeiro mensal',
       'Fechamento contábil-fiscal',
@@ -41,12 +39,12 @@ const itens = [
     ],
   },
   {
-    icone: 'Sprout' as const,
+    icone: 11,
     numero: '03',
     titulo: 'ALETIS Fomento',
     selo: 'Crédito & Reestruturação',
     descricao:
-      'Captação de crédito estruturado, originação de operações de FIDC, BNDES e linhas privadas, e desenho de garantias otimizadas — desde o pitch até o desembolso.',
+      'Estruturação de crédito, garantias e narrativa financeira para operações que precisam chegar ao credor já bem montadas.',
     detalhes: [
       'Estruturação de crédito',
       'FIDC / BNDES / privados',
@@ -54,12 +52,12 @@ const itens = [
     ],
   },
   {
-    icone: 'ShieldCheck' as const,
+    icone: 16,
     numero: '04',
     titulo: 'ALETIS Gestão',
     selo: 'Governança & Controles',
     descricao:
-      'Governança corporativa, controles internos, compliance fiscal e mapeamento de risco para grupos familiares e empresas que precisam profissionalizar a gestão sem burocratizar.',
+      'Governança, controles e rituais de acompanhamento para grupos familiares e empresas profissionalizarem a gestão sem perder velocidade.',
     detalhes: [
       'Governança & conselhos',
       'Controles internos / SOX-lite',
@@ -76,14 +74,13 @@ export function Pilares() {
           <Reveal className="lg:sticky lg:top-28 lg:self-start">
             <Eyebrow>Como pensamos</Eyebrow>
             <h2 className="mt-6 display-lg text-aletis-verde">
-              Quatro pilares.{' '}
-              <span className="italic text-gold-gradient">Uma única mesa.</span>
+              Quatro frentes.{' '}
+              <span className="italic text-gold-gradient">Um método.</span>
             </h2>
             <p className="mt-6 max-w-md font-body text-[14.5px] leading-relaxed text-aletis-verde-medio">
-              A ALETIS é uma plataforma de finanças estratégicas com 4 verticais
-              especializadas — agro, corporativo, fomento e gestão. Não somos
-              escritório de advocacia, não somos corretora e não vendemos software.
-              Somos uma mesa técnica independente que entrega resultado.
+              A marca nasce de quatro áreas complementares: agro, corporativo,
+              fomento e gestão. O ponto comum é simples: transformar informação
+              dispersa em decisão financeira clara, defensável e acompanhável.
             </p>
             <Link
               href="/solucoes"
@@ -96,14 +93,13 @@ export function Pilares() {
 
           <div className="space-y-5">
             {itens.map((p, i) => {
-              const Icon = ICONS[p.icone]
               return (
                 <Reveal key={p.titulo} delay={i * 80}>
                   <article className="group relative overflow-hidden rounded-2xl border border-aletis-borda/70 bg-white p-7 transition-all duration-500 hover:-translate-y-1 hover:border-aletis-gold/45 hover:shadow-premium-sm">
                     <div className="flex items-start gap-5">
                       <div className="flex-shrink-0">
                         <div className="relative flex h-14 w-14 items-center justify-center rounded-xl border border-aletis-gold/40 bg-aletis-gold/10 text-aletis-verde transition group-hover:border-aletis-gold group-hover:bg-aletis-gold/20">
-                          <Icon className="h-6 w-6" />
+                          <BrandIcon id={p.icone} size={50} />
                         </div>
                       </div>
                       <div className="flex-1 min-w-0">

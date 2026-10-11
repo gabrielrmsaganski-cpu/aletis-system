@@ -90,9 +90,9 @@ export function MapThumbnail({ lat, lng, zoom = 15, height = 200, legenda, titul
         <div className="absolute top-2 right-2 flex gap-1 bg-black/70 backdrop-blur rounded-lg p-0.5 shadow-lg z-[400]">
           <button
             onClick={() => setLayer('satellite')}
-            className={`px-2 py-1 rounded text-[10px] font-semibold flex items-center gap-1 transition ${
+            className={`px-2 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition ${
               layer === 'satellite'
-                ? 'bg-white text-aletis-grafite-escuro'
+                ? 'bg-card text-foreground'
                 : 'text-white/80 hover:text-white'
             }`}
             title="Imagem de satélite (Esri)"
@@ -103,9 +103,9 @@ export function MapThumbnail({ lat, lng, zoom = 15, height = 200, legenda, titul
           </button>
           <button
             onClick={() => setLayer('osm')}
-            className={`px-2 py-1 rounded text-[10px] font-semibold flex items-center gap-1 transition ${
+            className={`px-2 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition ${
               layer === 'osm'
-                ? 'bg-white text-aletis-grafite-escuro'
+                ? 'bg-card text-foreground'
                 : 'text-white/80 hover:text-white'
             }`}
             title="Mapa OpenStreetMap"
@@ -116,7 +116,7 @@ export function MapThumbnail({ lat, lng, zoom = 15, height = 200, legenda, titul
           </button>
           <button
             onClick={() => setShowFullScreen(true)}
-            className="px-2 py-1 rounded text-[10px] font-semibold flex items-center gap-1 text-white/80 hover:text-white hover:bg-white/10 transition"
+            className="px-2 py-1 rounded text-[11px] font-semibold flex items-center gap-1 text-white/80 hover:text-white hover:bg-white/10 transition"
             title="Ampliar em tela cheia (NDVI, camadas, etc)"
             type="button"
           >
@@ -126,7 +126,7 @@ export function MapThumbnail({ lat, lng, zoom = 15, height = 200, legenda, titul
         </div>
 
         {/* Créditos obrigatórios pelas TOS */}
-        <div className="absolute bottom-1 left-2 text-[9px] text-white/80 bg-black/50 px-1.5 py-0.5 rounded z-[400] pointer-events-none">
+        <div className="absolute bottom-1 left-2 text-[11px] text-white/80 bg-black/50 px-1.5 py-0.5 rounded z-[400] pointer-events-none">
           {tileAttribution}
         </div>
 
@@ -136,7 +136,7 @@ export function MapThumbnail({ lat, lng, zoom = 15, height = 200, legenda, titul
             href={gmapsLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[9px] bg-black/60 text-white/90 hover:bg-black/80 px-1.5 py-0.5 rounded flex items-center gap-1"
+            className="text-[11px] bg-black/60 text-white/90 hover:bg-black/80 px-1.5 py-0.5 rounded flex items-center gap-1"
             title="Abrir no Google Maps"
           >
             Google <ExternalLink size={9} />
@@ -145,7 +145,7 @@ export function MapThumbnail({ lat, lng, zoom = 15, height = 200, legenda, titul
             href={osmLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[9px] bg-black/60 text-white/90 hover:bg-black/80 px-1.5 py-0.5 rounded flex items-center gap-1"
+            className="text-[11px] bg-black/60 text-white/90 hover:bg-black/80 px-1.5 py-0.5 rounded flex items-center gap-1"
             title="Abrir no OpenStreetMap"
           >
             OSM <ExternalLink size={9} />
@@ -166,9 +166,9 @@ export function MapThumbnail({ lat, lng, zoom = 15, height = 200, legenda, titul
       )}
 
       {legenda && (
-        <div className="px-3 py-1.5 text-[11px] font-body text-aletis-grafite-medio dark:text-white/60 flex items-center justify-between gap-2">
+        <div className="px-3 py-1.5 text-[11px] font-body text-[var(--text-soft)] dark:text-white/60 flex items-center justify-between gap-2">
           <span className="truncate">{legenda}</span>
-          <span className="font-mono text-[10px] text-aletis-grafite-claro flex-shrink-0">
+          <span className="font-mono text-[11px] text-muted-foreground flex-shrink-0">
             {lat.toFixed(5)}, {lng.toFixed(5)}
           </span>
         </div>

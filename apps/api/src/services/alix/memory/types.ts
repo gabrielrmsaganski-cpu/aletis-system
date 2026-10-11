@@ -62,11 +62,36 @@ export interface BriefingKpiBsc {
   nota: string
 }
 
-/** Dívida ativa resumida no briefing. */
+/** Registro da análise; sua presença não comprova dívida ativa ou saldo atual. */
 export interface BriefingDivida {
   credor: string
-  saldoBRL: number
+  /** Valor numérico explícito na fonte. Ausência nunca equivale a zero. */
+  saldoBRL: number | null
   status: string
+  origem: 'analise.saldoRecalculado.porDivida'
+  naturezaSaldo: 'informado_na_analise' | 'nao_informado'
+  situacaoAtual: 'nao_verificada'
+}
+
+/** Texto histórico/declarativo: não extrair dele saldo, situação ou titularidade. */
+export interface BriefingReferenciaFinanceiraMemoria {
+  texto: string
+  origem: 'memoria'
+  /** Data da memória, não data-base da posição financeira. */
+  memoriaAtualizadaEm: string
+  saldoAtualBRL: null
+  situacaoAtual: 'nao_verificada'
+}
+
+export interface BriefingResumoFinanceiro {
+  registrosNaAnalise: number
+  registrosComSaldoInformado: number
+  registrosSemSaldoInformado: number
+  referenciasMemoriaNaoConciliadas: number
+  coberturaSaldosNaAnalise: 'sem_registros' | 'nenhum_informado' | 'parcial' | 'todos_informados'
+  /** Estas fontes não comprovam uma posição atual conciliada. */
+  saldoAtualTotalBRL: null
+  situacaoAtual: 'nao_verificada'
 }
 
 /**
@@ -81,7 +106,10 @@ export interface Briefing {
   destaques: BriefingDestaque[]
   proximasAcoes: string[]
   kpisBscResumo?: BriefingKpiBsc[]
+  /** Nome legado da API: contém apenas registros da análise, não dívidas confirmadas. */
   dividasAtivas: BriefingDivida[]
+  referenciasFinanceirasMemoria: BriefingReferenciaFinanceiraMemoria[]
+  resumoFinanceiro: BriefingResumoFinanceiro
   sugestaoPrimeiraAcao: string
   markdown: string
 }

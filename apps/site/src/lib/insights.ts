@@ -53,7 +53,7 @@ export const insights: Insight[] = [
       {
         type: 'paragrafo',
         content:
-          'Em quase toda mesa que abrimos na ALETIS, o primeiro contrato analisado carrega uma cicatriz silenciosa: foi contratado como crédito rural, mas já não se comporta como tal. Os encargos subiram, a taxa efetiva rompeu o teto do programa oficial, a destinação sofreu desvio. Esse é o terreno onde a descaracterização nasce — e onde se encontra, tipicamente, 20% a 30% de redução direta no saldo devedor.',
+          'Em boa parte das análises da ALETIS, o primeiro contrato analisado carrega uma cicatriz silenciosa: foi contratado como crédito rural, mas já não se comporta como tal. Os encargos subiram, a taxa efetiva rompeu o teto do programa oficial, a destinação sofreu desvio. Esse é o terreno onde a descaracterização nasce — e onde pode haver diferença relevante no saldo discutido.',
       },
       {
         type: 'h2',
@@ -71,12 +71,12 @@ export const insights: Insight[] = [
       {
         type: 'paragrafo',
         content:
-          'As Súmulas STJ 93, 296 e 541 já pavimentam há décadas o argumento contra a capitalização mensal e a cobrança de encargos em duplicidade nos contratos rurais. O que mudou foi a expectativa probatória: hoje, sem memória de cálculo auditável que mostre o desvio em relação à taxa subsidiada contemporânea, o argumento não se sustenta.',
+          'As Súmulas STJ 93, 296 e 541 já pavimentam há décadas o argumento contra a capitalização mensal e a cobrança de encargos em duplicidade nos contratos rurais. O que mudou foi a expectativa probatória: hoje, sem cálculo documentado que mostre o desvio em relação à taxa subsidiada contemporânea, o argumento não se sustenta.',
       },
       {
         type: 'destaque',
         content:
-          'Toda tese revisional que entra na mesa ALETIS passa por três filtros: taxa contra o PRONAMP da data do contrato, reconstituição do saldo sem anatocismo e reclassificação de encargos acessórios. Sem os três, não abrimos negociação.',
+          'Toda tese revisional que entra na análise ALETIS passa por três filtros: taxa contra o PRONAMP da data do contrato, reconstituição do saldo sem anatocismo e reclassificação de encargos acessórios. Sem os três, não abrimos negociação.',
       },
       {
         type: 'h2',
@@ -103,12 +103,12 @@ export const insights: Insight[] = [
       {
         type: 'paragrafo',
         content:
-          'Em casos auditados pela nossa mesa em 2025, a diferença entre renegociar com e sem tese revisional em pauta foi, em média, 27% no saldo final negociado. Para um produtor com R$ 10 milhões em exposição, isso é R$ 2,7 milhões que ficam dentro da porteira — ou fora dela.',
+          'Na prática, a diferença entre renegociar com e sem tese revisional em pauta pode mudar a faixa de acordo, o prazo possível e o tipo de garantia exigida. Para exposições relevantes, esse ponto não pode ser tratado como detalhe.',
       },
       {
         type: 'citacao',
         content:
-          'O produtor brasileiro não perdeu negócios por incompetência operacional. Perdeu porque a mesa bancária tinha argumento técnico que o outro lado não soube responder. A ALETIS existe para inverter isso.',
+          'O produtor brasileiro não perde apenas por problema operacional. Muitas vezes perde porque o credor chega com argumento técnico e o outro lado não tem resposta organizada. ALETIS existe para corrigir essa assimetria.',
       },
     ],
   },
@@ -119,7 +119,7 @@ export const insights: Insight[] = [
     resumo:
       'Importar o DSCR corporativo para o agro sem adaptar gera plano que quebra no primeiro stress climático. Três cortes que fazem o indicador virar decisão.',
     categoria: 'reestruturacao',
-    autor: 'Mesa técnica ALETIS',
+    autor: 'Equipe técnica ALETIS',
     autorRole: 'Inteligência financeira',
     publicadoEm: '2026-03-22',
     leituraMin: 6,
@@ -128,7 +128,7 @@ export const insights: Insight[] = [
       {
         type: 'paragrafo',
         content:
-          'O Debt Service Coverage Ratio é o indicador mais usado em mesa de reestruturação no mundo inteiro. No agro brasileiro, aplicar a fórmula nua — EBITDA sobre serviço da dívida — produz uma leitura que o produtor sabe que não é verdade. Tem sazonalidade, tem basis regional, tem risco climático, tem CPR vendida que já antecipou receita.',
+          'O Debt Service Coverage Ratio é um dos indicadores mais usados em reestruturação no mundo inteiro. No agro brasileiro, aplicar a fórmula nua — EBITDA sobre serviço da dívida — produz uma leitura que o produtor sabe que não é verdade. Tem sazonalidade, tem basis regional, tem risco climático, tem CPR vendida que já antecipou receita.',
       },
       {
         type: 'h2',
@@ -137,7 +137,7 @@ export const insights: Insight[] = [
       {
         type: 'paragrafo',
         content:
-          'A receita que entra no numerador do DSCR rural precisa ser líquida do que já foi comercializado via CPR. Caso contrário, o indicador superestima caixa que não está mais disponível para pagar dívida. Em mesa, isso vira default no segundo ano.',
+          'A receita que entra no numerador do DSCR rural precisa ser líquida do que já foi comercializado via CPR. Caso contrário, o indicador superestima caixa que não está mais disponível para pagar dívida. Na negociação, isso vira problema no segundo ano.',
       },
       {
         type: 'h2',
@@ -146,7 +146,7 @@ export const insights: Insight[] = [
       {
         type: 'paragrafo',
         content:
-          'Nossa metodologia exige que o plano sobreviva a um stress de 15% sobre receita com DSCR ≥ 1,25. Histórico climático Brasil (2004, 2012, 2021) mostra que 15% é moderado; em mesas com exposição concentrada em uma única cultura, trabalhamos com 20%.',
+          'Nossa metodologia exige que o plano sobreviva a um stress sobre receita e mantenha cobertura mínima. Em casos com exposição concentrada em uma única cultura, o teste precisa ser mais conservador.',
       },
       {
         type: 'destaque',
@@ -171,7 +171,7 @@ export const insights: Insight[] = [
     resumo:
       'O produtor que vende no dia do vencimento sem olhar basis perde margem por estrutura. Um breve guia sobre o gap que separa commodity de caixa.',
     categoria: 'mercado',
-    autor: 'Mesa de mercado ALETIS',
+    autor: 'Equipe de mercado ALETIS',
     autorRole: 'Inteligência de mercado',
     publicadoEm: '2026-03-08',
     leituraMin: 5,
@@ -215,7 +215,7 @@ export const insights: Insight[] = [
     titulo:
       'ALIX: por que uma IA de agro precisa de metodologia antes de modelo',
     resumo:
-      'Treinar LLM com contratos rurais não basta. A ALIX nasceu da premissa oposta: metodologia primeiro, modelo depois. O que isso muda na mesa.',
+      'Treinar LLM com contratos rurais não basta. A ALIX nasceu da premissa oposta: metodologia primeiro, modelo depois. O que isso muda na análise.',
     categoria: 'tecnologia',
     autor: 'Time de produto ALETIS',
     autorRole: 'Tecnologia proprietária',
@@ -245,7 +245,7 @@ export const insights: Insight[] = [
         type: 'lista',
         content: [
           'Triagem de contratos em minutos com score revisional inicial',
-          'Geração de memória de cálculo em formato auditável',
+          'Geração de cálculo documentado para revisão humana',
           'Resposta consultiva ao cliente 24/7 em canais internos',
           'Cruzamento automático com Súmulas STJ e Res. BCB pertinentes',
         ],
@@ -253,7 +253,7 @@ export const insights: Insight[] = [
       {
         type: 'destaque',
         content:
-          'Velocidade na triagem faz diferença entre caso viável e caso perdido. A ALIX reduziu o tempo médio de diagnóstico inicial de 5 dias para 4 horas — sem perder rigor técnico.',
+          'Velocidade na triagem faz diferença entre caso viável e caso perdido. A ALIX reduz trabalho repetitivo e libera a equipe para revisar os pontos que exigem julgamento técnico.',
       },
       {
         type: 'h2',
@@ -262,7 +262,7 @@ export const insights: Insight[] = [
       {
         type: 'paragrafo',
         content:
-          'Nenhuma decisão final passa sem revisão humana sênior. A ALIX é um amplificador de mesa, não uma mesa autônoma. Essa fronteira é deliberada — e é o que separa tecnologia responsável de atalho arriscado.',
+          'Nenhuma decisão final passa sem revisão humana sênior. A ALIX é um amplificador de análise, não uma decisão autônoma. Essa fronteira é deliberada — e é o que separa tecnologia responsável de atalho arriscado.',
       },
     ],
   },
@@ -323,12 +323,12 @@ export const insights: Insight[] = [
     ],
   },
   {
-    slug: 'mesa-multi-credor-anatomia',
-    titulo: 'Anatomia de uma mesa multi-credor: por que o formato define o desfecho',
+    slug: 'negociacao-multi-credor-anatomia',
+    titulo: 'Anatomia de uma negociação multi-credor: por que o formato define o desfecho',
     resumo:
-      'Sentar cinco credores juntos é técnica, não sorte. Como a arquitetura da mesa conduz a convergência — e os seis erros que afundam a negociação.',
+      'Conduzir vários credores é técnica, não sorte. Como a arquitetura da negociação ajuda a criar convergência — e os seis erros que afundam o processo.',
     categoria: 'reestruturacao',
-    autor: 'Mesa técnica ALETIS',
+    autor: 'Equipe técnica ALETIS',
     autorRole: 'Reestruturação',
     publicadoEm: '2026-01-12',
     leituraMin: 7,
@@ -337,7 +337,7 @@ export const insights: Insight[] = [
       {
         type: 'paragrafo',
         content:
-          'Reestruturar dívida com um credor é negociação bilateral. Com cinco ou mais credores, é desenho institucional. O formato da mesa — quem senta, em que ordem, com que informação, sob qual sequência decisória — determina 80% do desfecho. Os outros 20% são o argumento técnico.',
+          'Reestruturar dívida com um credor é negociação bilateral. Com cinco ou mais credores, é desenho institucional. A ordem das conversas, o pacote de informação e a sequência decisória mudam o desfecho tanto quanto o argumento técnico.',
       },
       {
         type: 'h2',
@@ -346,7 +346,7 @@ export const insights: Insight[] = [
       {
         type: 'paragrafo',
         content:
-          'Toda mesa começa com o mesmo pacote de informação entregue aos credores no mesmo momento. Nunca um credor enxerga o plano antes do outro. Assimetria vira vantagem competitiva imediata do primeiro a ver — e afunda a convergência.',
+          'Todo processo começa com o mesmo pacote de informação para os credores relevantes. Quando um credor enxerga o plano antes dos outros, a assimetria cria vantagem competitiva e reduz a chance de convergência.',
       },
       {
         type: 'h2',
@@ -355,16 +355,16 @@ export const insights: Insight[] = [
       {
         type: 'paragrafo',
         content:
-          'A mesa abre com três cenários alternativos (central, conservador, stress), não com uma única proposta. Credor que entra em sala com uma proposta fechada na mão só tem dois movimentos: aceitar ou recusar. Com três cenários, há 12 eixos de negociação.',
+          'O processo abre com três cenários alternativos (central, conservador, stress), não com uma única proposta. Credor que recebe uma proposta fechada só tem dois movimentos: aceitar ou recusar. Com cenários, há mais espaço para ajuste responsável.',
       },
       {
         type: 'destaque',
         content:
-          'Na mesa ALETIS, entre 2022 e 2025, 91% das convergências multi-credor foram construídas a partir de um cenário que não era o inicial. Flexibilidade estruturada é o que separa acordo de impasse.',
+          'Flexibilidade estruturada é o que separa acordo de impasse. A proposta inicial precisa orientar a conversa, não aprisionar a decisão.',
       },
       {
         type: 'h2',
-        content: 'Os seis erros que afundam mesa multi-credor',
+        content: 'Os seis erros que afundam negociação multi-credor',
       },
       {
         type: 'lista',
@@ -374,7 +374,7 @@ export const insights: Insight[] = [
           'Omitir exposição total do devedor (quando descoberto, queima confiança)',
           'Oferecer garantia sem mapa de prioridade entre credores',
           'Fechar acordo bilateral sem cláusula de equalização',
-          'Não prever governança pós-acordo com DSCR mensal auditável',
+          'Não prever governança pós-acordo com DSCR mensal documentado',
         ],
       },
     ],

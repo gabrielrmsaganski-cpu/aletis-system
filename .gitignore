@@ -143,3 +143,12 @@ backups/
 # Staging area de fontes pre-canonização. Os 25 docs canônicos do Processo
 # de Assessoria TEX vivem em documentos/processo-assessoria/originais/.
 documentos2/
+
+# Evidências operacionais e documentos privados permanecem no servidor.
+/output/
+/apps/api/output/
+/docs/ui-reference/
+/prompt03/
+/documentos/
+/docs/*-2026-*/
+/docs/ui-redesign-*/

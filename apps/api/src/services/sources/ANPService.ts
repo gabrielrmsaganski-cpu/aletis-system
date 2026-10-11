@@ -25,8 +25,9 @@ export interface PrecoCombustivel {
 
 export interface PrecoCombustivelResumo {
   diesel: PrecoCombustivel;
-  gasolina: PrecoCombustivel;
-  estados: Record<string, { diesel: number; gasolina: number }>;
+  gasolina: PrecoCombustivel | null;
+  estados: Record<string, { diesel: number; gasolina: number | null }>;
+  indisponiveis: string[];
   fonte: 'api' | 'cache' | 'fallback';
   atualizadoEm: string;
 }
@@ -123,7 +124,7 @@ export class ANPService {
     const cached = this.cache.get<PrecoCombustivel>(cacheKey);
     if (cached) {
       console.log(`[ANP] Diesel ${uf} retornado do cache`);
-      return { ...cached, fonte: 'cache' };
+      return { ...cached, fonte: cached.fonte === 'fallback' ? 'fallback' : 'cache' };
     }
 
     return this.fetchRealDiesel(uf, cacheKey);
@@ -137,7 +138,7 @@ export class ANPService {
     const cached = this.cache.get<PrecoCombustivel>(cacheKey);
     if (cached) {
       console.log(`[ANP] Etanol ${uf} retornado do cache`);
-      return { ...cached, fonte: 'cache' };
+      return { ...cached, fonte: cached.fonte === 'fallback' ? 'fallback' : 'cache' };
     }
 
     return this.fetchRealEtanol(uf, cacheKey);
@@ -171,7 +172,7 @@ export class ANPService {
   async getDieselNacional(): Promise<PrecoCombustivelResumo> {
     const cacheKey = 'anp_diesel_nacional';
     const cached = this.cache.get<PrecoCombustivelResumo>(cacheKey);
-    if (cached) return { ...cached, fonte: 'cache' };
+    if (cached) return { ...cached, fonte: cached.fonte === 'fallback' ? 'fallback' : 'cache' };
 
     const startTime = Date.now();
     try {
@@ -186,14 +187,15 @@ export class ANPService {
         this.cache.set(`anp_diesel_${uf}`, data, 86400);
       }
 
-      const estados: Record<string, { diesel: number; gasolina: number }> = {};
+      const estados: PrecoCombustivelResumo['estados'] = {};
       for (const [uf, data] of Object.entries(parsed.porEstado)) {
-        estados[uf] = { diesel: data.precoMedio, gasolina: 0 };
+        estados[uf] = { diesel: data.precoMedio, gasolina: null };
       }
 
       const result: PrecoCombustivelResumo = {
         diesel: parsed.nacional,
-        gasolina: { combustivel: 'Gasolina Comum', estado: 'BR', precoMedio: 0, precoMinimo: 0, precoMaximo: 0, unidade: 'R$/litro', dataReferencia: parsed.nacional.dataReferencia, numeroPesquisas: 0, fonte: 'api' },
+        gasolina: null,
+        indisponiveis: ['gasolina'],
         estados,
         fonte: 'api',
         atualizadoEm: new Date().toISOString(),
@@ -208,14 +210,15 @@ export class ANPService {
       this.manager.updateSourceStatus('anp_diesel', 'offline', latencia, msg);
       console.warn(`[ANP] Erro diesel nacional: ${msg}. Usando fallback.`);
 
-      const estados: Record<string, { diesel: number; gasolina: number }> = {};
+      const estados: PrecoCombustivelResumo['estados'] = {};
       for (const [uf, data] of Object.entries(FALLBACK_DIESEL)) {
-        estados[uf] = { diesel: data.precoMedio, gasolina: 0 };
+        estados[uf] = { diesel: data.precoMedio, gasolina: null };
       }
 
       return {
         diesel: { ...FALLBACK_DIESEL.SP, estado: 'BR', fonte: 'fallback' },
-        gasolina: { combustivel: 'Gasolina Comum', estado: 'BR', precoMedio: 0, precoMinimo: 0, precoMaximo: 0, unidade: 'R$/litro', dataReferencia: '2026-04-13', numeroPesquisas: 0, fonte: 'fallback' },
+        gasolina: null,
+        indisponiveis: ['gasolina'],
         estados,
         fonte: 'fallback',
         atualizadoEm: new Date().toISOString(),
@@ -264,10 +267,10 @@ export class ANPService {
 
         const estado = (cols[1] || '').trim();
         const produto = (cols[10] || '').trim().toUpperCase();
-        const dataColeta = (cols[11] || '').trim();
+        const dataColeta = this.parseDateBR((cols[11] || '').trim());
         const valorVenda = this.parseBRNumber(cols[12]);
 
-        if (estado !== uf) continue;
+        if (!dataColeta || estado !== uf) continue;
         if (!produto.includes('DIESEL S10')) continue;
         if (valorVenda <= 0 || valorVenda > 15) continue; // sanity
 
@@ -287,7 +290,7 @@ export class ANPService {
         precoMinimo: Number(minVenda.toFixed(2)),
         precoMaximo: Number(maxVenda.toFixed(2)),
         unidade: 'R$/litro',
-        dataReferencia: this.parseDateBR(lastDate),
+        dataReferencia: lastDate,
         numeroPesquisas: count,
         fonte: 'api',
       };
@@ -330,10 +333,10 @@ export class ANPService {
 
         const estado = (cols[1] || '').trim();
         const produto = (cols[10] || '').trim().toUpperCase();
-        const dataColeta = (cols[11] || '').trim();
+        const dataColeta = this.parseDateBR((cols[11] || '').trim());
         const valorVenda = this.parseBRNumber(cols[12]);
 
-        if (estado !== uf) continue;
+        if (!dataColeta || estado !== uf) continue;
         if (!produto.includes('ETANOL')) continue;
         if (valorVenda <= 0 || valorVenda > 15) continue;
 
@@ -353,7 +356,7 @@ export class ANPService {
         precoMinimo: Number(minVenda.toFixed(2)),
         precoMaximo: Number(maxVenda.toFixed(2)),
         unidade: 'R$/litro',
-        dataReferencia: this.parseDateBR(lastDate),
+        dataReferencia: lastDate,
         numeroPesquisas: count,
         fonte: 'api',
       };
@@ -390,10 +393,10 @@ export class ANPService {
 
       const estado = (cols[1] || '').trim();
       const produto = (cols[10] || '').trim().toUpperCase();
-      const dataColeta = (cols[11] || '').trim();
+      const dataColeta = this.parseDateBR((cols[11] || '').trim());
       const valorVenda = this.parseBRNumber(cols[12]);
 
-      if (!produto.includes('DIESEL S10')) continue;
+      if (!dataColeta || !/^[A-Z]{2}$/.test(estado) || !produto.includes('DIESEL S10')) continue;
       if (valorVenda <= 0 || valorVenda > 15) continue;
 
       if (!byState.has(estado)) {
@@ -422,7 +425,7 @@ export class ANPService {
         precoMinimo: Number(s.min.toFixed(2)),
         precoMaximo: Number(s.max.toFixed(2)),
         unidade: 'R$/litro',
-        dataReferencia: this.parseDateBR(s.lastDate),
+        dataReferencia: s.lastDate,
         numeroPesquisas: s.count,
         fonte: 'api',
       };
@@ -434,6 +437,8 @@ export class ANPService {
       if (s.lastDate > lastDateNacional) lastDateNacional = s.lastDate;
     }
 
+    if (!countNacional) throw new Error('Nenhuma observação Diesel S10 com data válida no CSV ANP');
+
     return {
       nacional: {
         combustivel: 'Diesel S10',
@@ -442,7 +447,7 @@ export class ANPService {
         precoMinimo: minNacional === Infinity ? 0 : Number(minNacional.toFixed(2)),
         precoMaximo: Number(maxNacional.toFixed(2)),
         unidade: 'R$/litro',
-        dataReferencia: this.parseDateBR(lastDateNacional),
+        dataReferencia: lastDateNacional,
         numeroPesquisas: countNacional,
         fonte: 'api',
       },
@@ -459,13 +464,13 @@ export class ANPService {
     return isNaN(num) ? 0 : num;
   }
 
-  private parseDateBR(dateStr: string): string {
-    if (!dateStr) return new Date().toISOString().split('T')[0];
-    // Convert DD/MM/YYYY to YYYY-MM-DD
-    const parts = dateStr.split('/');
-    if (parts.length === 3) {
-      return `${parts[2]}-${parts[1]}-${parts[0]}`;
-    }
-    return dateStr;
+  private parseDateBR(dateStr: string): string | null {
+    const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dateStr);
+    if (!match) return null;
+    const iso = `${match[3]}-${match[2]}-${match[1]}`;
+    const date = new Date(`${iso}T00:00:00Z`);
+    if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== iso) return null;
+    // ISO permite comparação cronológica e não transforma ausência em "hoje".
+    return iso;
   }
 }

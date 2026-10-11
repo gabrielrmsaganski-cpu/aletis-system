@@ -11,7 +11,10 @@
 // /Telemetry. Tools puras (DSCR, simulação, leitura) são chamáveis
 // livremente pelo Orchestrator.
 // ============================================================
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
+import { createHash } from 'node:crypto'
+import { z } from 'zod'
+import { isPgEnabled } from '../../../db/client.js'
 import { getCusteioService } from '../../custeio/CusteioService.js'
 import { clientes } from '../../../routes/clientes.js'
 import {
@@ -24,9 +27,13 @@ import {
   notificarMensagemConsultor,
 } from '../../PortalNotificationService.js'
 import {
-  criarPendencia,
   registrarEvento,
 } from '../../PortalStore.js'
+import { portalDocumentService, PortalDocumentError } from '../../portal/PortalDocumentService.js'
+import { portalDocumentCreateSchema } from '../../portal/PortalDocumentSchemas.js'
+import { publicPortalRequest } from '../../portal/PortalDocumentPresentation.js'
+
+const portalRequestToolSchema = portalDocumentCreateSchema.extend({ clienteId: z.string().trim().min(1).max(100) })
 
 /* ────────────────────────────────────────────────────────────
  * Helpers
@@ -44,9 +51,9 @@ function safeRequire(loader: () => Promise<unknown>): Promise<any | null> {
  * Build
  * ──────────────────────────────────────────────────────────── */
 
-export function buildAlixPowerTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildAlixPowerTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   // ───────────────────────────────────────────────────────────
   // 1. criar_plano_custeio
@@ -67,7 +74,7 @@ export function buildAlixPowerTools(): { tools: ClaudeTool[]; registry: ClaudeTo
             cidade: { type: 'string' },
             uf: { type: 'string' },
           },
-          required: ['nome', 'cpfCnpj'],
+          required: ['nome'],
         },
         safra: { type: 'string', description: 'YYYY/YY ex: 2026/27' },
         cultura: { type: 'string', description: 'Cultura principal (soja/milho/algodao/...)' },
@@ -381,7 +388,7 @@ export function buildAlixPowerTools(): { tools: ClaudeTool[]; registry: ClaudeTo
   tools.push({
     name: 'criar_pendencia_portal_cliente',
     description:
-      'Solicita um documento ao cliente via Inbox do Portal. O cliente vê a pendência ao logar e faz upload diretamente. Use quando precisar de IRPF, certidão, contrato escaneado, comprovante etc.',
+      'Publica uma solicitação de documento no Portal do Cliente, com instruções, prioridade, prazo e tipo esperado. O cliente pode enviar versões e receber orientação de correção. Consulte os pedidos existentes antes de criar; a mesma chave de idempotência retorna o pedido já criado. Não envia notificações externas. Use prazo somente quando informado pela equipe, nunca invente urgência.',
     input_schema: {
       type: 'object',
       properties: {
@@ -393,6 +400,10 @@ export function buildAlixPowerTools(): { tools: ClaudeTool[]; registry: ClaudeTo
           enum: ['fiscal', 'contrato', 'identidade', 'patrimonio', 'agro', 'outros'],
         },
         obrigatorio: { type: 'boolean' },
+        prioridade: { type: 'string', enum: ['normal', 'alta', 'urgente'] },
+        prazo: { type: 'string', description: 'Data YYYY-MM-DD combinada com a equipe, opcional.' },
+        tipoDocumento: { type: 'string', description: 'Tipo específico esperado, por exemplo IRPF completo do exercício 2025.' },
+        idempotencyKey: { type: 'string', description: 'Chave estável da solicitação (8 a 200 caracteres); reutilize em tentativas da mesma operação.' },
       },
       required: ['clienteId', 'titulo'],
     },
@@ -400,23 +411,19 @@ export function buildAlixPowerTools(): { tools: ClaudeTool[]; registry: ClaudeTo
   registry['criar_pendencia_portal_cliente'] = {
     spec: tools[tools.length - 1],
     handler: async (i: any) => {
-      const c = clientes.get(i.clienteId)
-      if (!c) return { ok: false, error: 'Cliente não encontrado' }
-      const p = criarPendencia({
-        clienteId: i.clienteId,
-        titulo: i.titulo,
-        descricao: i.descricao,
-        categoria: i.categoria || 'outros',
-        obrigatorio: i.obrigatorio !== false,
-        solicitadoPor: 'ALIX (assistente)',
-      })
-      registrarEvento({
-        clienteId: i.clienteId,
-        tipo: 'pendencia_criada',
-        canal: 'consultor',
-        detalhes: { origem: 'alix', pendenciaId: p.id, titulo: p.titulo },
-      })
-      return { ok: true, pendencia: p }
+      const parsed = portalRequestToolSchema.safeParse(i)
+      if (!parsed.success) return { ok: false, error: 'Dados da solicitação inválidos.', code: 'PORTAL_DOCUMENT_INVALID', detalhes: parsed.error.issues.map(issue => ({ campo: issue.path.join('.'), mensagem: issue.message })) }
+      const { clienteId, ...data } = parsed.data
+      if (!isPgEnabled() && !clientes.has(clienteId)) return { ok: false, error: 'Cliente não encontrado.', code: 'PORTAL_DOCUMENT_NOT_FOUND' }
+      const request = { ...data, solicitadoPor: 'ALIX (assistente)' }
+      const key = data.idempotencyKey ?? `alix-doc:${createHash('sha256').update(JSON.stringify({ clienteId, ...request })).digest('hex')}`
+      try {
+        const record = await portalDocumentService.criarPendencia(clienteId, { ...request, idempotencyKey: key }, { ator: 'alix', canal: 'consultor' })
+        return { ok: true, pendencia: publicPortalRequest(record) }
+      } catch (error) {
+        if (error instanceof PortalDocumentError) return { ok: false, error: error.message, code: error.code }
+        throw error
+      }
     },
   }
 
@@ -583,6 +590,7 @@ export function buildAlixPowerTools(): { tools: ClaudeTool[]; registry: ClaudeTo
     input_schema: {
       type: 'object',
       properties: {
+        sessionId: { type: 'string', description: 'ID da sessão Alix onde o documento foi enviado' },
         documentoId: { type: 'string', description: 'ID retornado pelo upload' },
         tipo: {
           type: 'string',
@@ -596,31 +604,34 @@ export function buildAlixPowerTools(): { tools: ClaudeTool[]; registry: ClaudeTo
             'Lista opcional de campos a extrair (ex: ["cpf", "nome", "valor_total", "vencimento"])',
         },
       },
-      required: ['documentoId'],
+      required: ['sessionId', 'documentoId'],
     },
   })
   registry['extrair_dados_documento'] = {
     spec: tools[tools.length - 1],
     handler: async (i: any) => {
       const intake = await safeRequire(() => import('../intake/DocumentIntakeService.js' as string) as any)
-      const extractor = await safeRequire(() => import('../intake/LlmDocExtractor.js' as string) as any)
-      if (!intake || !extractor) {
-        return { ok: false, error: 'Pipeline de intake/extração indisponível neste deployment.' }
+      if (!intake) {
+        return { ok: false, error: 'Pipeline de intake indisponível neste deployment.' }
       }
       const intakeSvc = intake.getDocumentIntakeService?.() || intake.default
-      const extractSvc = extractor.getLlmDocExtractor?.() || extractor.default
-      if (!intakeSvc || !extractSvc) {
+      if (!intakeSvc) {
         return { ok: false, error: 'Servicos de intake não inicializados.' }
       }
       try {
-        const doc = await intakeSvc.buscar?.(i.documentoId) ?? await intakeSvc.get?.(i.documentoId)
-        if (!doc) return { ok: false, error: 'Documento não encontrado.' }
-        const extraido = await extractSvc.extrair?.({
-          documento: doc,
-          tipo: i.tipo || 'auto',
-          campos: i.camposEsperados,
-        })
-        return { ok: true, documentoId: i.documentoId, dados: extraido }
+        const doc = await intakeSvc.get(String(i.sessionId), String(i.documentoId))
+        if (!doc) return { ok: false, error: 'Documento não encontrado nesta sessão.' }
+        return {
+          ok: true,
+          documentoId: i.documentoId,
+          dados: {
+            tipoDocumento: (doc.metadata as any)?.entitySummary || 'Não classificado',
+            entidades: (doc.metadata as any)?.entities || [],
+            camposEstruturados: (doc.metadata as any)?.entityStructured || {},
+            suggestedActions: (doc.metadata as any)?.suggestedActions || [],
+            extractedTextPreview: doc.extractedText?.slice(0, 2000),
+          },
+        }
       } catch (e: any) {
         return { ok: false, error: e?.message || 'Falha na extração' }
       }

@@ -1,6 +1,6 @@
 // ============================================================
 // ProcessoAssessoriaService — render multi-formato dos 25 docs
-// do Processo de Assessoria TEX CAPITAL.
+// do Processo de Assessoria ALETIS.
 // ============================================================
 //
 // Estratégia por formato:
@@ -76,6 +76,17 @@ function maskCnpj(s: string): string {
   return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`
 }
 function dateBR(d: Date | string = new Date()): string {
+  if (typeof d === 'string') {
+    const s = d.trim()
+    if (!s) return ''
+    const br = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+    if (br) {
+      const yyyy = br[3].length === 2 ? `20${br[3]}` : br[3]
+      return `${br[1].padStart(2, '0')}/${br[2].padStart(2, '0')}/${yyyy}`
+    }
+    const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`
+  }
   const dt = typeof d === 'string' ? new Date(d) : d
   if (isNaN(dt.getTime())) return ''
   return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`
@@ -326,6 +337,28 @@ const CONTENT_TYPES: Record<DocFormato, string> = {
   pdf: 'application/pdf',
 }
 
+export interface TemplateStructureSheet {
+  name: string
+  index: number
+  rowCount: number
+  columnCount: number
+  placeholders: Array<{
+    name: string
+    label: string
+    hint?: string
+    cell: string
+    required: boolean
+    clientePath?: string
+    default?: string
+  }>
+}
+
+export interface TemplateStructure {
+  slug: string
+  formato: DocFormato
+  sheets: TemplateStructureSheet[]
+}
+
 export class ProcessoAssessoriaService {
   listTemplates(): ProcessoTemplate[] {
     return PROCESSO_TEMPLATES.slice()
@@ -337,6 +370,57 @@ export class ProcessoAssessoriaService {
 
   getTemplate(slug: string): ProcessoTemplate | null {
     return getProcessoTemplateBySlug(slug)
+  }
+
+  async getStructure(slug: string): Promise<TemplateStructure | null> {
+    const tpl = this.getTemplate(slug)
+    if (!tpl) return null
+    if (tpl.formato !== 'xlsx' && tpl.formato !== 'xlsm') {
+      // Para docx/pptx/pdf, retornar estrutura vazia (sem sheets)
+      return { slug: tpl.slug, formato: tpl.formato, sheets: [] }
+    }
+
+    const filePath = join(TEMPLATES_DIR, tpl.templateFile)
+    if (!existsSync(filePath)) {
+      throw new Error(
+        `Arquivo de template não encontrado: ${filePath}. ` +
+          `Rode: pnpm --filter @aletis/api exec tsx scripts/build-processo-assessoria-templates.ts`,
+      )
+    }
+
+    const wb = new ExcelJS.Workbook()
+    await wb.xlsx.readFile(filePath)
+
+    const sheets: TemplateStructureSheet[] = []
+    const placeholders = tpl.placeholders ?? []
+
+    wb.worksheets.forEach((ws, idx) => {
+      const sheetPlaceholders = placeholders
+        .filter((p) => {
+          if (!p.cell) return false
+          const [sheetName] = p.cell.split('!')
+          return sheetName === ws.name
+        })
+        .map((p) => ({
+          name: p.name,
+          label: p.label,
+          hint: p.hint,
+          cell: p.cell!,
+          required: p.required,
+          clientePath: p.clientePath,
+          default: p.default,
+        }))
+
+      sheets.push({
+        name: ws.name,
+        index: idx + 1,
+        rowCount: ws.rowCount,
+        columnCount: ws.columnCount,
+        placeholders: sheetPlaceholders,
+      })
+    })
+
+    return { slug: tpl.slug, formato: tpl.formato, sheets }
   }
 
   preview(input: ProcessoRenderInput): {

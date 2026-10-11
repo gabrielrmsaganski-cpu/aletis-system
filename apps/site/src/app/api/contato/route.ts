@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { writeFile, mkdir, readFile } from 'node:fs/promises'
+import { appendFile, mkdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -35,6 +35,7 @@ async function persistLead(lead: Record<string, unknown>): Promise<{ ok: boolean
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(lead),
+        signal: AbortSignal.timeout(10_000),
       })
       if (r.ok) return { ok: true, mode: 'webhook' }
     } catch (e) {
@@ -59,6 +60,7 @@ async function persistLead(lead: Record<string, unknown>): Promise<{ ok: boolean
           subject: `Novo lead — ${lead.nome ?? 'sem nome'} (${lead.segmento ?? 'sem segmento'})`,
           html: `<pre style="font-family:monospace">${JSON.stringify(lead, null, 2)}</pre>`,
         }),
+        signal: AbortSignal.timeout(10_000),
       })
       if (r.ok) return { ok: true, mode: 'resend' }
     } catch (e) {
@@ -66,12 +68,11 @@ async function persistLead(lead: Record<string, unknown>): Promise<{ ok: boolean
     }
   }
 
-  // 3. Storage local JSONL — sempre funciona
+  // 3. Registro local; o contato só é confirmado depois da gravação.
   try {
     if (!existsSync(LEAD_DIR)) await mkdir(LEAD_DIR, { recursive: true })
     const file = join(LEAD_DIR, `${new Date().toISOString().slice(0, 7)}.jsonl`)
-    const existing = existsSync(file) ? await readFile(file, 'utf-8').catch(() => '') : ''
-    await writeFile(file, existing + JSON.stringify(lead) + '\n')
+    await appendFile(file, JSON.stringify(lead) + '\n', 'utf-8')
     return { ok: true, mode: 'jsonl' }
   } catch (e) {
     console.error('[contato] storage local falhou:', e)
@@ -123,6 +124,12 @@ export async function POST(req: Request) {
   }
 
   const out = await persistLead(lead)
+  if (!out.ok) {
+    return NextResponse.json({
+      success: false,
+      error: 'Não foi possível registrar seu contato. Tente novamente.',
+    }, { status: 503 })
+  }
   console.info('[contato] novo lead persistido', {
     nome, email, segmento: body.segmento, interesse: body.interesse,
     receivedAt, persistido: out.mode,

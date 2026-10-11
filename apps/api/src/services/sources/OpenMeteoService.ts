@@ -5,7 +5,17 @@
 
 import axios, { type AxiosInstance } from 'axios';
 import NodeCache from 'node-cache';
+import { LastObservationStore } from './LastObservationStore.js';
 import type { DataSourceManager } from '../DataSourceManager.js';
+
+// A API publica hora civil junto de utc_offset_seconds. Data sem sufixo não é UTC.
+function observationInstant(value: unknown, offsetSeconds: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const explicitZone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value);
+  if (!explicitZone && (typeof offsetSeconds !== 'number' || !Number.isFinite(offsetSeconds) || Math.abs(offsetSeconds) > 86400)) return null;
+  const timestamp = explicitZone ? Date.parse(value) : Date.parse(value + 'Z') - (offsetSeconds as number) * 1000;
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+}
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -29,6 +39,11 @@ export interface OpenMeteoForecast {
     soil_temperature_6cm: number[];
     relative_humidity_2m: number[];
   };
+  estado?: 'disponivel' | 'atrasado';
+  observadoEm?: string;
+  coletadoEm?: string;
+  emitidoEm?: string | null;
+  validoAte?: string;
   fonte: 'api' | 'cache' | 'fallback';
   atualizadoEm: string;
 }
@@ -43,6 +58,11 @@ export interface OpenMeteoHistorical {
     precipitation_sum: number[];
     et0_fao_evapotranspiration: number[];
   };
+  estado?: 'disponivel' | 'atrasado';
+  observadoEm?: string;
+  coletadoEm?: string;
+  emitidoEm?: string | null;
+  validoAte?: string;
   fonte: 'api' | 'cache' | 'fallback';
   atualizadoEm: string;
 }
@@ -55,12 +75,18 @@ export interface OpenMeteoCurrent {
   weatherCode: number;
   windSpeed: number;
   windDirection: number;
+  estado?: 'disponivel' | 'atrasado';
+  observadoEm?: string;
+  coletadoEm?: string;
+  emitidoEm?: string | null;
+  validoAte?: string;
   fonte: 'api' | 'cache' | 'fallback';
 }
 
 // ── Service Class ───────────────────────────────────────────
 
 export class OpenMeteoService {
+  private readonly observations = new LastObservationStore('openmeteo');
   private http: AxiosInstance;
   private archiveHttp: AxiosInstance;
   private cache: NodeCache;
@@ -83,7 +109,6 @@ export class OpenMeteoService {
     const cacheKey = `openmeteo_forecast_${lat}_${lon}_${days}`;
     const cached = this.cache.get<OpenMeteoForecast>(cacheKey);
     if (cached) {
-      this.dsm.updateSourceStatus('openmeteo_forecast', 'online', 0);
       return { ...cached, fonte: 'cache' };
     }
 
@@ -100,26 +125,39 @@ export class OpenMeteoService {
 
       const response = await this.http.get('forecast', { params });
       const data = response.data;
+      if (!Array.isArray(data?.daily?.time) || !data.daily.time.length || !data.daily.time.every((d: unknown) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) || params.daily.split(',').some(key => !Array.isArray(data.daily[key]) || data.daily[key].length !== data.daily.time.length || !data.daily[key].every((v: unknown) => typeof v === 'number' && Number.isFinite(v)))) {
+        throw new Error('Resposta meteorológica sem observações válidas');
+      }
 
       const result: OpenMeteoForecast = {
         latitude: data.latitude,
         longitude: data.longitude,
         timezone: data.timezone,
         daily: data.daily,
+        validoAte: data.daily.time.at(-1),
+        coletadoEm: new Date().toISOString(),
+        emitidoEm: null,
         hourly: data.hourly,
         fonte: 'api',
         atualizadoEm: new Date().toISOString(),
       };
 
+      this.observations.set(cacheKey, result);
+
       this.cache.set(cacheKey, result);
       this.dsm.updateSourceStatus('openmeteo_forecast', 'online', Date.now() - start);
       return result;
     } catch (error) {
+      const last = this.observations.get<any>(cacheKey);
+      if (last) {
+        this.dsm.updateSourceStatus('openmeteo_forecast', 'degraded', Date.now() - start, 'Última previsão real preservada; atualização falhou');
+        return { ...last, fonte: 'cache', estado: 'atrasado' };
+      }
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       console.warn(`[OpenMeteo] Forecast falhou para ${lat},${lon}: ${msg}`);
       this.dsm.updateSourceStatus('openmeteo_forecast', 'degraded', Date.now() - start, msg);
 
-      return this.generateFallbackForecast(lat, lon, days);
+      throw new Error('Previsão meteorológica indisponível: nenhuma previsão real foi recebida.');
     }
   }
 
@@ -139,8 +177,14 @@ export class OpenMeteoService {
 
       const response = await this.http.get('forecast', { params });
       const c = response.data.current;
+      const observadoEm = observationInstant(c?.time, response.data.utc_offset_seconds);
+      if (!c || !observadoEm || params.current.split(',').some(key => !Number.isFinite(c[key]))) {
+        throw new Error('Condições meteorológicas inválidas');
+      }
 
       const result: OpenMeteoCurrent = {
+        observadoEm,
+        coletadoEm: new Date().toISOString(),
         temperature: c.temperature_2m,
         humidity: c.relative_humidity_2m,
         precipitation: c.precipitation,
@@ -151,20 +195,20 @@ export class OpenMeteoService {
         fonte: 'api',
       };
 
+      this.observations.set(cacheKey, result);
+
       this.cache.set(cacheKey, result, 900); // 15 min TTL
       this.dsm.updateSourceStatus('openmeteo_forecast', 'online', Date.now() - start);
       return result;
     } catch (error) {
-      return {
-        temperature: 25 + (lat + 15) * 0.3,
-        humidity: 65,
-        precipitation: 0,
-        rain: 0,
-        weatherCode: 1,
-        windSpeed: 8,
-        windDirection: 180,
-        fonte: 'fallback',
-      };
+      const last = this.observations.get<any>(cacheKey);
+      if (last && typeof last.observadoEm === 'string' && /(?:Z|[+-]\d{2}:\d{2})$/i.test(last.observadoEm)) {
+        this.dsm.updateSourceStatus('openmeteo_forecast', 'degraded', Date.now() - start, 'Última previsão real preservada; atualização falhou');
+        return { ...last, fonte: 'cache', estado: 'atrasado' };
+      }
+      const msg = error instanceof Error ? error.message : 'Erro desconhecido';
+      this.dsm.updateSourceStatus('openmeteo_forecast', 'degraded', Date.now() - start, msg);
+      throw new Error('Condições meteorológicas atuais indisponíveis.');
     }
   }
 
@@ -186,19 +230,32 @@ export class OpenMeteoService {
 
       const response = await this.archiveHttp.get('archive', { params });
       const data = response.data;
+      if (!Array.isArray(data?.daily?.time) || !data.daily.time.length || !data.daily.time.every((d: unknown) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) || params.daily.split(',').some(key => !Array.isArray(data.daily[key]) || data.daily[key].length !== data.daily.time.length || !data.daily[key].every((v: unknown) => typeof v === 'number' && Number.isFinite(v)))) {
+        throw new Error('Resposta meteorológica sem observações válidas');
+      }
 
       const result: OpenMeteoHistorical = {
         latitude: data.latitude,
         longitude: data.longitude,
         daily: data.daily,
+        validoAte: data.daily.time.at(-1),
+        coletadoEm: new Date().toISOString(),
+        emitidoEm: null,
         fonte: 'api',
         atualizadoEm: new Date().toISOString(),
       };
+
+      this.observations.set(cacheKey, result);
 
       this.cache.set(cacheKey, result, 86400); // 24h cache for historical
       this.dsm.updateSourceStatus('openmeteo_forecast', 'online', Date.now() - start);
       return result;
     } catch (error) {
+      const last = this.observations.get<any>(cacheKey);
+      if (last) {
+        this.dsm.updateSourceStatus('openmeteo_forecast', 'degraded', Date.now() - start, 'Última previsão real preservada; atualização falhou');
+        return { ...last, fonte: 'cache', estado: 'atrasado' };
+      }
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       console.warn(`[OpenMeteo] Historical falhou: ${msg}`);
       return {
@@ -211,51 +268,4 @@ export class OpenMeteoService {
     }
   }
 
-  private generateFallbackForecast(lat: number, lon: number, days: number): OpenMeteoForecast {
-    const time: string[] = [];
-    const tMax: number[] = [];
-    const tMin: number[] = [];
-    const precip: number[] = [];
-    const rain: number[] = [];
-    const et0: number[] = [];
-    const wind: number[] = [];
-    const uv: number[] = [];
-
-    const now = new Date();
-    const baseTempMax = 28 + (lat + 15) * 0.4;
-    const baseTempMin = baseTempMax - 10;
-
-    for (let i = 0; i < days; i++) {
-      const d = new Date(now);
-      d.setDate(d.getDate() + i);
-      time.push(d.toISOString().slice(0, 10));
-
-      const variation = Math.sin(i * 0.8) * 3;
-      tMax.push(Math.round((baseTempMax + variation) * 10) / 10);
-      tMin.push(Math.round((baseTempMin + variation) * 10) / 10);
-      precip.push(Math.round(Math.random() * 15 * 10) / 10);
-      rain.push(precip[i] * 0.9);
-      et0.push(Math.round((3.5 + Math.random() * 2) * 10) / 10);
-      wind.push(Math.round((5 + Math.random() * 15) * 10) / 10);
-      uv.push(Math.round((4 + Math.random() * 8) * 10) / 10);
-    }
-
-    return {
-      latitude: lat,
-      longitude: lon,
-      timezone: 'America/Sao_Paulo',
-      daily: {
-        time,
-        temperature_2m_max: tMax,
-        temperature_2m_min: tMin,
-        precipitation_sum: precip,
-        rain_sum: rain,
-        et0_fao_evapotranspiration: et0,
-        windspeed_10m_max: wind,
-        uv_index_max: uv,
-      },
-      fonte: 'fallback',
-      atualizadoEm: new Date().toISOString(),
-    };
-  }
 }

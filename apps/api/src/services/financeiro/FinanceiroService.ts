@@ -36,6 +36,8 @@ import type {
   ProjecaoCaixa,
   SugestaoReconciliacao,
   ResultadoMaterializacao,
+  Empresa,
+  LevantamentoMensalEmpresa,
 } from './types.js'
 import { CATEGORIAS_DESPESA } from './types.js'
 import { calcularDAS, alertaLimiteSimples } from './simples-nacional.js'
@@ -77,6 +79,8 @@ export class FinanceiroService {
   private despesas = new Map<string, Despesa>()
   private impostos = new Map<string, Imposto>()
   private lancamentos = new Map<string, LancamentoBancario>()
+  private empresas = new Map<string, Empresa>()
+  private levantamentos = new Map<string, LevantamentoMensalEmpresa>()
   private config: ConfiguracaoFinanceiro = DEFAULT_CONFIG
 
   constructor(storageRoot: string) {
@@ -91,6 +95,7 @@ export class FinanceiroService {
 
   private load(): void {
     if (!existsSync(this.dbFile)) {
+      this.seedEmpresas()
       this.save()
       return
     }
@@ -101,10 +106,87 @@ export class FinanceiroService {
       this.despesas = new Map(Object.entries(data.despesas ?? {}))
       this.impostos = new Map(Object.entries(data.impostos ?? {}))
       this.lancamentos = new Map(Object.entries(data.lancamentos ?? {}))
+      this.empresas = new Map(Object.entries(data.empresas ?? {}))
+      this.levantamentos = new Map(Object.entries(data.levantamentos ?? {}))
       this.config = { ...DEFAULT_CONFIG, ...(data.config ?? {}) }
+      if (this.empresas.size === 0) this.seedEmpresas()
     } catch (err) {
       console.error('[FinanceiroService] Erro ao carregar db:', err)
     }
+  }
+
+  private seedEmpresas(): void {
+    const now = new Date().toISOString()
+    const empresasSeed: Empresa[] = [
+      {
+        id: 'emp-c-kohler',
+        cnpj: '46.519.763/0001-44',
+        razaoSocial: 'C KOHLER VJL CONSULTORIA',
+        nomeFantasia: 'VJL CONSULTORIA',
+        atividadePrincipal: '73.19-0-02 - Promoção de vendas',
+        naturezaJuridica: '213-5 - Empresário (Individual)',
+        endereco: 'R MARCELINO MEDUNA, 11, MORRETES, PR',
+        cidade: 'MORRETES',
+        uf: 'PR',
+        cep: '83.350-000',
+        telefone: '(44) 9962-7895',
+        email: 'CHRISTIANKOHLER.CM@HOTMAIL.COM',
+        dataAbertura: '2022-05-24',
+        situacaoCadastral: 'ativa',
+        porte: 'ME',
+        ativa: true,
+        responsavel: 'Christian Kohler',
+        observacoes: 'Empresa 1 – matriz',
+        criadoEm: now,
+        atualizadoEm: now,
+      },
+      {
+        id: 'emp-eliandra',
+        cnpj: '19.820.004/0001-44',
+        razaoSocial: '19.820.004 ELIANDRA DE OLIVEIRA KOHLER',
+        nomeFantasia: '',
+        atividadePrincipal: '',
+        naturezaJuridica: '213-5 - Empresário (Individual)',
+        endereco: '',
+        cidade: '',
+        uf: '',
+        cep: '',
+        telefone: '',
+        email: '',
+        dataAbertura: '2014-03-05',
+        situacaoCadastral: 'ativa',
+        porte: 'ME',
+        ativa: true,
+        responsavel: 'Eliandra de Oliveira Kohler',
+        observacoes: 'Empresa 2',
+        criadoEm: now,
+        atualizadoEm: now,
+      },
+      {
+        id: 'emp-victor',
+        cnpj: '53.826.569/0001-77',
+        razaoSocial: '53.826.569 VICTOR VALENTINO DE OLIVEIRA KOHLER',
+        nomeFantasia: '',
+        atividadePrincipal: '',
+        naturezaJuridica: '213-5 - Empresário (Individual)',
+        endereco: '',
+        cidade: '',
+        uf: '',
+        cep: '',
+        telefone: '',
+        email: '',
+        dataAbertura: '2024-02-06',
+        situacaoCadastral: 'ativa',
+        porte: 'ME',
+        ativa: true,
+        responsavel: 'Victor Valentino de Oliveira Kohler',
+        observacoes: 'Empresa 3',
+        criadoEm: now,
+        atualizadoEm: now,
+      },
+    ]
+    for (const e of empresasSeed) this.empresas.set(e.id, e)
+    console.log('[FinanceiroService] Seed de empresas aplicado:', empresasSeed.length)
   }
 
   private save(): void {
@@ -113,6 +195,8 @@ export class FinanceiroService {
       despesas: Object.fromEntries(this.despesas),
       impostos: Object.fromEntries(this.impostos),
       lancamentos: Object.fromEntries(this.lancamentos),
+      empresas: Object.fromEntries(this.empresas),
+      levantamentos: Object.fromEntries(this.levantamentos),
       config: this.config,
       salvoEm: new Date().toISOString(),
     }
@@ -245,8 +329,9 @@ export class FinanceiroService {
     return ok
   }
 
-  listarReceitas(filtro?: { competencia?: string; status?: StatusReceita; clienteBusca?: string }): Receita[] {
+  listarReceitas(filtro?: { competencia?: string; status?: StatusReceita; clienteBusca?: string; empresaId?: string }): Receita[] {
     let arr = Array.from(this.receitas.values())
+    if (filtro?.empresaId) arr = arr.filter((r) => r.empresaId === filtro.empresaId)
     if (filtro?.competencia) arr = arr.filter((r) => r.competencia === filtro.competencia)
     if (filtro?.status) arr = arr.filter((r) => r.status === filtro.status)
     if (filtro?.clienteBusca) {
@@ -311,8 +396,9 @@ export class FinanceiroService {
     return ok
   }
 
-  listarDespesas(filtro?: { competencia?: string; categoria?: CategoriaDespesa; status?: StatusDespesa }): Despesa[] {
+  listarDespesas(filtro?: { competencia?: string; categoria?: CategoriaDespesa; status?: StatusDespesa; empresaId?: string }): Despesa[] {
     let arr = Array.from(this.despesas.values())
+    if (filtro?.empresaId) arr = arr.filter((d) => d.empresaId === filtro.empresaId)
     if (filtro?.competencia) arr = arr.filter((d) => d.competencia === filtro.competencia)
     if (filtro?.categoria) arr = arr.filter((d) => d.categoria === filtro.categoria)
     if (filtro?.status) arr = arr.filter((d) => d.status === filtro.status)
@@ -365,8 +451,9 @@ export class FinanceiroService {
     return ok
   }
 
-  listarImpostos(filtro?: { competencia?: string; tipo?: Imposto['tipo'] }): Imposto[] {
+  listarImpostos(filtro?: { competencia?: string; tipo?: Imposto['tipo']; empresaId?: string }): Imposto[] {
     let arr = Array.from(this.impostos.values())
+    if (filtro?.empresaId) arr = arr.filter((i) => i.empresaId === filtro.empresaId)
     if (filtro?.competencia) arr = arr.filter((i) => i.competencia === filtro.competencia)
     if (filtro?.tipo) arr = arr.filter((i) => i.tipo === filtro.tipo)
     return arr.sort((a, b) => b.dataVencimento.localeCompare(a.dataVencimento))
@@ -401,8 +488,9 @@ export class FinanceiroService {
     return ok
   }
 
-  listarLancamentos(filtro?: { contaId?: string; dataInicio?: string; dataFim?: string; naoClassificados?: boolean }): LancamentoBancario[] {
+  listarLancamentos(filtro?: { contaId?: string; dataInicio?: string; dataFim?: string; naoClassificados?: boolean; empresaId?: string }): LancamentoBancario[] {
     let arr = Array.from(this.lancamentos.values())
+    if (filtro?.empresaId) arr = arr.filter((l) => l.empresaId === filtro.empresaId)
     if (filtro?.contaId) arr = arr.filter((l) => l.contaId === filtro.contaId)
     if (filtro?.dataInicio) arr = arr.filter((l) => l.data >= filtro.dataInicio!)
     if (filtro?.dataFim) arr = arr.filter((l) => l.data <= filtro.dataFim!)
@@ -430,20 +518,21 @@ export class FinanceiroService {
   }
 
   /** Receita bruta do mês (YYYY-MM) — baseada em competência. */
-  receitaBrutaMes(competencia: string): number {
+  receitaBrutaMes(competencia: string, empresaId?: string): number {
     let total = 0
     for (const r of this.receitas.values()) {
-      if (r.competencia === competencia && r.status !== 'cancelada') total += r.valorBruto
+      if (r.competencia === competencia && r.status !== 'cancelada') {
+        if (!empresaId || r.empresaId === empresaId) total += r.valorBruto
+      }
     }
     return Number(total.toFixed(2))
   }
 
   /** RBT12 — soma de receita bruta dos 12 meses anteriores (exclui o mês da competência dada, inclui os 12 antes). */
-  calcularRBT12(competencia: string): number {
+  calcularRBT12(competencia: string, empresaId?: string): number {
     const [ano, mes] = competencia.split('-').map(Number)
     let rbt = 0
     for (let i = 1; i <= 12; i++) {
-      // Subtrair i meses de (ano, mes) — rolando ano
       let y = ano
       let m = mes - i
       while (m <= 0) {
@@ -451,17 +540,18 @@ export class FinanceiroService {
         y -= 1
       }
       const comp = `${y}-${String(m).padStart(2, '0')}`
-      rbt += this.receitaBrutaMes(comp)
+      rbt += this.receitaBrutaMes(comp, empresaId)
     }
     return Number(rbt.toFixed(2))
   }
 
   /** DRE mensal completo. */
-  calcularDREMensal(competencia: string): DREMensal {
-    const receitas = this.listarReceitas({ competencia })
-    const despesas = this.listarDespesas({ competencia })
-    const impostos = this.listarImpostos({ competencia })
+  calcularDREMensal(competencia: string, empresaId?: string): DREMensal {
+    const receitas = this.listarReceitas({ competencia, empresaId })
+    const despesas = this.listarDespesas({ competencia, empresaId })
+    const impostos = this.listarImpostos({ competencia, empresaId })
     const extratos = this.listarLancamentos({
+      empresaId,
       dataInicio: `${competencia}-01`,
       dataFim: `${competencia}-31`,
     })
@@ -514,11 +604,11 @@ export class FinanceiroService {
   }
 
   /** DRE anual consolidado com todos os meses. */
-  calcularDREAnual(ano: number): DREAnual {
+  calcularDREAnual(ano: number, empresaId?: string): DREAnual {
     const meses: DREMensal[] = []
     for (let m = 1; m <= 12; m++) {
       const comp = `${ano}-${String(m).padStart(2, '0')}`
-      meses.push(this.calcularDREMensal(comp))
+      meses.push(this.calcularDREMensal(comp, empresaId))
     }
     const totais = {
       receitaBruta: meses.reduce((s, m) => s + m.receitaBruta, 0),
@@ -532,6 +622,7 @@ export class FinanceiroService {
       outros: 0,
     }
     for (const imp of this.impostos.values()) {
+      if (empresaId && imp.empresaId !== empresaId) continue
       if (imp.competencia.startsWith(`${ano}-`) && imp.status === 'pago') {
         totais.impostosPagos += imp.valor
         if (imp.tipo === 'das_simples') totais.das += imp.valor
@@ -541,9 +632,9 @@ export class FinanceiroService {
       }
     }
     const ultimoMes = `${ano}-12`
-    const rbt12 = this.calcularRBT12(ultimoMes)
+    const rbt12 = this.calcularRBT12(ultimoMes, empresaId)
     const compAtual = new Date().toISOString().slice(0, 7)
-    const dasAtual = calcularDAS(this.receitaBrutaMes(compAtual), this.calcularRBT12(compAtual), this.config.anexoSimples, compAtual)
+    const dasAtual = calcularDAS(this.receitaBrutaMes(compAtual, empresaId), this.calcularRBT12(compAtual, empresaId), this.config.anexoSimples, compAtual)
 
     return {
       ano,
@@ -570,7 +661,7 @@ export class FinanceiroService {
    * entram; despesas estruturais (aluguel, contabilidade) ficam fora do cálculo
    * de margem por caso — o rateio estrutural é tratado no DRE geral.
    */
-  calcularMargensPorCliente(filtro?: { ano?: number; limite?: number }): MargemCliente[] {
+  calcularMargensPorCliente(filtro?: { ano?: number; limite?: number; empresaId?: string }): MargemCliente[] {
     type Bucket = {
       nome: string
       cpfCnpj?: string
@@ -591,6 +682,7 @@ export class FinanceiroService {
     // Receitas
     for (const r of this.receitas.values()) {
       if (r.status === 'cancelada') continue
+      if (filtro?.empresaId && r.empresaId !== filtro.empresaId) continue
       if (filtro?.ano && !r.competencia.startsWith(`${filtro.ano}-`)) continue
       if (!r.cliente?.nome) continue
       const key = chave(r.cliente.nome, r.cliente.cpfCnpj)
@@ -616,6 +708,7 @@ export class FinanceiroService {
     // Despesas com vínculo
     for (const d of this.despesas.values()) {
       if (d.status === 'cancelada') continue
+      if (filtro?.empresaId && d.empresaId !== filtro.empresaId) continue
       if (filtro?.ano && !d.competencia.startsWith(`${filtro.ano}-`)) continue
       if (!d.clienteVinculo?.nome) continue
       const key = chave(d.clienteVinculo.nome, d.clienteVinculo.cpfCnpj)
@@ -671,7 +764,7 @@ export class FinanceiroService {
    * e pagáveis agendados. Saldo inicial = saldo das contas bancárias (saldo
    * inicial + net dos lançamentos já registrados até hoje).
    */
-  calcularProjecaoCaixa(diasHorizonte = 90): ProjecaoCaixa {
+  calcularProjecaoCaixa(diasHorizonte = 90, empresaId?: string): ProjecaoCaixa {
     const hoje = new Date()
     hoje.setHours(0, 0, 0, 0)
     const fim = new Date(hoje)
@@ -684,7 +777,7 @@ export class FinanceiroService {
       .filter((c) => c.ativa)
       .reduce((s, c) => s + (c.saldoInicial ?? 0), 0)
     const netLancamentos = Array.from(this.lancamentos.values())
-      .filter((l) => l.data <= hojeStr)
+      .filter((l) => (!empresaId || l.empresaId === empresaId) && l.data <= hojeStr)
       .reduce((s, l) => s + l.valor, 0)
     const saldoInicial = Number((saldoContasIniciais + netLancamentos).toFixed(2))
 
@@ -732,6 +825,7 @@ export class FinanceiroService {
 
     // 3. Entradas previstas — receitas em aberto com dataPrevisaoRecebimento na janela
     for (const r of this.receitas.values()) {
+      if (empresaId && r.empresaId !== empresaId) continue
       if (r.status === 'recebida' || r.status === 'cancelada') continue
       const data = r.dataPrevisaoRecebimento
       if (!data || data < hojeStr || data > fimStr) continue
@@ -741,12 +835,14 @@ export class FinanceiroService {
 
     // 4. Saídas previstas — despesas e impostos em aberto dentro da janela
     for (const d of this.despesas.values()) {
+      if (empresaId && d.empresaId !== empresaId) continue
       if (d.status === 'paga' || d.status === 'cancelada') continue
       if (d.dataVencimento < hojeStr || d.dataVencimento > fimStr) continue
       const idx = bucketParaData(d.dataVencimento)
       if (idx >= 0) semanas[idx].saidas += d.valor
     }
     for (const i of this.impostos.values()) {
+      if (empresaId && i.empresaId !== empresaId) continue
       if (i.status === 'pago') continue
       if (i.dataVencimento < hojeStr || i.dataVencimento > fimStr) continue
       const idx = bucketParaData(i.dataVencimento)
@@ -1012,21 +1108,21 @@ export class FinanceiroService {
   }
 
   /** Dashboard principal. */
-  calcularDashboard(): DashboardFinanceiro {
+  calcularDashboard(empresaId?: string): DashboardFinanceiro {
     const hoje = new Date()
     const mesAtual = hoje.toISOString().slice(0, 7)
-    const dreAtual = this.calcularDREMensal(mesAtual)
-    const faturamento12m = this.calcularRBT12(mesAtual) + this.receitaBrutaMes(mesAtual)
-    const rbt12 = this.calcularRBT12(mesAtual)
+    const dreAtual = this.calcularDREMensal(mesAtual, empresaId)
+    const faturamento12m = this.calcularRBT12(mesAtual, empresaId) + this.receitaBrutaMes(mesAtual, empresaId)
+    const rbt12 = this.calcularRBT12(mesAtual, empresaId)
 
-    const receitaMes = this.receitaBrutaMes(mesAtual)
+    const receitaMes = this.receitaBrutaMes(mesAtual, empresaId)
     const dasProximo = receitaMes > 0
       ? calcularDAS(receitaMes, rbt12, this.config.anexoSimples, mesAtual)
       : undefined
 
     // Contas a receber
     const receitasAbertas = Array.from(this.receitas.values()).filter(
-      (r) => r.status !== 'recebida' && r.status !== 'cancelada'
+      (r) => (!empresaId || r.empresaId === empresaId) && r.status !== 'recebida' && r.status !== 'cancelada'
     )
     // Bucket aging — só considera receitas em aberto com previsão de recebimento
     const aging = {
@@ -1096,9 +1192,11 @@ export class FinanceiroService {
 
     // Contas a pagar
     const despesasAbertas = Array.from(this.despesas.values()).filter(
-      (d) => d.status !== 'paga' && d.status !== 'cancelada'
+      (d) => (!empresaId || d.empresaId === empresaId) && d.status !== 'paga' && d.status !== 'cancelada'
     )
-    const impostosAbertos = Array.from(this.impostos.values()).filter((i) => i.status !== 'pago')
+    const impostosAbertos = Array.from(this.impostos.values()).filter(
+      (i) => (!empresaId || i.empresaId === empresaId) && i.status !== 'pago'
+    )
     const contasPagar = {
       total: Number(
         (despesasAbertas.reduce((s, d) => s + d.valor, 0) + impostosAbertos.reduce((s, i) => s + i.valor, 0)).toFixed(2)
@@ -1141,7 +1239,7 @@ export class FinanceiroService {
         y -= 1
       }
       const comp = `${y}-${String(m).padStart(2, '0')}`
-      const dre = this.calcularDREMensal(comp)
+      const dre = this.calcularDREMensal(comp, empresaId)
       acumulado += dre.resultadoLiquido
       fluxoCaixa12m.push({
         mes: comp,
@@ -1155,6 +1253,7 @@ export class FinanceiroService {
     // Top categorias despesa (últimos 3 meses)
     const cat: Record<string, number> = {}
     for (const d of this.despesas.values()) {
+      if (empresaId && d.empresaId !== empresaId) continue
       if (d.status === 'cancelada') continue
       const diff = this.mesesDesdeHoje(d.competencia)
       if (diff <= 3) cat[d.categoria] = (cat[d.categoria] ?? 0) + d.valor
@@ -1174,6 +1273,7 @@ export class FinanceiroService {
     const anoAtual = hoje.getFullYear()
     const cli: Record<string, number> = {}
     for (const r of this.receitas.values()) {
+      if (empresaId && r.empresaId !== empresaId) continue
       if (r.status === 'cancelada') continue
       if (!r.competencia.startsWith(`${anoAtual}-`)) continue
       const nome = r.cliente?.nome ?? 'Sem identificação'
@@ -1244,8 +1344,8 @@ export class FinanceiroService {
       })
     }
 
-    const margensPorCliente = this.calcularMargensPorCliente({ ano: hoje.getFullYear(), limite: 10 })
-    const projecaoCaixa90d = this.calcularProjecaoCaixa(90)
+    const margensPorCliente = this.calcularMargensPorCliente({ ano: hoje.getFullYear(), limite: 10, empresaId })
+    const projecaoCaixa90d = this.calcularProjecaoCaixa(90, empresaId)
 
     // Alerta de projeção de caixa — primeiro gap detectado na janela
     if (projecaoCaixa90d.primeiroGap) {
@@ -1389,6 +1489,131 @@ export class FinanceiroService {
     const hoje = new Date()
     const [ano, mes] = comp.split('-').map(Number)
     return (hoje.getFullYear() - ano) * 12 + (hoje.getMonth() + 1 - mes)
+  }
+
+  /* ────────────────── Empresas ────────────────── */
+
+  listarEmpresas(): Empresa[] {
+    return Array.from(this.empresas.values()).sort((a, b) => a.razaoSocial.localeCompare(b.razaoSocial))
+  }
+
+  getEmpresa(id: string): Empresa | null {
+    return this.empresas.get(id) ?? null
+  }
+
+  criarEmpresa(dados: Omit<Empresa, 'id' | 'criadoEm' | 'atualizadoEm'>): Empresa {
+    const id = `emp-${randomUUID()}`
+    const now = new Date().toISOString()
+    const empresa: Empresa = { ...dados, id, criadoEm: now, atualizadoEm: now }
+    this.empresas.set(id, empresa)
+    this.save()
+    return empresa
+  }
+
+  atualizarEmpresa(id: string, patch: Partial<Empresa>): Empresa | null {
+    const e = this.empresas.get(id)
+    if (!e) return null
+    const merged: Empresa = { ...e, ...patch, id, atualizadoEm: new Date().toISOString() }
+    this.empresas.set(id, merged)
+    this.save()
+    return merged
+  }
+
+  deletarEmpresa(id: string): boolean {
+    const ok = this.empresas.delete(id)
+    if (ok) {
+      // Remove levantamentos vinculados
+      for (const [lid, l] of this.levantamentos) {
+        if (l.empresaId === id) this.levantamentos.delete(lid)
+      }
+      this.save()
+    }
+    return ok
+  }
+
+  /* ────────────────── Levantamentos Mensais ────────────────── */
+
+  listarLevantamentos(filtro?: { empresaId?: string; competencia?: string }): LevantamentoMensalEmpresa[] {
+    let arr = Array.from(this.levantamentos.values())
+    if (filtro?.empresaId) arr = arr.filter((l) => l.empresaId === filtro.empresaId)
+    if (filtro?.competencia) arr = arr.filter((l) => l.competencia === filtro.competencia)
+    return arr.sort((a, b) => b.competencia.localeCompare(a.competencia))
+  }
+
+  getLevantamento(id: string): LevantamentoMensalEmpresa | null {
+    return this.levantamentos.get(id) ?? null
+  }
+
+  criarLevantamento(dados: Omit<LevantamentoMensalEmpresa, 'id' | 'criadoEm' | 'atualizadoEm' | 'margemPercentual'>): LevantamentoMensalEmpresa {
+    const id = `lev-${randomUUID()}`
+    const now = new Date().toISOString()
+    const margem = dados.faturamento - dados.custosOperacionais - dados.despesasAdministrativas - dados.folhaPagamento - dados.impostos
+    const margemPct = dados.faturamento > 0 ? Number(((margem / dados.faturamento) * 100).toFixed(2)) : 0
+    const levantamento: LevantamentoMensalEmpresa = {
+      ...dados,
+      id,
+      resultadoLiquido: Number(margem.toFixed(2)),
+      margemPercentual: margemPct,
+      anexos: dados.anexos ?? [],
+      criadoEm: now,
+      atualizadoEm: now,
+    }
+    this.levantamentos.set(id, levantamento)
+    this.save()
+    return levantamento
+  }
+
+  atualizarLevantamento(id: string, patch: Partial<LevantamentoMensalEmpresa>): LevantamentoMensalEmpresa | null {
+    const l = this.levantamentos.get(id)
+    if (!l) return null
+    const merged: LevantamentoMensalEmpresa = { ...l, ...patch, id, atualizadoEm: new Date().toISOString() }
+    const faturamento = merged.faturamento ?? 0
+    const custos = merged.custosOperacionais ?? 0
+    const despesas = merged.despesasAdministrativas ?? 0
+    const folha = merged.folhaPagamento ?? 0
+    const impostos = merged.impostos ?? 0
+    const margem = faturamento - custos - despesas - folha - impostos
+    merged.resultadoLiquido = Number(margem.toFixed(2))
+    merged.margemPercentual = faturamento > 0 ? Number(((margem / faturamento) * 100).toFixed(2)) : 0
+    this.levantamentos.set(id, merged)
+    this.save()
+    return merged
+  }
+
+  deletarLevantamento(id: string): boolean {
+    const ok = this.levantamentos.delete(id)
+    if (ok) this.save()
+    return ok
+  }
+
+  /** Relatório consolidado por empresa — últimos 12 meses + comparativo YoY */
+  gerarRelatorioEmpresa(empresaId: string): {
+    empresa: Empresa | null
+    serie12m: Array<{ competencia: string; faturamento: number; resultado: number; margemPct: number }>
+    totais12m: { faturamento: number; custos: number; despesas: number; folha: number; impostos: number; resultado: number }
+    mediaMargem: number
+  } {
+    const empresa = this.getEmpresa(empresaId)
+    const levs = this.listarLevantamentos({ empresaId })
+      .filter((l) => this.mesesDesdeHoje(l.competencia) <= 12)
+      .sort((a, b) => a.competencia.localeCompare(b.competencia))
+    const serie = levs.map((l) => ({
+      competencia: l.competencia,
+      faturamento: l.faturamento,
+      resultado: l.resultadoLiquido,
+      margemPct: l.margemPercentual,
+    }))
+    const totais = levs.reduce((acc, l) => {
+      acc.faturamento += l.faturamento
+      acc.custos += l.custosOperacionais
+      acc.despesas += l.despesasAdministrativas
+      acc.folha += l.folhaPagamento
+      acc.impostos += l.impostos
+      acc.resultado += l.resultadoLiquido
+      return acc
+    }, { faturamento: 0, custos: 0, despesas: 0, folha: 0, impostos: 0, resultado: 0 })
+    const mediaMargem = serie.length > 0 ? Number((serie.reduce((s, v) => s + v.margemPct, 0) / serie.length).toFixed(2)) : 0
+    return { empresa, serie12m: serie, totais12m: totais, mediaMargem }
   }
 }
 

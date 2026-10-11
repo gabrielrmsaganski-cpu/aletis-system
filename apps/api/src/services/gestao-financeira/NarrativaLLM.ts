@@ -1,10 +1,11 @@
 // ============================================================
-// NarrativaLLM — gera narrativa técnica do diagnóstico via Claude
-// (Foundry) com base no dashboard 360°. Texto explicativo +
+// NarrativaLLM — gera narrativa tecnica do diagnostico via OpenAI
+// com base no dashboard 360. Texto explicativo +
 // análise crítica + recomendações em prosa pronto pra colar
 // no relatório/proposta.
 // ============================================================
-import { runClaude } from '../llm/ClaudeFoundryClient.js'
+import { runOpenAI } from '../llm/OpenAIClient.js'
+import { getModelForRole } from '../llm/LLMConfig.js'
 import { getGestaoFinanceiraServiceV2 } from './GestaoFinanceiraServiceV2.js'
 
 export interface NarrativaInput {
@@ -120,10 +121,10 @@ export async function gerarNarrativa(input: NarrativaInput): Promise<NarrativaOu
   const secoes = input.secoes ?? SECOES_DEFAULT
   const prompt = PROMPT_TEMPLATE(ESTILO_INSTRUCAO[estilo], secoes, resumo)
 
-  const r = await runClaude(
+  const r = await runOpenAI(
     [{ role: 'user', content: prompt }],
     {
-      model: process.env.ALIX_ORCHESTRATOR_MODEL || 'claude-sonnet-4-6',
+      model: getModelForRole('doc_analyzer'),
       maxTokens: 2500,
       temperature: 0.3,
     },
@@ -142,7 +143,7 @@ export async function gerarNarrativa(input: NarrativaInput): Promise<NarrativaOu
   return {
     texto,
     secoes: secoesParsed,
-    modelo: process.env.ALIX_ORCHESTRATOR_MODEL || 'claude-sonnet-4-6',
+    modelo: getModelForRole('doc_analyzer'),
     tokensIn: r.usage?.input_tokens ?? 0,
     tokensOut: r.usage?.output_tokens ?? 0,
     geradoEm: new Date().toISOString(),

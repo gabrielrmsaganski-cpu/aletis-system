@@ -13,6 +13,14 @@ function err(message: string, code = 'ERR') {
   return { success: false, error: message, code }
 }
 
+function asNumber(value: unknown): number {
+  if (value === null || value === undefined || value === '') return 0
+  const raw = String(value).trim()
+  const normalized = raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw
+  const n = typeof value === 'number' ? value : parseFloat(normalized)
+  return isFinite(n) ? n : 0
+}
+
 function extrairResumo(tipo: string, payload: any): Record<string, any> {
   const out: Record<string, any> = {}
   if (payload?.raioX?.indicadores) {
@@ -102,6 +110,134 @@ export default async function gestaoFinanceiraRoutes(fastify: FastifyInstance) {
     }
     await svc.deletarGrupo(id)
     return envelope({ ok: true })
+  })
+
+  fastify.get('/api/gestao-financeira/grupos/:id/overview', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const grupo = await svc.obterGrupo(id)
+    if (!grupo) {
+      reply.code(404)
+      return err('grupo não encontrado', 'NOT_FOUND')
+    }
+
+    const [
+      membros,
+      culturas,
+      custos,
+      demandas,
+      contratos,
+      fazendas,
+      ativosOutros,
+      passivosOutros,
+      garantias,
+      premissas,
+    ] = await Promise.all([
+      svc.listarMembros(id),
+      svc.listarCulturas(id),
+      svc.listarCustos(id),
+      svc.listarDemandas(id),
+      svc.listarContratos(id),
+      svc.listarFazendas(id),
+      svcV2.listarAtivosOutros(id),
+      svcV2.listarPassivosOutros(id),
+      svcV2.listarGarantias(id),
+      svcV2.listarPremissas(id),
+    ])
+
+    const dividaBancaria = contratos.reduce(
+      (acc, c: any) => acc + (asNumber(c.valorPresenteAtualizado) || asNumber(c.valorPresente) || asNumber(c.valorFinanciado)),
+      0,
+    )
+    const passivosNaoBancarios = passivosOutros.reduce((acc: number, p: any) => acc + asNumber(p.valor), 0)
+    const areaTotalHa = fazendas.reduce((acc: number, f: any) => acc + asNumber(f.areaTotalHa), 0)
+    const garantiasValorForcado = garantias.reduce((acc: number, g: any) => acc + (asNumber(g.valorForcado) || asNumber(g.valorMercado)), 0)
+
+    const stages = [
+      {
+        key: 'cadastro',
+        label: 'Cadastro',
+        count: membros.length,
+        status: membros.length > 0 && grupo.nomeGrupo ? 'ok' : 'empty',
+        required: true,
+        hint: membros.length > 0 ? 'grupo identificado' : 'membros e responsável faltantes',
+      },
+      {
+        key: 'fazendas',
+        label: 'Propriedades',
+        count: fazendas.length,
+        status: fazendas.length > 0 ? 'ok' : 'empty',
+        required: true,
+        hint: fazendas.length > 0 ? `${areaTotalHa.toLocaleString('pt-BR')} ha cadastrados` : 'matrículas, áreas e valores faltantes',
+      },
+      {
+        key: 'safras',
+        label: 'Safras',
+        count: culturas.length,
+        status: culturas.length > 0 ? 'ok' : 'empty',
+        required: true,
+        hint: culturas.length > 0 ? 'produção por cultura cadastrada' : 'culturas, área, produtividade e preço faltantes',
+      },
+      {
+        key: 'custos',
+        label: 'Custos',
+        count: custos.length,
+        status: custos.length > 0 ? 'ok' : 'empty',
+        required: true,
+        hint: custos.length > 0 ? 'custos disponíveis para EBITDA' : 'insumos, custos fixos e operacionais faltantes',
+      },
+      {
+        key: 'endividamento',
+        label: 'Endividamento',
+        count: contratos.length,
+        status: contratos.length > 0 ? 'ok' : 'empty',
+        required: true,
+        hint: contratos.length > 0 ? 'contratos bancários cadastrados' : 'contratos, taxas e vencimentos faltantes',
+      },
+      {
+        key: 'garantias',
+        label: 'Garantias',
+        count: garantias.length,
+        status: garantias.length > 0 ? 'ok' : 'empty',
+        required: true,
+        hint: garantias.length > 0 ? 'base para LTV disponível' : 'garantias e vínculos faltantes',
+      },
+      {
+        key: 'premissas',
+        label: 'Premissas',
+        count: premissas.length,
+        status: premissas.length >= 4 ? 'ok' : premissas.length > 0 ? 'partial' : 'empty',
+        required: false,
+        hint: premissas.length > 0 ? 'parâmetros auditáveis' : 'taxas e indexadores ainda não definidos',
+      },
+    ]
+    const requiredStages = stages.filter((s) => s.required)
+    const score = Math.round((requiredStages.filter((s) => s.status === 'ok').length / requiredStages.length) * 100)
+
+    return envelope({
+      grupoId: id,
+      clienteId: grupo.clienteId,
+      score,
+      counts: {
+        membros: membros.length,
+        culturas: culturas.length,
+        custos: custos.length,
+        demandas: demandas.length,
+        contratos: contratos.length,
+        fazendas: fazendas.length,
+        ativosOutros: ativosOutros.length,
+        passivosOutros: passivosOutros.length,
+        garantias: garantias.length,
+        premissas: premissas.length,
+      },
+      totals: {
+        dividaTotal: dividaBancaria + passivosNaoBancarios,
+        dividaBancaria,
+        passivosNaoBancarios,
+        areaTotalHa,
+        garantiasValorForcado,
+      },
+      stages,
+    })
   })
 
   // ── Membros ─────────────────────────────────────────────
@@ -1039,8 +1175,9 @@ export default async function gestaoFinanceiraRoutes(fastify: FastifyInstance) {
       }
       const buffer = await data.toBuffer()
       const versao = ((req.query as any)?.versao ?? 'v2') as 'v1' | 'v2'
+      const replaceExisting = (req.query as any)?.replaceExisting === '1'
       const { importarDeXlsm } = await import('../services/gestao-financeira/XlsmImporter.js')
-      const r = await importarDeXlsm({ grupoId: id, buffer, versao })
+      const r = await importarDeXlsm({ grupoId: id, buffer, versao, replaceExisting })
       return envelope(r)
     } catch (e: any) {
       reply.code(400)

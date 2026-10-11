@@ -11,6 +11,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@aletis/brand": "workspace:*",
     "lucide-react": "^0.460.0",
     "next": "14.2.18",
     "react": "^18.3.1",

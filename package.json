@@ -12,8 +12,12 @@
     "build": "pnpm -r run build",
     "lint": "pnpm -r run lint",
     "test": "pnpm -r run test",
+    "eval:alix": "pnpm --filter @aletis/api eval:alix:reliability && pnpm --filter @aletis/api eval:alix:golden && pnpm --filter @aletis/api eval:alix:governance && pnpm --filter @aletis/api eval:alix:promptfoo",
     "dev:web": "pnpm --filter @aletis/web dev",
     "dev:api": "pnpm --filter @aletis/api dev",
     "typecheck": "pnpm -r run typecheck"
+  },
+  "devDependencies": {
+    "promptfoo": "0.121.11"
   }
 }

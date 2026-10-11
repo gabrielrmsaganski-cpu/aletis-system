@@ -1,0 +1,25 @@
+@layer components {
+  .board-scroller { min-width: 0; padding: 16px; }
+  .board-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; }
+  .board-stage-links { display: flex; flex-wrap: wrap; gap: 6px; padding-block: 14px; }
+  .board-stage-links button { display: inline-flex; align-items: center; gap: 8px; padding: 6px 9px; border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--bg-surface); color: var(--text-soft); font-size: 12px; }
+  .board-stage-links button:hover { background: var(--selected-bg); border-color: var(--border-strong); color: var(--text-strong); }
+  .board-stage-links button span { color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .board-top-scroll { margin-bottom: 14px; }
+  .board-top-scroll input { display: block; appearance: none; width: 100%; height: 24px; margin: 0; background: transparent; cursor: ew-resize; accent-color: var(--primary-color); }
+  .board-top-scroll input::-webkit-slider-runnable-track { height: 12px; border-radius: 6px; background: var(--bg-surface-soft); border: 1px solid var(--border-default); }
+  .board-top-scroll input::-webkit-slider-thumb { appearance: none; height: 12px; width: var(--board-thumb-width); margin-top: -1px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--text-muted); }
+  .board-top-scroll input::-moz-range-track { height: 10px; border-radius: 6px; background: var(--bg-surface-soft); border: 1px solid var(--border-default); }
+  .board-top-scroll input::-moz-range-thumb { height: 10px; width: var(--board-thumb-width); border-radius: 6px; border: 1px solid var(--border-strong); background: var(--text-muted); }
+  .board-viewport { scrollbar-color: var(--border-strong) var(--bg-surface-soft); scrollbar-width: auto; }
+  .board-viewport::-webkit-scrollbar { height: 12px; }
+  .board-viewport::-webkit-scrollbar-track { background: var(--bg-surface-soft); border-radius: 6px; }
+  .board-viewport::-webkit-scrollbar-thumb { background: var(--border-strong); border: 2px solid var(--bg-surface-soft); border-radius: 6px; }
+  @supports selector(::-webkit-scrollbar) {
+    .board-viewport { scrollbar-color: auto; }
+  }
+  .board-viewport { overflow-x: auto; padding-bottom: 14px; }
+  .board-columns { display: flex; gap: 12px; width: max-content; min-width: 100%; align-items: stretch; }
+  .board-columns > [data-board-section] { scroll-margin-inline: 8px; }
+  @media (min-width: 640px) { .board-scroller { padding: 20px; } }
+}

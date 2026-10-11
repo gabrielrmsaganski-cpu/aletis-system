@@ -5,6 +5,7 @@
 
 import axios, { type AxiosInstance } from 'axios';
 import NodeCache from 'node-cache';
+import { LastObservationStore } from './LastObservationStore.js';
 import type { DataSourceManager } from '../DataSourceManager.js';
 
 // ── Types ────────────────────────────────────────────────────
@@ -21,6 +22,7 @@ export interface IndicadorBCB {
   data: string;
   unidade: string;
   fonte: 'api' | 'cache' | 'fallback';
+  estado?: 'disponivel' | 'atrasado';
   historico?: { data: string; valor: number }[];
 }
 
@@ -29,6 +31,7 @@ export interface CotacaoPTAX {
   cotacaoVenda: number;
   dataHoraCotacao: string;
   fonte: 'api' | 'cache' | 'fallback';
+  estado?: 'disponivel' | 'atrasado';
 }
 
 export interface CreditoRuralData {
@@ -36,6 +39,7 @@ export interface CreditoRuralData {
   periodo: string;
   unidade: string;
   fonte: 'api' | 'cache' | 'fallback';
+  estado?: 'disponivel' | 'atrasado';
   historico?: { data: string; valor: number }[];
 }
 
@@ -53,6 +57,7 @@ const FALLBACK_DATA = {
 // ── Service Class ────────────────────────────────────────────
 
 export class BancoCentralService {
+  private readonly observations = new LastObservationStore('bcb');
   private readonly cache: NodeCache;
   private readonly httpSGS: AxiosInstance;
   private readonly httpOLINDA: AxiosInstance;
@@ -108,10 +113,10 @@ export class BancoCentralService {
       const response = await this.httpSGS.get<SerieTemporalBCB[]>(url);
       const latencia = Date.now() - startTime;
 
-      if (response.data && response.data.length > 0) {
+      if (Array.isArray(response.data) && response.data.length > 0 && this.parseSGSData(response.data).length === response.data.length) {
         this.manager.updateSourceStatus(sourceName, 'online', latencia);
         console.log(`[BCB] Série ${serie} OK: ${response.data.length} registros em ${latencia}ms`);
-        return response.data;
+        return [...response.data].sort((a, b) => this.parseDateBR(a.data).localeCompare(this.parseDateBR(b.data)));
       }
 
       this.manager.updateSourceStatus(sourceName, 'degraded', latencia, 'Resposta vazia');
@@ -131,7 +136,7 @@ export class BancoCentralService {
         data: this.parseDateBR(item.data),
         valor: parseFloat(item.valor),
       }))
-      .filter((item) => !isNaN(item.valor));
+      .filter((item) => Number.isFinite(item.valor) && /^\d{4}-\d{2}-\d{2}$/.test(item.data));
   }
 
   // ── Public: Taxa Selic (SGS 432) ─────────────────────────
@@ -141,7 +146,7 @@ export class BancoCentralService {
     const cached = this.cache.get<IndicadorBCB>(cacheKey);
     if (cached) {
       console.log('[BCB] Selic retornada do cache');
-      return { ...cached, fonte: 'cache' };
+      return { ...cached, fonte: cached.fonte === 'fallback' ? 'fallback' : 'cache' };
     }
 
     try {
@@ -161,9 +166,13 @@ export class BancoCentralService {
         historico: parsed.slice(-12),
       };
 
+      if (result.fonte === 'api') this.observations.set(cacheKey, result);
+
       this.cache.set(cacheKey, result);
       return result;
     } catch {
+      const last = this.observations.get<any>(cacheKey);
+      if (last) return { ...last, fonte: 'cache', estado: 'atrasado' };
       console.warn('[BCB] Usando fallback para Selic');
       const fallback: IndicadorBCB = {
         nome: 'Taxa Selic Meta',
@@ -185,11 +194,11 @@ export class BancoCentralService {
     const cached = this.cache.get<IndicadorBCB>(cacheKey);
     if (cached) {
       console.log('[BCB] IPCA retornado do cache');
-      return { ...cached, fonte: 'cache' };
+      return { ...cached, fonte: cached.fonte === 'fallback' ? 'fallback' : 'cache' };
     }
 
     try {
-      const rawData = await this.fetchSerieSGS(433, 'bcb_ipca', 180);
+      const rawData = await this.fetchSerieSGS(433, 'bcb_ipca', 430);
       const parsed = this.parseSGSData(rawData);
 
       if (parsed.length === 0) throw new Error('Sem dados');
@@ -205,9 +214,13 @@ export class BancoCentralService {
         historico: parsed.slice(-12),
       };
 
+      if (result.fonte === 'api') this.observations.set(cacheKey, result);
+
       this.cache.set(cacheKey, result);
       return result;
     } catch {
+      const last = this.observations.get<any>(cacheKey);
+      if (last) return { ...last, fonte: 'cache', estado: 'atrasado' };
       console.warn('[BCB] Usando fallback para IPCA');
       const fallback: IndicadorBCB = {
         nome: 'IPCA Mensal',
@@ -229,11 +242,11 @@ export class BancoCentralService {
     const cached = this.cache.get<IndicadorBCB>(cacheKey);
     if (cached) {
       console.log('[BCB] IGP-M retornado do cache');
-      return { ...cached, fonte: 'cache' };
+      return { ...cached, fonte: cached.fonte === 'fallback' ? 'fallback' : 'cache' };
     }
 
     try {
-      const rawData = await this.fetchSerieSGS(189, 'bcb_igpm', 180);
+      const rawData = await this.fetchSerieSGS(189, 'bcb_igpm', 430);
       const parsed = this.parseSGSData(rawData);
 
       if (parsed.length === 0) throw new Error('Sem dados');
@@ -249,9 +262,13 @@ export class BancoCentralService {
         historico: parsed.slice(-12),
       };
 
+      if (result.fonte === 'api') this.observations.set(cacheKey, result);
+
       this.cache.set(cacheKey, result);
       return result;
     } catch {
+      const last = this.observations.get<any>(cacheKey);
+      if (last) return { ...last, fonte: 'cache', estado: 'atrasado' };
       console.warn('[BCB] Usando fallback para IGP-M');
       const fallback: IndicadorBCB = {
         nome: 'IGP-M Mensal',
@@ -273,7 +290,7 @@ export class BancoCentralService {
     const cached = this.cache.get<IndicadorBCB>(cacheKey);
     if (cached) {
       console.log('[BCB] CDI retornado do cache');
-      return { ...cached, fonte: 'cache' };
+      return { ...cached, fonte: cached.fonte === 'fallback' ? 'fallback' : 'cache' };
     }
 
     try {
@@ -286,21 +303,25 @@ export class BancoCentralService {
       // CDI diario: anualizar
       const cdiAnual = (Math.pow(1 + ultimo.valor / 100, 252) - 1) * 100;
       const result: IndicadorBCB = {
-        nome: 'Taxa CDI',
+        nome: 'CDI anualizado (252 dias úteis)',
         serie: 12,
         valor: parseFloat(cdiAnual.toFixed(2)),
         data: ultimo.data,
         unidade: '% a.a.',
         fonte: 'api',
-        historico: parsed.slice(-30),
+        historico: parsed.slice(-30).map(p => ({ data: p.data, valor: Number(((Math.pow(1 + p.valor / 100, 252) - 1) * 100).toFixed(2)) })),
       };
+
+      if (result.fonte === 'api') this.observations.set(cacheKey, result);
 
       this.cache.set(cacheKey, result);
       return result;
     } catch {
+      const last = this.observations.get<any>(cacheKey);
+      if (last) return { ...last, fonte: 'cache', estado: 'atrasado' };
       console.warn('[BCB] Usando fallback para CDI');
       const fallback: IndicadorBCB = {
-        nome: 'Taxa CDI',
+        nome: 'CDI anualizado (252 dias úteis)',
         serie: 12,
         valor: FALLBACK_DATA.cdi.valor,
         data: FALLBACK_DATA.cdi.data,
@@ -319,7 +340,7 @@ export class BancoCentralService {
     const cached = this.cache.get<CotacaoPTAX>(cacheKey);
     if (cached) {
       console.log('[BCB] PTAX retornada do cache');
-      return { ...cached, fonte: 'cache' };
+      return { ...cached, fonte: cached.fonte === 'fallback' ? 'fallback' : 'cache' };
     }
 
     const startTime = Date.now();
@@ -346,6 +367,8 @@ export class BancoCentralService {
               fonte: 'api',
             };
 
+            if (result.fonte === 'api') this.observations.set(cacheKey, result);
+
             this.cache.set(cacheKey, result, 1800);
             console.log(`[BCB] PTAX OK: Venda R$ ${result.cotacaoVenda} em ${latencia}ms`);
             return result;
@@ -358,6 +381,8 @@ export class BancoCentralService {
 
       throw new Error('Nenhuma cotação encontrada nos últimos 3 dias úteis');
     } catch (error) {
+      const last = this.observations.get<any>(cacheKey);
+      if (last) return { ...last, fonte: 'cache', estado: 'atrasado' };
       const latencia = Date.now() - startTime;
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       this.manager.updateSourceStatus('bcb_dolar_ptax', 'offline', latencia, msg);
@@ -380,8 +405,7 @@ export class BancoCentralService {
     const cacheKey = 'bcb_icbr_agro';
     const cached = this.cache.get<IndicadorBCB>(cacheKey);
     if (cached) {
-      this.manager.updateSourceStatus('bcb_icbr_agro', 'online', 0);
-      return { ...cached, fonte: 'cache' };
+      return { ...cached, fonte: cached.fonte === 'fallback' ? 'fallback' : 'cache' };
     }
 
     const start = Date.now();
@@ -405,10 +429,14 @@ export class BancoCentralService {
         historico,
       };
 
+      if (result.fonte === 'api') this.observations.set(cacheKey, result);
+
       this.cache.set(cacheKey, result, 3600);
       this.manager.updateSourceStatus('bcb_icbr_agro', 'online', Date.now() - start);
       return result;
     } catch (error) {
+      const last = this.observations.get<any>(cacheKey);
+      if (last) return { ...last, fonte: 'cache', estado: 'atrasado' };
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       console.warn(`[BCB] IC-Br Agro falhou: ${msg}`);
       this.manager.updateSourceStatus('bcb_icbr_agro', 'degraded', Date.now() - start, msg);
@@ -431,11 +459,12 @@ export class BancoCentralService {
     energia: IndicadorBCB;
     metal: IndicadorBCB;
     fonte: 'api' | 'cache' | 'fallback';
+  estado?: 'disponivel' | 'atrasado';
     atualizadoEm: string;
   }> {
     const cacheKey = 'bcb_icbr_completo';
     const cached = this.cache.get<{ agro: IndicadorBCB; energia: IndicadorBCB; metal: IndicadorBCB; fonte: 'api' | 'cache' | 'fallback'; atualizadoEm: string }>(cacheKey);
-    if (cached) return { ...cached, fonte: 'cache' };
+    if (cached) return { ...cached, fonte: cached.fonte === 'fallback' ? 'fallback' : 'cache' };
 
     const [agroResult, energiaResult, metalResult] = await Promise.allSettled([
       this.fetchICBrAgro(),
@@ -454,6 +483,7 @@ export class BancoCentralService {
       : [agro, energia, metal].some(i => i.fonte === 'cache') ? 'cache' as const : 'fallback' as const;
 
     const result = { agro, energia, metal, fonte: fonteGeral, atualizadoEm: new Date().toISOString() };
+    if (result.fonte === 'api') this.observations.set(cacheKey, result);
     this.cache.set(cacheKey, result, 3600);
     return result;
   }
@@ -461,7 +491,7 @@ export class BancoCentralService {
   private async fetchICBrSubIndex(serie: number, sourceName: string, nome: string, fallbackValor: number): Promise<IndicadorBCB> {
     const cacheKey = sourceName;
     const cached = this.cache.get<IndicadorBCB>(cacheKey);
-    if (cached) return { ...cached, fonte: 'cache' };
+    if (cached) return { ...cached, fonte: cached.fonte === 'fallback' ? 'fallback' : 'cache' };
 
     const start = Date.now();
     try {
@@ -481,9 +511,13 @@ export class BancoCentralService {
         historico,
       };
 
+      if (result.fonte === 'api') this.observations.set(cacheKey, result);
+
       this.cache.set(cacheKey, result, 3600);
       return result;
     } catch (error) {
+      const last = this.observations.get<any>(cacheKey);
+      if (last) return { ...last, fonte: 'cache', estado: 'atrasado' };
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       console.warn(`[BCB] ${nome} falhou: ${msg}`);
       this.manager.updateSourceStatus(sourceName, 'degraded', Date.now() - start, msg);
@@ -497,8 +531,7 @@ export class BancoCentralService {
     const cacheKey = 'bcb_embi';
     const cached = this.cache.get<IndicadorBCB>(cacheKey);
     if (cached) {
-      this.manager.updateSourceStatus('bcb_embi', 'online', 0);
-      return { ...cached, fonte: 'cache' };
+      return { ...cached, fonte: cached.fonte === 'fallback' ? 'fallback' : 'cache' };
     }
 
     const start = Date.now();
@@ -522,10 +555,14 @@ export class BancoCentralService {
         historico,
       };
 
+      if (result.fonte === 'api') this.observations.set(cacheKey, result);
+
       this.cache.set(cacheKey, result, 3600);
       this.manager.updateSourceStatus('bcb_embi', 'online', Date.now() - start);
       return result;
     } catch (error) {
+      const last = this.observations.get<any>(cacheKey);
+      if (last) return { ...last, fonte: 'cache', estado: 'atrasado' };
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       console.warn(`[BCB] EMBI+ falhou: ${msg}`);
       this.manager.updateSourceStatus('bcb_embi', 'degraded', Date.now() - start, msg);
@@ -548,7 +585,7 @@ export class BancoCentralService {
     const cached = this.cache.get<CreditoRuralData>(cacheKey);
     if (cached) {
       console.log('[BCB] Crédito Rural retornado do cache');
-      return { ...cached, fonte: 'cache' };
+      return { ...cached, fonte: cached.fonte === 'fallback' ? 'fallback' : 'cache' };
     }
 
     try {
@@ -566,9 +603,13 @@ export class BancoCentralService {
         historico: parsed.slice(-12),
       };
 
+      if (result.fonte === 'api') this.observations.set(cacheKey, result);
+
       this.cache.set(cacheKey, result, 7200);
       return result;
     } catch {
+      const last = this.observations.get<any>(cacheKey);
+      if (last) return { ...last, fonte: 'cache', estado: 'atrasado' };
       console.warn('[BCB] Usando fallback para Crédito Rural');
       const fallback: CreditoRuralData = {
         volume: FALLBACK_DATA.creditoRural.volume,

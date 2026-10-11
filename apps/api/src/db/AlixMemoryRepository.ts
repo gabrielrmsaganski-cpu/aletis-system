@@ -1,5 +1,5 @@
 /**
- * AlixMemoryRepository — dual-write best-effort.
+ * AlixMemoryRepository — memória canônica e atualização transacional no PostgreSQL.
  *
  * Memória ALIX hoje é arquivo Markdown por cliente em
  * apps/api/storage/alix-memory/{clienteId}.md (estrutura serializada
@@ -10,10 +10,13 @@
  * usados pela ProactiveService.
  */
 import { eq, sql, desc, and, gte } from 'drizzle-orm'
-import { getDb, isPgEnabled } from './client.js'
+import { getDb, getPool, isPgEnabled } from './client.js'
+import { z } from 'zod'
+import { resolveClienteId } from './ClienteRepository.js'
+import { clientMergedError, mergedClientIdentity } from '../services/core/ClientIdentity.js'
 import { alixMemory, alixInsight } from './schema.js'
 
-interface MemoriaLike {
+export interface MemoriaLike {
   clienteId: string
   clienteNome: string
   atualizadoEm: string
@@ -21,60 +24,62 @@ interface MemoriaLike {
 }
 
 /* ── Memória estruturada ────────────────────────────────── */
+export const memoriaEnvelope = z.object({
+  clienteId: z.string().min(1), clienteNome: z.string().min(1), atualizadoEm: z.string().min(1),
+  perfil: z.array(z.string()).default([]), dividasAtivas: z.array(z.string()).default([]), decisoes: z.array(z.string()).default([]),
+  proximasAcoes: z.array(z.string()).default([]), alertas: z.array(z.string()).default([]),
+  historico: z.array(z.object({ data: z.string(), texto: z.string() }).passthrough()).default([]),
+}).passthrough()
+
+/** Lock transacional evita perda de notas quando dois processos atualizam a memória simultaneamente. */
+export async function updateAlixMemoryStrict(clienteId: string, update: (previous: MemoriaLike | null, canonicalId: string) => MemoriaLike): Promise<MemoriaLike> {
+  if (!isPgEnabled()) throw new Error('Atualização transacional de memória exige PostgreSQL.')
+  const canonicalId = await resolveClienteId(clienteId)
+  const connection = await getPool().connect()
+  try {
+    await connection.query('begin')
+    const identity = await connection.query('select payload from cliente where id=$1 for share', [canonicalId])
+    const merged = mergedClientIdentity(identity.rows[0]?.payload)
+    if (merged) throw clientMergedError(merged.canonicalId)
+    await connection.query('select pg_advisory_xact_lock(hashtext($1))', [`alix-memory:${canonicalId}`])
+    const current = await connection.query('select payload from alix_memory where cliente_id=$1 for update', [canonicalId])
+    const next = memoriaEnvelope.parse(update(current.rows[0]?.payload ?? null, canonicalId))
+    if (next.clienteId !== canonicalId) throw new Error('A memória não pode mudar de identidade.')
+    await connection.query('insert into alix_memory(cliente_id,cliente_nome,atualizado_em,payload) values($1,$2,$3,$4::jsonb) on conflict(cliente_id) do update set cliente_nome=excluded.cliente_nome,atualizado_em=excluded.atualizado_em,payload=excluded.payload', [canonicalId, next.clienteNome, next.atualizadoEm, JSON.stringify(next)])
+    await connection.query('commit')
+    return next
+  } catch (error) { await connection.query('rollback'); throw error } finally { connection.release() }
+}
+
 export async function upsertAlixMemory(m: MemoriaLike): Promise<void> {
   if (!isPgEnabled()) return
-  try {
-    const db = getDb()
-    const row = {
-      clienteId: m.clienteId,
-      clienteNome: m.clienteNome,
-      atualizadoEm: new Date(m.atualizadoEm || Date.now()),
-      payload: m as unknown as Record<string, unknown>,
-    }
-    await db.insert(alixMemory).values(row).onConflictDoUpdate({
-      target: alixMemory.clienteId,
-      set: {
-        clienteNome: row.clienteNome,
-        atualizadoEm: row.atualizadoEm,
-        payload: row.payload,
-      },
-    })
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn('[AlixMemoryRepo.upsert] fail:', (err as Error).message)
-  }
+  await updateAlixMemoryStrict(m.clienteId, (previous, canonicalId) => ({ ...previous, ...m, clienteId: canonicalId }))
 }
 
 export async function getAlixMemory(clienteId: string): Promise<MemoriaLike | null> {
   if (!isPgEnabled()) return null
-  try {
-    const db = getDb()
-    const rows = await db.select().from(alixMemory).where(eq(alixMemory.clienteId, clienteId)).limit(1)
-    if (rows.length === 0) return null
-    return rows[0].payload as MemoriaLike
-  } catch {
-    return null
-  }
+  const canonicalId = await resolveClienteId(clienteId)
+  const rows = await getDb().select().from(alixMemory).where(eq(alixMemory.clienteId, canonicalId)).limit(1)
+  return rows.length ? memoriaEnvelope.parse(rows[0].payload) : null
+}
+
+export async function listAlixMemories(): Promise<MemoriaLike[]> {
+  if (!isPgEnabled()) return []
+  const result = await getPool().query("select m.payload from alix_memory m left join cliente c on c.id=m.cliente_id where (c.payload->'identityMerge'->>'status') is distinct from 'merged' order by m.atualizado_em desc")
+  return result.rows.map(row => memoriaEnvelope.parse(row.payload))
 }
 
 export async function deleteAlixMemory(clienteId: string): Promise<void> {
   if (!isPgEnabled()) return
-  try {
-    await getDb().delete(alixMemory).where(eq(alixMemory.clienteId, clienteId))
-  } catch {
-    /* ignore */
-  }
+  const canonicalId = await resolveClienteId(clienteId)
+  if (canonicalId !== clienteId) throw new Error('A memória do cadastro consolidado não pode excluir a memória canônica.')
+  await getDb().delete(alixMemory).where(eq(alixMemory.clienteId, canonicalId))
 }
 
 export async function countAlixMemory(): Promise<number> {
   if (!isPgEnabled()) return 0
-  try {
-    const db = getDb()
-    const r = await db.select({ n: sql<number>`count(*)::int` }).from(alixMemory)
-    return r[0]?.n ?? 0
-  } catch {
-    return 0
-  }
+  const r = await getDb().select({ n: sql<number>`count(*)::int` }).from(alixMemory)
+  return r[0]?.n ?? 0
 }
 
 /* ── Insights diários ────────────────────────────────────── */

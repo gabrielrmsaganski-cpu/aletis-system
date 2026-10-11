@@ -38,22 +38,27 @@ export default async function (fastify: FastifyInstance) {
 
   /* ════════════════ DASHBOARD / DRE ════════════════ */
 
-  fastify.get('/api/financeiro/dashboard', async () => ok(svc.calcularDashboard()))
+  fastify.get('/api/financeiro/dashboard', async (req: FastifyRequest) => {
+    const { empresaId } = req.query as { empresaId?: string }
+    return ok(svc.calcularDashboard(empresaId))
+  })
 
   fastify.get('/api/financeiro/dre/:competencia', async (req: FastifyRequest) => {
     const { competencia } = req.params as { competencia: string }
-    return ok(svc.calcularDREMensal(competencia))
+    const { empresaId } = req.query as { empresaId?: string }
+    return ok(svc.calcularDREMensal(competencia, empresaId))
   })
 
   fastify.get('/api/financeiro/dre-anual/:ano', async (req: FastifyRequest) => {
     const { ano } = req.params as { ano: string }
-    return ok(svc.calcularDREAnual(Number(ano)))
+    const { empresaId } = req.query as { empresaId?: string }
+    return ok(svc.calcularDREAnual(Number(ano), empresaId))
   })
 
   fastify.get('/api/financeiro/rbt12', async (req: FastifyRequest) => {
-    const { competencia } = req.query as { competencia?: string }
+    const { competencia, empresaId } = req.query as { competencia?: string; empresaId?: string }
     const comp = competencia ?? new Date().toISOString().slice(0, 7)
-    return ok({ competencia: comp, rbt12: svc.calcularRBT12(comp) })
+    return ok({ competencia: comp, rbt12: svc.calcularRBT12(comp, empresaId) })
   })
 
   fastify.get('/api/financeiro/categorias', async () => ok(CATEGORIAS_DESPESA))
@@ -61,19 +66,20 @@ export default async function (fastify: FastifyInstance) {
   /* ════════════════ MARGEM POR CLIENTE ════════════════ */
 
   fastify.get('/api/financeiro/margem-cliente', async (req: FastifyRequest) => {
-    const { ano, limite } = req.query as { ano?: string; limite?: string }
+    const { ano, limite, empresaId } = req.query as { ano?: string; limite?: string; empresaId?: string }
     return ok(svc.calcularMargensPorCliente({
       ano: ano ? Number(ano) : undefined,
       limite: limite ? Number(limite) : undefined,
+      empresaId,
     }))
   })
 
   /* ════════════════ PROJEÇÃO DE CAIXA ════════════════ */
 
   fastify.get('/api/financeiro/projecao-caixa', async (req: FastifyRequest) => {
-    const { dias } = req.query as { dias?: string }
+    const { dias, empresaId } = req.query as { dias?: string; empresaId?: string }
     const diasHorizonte = dias ? Math.min(180, Math.max(14, Number(dias))) : 90
-    return ok(svc.calcularProjecaoCaixa(diasHorizonte))
+    return ok(svc.calcularProjecaoCaixa(diasHorizonte, empresaId))
   })
 
   /* ════════════════ RECORRÊNCIAS ════════════════ */
@@ -96,10 +102,10 @@ export default async function (fastify: FastifyInstance) {
   /* ════════════════ RECEITAS ════════════════ */
 
   fastify.get('/api/financeiro/receitas', async (req: FastifyRequest) => {
-    const { competencia, status, cliente } = req.query as {
-      competencia?: string; status?: Receita['status']; cliente?: string
+    const { competencia, status, cliente, empresaId } = req.query as {
+      competencia?: string; status?: Receita['status']; cliente?: string; empresaId?: string
     }
-    return ok(svc.listarReceitas({ competencia, status, clienteBusca: cliente }))
+    return ok(svc.listarReceitas({ competencia, status, clienteBusca: cliente, empresaId }))
   })
 
   fastify.get('/api/financeiro/receitas/:id', async (req: FastifyRequest, reply: FastifyReply) => {
@@ -238,10 +244,10 @@ export default async function (fastify: FastifyInstance) {
   /* ════════════════ DESPESAS ════════════════ */
 
   fastify.get('/api/financeiro/despesas', async (req: FastifyRequest) => {
-    const { competencia, categoria, status } = req.query as {
-      competencia?: string; categoria?: CategoriaDespesa; status?: Despesa['status']
+    const { competencia, categoria, status, empresaId } = req.query as {
+      competencia?: string; categoria?: CategoriaDespesa; status?: Despesa['status']; empresaId?: string
     }
-    return ok(svc.listarDespesas({ competencia, categoria, status }))
+    return ok(svc.listarDespesas({ competencia, categoria, status, empresaId }))
   })
 
   fastify.get('/api/financeiro/despesas/:id', async (req: FastifyRequest, reply: FastifyReply) => {
@@ -328,14 +334,15 @@ export default async function (fastify: FastifyInstance) {
   /* ════════════════ LANÇAMENTOS BANCÁRIOS ════════════════ */
 
   fastify.get('/api/financeiro/lancamentos', async (req: FastifyRequest) => {
-    const { contaId, dataInicio, dataFim, naoClassificados } = req.query as {
-      contaId?: string; dataInicio?: string; dataFim?: string; naoClassificados?: string
+    const { contaId, dataInicio, dataFim, naoClassificados, empresaId } = req.query as {
+      contaId?: string; dataInicio?: string; dataFim?: string; naoClassificados?: string; empresaId?: string
     }
     return ok(svc.listarLancamentos({
       contaId,
       dataInicio,
       dataFim,
       naoClassificados: naoClassificados === 'true',
+      empresaId,
     }))
   })
 
@@ -513,5 +520,79 @@ export default async function (fastify: FastifyInstance) {
       limit: limit ? Number(limit) : 10,
     })
     return ok(data)
+  })
+
+  /* ════════════════ EMPRESAS (MULTI-CNPJ) ════════════════ */
+
+  fastify.get('/api/financeiro/empresas', async () => ok(svc.listarEmpresas()))
+
+  fastify.get('/api/financeiro/empresas/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string }
+    const e = svc.getEmpresa(id)
+    if (!e) { reply.status(404); return fail('Empresa não encontrada', 'NOT_FOUND') }
+    return ok(e)
+  })
+
+  fastify.post('/api/financeiro/empresas', async (req: FastifyRequest) => {
+    const body = req.body as Omit<import('../services/financeiro/types.js').Empresa, 'id' | 'criadoEm' | 'atualizadoEm'>
+    return ok(svc.criarEmpresa(body))
+  })
+
+  fastify.put('/api/financeiro/empresas/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string }
+    const patch = req.body as Partial<import('../services/financeiro/types.js').Empresa>
+    const updated = svc.atualizarEmpresa(id, patch)
+    if (!updated) { reply.status(404); return fail('Empresa não encontrada', 'NOT_FOUND') }
+    return ok(updated)
+  })
+
+  fastify.delete('/api/financeiro/empresas/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string }
+    const okDel = svc.deletarEmpresa(id)
+    if (!okDel) { reply.status(404); return fail('Empresa não encontrada', 'NOT_FOUND') }
+    return ok({ deleted: true })
+  })
+
+  /* ════════════════ LEVANTAMENTOS MENSAIS POR EMPRESA ════════════════ */
+
+  fastify.get('/api/financeiro/levantamentos', async (req: FastifyRequest) => {
+    const { empresaId, competencia } = req.query as { empresaId?: string; competencia?: string }
+    return ok(svc.listarLevantamentos({ empresaId, competencia }))
+  })
+
+  fastify.get('/api/financeiro/levantamentos/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string }
+    const l = svc.getLevantamento(id)
+    if (!l) { reply.status(404); return fail('Levantamento não encontrado', 'NOT_FOUND') }
+    return ok(l)
+  })
+
+  fastify.post('/api/financeiro/levantamentos', async (req: FastifyRequest) => {
+    const body = req.body as Omit<import('../services/financeiro/types.js').LevantamentoMensalEmpresa, 'id' | 'criadoEm' | 'atualizadoEm' | 'margemPercentual'>
+    return ok(svc.criarLevantamento(body))
+  })
+
+  fastify.put('/api/financeiro/levantamentos/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string }
+    const patch = req.body as Partial<import('../services/financeiro/types.js').LevantamentoMensalEmpresa>
+    const updated = svc.atualizarLevantamento(id, patch)
+    if (!updated) { reply.status(404); return fail('Levantamento não encontrado', 'NOT_FOUND') }
+    return ok(updated)
+  })
+
+  fastify.delete('/api/financeiro/levantamentos/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string }
+    const okDel = svc.deletarLevantamento(id)
+    if (!okDel) { reply.status(404); return fail('Levantamento não encontrado', 'NOT_FOUND') }
+    return ok({ deleted: true })
+  })
+
+  /* ════════════════ RELATÓRIO CONSOLIDADO POR EMPRESA ════════════════ */
+
+  fastify.get('/api/financeiro/empresas/:id/relatorio', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string }
+    const rel = svc.gerarRelatorioEmpresa(id)
+    if (!rel.empresa) { reply.status(404); return fail('Empresa não encontrada', 'NOT_FOUND') }
+    return ok(rel)
   })
 }

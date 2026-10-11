@@ -13,24 +13,24 @@ export default function NotFound() {
   const navigate = useNavigate()
   const sugestoes: Array<{ label: string; href: string; nota: string }> = [
     { label: 'Dashboard', href: '/dashboard', nota: 'visão geral do escritório' },
-    { label: 'CRM', href: '/crm', nota: 'lista de clientes ativos' },
+    { label: 'CRM ALETIS', href: '/crm', nota: 'lista de clientes ativos' },
     { label: 'Prospecção', href: '/prospeccao', nota: 'OODA — leads qualificados' },
-    { label: 'Aletéia', href: '/ia', nota: 'assistente IA' },
+    { label: 'ALIX', href: '/ia', nota: 'assistente IA' },
   ]
 
   return (
     <div className="min-h-[70vh] flex items-center justify-center py-12">
       <div className="card-premium max-w-2xl w-full p-10 text-center">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-aletis-gold/15 border border-aletis-gold/40 mb-5">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-lg bg-aletis-gold/15 border border-aletis-gold/40 mb-5">
           <AlertCircle className="w-8 h-8 text-aletis-gold-escuro" />
         </div>
         <p className="font-display text-[11px] font-semibold uppercase tracking-widest text-aletis-gold-escuro">
           404 · Rota não encontrada
         </p>
-        <h1 className="mt-3 font-display text-3xl md:text-4xl font-bold text-aletis-verde tracking-tight">
+        <h1 className="mt-3 font-display text-3xl md:text-4xl font-bold text-foreground tracking-tight">
           Essa página não está no mapa.
         </h1>
-        <p className="mt-3 max-w-md mx-auto font-body text-[14px] leading-relaxed text-aletis-verde-medio">
+        <p className="mt-3 max-w-md mx-auto font-body text-[14px] leading-relaxed text-muted-foreground">
           Tentei abrir{' '}
           <code className="px-1.5 py-0.5 rounded bg-aletis-cream font-mono text-[12px] text-aletis-verde-escuro">
             {pathname}
@@ -52,7 +52,7 @@ export default function NotFound() {
         </div>
 
         <div className="mt-9 pt-7 border-t border-aletis-cream-escuro/60">
-          <p className="font-display text-[10.5px] font-semibold uppercase tracking-widest text-aletis-verde-medio">
+          <p className="font-display text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             <Search size={12} className="inline -mt-0.5 mr-1.5" />
             Atalhos rápidos
           </p>
@@ -61,12 +61,12 @@ export default function NotFound() {
               <li key={s.href}>
                 <Link
                   to={s.href}
-                  className="block rounded-xl border border-aletis-cream-escuro/70 bg-aletis-cream-papel px-3 py-2.5 hover:border-aletis-gold/45 hover:bg-white transition"
+                  className="block rounded-xl border border-aletis-cream-escuro/70 bg-muted px-3 py-2.5 hover:border-aletis-gold/45 hover:bg-white transition"
                 >
-                  <p className="font-display text-[12.5px] font-bold text-aletis-verde">
+                  <p className="font-display text-[12.5px] font-bold text-foreground">
                     {s.label}
                   </p>
-                  <p className="font-body text-[10.5px] text-aletis-verde-medio mt-0.5">
+                  <p className="font-body text-xs text-muted-foreground mt-0.5">
                     {s.nota}
                   </p>
                 </Link>
@@ -74,7 +74,7 @@ export default function NotFound() {
             ))}
           </ul>
           <p className="mt-5 font-body text-[11.5px] text-aletis-verde-claro">
-            Pressione <kbd className="px-1.5 py-0.5 rounded bg-aletis-cream-papel border border-aletis-cream-escuro font-mono text-[10px]">⌘K</kbd> para abrir a paleta de comandos.
+            Pressione <kbd className="px-1.5 py-0.5 rounded bg-muted border border-aletis-cream-escuro font-mono text-[11px]">⌘K</kbd> para abrir a paleta de comandos.
           </p>
         </div>
       </div>

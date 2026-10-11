@@ -1,8 +1,8 @@
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert';
 import { OrchestratorService } from '../../src/services/alix/OrchestratorService.ts';
 import { DataSourceManager } from '../../src/services/DataSourceManager.ts';
-import { isLLMEnabled } from '../../src/services/llm/ClaudeFoundryClient.ts';
+import { isOpenAIEnabled } from '../../src/services/llm/OpenAIClient.ts';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -10,7 +10,7 @@ const runLLM = process.env.RUN_LLM_TESTS === '1';
 
 test(
   'GOLDEN: "analisa o top lead de MT" → Orchestrator delega ou usa tool leve',
-  { skip: !runLLM || !isLLMEnabled(), timeout: 180_000 },
+  { skip: !runLLM || !isOpenAIEnabled(), timeout: 180_000 },
   async () => {
     const orch = await OrchestratorService.create(
       DataSourceManager.getInstance(),
@@ -33,7 +33,7 @@ test(
 
 test(
   'REGRESSION: "qual câmbio" responde sem delegar (usando tools legados do AlixService)',
-  { skip: !runLLM || !isLLMEnabled(), timeout: 60_000 },
+  { skip: !runLLM || !isOpenAIEnabled(), timeout: 60_000 },
   async () => {
     const orch = await OrchestratorService.create(
       DataSourceManager.getInstance(),

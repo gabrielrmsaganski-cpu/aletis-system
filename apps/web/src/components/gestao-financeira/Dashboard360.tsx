@@ -11,7 +11,7 @@ import {
 import { Skeleton as UISkeleton, SkeletonKpiGrid } from '../ui'
 import {
   AlertTriangle, AlertCircle, Info, TrendingUp, TrendingDown,
-  RefreshCw, Loader2, CheckCircle2,
+  RefreshCw, Loader2, CheckCircle2, ChevronDown, ChevronRight,
 } from 'lucide-react'
 
 interface Props {
@@ -33,7 +33,7 @@ interface Dashboard360Data {
   contadores: any
 }
 
-const COLORS = ['#0F4C35', '#D4A574', '#A0392F', '#5A8A6E', '#7B5B30', '#94A3B8', '#FBBF24', '#3B82F6']
+const COLORS = ['#17251b', '#e3bd80', '#a83232', '#5A8A6E', '#7B5B30', '#94A3B8', '#FBBF24', '#3B82F6']
 
 export default function Dashboard360({ grupoId }: Props) {
   const [data, setData] = useState<Dashboard360Data | null>(null)
@@ -114,29 +114,29 @@ export default function Dashboard360({ grupoId }: Props) {
   }))
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Header com filtros + ação recalcular */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex flex-col gap-3 rounded-lg border border-aletis-borda bg-card p-4 shadow-none lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h3 className="text-sm font-display font-semibold text-aletis-grafite-escuro">
-            🔬 Dashboard 360° — Diagnóstico Completo
+          <h3 className="text-sm font-display font-semibold text-foreground">
+            Dashboard 360 - Diagnóstico completo
           </h3>
-          <p className="text-[10px] font-body text-aletis-grafite-claro">
+          <p className="text-[11px] font-body text-muted-foreground">
             {data.contadores.culturas} culturas · {data.contadores.contratos} contratos · {data.contadores.fazendas} fazendas · {data.contadores.garantias} garantias · {data.contadores.premissas} premissas · {data.insights.length} insights
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Toggle de cenário */}
-          <div className="inline-flex rounded-lg border border-aletis-grafite-claro/20 overflow-hidden text-[10px] font-body">
+          <div className="inline-flex overflow-hidden rounded-xl border border-aletis-borda bg-card text-[11px] font-body">
             {(['todos', 'planejado', 'realizado', 'proposta'] as const).map((c) => (
               <button
                 key={c}
                 type="button"
                 onClick={() => setCenarioFiltro(c)}
-                className={`px-2.5 py-1 transition-colors ${
+                className={`h-8 px-2.5 transition-colors ${
                   cenarioFiltro === c
                     ? 'bg-aletis-verde text-white'
-                    : 'bg-white text-aletis-grafite-escuro hover:bg-aletis-grafite-escuro/5'
+                    : 'bg-card text-foreground hover:bg-aletis-bege/55'
                 }`}
               >
                 {c === 'todos' ? 'Todos' : c[0].toUpperCase() + c.slice(1)}
@@ -147,7 +147,7 @@ export default function Dashboard360({ grupoId }: Props) {
             type="button"
             onClick={recalcular}
             disabled={recalculating}
-            className="px-3 py-1.5 rounded-lg bg-aletis-verde text-white text-xs font-body font-semibold hover:bg-aletis-verde-escuro inline-flex items-center gap-1.5 disabled:opacity-50"
+            className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-aletis-verde px-3 text-xs font-body font-semibold text-white hover:bg-aletis-verde-escuro disabled:opacity-50"
           >
             {recalculating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             Recalcular
@@ -219,7 +219,7 @@ export default function Dashboard360({ grupoId }: Props) {
       {/* CHARTS — grid 2 colunas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Receita por safra */}
-        <ChartCard title="🌾 Receita × Custo por Safra">
+        <ChartCard title="Receita x custo por safra">
           {safrasChart.length === 0 ? <Empty msg="Sem safras cadastradas" /> : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={safrasChart} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
@@ -227,16 +227,16 @@ export default function Dashboard360({ grupoId }: Props) {
                 <YAxis tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} tick={{ fontSize: 10 }} />
                 <Tooltip formatter={(v: any) => fmtBRL(v as number)} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="receita" fill="#0F4C35" name="Receita" />
-                <Bar dataKey="custo" fill="#A0392F" name="Custo" />
-                <Bar dataKey="resultado" fill="#D4A574" name="Resultado" />
+                <Bar dataKey="receita" fill="#17251b" name="Receita" />
+                <Bar dataKey="custo" fill="#a83232" name="Custo" />
+                <Bar dataKey="resultado" fill="#e3bd80" name="Resultado" />
               </BarChart>
             </ResponsiveContainer>
           )}
         </ChartCard>
 
         {/* Endividamento por credor */}
-        <ChartCard title="🏦 Endividamento por Credor">
+        <ChartCard title="Endividamento por credor">
           {credoresChart.length === 0 ? <Empty msg="Sem contratos cadastrados" /> : (
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
@@ -251,7 +251,7 @@ export default function Dashboard360({ grupoId }: Props) {
         </ChartCard>
 
         {/* Cenários DRE FCL */}
-        <ChartCard title="📈 FCL — Cenários (pessimista / base / otimista)" full>
+        <ChartCard title="FCL - cenários pessimista, base e otimista" full>
           {cenariosChart.length === 0 ? <Empty msg="Sem cenários" /> : (
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={cenariosChart} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
@@ -260,16 +260,16 @@ export default function Dashboard360({ grupoId }: Props) {
                 <Tooltip formatter={(v: any) => fmtBRL(v as number)} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <ReferenceLine y={0} stroke="#94A3B8" strokeDasharray="3 3" />
-                <Line type="monotone" dataKey="pessimista" stroke="#A0392F" strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="base" stroke="#0F4C35" strokeWidth={2.5} dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="otimista" stroke="#D4A574" strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="pessimista" stroke="#a83232" strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="base" stroke="#17251b" strokeWidth={2.5} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="otimista" stroke="#e3bd80" strokeWidth={2} dot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
           )}
         </ChartCard>
 
         {/* Passivos por categoria */}
-        <ChartCard title="📊 Passivos Consolidados">
+        <ChartCard title="Passivos consolidados">
           {passivosChart.length === 0 ? <Empty msg="Sem passivos cadastrados" /> : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={passivosChart} layout="vertical" margin={{ top: 5, right: 10, left: 60, bottom: 5 }}>
@@ -286,7 +286,7 @@ export default function Dashboard360({ grupoId }: Props) {
 
         {/* EBITDA mensal (primeira safra) */}
         {data.ebitdaMensal[0] && (
-          <ChartCard title={`💰 EBITDA Mensal — Safra ${data.ebitdaMensal[0].safra}`} full>
+          <ChartCard title={`EBITDA mensal - safra ${data.ebitdaMensal[0].safra}`} full>
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={data.ebitdaMensal[0].meses}>
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} />
@@ -294,23 +294,23 @@ export default function Dashboard360({ grupoId }: Props) {
                 <Tooltip formatter={(v: any) => fmtBRL(v as number)} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <ReferenceLine y={0} stroke="#94A3B8" strokeDasharray="3 3" />
-                <Area type="monotone" dataKey="receita" stackId="1" stroke="#0F4C35" fill="#0F4C35" fillOpacity={0.4} />
-                <Area type="monotone" dataKey="custoTotal" stackId="2" stroke="#A0392F" fill="#A0392F" fillOpacity={0.3} />
-                <Line type="monotone" dataKey="saldoAcumulado" stroke="#D4A574" strokeWidth={2.5} />
+                <Area type="monotone" dataKey="receita" stackId="1" stroke="#17251b" fill="#17251b" fillOpacity={0.4} />
+                <Area type="monotone" dataKey="custoTotal" stackId="2" stroke="#a83232" fill="#a83232" fillOpacity={0.3} />
+                <Line type="monotone" dataKey="saldoAcumulado" stroke="#e3bd80" strokeWidth={2.5} />
               </AreaChart>
             </ResponsiveContainer>
           </ChartCard>
         )}
 
         {/* Raio X 10 anos */}
-        <ChartCard title="🩻 Raio X — Saldo Acumulado" full>
+        <ChartCard title="Raio X - saldo acumulado" full>
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={data.raioX.anos}>
               <XAxis dataKey="ano" tick={{ fontSize: 10 }} />
               <YAxis tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} tick={{ fontSize: 10 }} />
               <Tooltip formatter={(v: any) => fmtBRL(v as number)} />
               <ReferenceLine y={0} stroke="#94A3B8" strokeDasharray="3 3" />
-              <Area type="monotone" dataKey="saldoAcumulado" stroke="#0F4C35" fill="#0F4C35" fillOpacity={0.3} name="Saldo acumulado" />
+              <Area type="monotone" dataKey="saldoAcumulado" stroke="#17251b" fill="#17251b" fillOpacity={0.3} name="Saldo acumulado" />
             </AreaChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -318,13 +318,13 @@ export default function Dashboard360({ grupoId }: Props) {
 
       {/* Cronograma de Amortização — drill-down mensal por contrato */}
       {data.endividamento.contratos.length > 0 && (
-        <section className="card-premium p-4">
+        <section className="rounded-lg border border-aletis-borda bg-card p-4 shadow-none">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-display font-semibold text-aletis-grafite-escuro">
-              📅 Cronograma de Amortização — drill-down mensal
+            <h3 className="text-sm font-display font-semibold text-foreground">
+              Cronograma de amortização
             </h3>
-            <span className="text-[10px] text-aletis-grafite-claro">
-              Click no contrato para expandir parcela-a-parcela
+            <span className="text-[11px] text-muted-foreground">
+              Clique no contrato para expandir parcela a parcela
             </span>
           </div>
           <div className="space-y-2">
@@ -347,50 +347,50 @@ function CronogramaContrato({ contrato, expanded, onToggle }: { contrato: any; e
   const [vista, setVista] = useState<'anual' | 'mensal'>('anual')
 
   return (
-    <div className="rounded-lg border border-aletis-grafite-claro/15 overflow-hidden">
+    <div className="overflow-hidden rounded-xl border border-aletis-borda bg-card">
       <button
         type="button"
         onClick={onToggle}
-        className="w-full px-3 py-2 cursor-pointer text-xs font-body bg-aletis-cream/30 hover:bg-aletis-cream/50 flex items-center justify-between"
+        className="flex w-full cursor-pointer items-center justify-between gap-3 bg-aletis-bege/25 px-3 py-2 text-xs font-body hover:bg-aletis-bege/45"
       >
-        <div className="flex items-center gap-2">
-          <span>{expanded ? '▼' : '▶'}</span>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
           <strong>{contrato.credor}</strong>
-          <span className="text-aletis-grafite-claro">·</span>
+          <span className="text-muted-foreground">·</span>
           <span>{contrato.metodoCalculo}</span>
-          <span className="text-aletis-grafite-claro">·</span>
+          <span className="text-muted-foreground">·</span>
           <span>{contrato.prazoParcelas}m</span>
-          <span className="text-aletis-grafite-claro">·</span>
+          <span className="text-muted-foreground">·</span>
           <span>taxa período {(contrato.taxaPeriodo * 100).toFixed(4)}%</span>
         </div>
-        <div className="flex items-center gap-3 tabular-nums">
+        <div className="flex shrink-0 items-center gap-3 tabular-nums">
           <span>saldo {fmtBRL(contrato.saldoAtual)}</span>
         </div>
       </button>
       {expanded && (
         <div className="p-3">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-[10px] text-aletis-grafite-claro">Visualização:</span>
-            <div className="inline-flex rounded-md border border-aletis-grafite-claro/20 overflow-hidden text-[10px]">
+            <span className="text-[11px] text-muted-foreground">Visualização:</span>
+            <div className="inline-flex rounded-md border border-aletis-grafite-claro/20 overflow-hidden text-[11px]">
               <button
                 type="button"
                 onClick={() => setVista('anual')}
-                className={`px-2 py-0.5 ${vista === 'anual' ? 'bg-aletis-verde text-white' : 'bg-white'}`}
+                className={`px-2 py-0.5 ${vista === 'anual' ? 'bg-aletis-verde text-white' : 'bg-card'}`}
               >
                 Anual
               </button>
               <button
                 type="button"
                 onClick={() => setVista('mensal')}
-                className={`px-2 py-0.5 ${vista === 'mensal' ? 'bg-aletis-verde text-white' : 'bg-white'}`}
+                className={`px-2 py-0.5 ${vista === 'mensal' ? 'bg-aletis-verde text-white' : 'bg-card'}`}
               >
                 Mensal ({contrato.installments?.length ?? 0})
               </button>
             </div>
           </div>
           <div className="overflow-x-auto max-h-96">
-            <table className="w-full text-[11px] font-body">
-              <thead className="text-[10px] uppercase text-aletis-grafite-claro sticky top-0 bg-white">
+            <table className="ui-table w-full text-[11px] font-body">
+              <thead className="text-[11px] uppercase text-muted-foreground sticky top-0 bg-card">
                 {vista === 'anual' ? (
                   <tr>
                     <th className="text-left p-1">Ano</th>
@@ -448,26 +448,26 @@ function KpiCard({ label, value, sub, tone }: { label: string; value: string; su
     neutral: 'border-l-aletis-grafite-claro/30',
   }[tone]
   const subCls = {
-    good: 'text-aletis-verde',
+    good: 'text-foreground',
     warn: 'text-amber-600',
     bad: 'text-red-600',
-    neutral: 'text-aletis-grafite-claro',
+    neutral: 'text-muted-foreground',
   }[tone]
   return (
-    <div className={`card-premium p-3 border-l-4 ${toneCls}`}>
-      <p className="text-[10px] font-body uppercase tracking-wider text-aletis-grafite-claro">{label}</p>
-      <p className="text-base font-display font-bold text-aletis-grafite-escuro tabular-nums leading-tight mt-0.5">
+    <div className={`rounded-lg border border-aletis-borda bg-card p-3 shadow-none border-l-4 ${toneCls}`}>
+      <p className="text-[11px] font-body uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="text-base font-display font-semibold text-foreground tabular-nums leading-tight mt-0.5">
         {value}
       </p>
-      {sub && <p className={`text-[10px] font-body mt-0.5 ${subCls}`}>{sub}</p>}
+      {sub && <p className={`text-[11px] font-body mt-0.5 ${subCls}`}>{sub}</p>}
     </div>
   )
 }
 
 function ChartCard({ title, children, full }: { title: string; children: React.ReactNode; full?: boolean }) {
   return (
-    <div className={`card-premium p-4 ${full ? 'lg:col-span-2' : ''}`}>
-      <h4 className="text-xs font-display font-semibold text-aletis-grafite-escuro mb-2">{title}</h4>
+    <div className={`rounded-lg border border-aletis-borda bg-card p-4 shadow-none ${full ? 'lg:col-span-2' : ''}`}>
+      <h4 className="text-xs font-display font-semibold text-foreground mb-2">{title}</h4>
       {children}
     </div>
   )
@@ -491,7 +491,7 @@ function InsightCard({ insight }: { insight: any }) {
         <Icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${iconCls}`} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-mono uppercase font-semibold tracking-wider">
+            <span className="text-[11px] font-mono uppercase font-semibold tracking-wider">
               [{insight.categoria}]
             </span>
             <p className="text-xs font-body font-semibold leading-tight">{insight.titulo}</p>
@@ -508,7 +508,7 @@ function InsightCard({ insight }: { insight: any }) {
 
 function Empty({ msg }: { msg: string }) {
   return (
-    <div className="h-[220px] flex items-center justify-center text-xs text-aletis-grafite-claro">
+    <div className="h-[220px] flex items-center justify-center text-xs text-muted-foreground">
       {msg}
     </div>
   )

@@ -1,0 +1,1 @@
+ALTER TABLE proposta ADD COLUMN IF NOT EXISTS revision integer NOT NULL DEFAULT 0;

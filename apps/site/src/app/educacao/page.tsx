@@ -55,7 +55,7 @@ export default function EducacaoIndex() {
             do <span className="text-aletis-gold">financeiro agro</span>
           </>
         }
-        subtitulo="Crédito rural, programas oficiais, instrumentos do mercado, renegociação, direitos e anatomia de contratos — tudo o que o produtor precisa para decidir com clareza, na linguagem da mesa ALETIS."
+        subtitulo="Crédito rural, programas oficiais, instrumentos do mercado, renegociação, direitos e anatomia de contratos — tudo o que o produtor precisa para decidir com clareza e sem dialeto bancário."
         breadcrumbs={[{ label: 'Início', href: '/' }, { label: 'Educação' }]}
       />
 
@@ -92,7 +92,7 @@ export default function EducacaoIndex() {
               Sete eixos. Tudo o que pesa no caixa do produtor — explicado.
             </h2>
             <p className="mt-4 max-w-2xl text-[16px] leading-relaxed text-aletis-verde/80">
-              Cada eixo abre em páginas curtas, com tabelas, exemplos numéricos e referência legal direta. Sem dialeto bancário; sem texto jurídico opaco. O que o consultor da mesa explicaria no whiteboard.
+              Cada eixo abre em páginas curtas, com tabelas, exemplos numéricos e referência legal direta. Sem texto jurídico opaco, com explicação que cabe na conversa de gestão.
             </p>
           </Reveal>
 
@@ -146,18 +146,18 @@ export default function EducacaoIndex() {
         <Container>
           <div className="grid gap-10 md:grid-cols-[2fr_1fr] md:items-center">
             <Reveal>
-              <Eyebrow light>Mesa ALETIS</Eyebrow>
+              <Eyebrow light>ALETIS</Eyebrow>
               <h2 className="mt-3 font-display text-[28px] font-semibold text-aletis-cream md:text-[36px]">
                 Educação é o ponto de partida.<br />
                 <span className="text-aletis-gold">Decisão informada</span>{' '}
-                exige uma mesa do seu lado.
+                exige método do seu lado.
               </h2>
               <p className="mt-5 max-w-xl text-[16px] leading-relaxed text-aletis-cream/85">
-                Aprender o que é DSCR, CPR ou transação tributária resolve metade do problema. A outra metade é traduzir o cenário do seu balanço em uma decisão concreta — repactuação, captação, transação ou litígio. É o que a mesa ALETIS faz desde 2018.
+                Aprender o que é DSCR, CPR ou transação tributária resolve metade do problema. A outra metade é traduzir o cenário do seu balanço em uma decisão concreta — repactuação, captação, transação ou litígio. É o que a ALETIS faz.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <ButtonLink href="/contato" variant="primary">
-                  Conversar com a mesa
+                  Conversar com a ALETIS
                 </ButtonLink>
                 <ButtonLink href="/calculadoras" variant="ghost">
                   Abrir calculadoras

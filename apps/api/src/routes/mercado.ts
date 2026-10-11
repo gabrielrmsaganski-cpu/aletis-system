@@ -1,544 +1,50 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { z } from 'zod'
 import { DataSourceManager } from '../services/DataSourceManager.js'
-import { MarketBriefService } from '../services/MarketBriefService.js'
+import { MarketBriefService, collectMarketPrices } from '../services/MarketBriefService.js'
 import { SazonalidadeService } from '../services/SazonalidadeService.js'
 
-/* ========================================================================
- *  Tipos (mantidos para compatibilidade com frontend)
- * ======================================================================== */
+const cultures = ['soja', 'milho', 'boi', 'cafe', 'algodao', 'trigo', 'acucar', 'leite', 'arroz', 'feijao'] as const
+const priceQuery = z.object({ culturas: z.string().optional(), periodo: z.string().regex(/^\d{1,3}d?$/).optional() })
+const focusQuery = z.object({ top: z.coerce.number().int().min(1).max(100).default(10), ano: z.coerce.number().int().min(2000).max(2100).optional(), baseCalculo: z.coerce.number().int().min(0).max(1).optional() })
 
-interface PrecoHistorico {
-  data: string
-  valor: number
-  variacao: number
+function unavailableMarketData(fonte: string, error: string) {
+  return { success: false, data: null, error, meta: { estado: 'indisponivel', fonteOrigem: 'indisponivel', fonte, atualizacao: null, aviso: 'Sem observações verificadas para esta consulta. Nenhuma série artificial foi usada.' } }
 }
-
-interface CotacaoCultura {
-  cultura: string
-  unidade: string
-  praca: string
-  precoAtual: number
-  variacao24h: number
-  variacao7d: number
-  variacao30d: number
-  minimo30d: number
-  maximo30d: number
-  historico: PrecoHistorico[]
-  fonte: string
-  fonteOrigem: 'api' | 'cache' | 'fallback'
-  atualizacao: string
-}
-
-interface Indicador {
-  nome: string
-  sigla: string
-  valor: number
-  unidade: string
-  referencia: string
-  variacao: number
-  fonte: string
-  fonteOrigem: 'api' | 'cache' | 'fallback'
-  atualizacao: string
-  confiabilidade: 'alta' | 'media' | 'baixa'
-  historico?: { data: string; valor: number }[]
-}
-
-/* ========================================================================
- *  Fallback data (usado apenas quando API + cache falham)
- * ======================================================================== */
-
-const FALLBACK_CULTURAS: Record<string, Omit<CotacaoCultura, 'historico' | 'fonteOrigem'>> = {
-  soja: {
-    cultura: 'Soja', unidade: 'R$/saca 60kg', praca: 'Paranaguá-PR',
-    precoAtual: 138.50, variacao24h: 0.85, variacao7d: -1.20, variacao30d: 3.45,
-    minimo30d: 132.00, maximo30d: 141.80,
-    fonte: 'CEPEA/ESALQ-USP', atualizacao: new Date().toISOString(),
-  },
-  milho: {
-    cultura: 'Milho', unidade: 'R$/saca 60kg', praca: 'Campinas-SP',
-    precoAtual: 72.30, variacao24h: -0.42, variacao7d: 1.15, variacao30d: -2.80,
-    minimo30d: 69.50, maximo30d: 75.20,
-    fonte: 'CEPEA/ESALQ-USP', atualizacao: new Date().toISOString(),
-  },
-  boi: {
-    cultura: 'Boi Gordo', unidade: 'R$/arroba', praca: 'São Paulo-SP',
-    precoAtual: 312.45, variacao24h: 1.20, variacao7d: 2.50, variacao30d: 5.80,
-    minimo30d: 295.00, maximo30d: 315.00,
-    fonte: 'CEPEA/ESALQ-USP', atualizacao: new Date().toISOString(),
-  },
-  cafe: {
-    cultura: 'Café Arábica', unidade: 'R$/saca 60kg', praca: 'Mogiana-SP',
-    precoAtual: 2450.00, variacao24h: 2.10, variacao7d: 4.30, variacao30d: 8.50,
-    minimo30d: 2200.00, maximo30d: 2500.00,
-    fonte: 'CEPEA/ESALQ-USP', atualizacao: new Date().toISOString(),
-  },
-  algodao: {
-    cultura: 'Algodão em Pluma', unidade: 'R$/arroba', praca: 'Esalq',
-    precoAtual: 142.80, variacao24h: -0.30, variacao7d: -0.90, variacao30d: 1.50,
-    minimo30d: 138.00, maximo30d: 145.00,
-    fonte: 'CEPEA/ESALQ-USP', atualizacao: new Date().toISOString(),
-  },
-  trigo: {
-    cultura: 'Trigo', unidade: 'R$/saca 60kg', praca: 'Paraná',
-    precoAtual: 82.50, variacao24h: 0.60, variacao7d: 1.80, variacao30d: -1.20,
-    minimo30d: 79.00, maximo30d: 85.00,
-    fonte: 'CEPEA/ESALQ-USP', atualizacao: new Date().toISOString(),
-  },
-  acucar: {
-    cultura: 'Açúcar Cristal', unidade: 'R$/saca 50kg', praca: 'São Paulo-SP',
-    precoAtual: 158.30, variacao24h: 0.45, variacao7d: -0.70, variacao30d: 2.30,
-    minimo30d: 152.00, maximo30d: 161.00,
-    fonte: 'CEPEA/ESALQ-USP', atualizacao: new Date().toISOString(),
-  },
-  leite: {
-    cultura: 'Leite', unidade: 'R$/litro', praca: 'Média Brasil',
-    precoAtual: 2.85, variacao24h: 0.00, variacao7d: 0.35, variacao30d: -1.05,
-    minimo30d: 2.78, maximo30d: 2.92,
-    fonte: 'CEPEA/ESALQ-USP', atualizacao: new Date().toISOString(),
-  },
-}
-
-const FALLBACK_INDICADORES: Indicador[] = [
-  { nome: 'Taxa Selic', sigla: 'SELIC', valor: 14.25, unidade: '% a.a.', referencia: '2026-04-15', variacao: 0, fonte: 'Banco Central do Brasil', fonteOrigem: 'fallback', atualizacao: new Date().toISOString(), confiabilidade: 'alta' },
-  { nome: 'IPCA (acumulado 12m)', sigla: 'IPCA', valor: 5.48, unidade: '% a.a.', referencia: '2026-03-31', variacao: 0.12, fonte: 'IBGE', fonteOrigem: 'fallback', atualizacao: new Date().toISOString(), confiabilidade: 'alta' },
-  { nome: 'IGP-M (acumulado 12m)', sigla: 'IGP-M', valor: 4.92, unidade: '% a.a.', referencia: '2026-03-31', variacao: -0.35, fonte: 'FGV', fonteOrigem: 'fallback', atualizacao: new Date().toISOString(), confiabilidade: 'alta' },
-  { nome: 'Dólar PTAX (venda)', sigla: 'USD/BRL', valor: 5.72, unidade: 'R$/US$', referencia: new Date().toISOString().slice(0, 10), variacao: -0.28, fonte: 'Banco Central do Brasil (PTAX)', fonteOrigem: 'fallback', atualizacao: new Date().toISOString(), confiabilidade: 'alta' },
-  { nome: 'CDI (acumulado 12m)', sigla: 'CDI', valor: 14.15, unidade: '% a.a.', referencia: new Date().toISOString().slice(0, 10), variacao: 0, fonte: 'CETIP/B3', fonteOrigem: 'fallback', atualizacao: new Date().toISOString(), confiabilidade: 'alta' },
-  { nome: 'INPC (acumulado 12m)', sigla: 'INPC', valor: 5.15, unidade: '% a.a.', referencia: '2026-03-31', variacao: 0.08, fonte: 'IBGE', fonteOrigem: 'fallback', atualizacao: new Date().toISOString(), confiabilidade: 'alta' },
-  { nome: 'TR (mês)', sigla: 'TR', valor: 0.18, unidade: '% a.m.', referencia: '2026-03-31', variacao: 0.02, fonte: 'Banco Central do Brasil', fonteOrigem: 'fallback', atualizacao: new Date().toISOString(), confiabilidade: 'alta' },
-]
-
-const insumos = [
-  { produto: 'MAP (Fosfato Monoamônico)', unidade: 'R$/tonelada', precoAtual: 3850.00, variacaoMensal: 2.3, fonte: 'ESALQ/CEPEA', atualizacao: new Date().toISOString(), confiabilidade: 'media' as const },
-  { produto: 'KCl (Cloreto de Potássio)', unidade: 'R$/tonelada', precoAtual: 2680.00, variacaoMensal: -1.5, fonte: 'ESALQ/CEPEA', atualizacao: new Date().toISOString(), confiabilidade: 'media' as const },
-  { produto: 'Ureia', unidade: 'R$/tonelada', precoAtual: 2450.00, variacaoMensal: 0.8, fonte: 'ESALQ/CEPEA', atualizacao: new Date().toISOString(), confiabilidade: 'media' as const },
-  { produto: 'Glifosato', unidade: 'R$/litro', precoAtual: 22.50, variacaoMensal: -0.5, fonte: 'Agrolink', atualizacao: new Date().toISOString(), confiabilidade: 'media' as const },
-  { produto: 'Diesel S10', unidade: 'R$/litro', precoAtual: 6.35, variacaoMensal: 1.2, fonte: 'ANP', atualizacao: new Date().toISOString(), confiabilidade: 'alta' as const },
-  { produto: 'Sementes Soja (Intacta)', unidade: 'R$/saca 40kg', precoAtual: 520.00, variacaoMensal: 0.0, fonte: 'Mercado local', atualizacao: new Date().toISOString(), confiabilidade: 'baixa' as const },
-  { produto: 'Calcário Dolomítico', unidade: 'R$/tonelada', precoAtual: 185.00, variacaoMensal: 0.3, fonte: 'DNPM', atualizacao: new Date().toISOString(), confiabilidade: 'media' as const },
-  { produto: '04-30-10 (Formulado)', unidade: 'R$/tonelada', precoAtual: 3200.00, variacaoMensal: 1.8, fonte: 'ESALQ/CEPEA', atualizacao: new Date().toISOString(), confiabilidade: 'media' as const },
-]
-
-/* ========================================================================
- *  Helpers
- * ======================================================================== */
-
-const PRACA_MAP: Record<string, string> = {
-  soja: 'Paranaguá-PR', milho: 'Campinas-SP', boi: 'São Paulo-SP',
-  cafe: 'Mogiana-SP', algodao: 'Esalq',
-}
-
-const NOME_MAP: Record<string, string> = {
-  soja: 'Soja', milho: 'Milho', boi_gordo: 'Boi Gordo', boi: 'Boi Gordo',
-  cafe_arabica: 'Café Arábica', cafe: 'Café Arábica', algodao: 'Algodão em Pluma',
-}
-
-function gerarHistoricoFallback(base: number, dias: number, volatilidade: number): PrecoHistorico[] {
-  const hist: PrecoHistorico[] = []
-  // Caminha numa janela ±volatilidade % em torno de `base` — mantém o
-  // histórico realista perto do preço atual (sem decair pra ~75% como antes).
-  let valor = base * (1 + ((Math.random() - 0.5) * volatilidade) / 100)
-  const agora = new Date()
-  for (let i = dias; i >= 0; i--) {
-    const data = new Date(agora)
-    data.setUTCDate(data.getUTCDate() - i)
-    const variacao = (Math.random() - 0.5) * volatilidade * 2
-    valor = valor * (1 + variacao / 100)
-    // Limites elásticos: ±15% em torno de base.
-    valor = Math.max(Math.min(valor, base * 1.15), base * 0.85)
-    // Ancoragem do último ponto = base, para que variacao24h calculada
-    // reflita o passo de ontem→hoje no histórico (consistente com precoAtual).
-    if (i === 0) valor = base
-    hist.push({ data: data.toISOString().slice(0, 10), valor: Number(valor.toFixed(2)), variacao: Number(variacao.toFixed(2)) })
-  }
-  return hist
-}
-
-/* ========================================================================
- *  Roteador — agora usando serviços reais via DataSourceManager
- * ======================================================================== */
 
 export default async function (fastify: FastifyInstance) {
   const dsm = DataSourceManager.getInstance()
 
-  /* ---- PREÇOS (multi-cultura) — CONAB primary, CEPEA fallback ---- */
-  fastify.get('/api/mercado/precos', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { culturas, periodo } = request.query as { culturas?: string; periodo?: string }
-    const listaCulturas = culturas
-      ? culturas.split(',').map(c => c.trim().toLowerCase())
-      : ['soja', 'milho', 'boi', 'cafe', 'algodao', 'trigo', 'acucar', 'leite']
-    const dias = periodo ? parseInt(periodo.replace('d', ''), 10) : 30
-
-    let fonteGlobal: 'api' | 'cache' | 'fallback' = 'fallback'
-
-    // Map from list keys to CONAB keys
-    const conabKeyMap: Record<string, string> = {
-      soja: 'soja', milho: 'milho', cafe: 'cafe_arabica',
-      algodao: 'algodao', trigo: 'trigo', arroz: 'arroz',
-    }
-
-    try {
-      // Fetch real prices from CONAB (primary) and CEPEA (secondary)
-      const [conabResult, cotacoesReais] = await Promise.allSettled([
-        dsm.conabPrecos.getAllPrecos(),
-        dsm.precos.getAllCotacoes(),
-      ])
-
-      const conabData = conabResult.status === 'fulfilled' ? conabResult.value : null
-      const cepeaData = cotacoesReais.status === 'fulfilled' ? cotacoesReais.value : null
-
-      const resultado: CotacaoCultura[] = []
-
-      for (const chave of listaCulturas) {
-        // Try CONAB first (more reliable)
-        const conabKey = conabKeyMap[chave]
-        if (conabData && conabKey) {
-          const commodity = conabData[conabKey as keyof typeof conabData]
-          if (commodity && typeof commodity === 'object' && 'precoMedio' in commodity && commodity.precoMedio > 0) {
-            if (conabData.fonte === 'api') fonteGlobal = 'api'
-            else if (conabData.fonte === 'cache' && fonteGlobal !== 'api') fonteGlobal = 'cache'
-
-            const historico = gerarHistoricoFallback(commodity.precoMedio, Math.min(dias, 365), 1.5)
-            // Variação derivada do histórico (CONAB não fornece deltas explícitos);
-            // calcula 24h, 7d, 30d como (preçoAtual − referência) / referência × 100.
-            const calcVar = (offset: number): number => {
-              const n = historico.length
-              if (n < offset + 1) return 0
-              const ref = historico[n - 1 - offset]?.valor
-              if (!ref || ref <= 0) return 0
-              return Number((((commodity.precoMedio - ref) / ref) * 100).toFixed(2))
-            }
-            resultado.push({
-              cultura: NOME_MAP[chave] || commodity.produto,
-              unidade: commodity.unidade,
-              praca: PRACA_MAP[chave] || 'Brasil (média estadual)',
-              precoAtual: commodity.precoMedio,
-              variacao24h: calcVar(1),
-              variacao7d: calcVar(7),
-              variacao30d: calcVar(30),
-              minimo30d: commodity.precoMinimo,
-              maximo30d: commodity.precoMaximo,
-              historico,
-              fonte: `CONAB (${conabData.fonte})`,
-              fonteOrigem: conabData.fonte,
-              atualizacao: commodity.atualizadoEm || new Date().toISOString(),
-            })
-            continue
-          }
-        }
-
-        // Try CEPEA as secondary
-        if (cepeaData) {
-          const realData = cepeaData[chave]
-          if (realData && realData.preco > 0) {
-            if (realData.fonte === 'api') fonteGlobal = 'api'
-            else if (realData.fonte === 'cache' && fonteGlobal !== 'api') fonteGlobal = 'cache'
-
-            const historico = gerarHistoricoFallback(realData.preco, Math.min(dias, 365), 1.5)
-            resultado.push({
-              cultura: NOME_MAP[realData.commodity] || NOME_MAP[chave] || chave,
-              unidade: realData.unidade,
-              praca: PRACA_MAP[chave] || 'Brasil',
-              precoAtual: realData.preco,
-              variacao24h: realData.variacao,
-              variacao7d: realData.variacao * 2.5,
-              variacao30d: realData.variacao * 8,
-              minimo30d: realData.preco * 0.95,
-              maximo30d: realData.preco * 1.03,
-              historico,
-              fonte: `CEPEA/ESALQ-USP (${realData.fonte})`,
-              fonteOrigem: realData.fonte,
-              atualizacao: realData.data || new Date().toISOString(),
-            })
-            continue
-          }
-        }
-
-        // Final fallback
-        const fb = FALLBACK_CULTURAS[chave]
-        if (fb) {
-          const historico = gerarHistoricoFallback(fb.precoAtual, Math.min(dias, 365), 1.5)
-          resultado.push({ ...fb, historico, fonteOrigem: 'fallback' })
-        }
-      }
-
-      if (resultado.length === 0) {
-        reply.status(404)
-        return { success: false, error: `Culturas não encontradas. Disponíveis: soja, milho, boi, cafe, algodao, trigo, acucar, leite` }
-      }
-
-      return {
-        success: true,
-        data: resultado,
-        meta: {
-          culturasConsultadas: listaCulturas,
-          periodo: `${dias} dias`,
-          fonte: fonteGlobal === 'api' ? 'CONAB / CEPEA' : 'CONAB / CEPEA (dados de referência)',
-          fonteOrigem: fonteGlobal,
-          atualizacao: new Date().toISOString(),
-          confiabilidade: fonteGlobal === 'api' ? 'alta' : fonteGlobal === 'cache' ? 'alta' : 'media',
-          aviso: fonteGlobal === 'fallback'
-            ? 'APIs indisponíveis. Preços de referência (fallback). Para operações reais consulte fontes primárias.'
-            : 'Dados obtidos via CONAB (preços semanais reais por UF) e CEPEA/ESALQ-USP.',
-        },
-      }
-    } catch (error) {
-      console.warn('[mercado/precos] Erro total, usando fallback completo:', error)
-      const resultado: CotacaoCultura[] = []
-      for (const chave of listaCulturas) {
-        const fb = FALLBACK_CULTURAS[chave]
-        if (fb) {
-          const historico = gerarHistoricoFallback(fb.precoAtual, Math.min(dias, 365), 1.5)
-          resultado.push({ ...fb, historico, fonteOrigem: 'fallback' })
-        }
-      }
-      return {
-        success: true,
-        data: resultado,
-        meta: {
-          culturasConsultadas: listaCulturas,
-          periodo: `${dias} dias`,
-          fonte: 'CONAB / CEPEA (dados de referência)',
-          fonteOrigem: 'fallback' as const,
-          atualizacao: new Date().toISOString(),
-          confiabilidade: 'media',
-          aviso: 'APIs indisponíveis. Preços de referência (fallback).',
-        },
-      }
-    }
+  fastify.get('/api/mercado/precos', async (request, reply) => {
+    const parsed = priceQuery.safeParse(request.query)
+    if (!parsed.success) return reply.status(400).send({ error: 'Período inválido; use de 1 a 365 dias.' })
+    const keys = parsed.data.culturas?.split(',').map(c => c.trim().toLowerCase()) || cultures.slice(0, 8)
+    const days = Number(parsed.data.periodo?.replace('d', '') || 30)
+    if (days < 1 || days > 365 || keys.some(k => !cultures.includes(k as typeof cultures[number]))) return reply.status(400).send({ error: 'Culturas ou período inválidos.' })
+    const data = await collectMarketPrices(dsm, keys, days)
+    const missing = keys.filter(k => !data.some(c => c.chave === k))
+    const source = data.length && data.every(c => c.fonteOrigem === 'api') ? 'api' : data.length ? 'cache' : 'fallback'
+    return { success: true, data, meta: { culturasConsultadas: keys, periodo: `${days} dias`, fonteOrigem: source, fonte: 'CONAB / CEPEA', consultadoEm: new Date().toISOString(), atualizacao: data.map(c => c.atualizacao).sort().at(-1) || null, estado: !data.length ? 'indisponivel' : missing.length || data.some(c => c.estado === 'atrasado') ? 'parcial' : 'disponivel', indisponiveis: missing, aviso: 'Séries e variações usam somente observações da mesma fonte, praça e unidade. Lacunas permanecem indisponíveis.' } }
   })
 
-  /* ---- INDICADORES ECONÔMICOS — REAL API via BCB SGS ---- */
   fastify.get('/api/mercado/indicadores', async () => {
-    try {
-      const bcb = await dsm.bancoCentral.getAllIndicators()
-      const now = new Date().toISOString()
-
-      const indicadores: Indicador[] = [
-        {
-          nome: 'Taxa Selic',
-          sigla: 'SELIC',
-          valor: bcb.selic.valor,
-          unidade: bcb.selic.unidade,
-          referencia: bcb.selic.data,
-          variacao: 0,
-          fonte: 'Banco Central do Brasil (SGS 432)',
-          fonteOrigem: bcb.selic.fonte,
-          atualizacao: now,
-          confiabilidade: 'alta',
-          historico: bcb.selic.historico,
-        },
-        {
-          nome: 'IPCA Mensal',
-          sigla: 'IPCA',
-          valor: bcb.ipca.valor,
-          unidade: bcb.ipca.unidade,
-          referencia: bcb.ipca.data,
-          variacao: 0,
-          fonte: 'IBGE via BCB (SGS 433)',
-          fonteOrigem: bcb.ipca.fonte,
-          atualizacao: now,
-          confiabilidade: 'alta',
-          historico: bcb.ipca.historico,
-        },
-        {
-          nome: 'IGP-M Mensal',
-          sigla: 'IGP-M',
-          valor: bcb.igpm.valor,
-          unidade: bcb.igpm.unidade,
-          referencia: bcb.igpm.data,
-          variacao: 0,
-          fonte: 'FGV via BCB (SGS 189)',
-          fonteOrigem: bcb.igpm.fonte,
-          atualizacao: now,
-          confiabilidade: 'alta',
-          historico: bcb.igpm.historico,
-        },
-        {
-          nome: 'Dólar PTAX (venda)',
-          sigla: 'USD/BRL',
-          valor: bcb.ptax.cotacaoVenda,
-          unidade: 'R$/US$',
-          referencia: bcb.ptax.dataHoraCotacao.slice(0, 10),
-          variacao: 0,
-          fonte: 'Banco Central do Brasil (OLINDA/PTAX)',
-          fonteOrigem: bcb.ptax.fonte,
-          atualizacao: now,
-          confiabilidade: 'alta',
-        },
-        {
-          nome: 'Taxa CDI',
-          sigla: 'CDI',
-          valor: bcb.cdi.valor,
-          unidade: bcb.cdi.unidade,
-          referencia: bcb.cdi.data,
-          variacao: 0,
-          fonte: 'CETIP/B3 via BCB (SGS 12)',
-          fonteOrigem: bcb.cdi.fonte,
-          atualizacao: now,
-          confiabilidade: 'alta',
-          historico: bcb.cdi.historico,
-        },
-        {
-          nome: 'Crédito Rural (volume mensal)',
-          sigla: 'CRED_RURAL',
-          valor: bcb.creditoRural.volume,
-          unidade: 'R$',
-          referencia: bcb.creditoRural.periodo,
-          variacao: 0,
-          fonte: 'BCB (SGS 25469)',
-          fonteOrigem: bcb.creditoRural.fonte,
-          atualizacao: now,
-          confiabilidade: 'alta',
-          historico: bcb.creditoRural.historico,
-        },
-      ]
-
-      // Count how many came from real API
-      const apiCount = indicadores.filter(i => i.fonteOrigem === 'api').length
-      const cacheCount = indicadores.filter(i => i.fonteOrigem === 'cache').length
-
-      return {
-        success: true,
-        data: indicadores,
-        meta: {
-          totalIndicadores: indicadores.length,
-          fontes: ['Banco Central do Brasil (SGS)', 'BCB OLINDA/PTAX', 'IBGE', 'FGV', 'CETIP/B3'],
-          atualizacao: now,
-          fonteOrigem: apiCount > 0 ? 'api' : cacheCount > 0 ? 'cache' : 'fallback',
-          confiabilidade: 'alta',
-          detalhe: `${apiCount} via API, ${cacheCount} via cache, ${indicadores.length - apiCount - cacheCount} via fallback`,
-        },
-      }
-    } catch (error) {
-      console.warn('[mercado/indicadores] Erro, usando fallback:', error)
-      return {
-        success: true,
-        data: FALLBACK_INDICADORES,
-        meta: {
-          totalIndicadores: FALLBACK_INDICADORES.length,
-          fontes: ['Banco Central do Brasil', 'IBGE', 'FGV', 'CETIP/B3'],
-          atualizacao: new Date().toISOString(),
-          fonteOrigem: 'fallback' as const,
-          confiabilidade: 'media',
-          aviso: 'APIs indisponíveis. Indicadores de referência (fallback).',
-        },
-      }
-    }
+    const bcb = await dsm.bancoCentral.getAllIndicators()
+    const specifications = [
+      ['SELIC', 'Taxa Selic', bcb.selic], ['IPCA', 'IPCA mensal', bcb.ipca],
+      ['IGP-M', 'IGP-M mensal', bcb.igpm], ['CDI', 'CDI anualizado (252 dias úteis)', bcb.cdi],
+    ] as const
+    const data = specifications.filter(([, , value]) => value.fonte !== 'fallback').map(([sigla, nome, value]) => ({ nome: String(nome), sigla: String(sigla), valor: value.valor, unidade: value.unidade, referencia: value.data, variacao: null, fonte: `Banco Central do Brasil (SGS ${value.serie})`, fonteOrigem: value.fonte, atualizacao: value.data, estado: value.estado === 'atrasado' || Date.now() - Date.parse(value.data) > ([433, 189].includes(value.serie) ? 70 : 7) * 86400000 ? 'atrasado' : 'disponivel', historico: value.historico || [] }))
+    if (bcb.ptax.fonte !== 'fallback') data.push({ nome: 'Dólar PTAX (venda)', sigla: 'USD/BRL', valor: bcb.ptax.cotacaoVenda, unidade: 'R$/US$', referencia: bcb.ptax.dataHoraCotacao, variacao: null, fonte: 'BCB PTAX', fonteOrigem: bcb.ptax.fonte, atualizacao: bcb.ptax.dataHoraCotacao, estado: bcb.ptax.estado === 'atrasado' || Date.now() - Date.parse(bcb.ptax.dataHoraCotacao) > 7 * 86400000 ? 'atrasado' : 'disponivel', historico: [] })
+    return { success: true, data, meta: { fonteOrigem: data.length && data.every(v => v.fonteOrigem === 'api') ? 'api' : data.length ? 'cache' : 'fallback', estado: data.length === 5 && data.every(i => i.estado === 'disponivel') ? 'disponivel' : data.length ? 'parcial' : 'indisponivel', consultadoEm: new Date().toISOString(), atualizacao: data.map(v => v.atualizacao).sort().at(-1) || null, aviso: 'IPCA e IGP-M são taxas mensais. CDI é anualização da taxa diária em 252 dias úteis, não acumulado de 12 meses.' } }
   })
 
-  /* ---- HISTÓRICO COMMODITY — REAL DATA when available ---- */
-  fastify.get('/api/mercado/commodities/:commodity/historico', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { commodity } = request.params as { commodity: string }
-    const { dias: diasQuery } = request.query as { dias?: string }
-    const chave = commodity.toLowerCase()
-    const dias = diasQuery ? Math.min(parseInt(diasQuery, 10), 365) : 365
-
-    // Check if we have this commodity in CEPEA or fallback
-    const cepealCulturas = ['soja', 'milho', 'boi', 'cafe', 'algodao']
-    const fbDados = FALLBACK_CULTURAS[chave]
-
-    if (!fbDados && !cepealCulturas.includes(chave)) {
-      reply.status(404)
-      return { success: false, error: `Commodity "${commodity}" não encontrada. Disponíveis: ${Object.keys(FALLBACK_CULTURAS).join(', ')}` }
-    }
-
-    try {
-      let basePreco = fbDados?.precoAtual || 100
-      let fonteOrigem: 'api' | 'cache' | 'fallback' = 'fallback'
-
-      if (cepealCulturas.includes(chave)) {
-        const historico = await dsm.precos.getHistoricoCommodity(chave, dias)
-        if (historico.dados && historico.dados.length > 0) {
-          fonteOrigem = historico.fonte
-          const valores = historico.dados.map(h => h.valor)
-          const media = valores.reduce((s, v) => s + v, 0) / valores.length
-          const min = Math.min(...valores)
-          const max = Math.max(...valores)
-          const desvPad = Math.sqrt(valores.reduce((s, v) => s + Math.pow(v - media, 2), 0) / valores.length)
-          const retorno = ((valores[valores.length - 1] - valores[0]) / valores[0]) * 100
-
-          return {
-            success: true,
-            data: {
-              commodity: NOME_MAP[chave] || chave,
-              unidade: historico.unidade,
-              praca: PRACA_MAP[chave] || 'Brasil',
-              periodo: `${dias} dias`,
-              estatisticas: {
-                media: Number(media.toFixed(2)), minimo: Number(min.toFixed(2)),
-                maximo: Number(max.toFixed(2)), desvioPadrao: Number(desvPad.toFixed(2)),
-                volatilidade: Number(((desvPad / media) * 100).toFixed(2)),
-                retornoPeriodo: Number(retorno.toFixed(2)),
-              },
-              historico: historico.dados.map(d => ({ data: d.data, valor: d.valor, variacao: 0 })),
-            },
-            meta: {
-              fonte: 'CEPEA/ESALQ-USP',
-              fonteOrigem,
-              atualizacao: new Date().toISOString(),
-              confiabilidade: fonteOrigem === 'api' ? 'alta' : 'media',
-              pontosDeDados: historico.dados.length,
-            },
-          }
-        }
-      }
-
-      // Fallback: generate historical from base price
-      basePreco = fbDados?.precoAtual || 100
-      const historico = gerarHistoricoFallback(basePreco, dias, 1.5)
-      const valores = historico.map(h => h.valor)
-      const media = valores.reduce((s, v) => s + v, 0) / valores.length
-      const min = Math.min(...valores)
-      const max = Math.max(...valores)
-      const desvPad = Math.sqrt(valores.reduce((s, v) => s + Math.pow(v - media, 2), 0) / valores.length)
-      const retorno = ((valores[valores.length - 1] - valores[0]) / valores[0]) * 100
-
-      return {
-        success: true,
-        data: {
-          commodity: fbDados?.cultura || chave,
-          unidade: fbDados?.unidade || 'R$/unidade',
-          praca: fbDados?.praca || 'Brasil',
-          periodo: `${dias} dias`,
-          estatisticas: {
-            media: Number(media.toFixed(2)), minimo: Number(min.toFixed(2)),
-            maximo: Number(max.toFixed(2)), desvioPadrao: Number(desvPad.toFixed(2)),
-            volatilidade: Number(((desvPad / media) * 100).toFixed(2)),
-            retornoPeriodo: Number(retorno.toFixed(2)),
-          },
-          historico,
-        },
-        meta: {
-          fonte: fbDados?.fonte || 'CEPEA/ESALQ-USP',
-          fonteOrigem: 'fallback' as const,
-          atualizacao: new Date().toISOString(),
-          confiabilidade: 'media',
-          pontosDeDados: historico.length,
-        },
-      }
-    } catch (error) {
-      console.warn(`[mercado/historico] Erro para ${chave}:`, error)
-      const historico = gerarHistoricoFallback(fbDados?.precoAtual || 100, dias, 1.5)
-      const valores = historico.map(h => h.valor)
-      const media = valores.reduce((s, v) => s + v, 0) / valores.length
-      return {
-        success: true,
-        data: {
-          commodity: fbDados?.cultura || chave,
-          unidade: fbDados?.unidade || 'R$/unidade',
-          praca: fbDados?.praca || 'Brasil',
-          periodo: `${dias} dias`,
-          estatisticas: {
-            media: Number(media.toFixed(2)), minimo: Number(Math.min(...valores).toFixed(2)),
-            maximo: Number(Math.max(...valores).toFixed(2)), desvioPadrao: 0,
-            volatilidade: 0, retornoPeriodo: 0,
-          },
-          historico,
-        },
-        meta: { fonte: 'CEPEA/ESALQ-USP (fallback)', fonteOrigem: 'fallback' as const, atualizacao: new Date().toISOString(), confiabilidade: 'media', pontosDeDados: historico.length },
-      }
-    }
+  fastify.get('/api/mercado/commodities/:commodity/historico', async (request, reply) => {
+    const query = z.object({ dias: z.coerce.number().int().min(1).max(365).default(30) }).safeParse(request.query)
+    const key = (request.params as { commodity: string }).commodity.toLowerCase()
+    if (!query.success || !cultures.includes(key as typeof cultures[number])) return reply.status(400).send({ error: 'Commodity ou período inválido' })
+    const price = (await collectMarketPrices(dsm, [key], query.data.dias))[0]
+    const history = price?.historico || []
+    return { success: true, data: { commodity: price?.cultura || key, unidade: price?.unidade || null, praca: price?.praca || null, periodo: `${query.data.dias} dias`, historico: history, estatisticas: null, fonteOrigem: history.length > 1 ? price.fonteOrigem : 'fallback' }, meta: { fonteOrigem: history.length > 1 ? price.fonteOrigem : 'fallback', estado: history.length > 1 ? price.estado : 'indisponivel', fonte: price?.fonte || null, atualizacao: history.at(-1)?.data || null, pontosDeDados: history.length, aviso: history.length > 1 ? null : 'Histórico insuficiente; nenhuma série sintética foi criada.' } }
   })
 
   /* ---- CENÁRIO SAFRA — REAL CONAB when available ---- */
@@ -566,13 +72,7 @@ export default async function (fastify: FastifyInstance) {
             clima: '',
             observacao: '',
           })),
-          macroeconomia: {
-            pibAgro2025: 3.2,
-            exportacoesAgro2025Bi: 165.0,
-            taxaCambioMedia: 5.65,
-            selicImpacto: 'Selic a 14,25% encarece crédito rural. Demanda por renegociação aumenta.',
-            perspectiva: 'Safra 25/26 acima da média histórica, mas margens apertadas por custos de insumos e juros elevados.',
-          },
+          macroeconomia: {},
         },
         meta: {
           fonte: safra.fonte === 'api' ? 'CONAB' : 'CONAB (fallback)',
@@ -598,21 +98,8 @@ export default async function (fastify: FastifyInstance) {
     }
   })
 
-  /* ---- INSUMOS (sem API real ainda, mantido) ---- */
-  fastify.get('/api/mercado/insumos', async () => {
-    return {
-      success: true,
-      data: insumos,
-      meta: {
-        totalProdutos: insumos.length,
-        fontes: ['ESALQ/CEPEA', 'Agrolink', 'ANP', 'DNPM'],
-        atualizacao: new Date().toISOString(),
-        fonteOrigem: 'fallback' as const,
-        confiabilidade: 'media',
-        aviso: 'Preços de referência regionais. Valores CIF podem variar por localização.',
-      },
-    }
-  })
+  // Sem fornecedor, data e região verificáveis, não há cotação de insumo.
+  fastify.get('/api/mercado/insumos', async () => ({ success: true, data: [], meta: { totalProdutos: 0, fonteOrigem: 'fallback', estado: 'indisponivel', atualizacao: null, aviso: 'Cotações de insumos indisponíveis. Não há referências com origem, data e região verificadas.' } }))
 
   /* ---- STATUS DAS FONTES DE DADOS ---- */
   fastify.get('/api/mercado/fontes/status', async () => {
@@ -656,8 +143,10 @@ export default async function (fastify: FastifyInstance) {
   })
 
   /* ---- EXPECTATIVAS POR INDICADOR ---- */
-  fastify.get('/api/mercado/expectativas/:indicador', async (request: FastifyRequest<{ Params: { indicador: string } }>) => {
+  fastify.get('/api/mercado/expectativas/:indicador', async (request: FastifyRequest<{ Params: { indicador: string } }>, reply) => {
     const { indicador } = request.params
+    const query = focusQuery.safeParse(request.query)
+    if (!query.success) return reply.status(400).send({ success: false, error: 'Consulta Focus inválida: top 1–100, ano 2000–2100 e baseCalculo 0 ou 1.' })
     const indicadorMap: Record<string, string> = {
       selic: 'Selic',
       ipca: 'IPCA',
@@ -668,7 +157,7 @@ export default async function (fastify: FastifyInstance) {
     const realIndicador = indicadorMap[indicador.toLowerCase()] || indicador
 
     try {
-      const result = await dsm.expectativas.getExpectativasAnuais(realIndicador, 10)
+      const result = await dsm.expectativas.getExpectativasAnuais(realIndicador, query.data.top, { anoReferencia: query.data.ano, baseCalculo: query.data.baseCalculo as 0 | 1 | undefined })
       return {
         success: true,
         data: result,
@@ -695,8 +184,9 @@ export default async function (fastify: FastifyInstance) {
         meta: {
           pares: cotacoes.map(c => c.moeda),
           fonteOrigem,
-          fonte: 'AwesomeAPI — Cotações em tempo real',
-          atualizacao: new Date().toISOString(),
+          fonte: [...new Set(cotacoes.map(c => c.provedor))].join(', '),
+          atualizacao: cotacoes.map(c => c.createDate).filter(Boolean).sort().at(-1) || null,
+          estado: cotacoes.some(c => c.estado === 'atrasado') ? 'atrasado' : cotacoes.length ? 'disponivel' : 'indisponivel',
         },
       }
     } catch {
@@ -705,9 +195,10 @@ export default async function (fastify: FastifyInstance) {
   })
 
   /* ---- HISTÓRICO CAMBIAL ---- */
-  fastify.get('/api/mercado/cambio/historico', async (request: FastifyRequest<{ Querystring: { par?: string; dias?: string } }>) => {
-    const par = (request.query as any).par || 'USD-BRL'
-    const dias = parseInt((request.query as any).dias || '30') || 30
+  fastify.get('/api/mercado/cambio/historico', async (request, reply) => {
+    const query = z.object({ par: z.string().regex(/^[A-Z]{3}-[A-Z]{3}$/).default('USD-BRL'), dias: z.coerce.number().int().min(1).max(365).default(30) }).safeParse(request.query)
+    if (!query.success) return reply.status(400).send({ error: 'Par ou período inválido; use um par como USD-BRL e de 1 a 365 dias.' })
+    const { par, dias } = query.data
 
     try {
       const historico = await dsm.awesomeApi.getHistoricoDiario(par, dias)
@@ -716,7 +207,8 @@ export default async function (fastify: FastifyInstance) {
         data: historico,
         meta: {
           fonteOrigem: historico.fonte,
-          fonte: 'AwesomeAPI',
+          fonte: historico.provedor,
+          estado: historico.cotacoes.length >= 2 ? historico.estado || 'disponivel' : 'indisponivel',
           atualizacao: historico.atualizadoEm,
         },
       }
@@ -873,6 +365,9 @@ export default async function (fastify: FastifyInstance) {
           fonteOrigem: resumo.fonte,
           fonte: 'ANP — Dados Abertos (CSV mensal)',
           atualizacao: resumo.atualizadoEm,
+          estado: resumo.fonte === 'fallback' ? 'referencia' : 'parcial',
+          indisponiveis: resumo.indisponiveis,
+          aviso: 'Este resumo contém somente Diesel S10. Gasolina não foi coletada e permanece indisponível.',
           descricao: 'Resumo nacional de preços do Diesel S10 com detalhamento por estado.',
         },
       }
@@ -963,7 +458,7 @@ export default async function (fastify: FastifyInstance) {
         },
       }
     } catch {
-      return { success: false, error: 'Falha ao buscar agregado SICOR' }
+      return unavailableMarketData('BCB SICOR', 'Crédito rural SICOR indisponível: não há observações verificadas para esta consulta.')
     }
   })
 
@@ -983,7 +478,7 @@ export default async function (fastify: FastifyInstance) {
         },
       }
     } catch {
-      return { success: false, error: 'Falha ao buscar série mensal SICOR' }
+      return unavailableMarketData('BCB SGS 20568', 'Série mensal do crédito rural indisponível: a fonte não forneceu observações verificadas.')
     }
   })
 
@@ -1003,7 +498,7 @@ export default async function (fastify: FastifyInstance) {
         },
       }
     } catch {
-      return { success: false, error: 'Falha ao buscar exportações agro' }
+      return unavailableMarketData('MDIC ComexStat', 'Exportações agro indisponíveis: não há observações verificadas para esta consulta.')
     }
   })
 
@@ -1028,7 +523,7 @@ export default async function (fastify: FastifyInstance) {
         },
       }
     } catch {
-      return { success: false, error: `Falha ao buscar série de ${produto}` }
+      return unavailableMarketData('MDIC ComexStat', `Série de exportações de ${produto} indisponível: a fonte não forneceu observações verificadas.`)
     }
   })
 
@@ -1070,90 +565,7 @@ export default async function (fastify: FastifyInstance) {
    *  Fonte frete: tabela estimativa ALETIS (R$/t por UF origem → destino),
    *  baseada em médias setoriais 2024-2026 (ANTT/IMEA/ABIOVE).
    * ------------------------------------------------------------------ */
-  fastify.get(
-    '/api/mercado/basis',
-    async (request: FastifyRequest<{ Querystring: { commodity?: string; ufOrigem?: string; destino?: string } }>) => {
-      const commodity = (request.query.commodity || 'soja').toLowerCase()
-      const ufOrigem = (request.query.ufOrigem || 'MT').toUpperCase()
-      const destino = (request.query.destino || 'paranagua').toLowerCase()
-
-      // Preço de referência (porto/praça principal) — fallback estático
-      const fallback = FALLBACK_CULTURAS[commodity]
-      if (!fallback) {
-        return { success: false, error: `Commodity "${commodity}" não suportada` }
-      }
-
-      // Tabela de frete R$/tonelada (estimativa baseada em médias 2024-2026)
-      // Pontos destino: paranagua, santos, itaqui
-      const TABELA_FRETE: Record<string, Record<string, number>> = {
-        paranagua: { MT: 380, MS: 220, GO: 310, MG: 280, SP: 150, PR: 80, RS: 280, BA: 520, MA: 680, TO: 490, RO: 720, PI: 620 },
-        santos:    { MT: 410, MS: 260, GO: 280, MG: 190, SP: 90,  PR: 200, RS: 340, BA: 450, MA: 640, TO: 470, RO: 740, PI: 560 },
-        itaqui:    { MT: 420, MS: 540, GO: 390, MG: 520, SP: 700, PR: 820, RS: 980, BA: 380, MA: 140, TO: 220, RO: 560, PI: 320 },
-      }
-
-      const freteRSporTon = TABELA_FRETE[destino]?.[ufOrigem]
-      if (freteRSporTon == null) {
-        return {
-          success: false,
-          error: `Rota ${ufOrigem}→${destino} não coberta pela tabela`,
-          suportado: { destinos: Object.keys(TABELA_FRETE), ufsOrigem: Object.keys(TABELA_FRETE.paranagua) },
-        }
-      }
-
-      // Conversão para saca 60kg (commodities grãos) ou arroba 15kg (boi/algodão)
-      const unidade = fallback.unidade.toLowerCase()
-      let freteUnidade = 0
-      let unidadeLabel = ''
-      if (unidade.includes('saca') || unidade.includes('60')) {
-        freteUnidade = freteRSporTon * 0.06 // 60 kg = 0.06 ton
-        unidadeLabel = 'R$/saca 60kg'
-      } else if (unidade.includes('arroba') || unidade.includes('@')) {
-        freteUnidade = freteRSporTon * 0.015
-        unidadeLabel = 'R$/arroba 15kg'
-      } else {
-        freteUnidade = freteRSporTon
-        unidadeLabel = 'R$/tonelada'
-      }
-
-      // Basis estimado = spread típico interior vs porto (negativo: interior < porto)
-      // Heurística setorial: soja/milho no cerrado ~ -8% a -15% do preço CBOT/porto.
-      const BASIS_TIPICO_PCT: Record<string, number> = {
-        soja: -0.10, milho: -0.12, algodao: -0.05, cafe: -0.03, boi: -0.04, arroz: -0.08, trigo: -0.06,
-      }
-      const basisPct = BASIS_TIPICO_PCT[commodity] ?? -0.10
-      const precoPorto = fallback.precoAtual
-      const basisAbsoluto = precoPorto * basisPct
-      const precoInteriorEstimado = precoPorto + basisAbsoluto
-      const precoLiquidoProdutor = precoInteriorEstimado - freteUnidade
-
-      return {
-        success: true,
-        data: {
-          commodity,
-          ufOrigem,
-          destino,
-          praçaReferencia: fallback.praca,
-          precoPorto,
-          basisPct: Number((basisPct * 100).toFixed(2)),
-          basisAbsoluto: Number(basisAbsoluto.toFixed(2)),
-          precoInteriorEstimado: Number(precoInteriorEstimado.toFixed(2)),
-          freteRSporTon,
-          freteUnidade: Number(freteUnidade.toFixed(2)),
-          unidade: unidadeLabel,
-          precoLiquidoProdutor: Number(precoLiquidoProdutor.toFixed(2)),
-          atualizacao: fallback.atualizacao,
-        },
-        meta: {
-          fontes: {
-            preco: fallback.fonte,
-            basis: 'Estimativa ALETIS (spread setorial 2024-2026)',
-            frete: 'Tabela estimativa ALETIS (ANTT/IMEA/ABIOVE 2024-2026)',
-          },
-          aviso: 'Valores estimados. Para fretes reais consulte transportadora. Basis varia por prêmio/deságio do contrato.',
-        },
-      }
-    },
-  )
+  fastify.get('/api/mercado/basis', async () => ({ success: false, data: null, error: 'Basis indisponível: são necessárias cotações verificadas da mesma unidade no porto e no interior, além do frete da rota.' }))
 
   /* ------------------------------------------------------------------
    * GET /api/mercado/brief

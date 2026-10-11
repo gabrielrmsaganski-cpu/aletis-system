@@ -10,7 +10,7 @@ import { Eyebrow } from '@/components/ui/Eyebrow'
 const faqs = [
   {
     q: 'A ALETIS é um escritório de advocacia?',
-    a: 'Não. Somos uma mesa técnica de inteligência financeira. Trabalhamos com uma rede de advogados parceiros quando há necessidade de atuação judicial, mas nosso produto principal é o diagnóstico e a reestruturação extrajudicial.',
+    a: 'Não. ALETIS é uma assessoria financeira estratégica. Quando um caso exige atuação jurídica, trabalhamos com advogados parceiros ou com o jurídico do cliente. Nosso papel principal é organizar números, documentos e estratégia de negociação.',
   },
   {
     q: 'Em quanto tempo consigo o diagnóstico?',
@@ -18,7 +18,7 @@ const faqs = [
   },
   {
     q: 'Quanto custa o trabalho da ALETIS?',
-    a: 'Operamos em cinco modelos: fixo, mensal (retainer), êxito, híbrido fixo+êxito e híbrido mensal+êxito. O diagnóstico inicial é gratuito e o modelo final é definido caso a caso, com piso e teto do êxito transparentes em contrato.',
+    a: 'Operamos em modelos fixo, mensal, êxito ou híbrido. A primeira conversa serve para entender escopo e urgência; o modelo final é definido caso a caso, com piso e teto de êxito transparentes em contrato quando houver essa modalidade.',
   },
   {
     q: 'Vocês atuam fora do agronegócio?',
@@ -48,8 +48,8 @@ export function Faq() {
               <span className="italic text-aletis-verde-escuro">perguntam</span> antes de começar.
             </h2>
             <p className="mt-6 max-w-sm text-base leading-relaxed text-aletis-grafite-medio">
-              Se a sua dúvida não estiver aqui, é melhor ainda — é sinal de que o caso
-              merece uma conversa real. Fale com um consultor.
+              Se a sua dúvida não estiver aqui, envie o contexto. Em casos de dívida rural,
+              a resposta depende muito dos documentos e da safra.
             </p>
           </Reveal>
 

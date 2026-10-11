@@ -61,24 +61,24 @@ export default function AlixAuditPanel({ audit }: { audit: AuditTrail | null | u
       </button>
 
       {open && (
-        <div className="mt-2 rounded-lg border border-aletis-borda dark:border-white/10 bg-white dark:bg-aletis-grafite-escuro/80 p-3 space-y-2">
+        <div className="mt-2 rounded-lg border border-aletis-borda dark:border-white/10 bg-card dark:bg-card p-3 space-y-2">
           {audit.toolCalls.map((t, i) => (
             <div key={i} className="border-l-2 pl-2 py-0.5" style={{ borderColor: t.ok ? '#22c55e' : '#ef4444' }}>
               <div className="flex items-center justify-between gap-2">
-                <span className="font-mono font-semibold text-aletis-grafite-escuro dark:text-white">
+                <span className="font-mono font-semibold text-foreground dark:text-white">
                   {t.toolName}
                 </span>
                 <span className="opacity-70">
                   conf. {(t.confidence * 100).toFixed(0)}% · {t.latencyMs}ms
                 </span>
               </div>
-              <p className="text-aletis-grafite-claro dark:text-white/60 italic mt-0.5">
+              <p className="text-muted-foreground dark:text-white/60 italic mt-0.5">
                 <Info className="inline w-2.5 h-2.5 mr-1" />
                 {t.source}
               </p>
               {Object.keys(t.params).length > 0 && (
                 <details className="mt-1">
-                  <summary className="cursor-pointer text-aletis-grafite-medio dark:text-white/50">
+                  <summary className="cursor-pointer text-[var(--text-soft)] dark:text-white/50">
                     parâmetros
                   </summary>
                   <pre className="text-[10px] bg-aletis-bege/30 dark:bg-white/5 p-1.5 rounded mt-1 overflow-x-auto">
@@ -87,7 +87,7 @@ export default function AlixAuditPanel({ audit }: { audit: AuditTrail | null | u
                 </details>
               )}
               <details className="mt-1">
-                <summary className="cursor-pointer text-aletis-grafite-medio dark:text-white/50">
+                <summary className="cursor-pointer text-[var(--text-soft)] dark:text-white/50">
                   resultado{!t.ok && ' (erro)'}
                 </summary>
                 <pre className="text-[10px] bg-aletis-bege/30 dark:bg-white/5 p-1.5 rounded mt-1 overflow-x-auto whitespace-pre-wrap break-words">

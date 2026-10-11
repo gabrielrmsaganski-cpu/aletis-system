@@ -1,3 +1,7 @@
+import { SectionNav } from '../components/ui/SectionNav'
+import SearchField from '../components/ui/SearchField'
+import FilterBar from '../components/ui/FilterBar'
+import PageHeader from '../components/ui/PageHeader'
 /**
  * Contratos — Geração de instrumentos contratuais para
  * reestruturação de dívida rural e comercialização de safra.
@@ -21,7 +25,6 @@ import {
   RefreshCw,
   Handshake,
   Banknote,
-  X,
   Loader2,
   AlertCircle,
   CheckCircle2,
@@ -31,9 +34,18 @@ import {
   FileSignature,
   Briefcase,
 } from 'lucide-react'
+import AppDialog from '../components/ui/AppDialog'
+import { uiAction } from '../components/ui/foundation'
 
-const fmtBRL = (v: number): string =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
+const fmtBRL = (value: string | number): string => {
+  const formatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+  if (typeof value === 'number') return formatter.format(value)
+  const match = value.match(/^(\d+)\.(\d{2})$/)
+  if (!match) return '—'
+  // Intl formata a parte inteira exata; os centavos chegam como string do banco.
+  return formatter.formatToParts(BigInt(match[1]))
+    .map(part => part.type === 'fraction' ? match[2] : part.value).join('')
+}
 const fmtDate = (iso?: string): string => {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -63,7 +75,7 @@ interface ContratoSummary {
   titulo: string
   dataGeracao: string
   partes: { devedor: string; credor: string }
-  valorTotal: number
+  valorTotal: string | number
   dataVencimentoOrVigencia?: string
 }
 
@@ -93,7 +105,7 @@ const TIPO_COR: Record<TipoContrato, string> = {
   termo_renegociacao: 'bg-blue-50 text-blue-700 border-blue-200',
   acordo_extrajudicial: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   transacao_excepcional: 'bg-rose-50 text-rose-700 border-rose-200',
-  prestacao_servicos_aletis: 'bg-aletis-dourado/15 text-aletis-grafite-escuro border-aletis-dourado/40',
+  prestacao_servicos_aletis: 'bg-aletis-dourado/15 text-foreground border-aletis-dourado/40',
 }
 
 export default function Contratos() {
@@ -102,6 +114,9 @@ export default function Contratos() {
     '/contratos',
     []
   )
+  const [area, setArea] = useState<'gerados' | 'modelos'>('gerados')
+  const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState('todos')
   const [showWizard, setShowWizard] = useState(false)
   const [tipoSelecionado, setTipoSelecionado] = useState<TipoContrato | null>(null)
   const [previewId, setPreviewId] = useState<string | null>(null)
@@ -142,46 +157,33 @@ export default function Contratos() {
 
   const contratosSafe = Array.isArray(contratos) ? contratos : []
 
+  const filteredContracts = contratosSafe.filter(contract => (typeFilter === 'todos' || contract.tipo === typeFilter) && [contract.titulo, contract.partes.devedor, contract.partes.credor].join(' ').toLocaleLowerCase('pt-BR').includes(search.trim().toLocaleLowerCase('pt-BR')))
+
   return (
     <div className="min-h-screen bg-aletis-bege">
       {/* Header */}
-      <header className="relative mb-6 overflow-hidden rounded-2xl border border-aletis-verde/20 bg-gradient-to-br from-aletis-verde via-aletis-verde to-aletis-grafite-escuro shadow-lg">
-        <div className="pointer-events-none absolute inset-0 opacity-[0.08]" style={{ backgroundImage: 'radial-gradient(circle at 20% 20%, #cb9d52 0%, transparent 35%), radial-gradient(circle at 80% 60%, #ffffff 0%, transparent 30%)' }} />
-        <div className="relative flex flex-col gap-4 p-6 lg:flex-row lg:items-end lg:justify-between lg:p-8">
-          <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-aletis-dourado/40 bg-aletis-dourado/10 px-3 py-1">
-              <FileCheck className="h-3 w-3 text-aletis-dourado" />
-              <span className="text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-aletis-dourado">
-                Instrumentos Jurídicos
-              </span>
-            </div>
-            <h1 className="font-display text-3xl font-bold tracking-tight text-white lg:text-[2.5rem]">
-              Contratos
-            </h1>
-            <p className="mt-2 max-w-2xl font-body text-sm text-white/75 lg:text-base">
+      <PageHeader eyebrow="Instrumentos jurídicos" title={<>Contratos</>} description={<> <p className="mt-2 max-w-2xl font-body text-sm text-[var(--text-soft)] lg:text-base">
               CPR Financeira, CPR Física, Confissão de Dívida, Renegociação Bancária,
               Acordo Extrajudicial e Transação Excepcional — templates juridicamente
               fundamentados prontos para revisão e assinatura.
-            </p>
-          </div>
-          <button
+            </p> </>} actions={<> <button
             onClick={() => setShowWizard(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-aletis-dourado px-5 py-2.5 font-display text-sm font-semibold text-aletis-grafite-escuro shadow-md hover:bg-aletis-dourado-suave transition"
+            className={uiAction.primary}
           >
             <Plus className="h-4 w-4" />
             Novo Contrato
-          </button>
-        </div>
-      </header>
+          </button> </>} />
 
+      <SectionNav label="Áreas de contratos" active={area} onChange={setArea} items={[{id:'gerados',label:'Contratos gerados',icon:FileCheck,detail:loadingContratos ? 'Carregando' : contratosSafe.length+' documentos'},{id:'modelos',label:'Modelos disponíveis',icon:FileText,detail:'Escolha o instrumento para gerar um contrato'}]} />
       {/* Cards de tipos */}
+      {area === 'modelos' && (
       <section className="mb-6">
-        <h2 className="mb-3 font-display text-sm font-semibold text-aletis-grafite-escuro">
+        <h2 className="mb-3 font-display text-sm font-semibold text-foreground">
           Tipos de contrato suportados
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {loadingTipos && (
-            <p className="text-xs text-aletis-grafite-claro col-span-3">Carregando…</p>
+            <p className="text-xs text-muted-foreground col-span-3">Carregando…</p>
           )}
           {tipos.map((t) => {
             const Icon = TIPO_ICON[t.tipo]
@@ -192,18 +194,18 @@ export default function Contratos() {
                   setTipoSelecionado(t.tipo)
                   setShowWizard(true)
                 }}
-                className="text-left rounded-xl border border-aletis-borda/60 bg-white p-4 hover:border-aletis-verde/40 hover:shadow-md transition"
+                className="text-left rounded-xl border border-aletis-borda/60 bg-card p-4 hover:border-aletis-verde/40 transition-colors"
               >
                 <div className="mb-2 flex items-center gap-2">
                   <div className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border ${TIPO_COR[t.tipo]}`}>
                     <Icon className="h-4 w-4" />
                   </div>
-                  <h3 className="font-display text-sm font-semibold text-aletis-grafite-escuro">{t.titulo}</h3>
+                  <h3 className="font-display text-sm font-semibold text-foreground">{t.titulo}</h3>
                 </div>
-                <p className="text-xs font-body text-aletis-grafite-medio leading-relaxed">
+                <p className="text-xs font-body text-[var(--text-soft)] leading-relaxed">
                   {t.quando}
                 </p>
-                <p className="mt-2 text-[10px] font-body uppercase tracking-wider text-aletis-grafite-claro">
+                <p className="mt-2 text-[11px] font-body uppercase tracking-wider text-muted-foreground">
                   {t.fundamento[0]}
                 </p>
               </button>
@@ -212,15 +214,23 @@ export default function Contratos() {
         </div>
       </section>
 
+      )}
+      {area === 'gerados' && <>
+      <FilterBar className="mb-4" activeCount={Number(Boolean(search.trim())) + Number(typeFilter !== 'todos')} onClear={() => {setSearch('');setTypeFilter('todos')}}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <SearchField label="Buscar contratos" value={search} onChange={setSearch} placeholder="Título, devedor ou credor" />
+          <label className="text-xs font-medium text-muted-foreground">Tipo de contrato<select value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} className="input-field mt-1.5 block w-full sm:w-64"><option value="todos">Todos os tipos</option>{tipos.map(t=><option key={t.tipo} value={t.tipo}>{t.titulo}</option>)}</select></label>
+        </div>
+      </FilterBar>
       {/* Lista de contratos gerados */}
-      <section className="rounded-xl border border-aletis-borda/60 bg-white shadow-sm">
+      <section className="rounded-xl border border-aletis-borda/60 bg-card shadow-sm">
         <div className="flex items-center justify-between border-b border-aletis-borda/40 px-5 py-3">
-          <h2 className="font-display text-sm font-semibold text-aletis-grafite-escuro">
-            Contratos gerados ({contratosSafe.length})
+          <h2 className="font-display text-sm font-semibold text-foreground">
+            Contratos gerados ({filteredContracts.length})
           </h2>
           <button
             onClick={refetch}
-            className="text-xs font-body text-aletis-grafite-medio hover:text-aletis-verde transition inline-flex items-center gap-1"
+            className="text-xs font-body text-[var(--text-soft)] hover:text-aletis-verde transition inline-flex items-center gap-1"
           >
             <RefreshCw className="h-3 w-3" /> Atualizar
           </button>
@@ -228,22 +238,22 @@ export default function Contratos() {
 
         {loadingContratos ? (
           <div className="p-8 text-center">
-            <Loader2 className="mx-auto h-6 w-6 animate-spin text-aletis-verde" />
-            <p className="mt-2 text-xs text-aletis-grafite-claro">Carregando contratos…</p>
+            <Loader2 className="mx-auto h-6 w-6 animate-spin text-foreground" />
+            <p className="mt-2 text-xs text-muted-foreground">Carregando contratos…</p>
           </div>
-        ) : contratosSafe.length === 0 ? (
+        ) : filteredContracts.length === 0 ? (
           <div className="p-10 text-center">
-            <FileText className="mx-auto h-10 w-10 text-aletis-grafite-claro" />
-            <p className="mt-2 font-display text-sm font-semibold text-aletis-grafite-medio">
-              Nenhum contrato gerado ainda
+            <FileText className="mx-auto h-10 w-10 text-muted-foreground" />
+            <p className="mt-2 font-display text-sm font-semibold text-[var(--text-soft)]">
+              {contratosSafe.length ? 'Nenhum contrato para estes filtros' : 'Nenhum contrato gerado ainda'}
             </p>
-            <p className="mt-1 text-xs text-aletis-grafite-claro">
-              Clique em "Novo Contrato" para começar.
+            <p className="mt-1 text-xs text-muted-foreground">
+              {contratosSafe.length ? 'Limpe os filtros ou busque por outro título, devedor ou credor.' : 'Clique em “Novo Contrato” para começar.'}
             </p>
           </div>
         ) : (
           <div className="divide-y divide-aletis-borda/40">
-            {contratosSafe.map((c) => {
+            {filteredContracts.map((c) => {
               const Icon = TIPO_ICON[c.tipo]
               return (
                 <div key={c.id} className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between">
@@ -252,14 +262,14 @@ export default function Contratos() {
                       <Icon className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-display text-sm font-semibold text-aletis-grafite-escuro truncate">
+                      <p className="font-display text-sm font-semibold text-foreground truncate">
                         {c.titulo}
                       </p>
-                      <p className="text-xs font-body text-aletis-grafite-medio truncate">
+                      <p className="text-xs font-body text-[var(--text-soft)] truncate">
                         <User className="inline h-3 w-3 mr-1" />
                         {c.partes.devedor} → {c.partes.credor}
                       </p>
-                      <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-aletis-grafite-claro">
+                      <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
                         <span className="inline-flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {fmtDate(c.dataGeracao)}
@@ -277,10 +287,10 @@ export default function Contratos() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setPreviewId(c.id)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-aletis-borda bg-white px-3 py-1.5 text-xs font-display font-semibold text-aletis-grafite-medio hover:bg-aletis-bege transition"
+                      className="inline-flex items-center gap-1 rounded-lg border border-aletis-borda bg-card px-3 py-1.5 text-xs font-display font-semibold text-[var(--text-soft)] hover:bg-aletis-bege transition"
                       title="Visualizar"
                     >
-                      <Eye className="h-3 w-3" /> Preview
+                      <Eye className="h-3 w-3" /> Visualizar
                     </button>
                     <a
                       href={`/api/contratos/${c.id}/pdf`}
@@ -293,7 +303,7 @@ export default function Contratos() {
                     </a>
                     <button
                       onClick={() => handleDelete(c.id)}
-                      className="inline-flex items-center justify-center rounded-lg border border-aletis-borda bg-white p-1.5 text-red-600 hover:bg-red-50 transition"
+                      className="inline-flex items-center justify-center rounded-lg border border-aletis-borda bg-card p-1.5 text-red-600 hover:bg-red-50 transition"
                       title="Excluir"
                     >
                       <Trash2 className="h-3 w-3" />
@@ -306,6 +316,7 @@ export default function Contratos() {
         )}
       </section>
 
+      </>}
       {/* Wizard modal */}
       {showWizard && (
         <WizardContrato
@@ -574,41 +585,60 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
   const isDivida = !isCPR && !isServicos
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-aletis-borda/60 bg-white px-6 py-4">
-          <div>
-            <h2 className="font-display text-lg font-semibold text-aletis-grafite-escuro">
-              Novo Contrato
-            </h2>
-            {tipoInfo && (
-              <p className="text-xs font-body text-aletis-grafite-medio">
-                {tipoInfo.titulo}
-              </p>
-            )}
+    <AppDialog
+      title="Novo contrato"
+      eyebrow="Contratos"
+      subtitle={tipoInfo?.titulo ?? 'Instrumento jurídico para revisão e assinatura.'}
+      icon={<FileCheck className="h-5 w-5" />}
+      size="lg"
+      onClose={onClose}
+      closeOnBackdrop={!loading}
+      bodyClassName="p-0"
+      className="md:max-h-[min(94dvh,1040px)]"
+      footer={(
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <p className="flex max-w-md items-start gap-2 text-xs leading-relaxed text-[var(--text-soft)] dark:text-aletis-sage">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+            Documento gerado requer revisão jurídica antes da assinatura.
+          </p>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className={uiAction.secondary}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              form="contrato-wizard-form"
+              disabled={loading}
+              className={uiAction.primary}
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck className="h-4 w-4" />}
+              Gerar contrato
+            </button>
           </div>
-          <button onClick={onClose} aria-label="Fechar modal" className="rounded-lg p-2 text-aletis-grafite-medio hover:bg-aletis-bege">
-            <X className="h-5 w-5" />
-          </button>
         </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+      )}
+    >
+        <form id="contrato-wizard-form" onSubmit={handleSubmit} className="space-y-6 px-5 py-5 md:px-6">
           {/* Tipo */}
           <div>
-            <label className="mb-2 block text-xs font-display font-semibold uppercase tracking-wider text-aletis-grafite-medio">
+            <label className="mb-2 block text-xs font-display font-semibold uppercase tracking-wider text-[var(--text-soft)]">
               Tipo de Contrato
             </label>
             <select
               value={tipo}
               onChange={(e) => setTipo(e.target.value as TipoContrato)}
-              className="w-full rounded-lg border border-aletis-borda bg-white px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
+              className="w-full rounded-lg border border-aletis-borda bg-card px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
             >
               {tipos.map((t) => (
                 <option key={t.tipo} value={t.tipo}>{t.titulo}</option>
               ))}
             </select>
             {tipoInfo && (
-              <p className="mt-1 text-[11px] text-aletis-grafite-claro">
+              <p className="mt-1 text-[11px] text-muted-foreground">
                 <strong>Quando usar:</strong> {tipoInfo.quando}
               </p>
             )}
@@ -616,7 +646,7 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
 
           {/* Devedor / Contratante */}
           <fieldset className="rounded-lg border border-aletis-borda/60 p-4">
-            <legend className="px-2 font-display text-xs font-semibold uppercase tracking-wider text-aletis-verde">
+            <legend className="px-2 font-display text-xs font-semibold uppercase tracking-wider text-foreground">
               {isServicos ? 'Contratante (Cliente)' : 'Devedor'}
             </legend>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -633,7 +663,7 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
 
           {/* Credor / Contratada */}
           <fieldset className="rounded-lg border border-aletis-borda/60 p-4">
-            <legend className="px-2 font-display text-xs font-semibold uppercase tracking-wider text-aletis-verde">
+            <legend className="px-2 font-display text-xs font-semibold uppercase tracking-wider text-foreground">
               {isServicos ? 'Contratada (ALETIS)' : 'Credor'}
             </legend>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -698,7 +728,7 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
                   <FormInput name="servicosCredoresListados" label="Credores (separar por vírgula)" value={form.servicosCredoresListados} onChange={handleChange} className="md:col-span-2" placeholder="Banco do Brasil, Sicredi, Fertiflora" />
                 </div>
                 <div className="mt-3">
-                  <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-aletis-grafite-medio">
+                  <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-[var(--text-soft)]">
                     Descrição da situação do Contratante
                   </label>
                   <textarea
@@ -707,25 +737,25 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
                     onChange={handleChange}
                     rows={3}
                     placeholder="Breve contexto do caso (inadimplência, contratos de crédito rural em execução, penhoras, etc.)"
-                    className="w-full rounded-lg border border-aletis-borda bg-white px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
+                    className="w-full rounded-lg border border-aletis-borda bg-card px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
                   />
                 </div>
                 <div className="mt-3 flex flex-wrap gap-4">
-                  <label className="inline-flex items-center gap-2 text-xs font-body text-aletis-grafite-medio">
+                  <label className="inline-flex items-center gap-2 text-xs font-body text-[var(--text-soft)]">
                     <input
                       type="checkbox"
                       checked={form.servicosAplicaCdc}
                       onChange={(e) => setForm({ ...form, servicosAplicaCdc: e.target.checked })}
-                      className="h-4 w-4 rounded border-aletis-borda text-aletis-verde focus:ring-aletis-verde"
+                      className="h-4 w-4 rounded border-aletis-borda text-foreground focus:ring-aletis-verde"
                     />
                     Contratante é consumidor — aplica CDC (Lei 8.078/90)
                   </label>
-                  <label className="inline-flex items-center gap-2 text-xs font-body text-aletis-grafite-medio">
+                  <label className="inline-flex items-center gap-2 text-xs font-body text-[var(--text-soft)]">
                     <input
                       type="checkbox"
                       checked={form.servicosAplicaSuper}
                       onChange={(e) => setForm({ ...form, servicosAplicaSuper: e.target.checked })}
-                      className="h-4 w-4 rounded border-aletis-borda text-aletis-verde focus:ring-aletis-verde"
+                      className="h-4 w-4 rounded border-aletis-borda text-foreground focus:ring-aletis-verde"
                     />
                     Situação de superendividamento (Lei 14.181/21)
                   </label>
@@ -737,7 +767,7 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
                 <legend className="px-2 font-display text-xs font-semibold uppercase tracking-wider text-aletis-dourado">
                   Escopo — Módulos de Serviço
                 </legend>
-                <p className="mb-3 text-[11px] text-aletis-grafite-claro">
+                <p className="mb-3 text-[11px] text-muted-foreground">
                   Selecione os módulos que compõem o escopo deste contrato. O texto da cláusula III será gerado listando apenas os módulos ativos.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -754,12 +784,12 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
                     ['escSuportePericial', 'Suporte pericial / revisional judicial'],
                     ['escAcompanhamento', 'Acompanhamento de execução pós-acordo'],
                   ] as const).map(([key, label]) => (
-                    <label key={key} className="inline-flex items-center gap-2 text-xs font-body text-aletis-grafite-medio">
+                    <label key={key} className="inline-flex items-center gap-2 text-xs font-body text-[var(--text-soft)]">
                       <input
                         type="checkbox"
                         checked={form[key]}
                         onChange={(e) => setForm({ ...form, [key]: e.target.checked })}
-                        className="h-4 w-4 rounded border-aletis-borda text-aletis-verde focus:ring-aletis-verde"
+                        className="h-4 w-4 rounded border-aletis-borda text-foreground focus:ring-aletis-verde"
                       />
                       {label}
                     </label>
@@ -774,14 +804,14 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
                 </legend>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-aletis-grafite-medio">
+                    <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-[var(--text-soft)]">
                       Modelo de honorários
                     </label>
                     <select
                       name="servicosModelo"
                       value={form.servicosModelo}
                       onChange={handleChange}
-                      className="w-full rounded-lg border border-aletis-borda bg-white px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
+                      className="w-full rounded-lg border border-aletis-borda bg-card px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
                     >
                       <option value="fixo">Fixo</option>
                       <option value="mensal">Mensal (retainer)</option>
@@ -809,14 +839,14 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
                     <>
                       <FormInput name="servicosPercentualExito" label="Percentual de êxito (%)" type="number" step="0.1" value={form.servicosPercentualExito} onChange={handleChange} />
                       <div>
-                        <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-aletis-grafite-medio">
+                        <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-[var(--text-soft)]">
                           Base de cálculo do êxito
                         </label>
                         <select
                           name="servicosBaseCalculoExito"
                           value={form.servicosBaseCalculoExito}
                           onChange={handleChange}
-                          className="w-full rounded-lg border border-aletis-borda bg-white px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
+                          className="w-full rounded-lg border border-aletis-borda bg-card px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
                         >
                           <option value="economia_total">Economia total (saldo − valor renegociado)</option>
                           <option value="reducao_saldo">Redução de saldo (deságio)</option>
@@ -826,14 +856,14 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
                       <FormInput name="servicosPisoExito" label="Piso do êxito (R$) — opcional" type="number" step="0.01" value={form.servicosPisoExito} onChange={handleChange} />
                       <FormInput name="servicosTetoExito" label="Teto do êxito (R$) — opcional" type="number" step="0.01" value={form.servicosTetoExito} onChange={handleChange} />
                       <div className="md:col-span-2">
-                        <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-aletis-grafite-medio">
+                        <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-[var(--text-soft)]">
                           Condição de pagamento do êxito
                         </label>
                         <select
                           name="servicosCondicaoExito"
                           value={form.servicosCondicaoExito}
                           onChange={handleChange}
-                          className="w-full rounded-lg border border-aletis-borda bg-white px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
+                          className="w-full rounded-lg border border-aletis-borda bg-card px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
                         >
                           <option value="a_vista_liquidacao">À vista, na liquidação/formalização do acordo</option>
                           <option value="pro_rata_parcelas_credor">Pro rata das parcelas pagas ao credor</option>
@@ -855,14 +885,14 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
                   <FormInput name="servicosConsultorEmail" label="E-mail" type="email" value={form.servicosConsultorEmail} onChange={handleChange} />
                   <FormInput name="servicosConsultorFone" label="Telefone" value={form.servicosConsultorFone} onChange={handleChange} />
                   <div>
-                    <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-aletis-grafite-medio">
+                    <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-[var(--text-soft)]">
                       Plataforma de assinatura eletrônica
                     </label>
                     <select
                       name="servicosPlataformaAssinatura"
                       value={form.servicosPlataformaAssinatura}
                       onChange={handleChange}
-                      className="w-full rounded-lg border border-aletis-borda bg-white px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
+                      className="w-full rounded-lg border border-aletis-borda bg-card px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
                     >
                       <option value="Clicksign">Clicksign</option>
                       <option value="DocuSign">DocuSign</option>
@@ -873,12 +903,12 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
                   </div>
                 </div>
                 <div className="mt-3 flex items-center gap-3">
-                  <label className="inline-flex items-center gap-2 text-xs font-body text-aletis-grafite-medio">
+                  <label className="inline-flex items-center gap-2 text-xs font-body text-[var(--text-soft)]">
                     <input
                       type="checkbox"
                       checked={form.servicosArbitragem}
                       onChange={(e) => setForm({ ...form, servicosArbitragem: e.target.checked })}
-                      className="h-4 w-4 rounded border-aletis-borda text-aletis-verde focus:ring-aletis-verde"
+                      className="h-4 w-4 rounded border-aletis-borda text-foreground focus:ring-aletis-verde"
                     />
                     Incluir cláusula arbitral (Lei 9.307/96)
                   </label>
@@ -888,7 +918,7 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
                       value={form.servicosCamaraArbitral}
                       onChange={handleChange}
                       placeholder="Câmara (ex: CAM-CCBC)"
-                      className="flex-1 rounded-lg border border-aletis-borda bg-white px-3 py-1.5 text-xs focus:border-aletis-verde focus:outline-none"
+                      className="flex-1 rounded-lg border border-aletis-borda bg-card px-3 py-1.5 text-xs focus:border-aletis-verde focus:outline-none"
                     />
                   )}
                 </div>
@@ -898,7 +928,7 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
 
           {/* Metadata */}
           <fieldset className="rounded-lg border border-aletis-borda/60 p-4">
-            <legend className="px-2 font-display text-xs font-semibold uppercase tracking-wider text-aletis-grafite-medio">
+            <legend className="px-2 font-display text-xs font-semibold uppercase tracking-wider text-[var(--text-soft)]">
               Metadados
             </legend>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -908,7 +938,7 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
               <FormInput name="foro" label="Foro (opcional)" value={form.foro} onChange={handleChange} className="md:col-span-3" />
             </div>
             <div className="mt-3">
-              <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-aletis-grafite-medio">
+              <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-[var(--text-soft)]">
                 Observações
               </label>
               <textarea
@@ -916,36 +946,13 @@ function WizardContrato({ tipoInicial, tipos, onClose, onSubmit }: WizardProps) 
                 value={form.observacoes}
                 onChange={handleChange}
                 rows={3}
-                className="w-full rounded-lg border border-aletis-borda bg-white px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
+                className="w-full rounded-lg border border-aletis-borda bg-card px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
               />
             </div>
           </fieldset>
 
-          <div className="sticky bottom-0 -mx-6 -mb-6 border-t border-aletis-borda/60 bg-white px-6 py-4 flex items-center justify-between">
-            <p className="text-[11px] text-aletis-grafite-claro max-w-sm">
-              ⚠ Documento gerado requer revisão jurídica antes da assinatura.
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-lg border border-aletis-borda bg-white px-4 py-2 text-sm font-display font-semibold text-aletis-grafite-medio hover:bg-aletis-bege"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="inline-flex items-center gap-2 rounded-lg bg-aletis-verde px-5 py-2 text-sm font-display font-semibold text-white hover:bg-aletis-verde-escuro disabled:opacity-60 transition"
-              >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck className="h-4 w-4" />}
-                Gerar Contrato
-              </button>
-            </div>
-          </div>
         </form>
-      </div>
-    </div>
+    </AppDialog>
   )
 }
 
@@ -960,12 +967,12 @@ interface FormInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 function FormInput({ label, className, ...rest }: FormInputProps) {
   return (
     <div className={className}>
-      <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-aletis-grafite-medio">
+      <label className="mb-1 block text-[11px] font-display font-semibold uppercase tracking-wider text-[var(--text-soft)]">
         {label}{rest.required && <span className="text-red-600 ml-0.5">*</span>}
       </label>
       <input
         {...rest}
-        className="w-full rounded-lg border border-aletis-borda bg-white px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
+        className="w-full rounded-lg border border-aletis-borda bg-card px-3 py-2 text-sm focus:border-aletis-verde focus:outline-none"
       />
     </div>
   )
@@ -978,63 +985,101 @@ function PreviewModal({ id, onClose }: { id: string; onClose: () => void }) {
   const { data, loading, error } = useApi<ContratoGerado | null>(`/contratos/${id}`, null as any)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col">
-        <div className="flex items-center justify-between border-b border-aletis-borda/60 px-6 py-4">
-          <div>
-            <h2 className="font-display text-lg font-semibold text-aletis-grafite-escuro">
-              {data?.titulo ?? 'Carregando…'}
-            </h2>
-            {data && (
-              <p className="text-xs font-body text-aletis-grafite-medio">
-                {data.metadados.clausulas} cláusulas · {data.metadados.fundamentoLegal.join(', ')}
+    <AppDialog
+      title={data?.titulo ?? 'Carregando contrato'}
+      eyebrow="Preview"
+      subtitle={data ? `${data.metadados.clausulas} cláusulas · ${data.metadados.fundamentoLegal.join(', ')}` : 'Preparando visualização do instrumento.'}
+      icon={<FileText className="h-5 w-5" />}
+      size="xl"
+      onClose={onClose}
+      bodyClassName="p-0"
+      footer={data && (
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          {data.metadados.necessarioRevisao.length > 0 ? (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-100">
+              <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em]">
+                <AlertCircle className="h-3.5 w-3.5" />
+                Requer revisão antes da assinatura
               </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {data && (
-              <a
-                href={`/api/contratos/${id}/pdf`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-lg bg-aletis-verde px-3 py-1.5 text-xs font-display font-semibold text-white"
-              >
-                <Download className="h-3 w-3" /> PDF
-              </a>
-            )}
-            <button onClick={onClose} aria-label="Fechar modal" className="rounded-lg p-2 text-aletis-grafite-medio hover:bg-aletis-bege">
-              <X className="h-5 w-5" />
-            </button>
-          </div>
+              <ul className="space-y-0.5 text-xs">
+                {data.metadados.necessarioRevisao.map((r, i) => (
+                  <li key={i}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="flex items-center gap-2 text-xs text-[var(--text-soft)] dark:text-aletis-sage">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+              Sem alertas adicionais de revisão registrados.
+            </p>
+          )}
+          <a
+            href={`/api/contratos/${id}/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`${uiAction.primary} shrink-0`}
+          >
+            <Download className="h-4 w-4" /> Baixar PDF
+          </a>
         </div>
-
-        <div className="flex-1 overflow-y-auto px-8 py-6 bg-aletis-bege/30">
+      )}
+    >
+        <div className="min-h-[420px] bg-aletis-cream-papel/60 px-5 py-5 dark:bg-white/[0.03] md:px-8">
           {loading && (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-6 w-6 animate-spin text-aletis-verde" />
+              <Loader2 className="h-6 w-6 animate-spin text-foreground" />
             </div>
           )}
           {error && <p className="text-sm text-red-600">{error}</p>}
-          {data && (
-            <pre className="whitespace-pre-wrap font-body text-sm leading-relaxed text-aletis-grafite-escuro max-w-none">
-              {data.conteudoMarkdown}
-            </pre>
-          )}
+          {data && <ContractMarkdownPreview markdown={data.conteudoMarkdown} />}
         </div>
+    </AppDialog>
+  )
+}
 
-        {data && data.metadados.necessarioRevisao.length > 0 && (
-          <div className="border-t border-aletis-borda/60 bg-amber-50 px-6 py-3">
-            <p className="text-[11px] font-display font-semibold uppercase tracking-wider text-amber-800 mb-1">
-              Requer revisão antes da assinatura
+function ContractMarkdownPreview({ markdown }: { markdown: string }) {
+  const lines = markdown.split('\n')
+
+  return (
+    <article className="mx-auto max-w-4xl rounded-lg border border-aletis-borda/70 bg-card px-6 py-6 text-foreground shadow-none dark:border-white/10 dark:bg-card dark:text-aletis-cream">
+      {lines.map((raw, index) => {
+        const line = raw.trim()
+        if (!line) return <div key={index} className="h-3" />
+        if (line.startsWith('### ')) {
+          return (
+            <h4 key={index} className="mt-4 text-sm font-semibold leading-snug text-foreground dark:text-aletis-gold">
+              {line.replace(/^###\s+/, '')}
+            </h4>
+          )
+        }
+        if (line.startsWith('## ')) {
+          return (
+            <h3 key={index} className="mt-5 text-base font-semibold leading-snug text-foreground dark:text-white">
+              {line.replace(/^##\s+/, '')}
+            </h3>
+          )
+        }
+        if (line.startsWith('# ')) {
+          return (
+            <h2 key={index} className="mb-3 text-lg font-semibold leading-snug text-foreground dark:text-white">
+              {line.replace(/^#\s+/, '')}
+            </h2>
+          )
+        }
+        if (/^[-*]\s+/.test(line)) {
+          return (
+            <p key={index} className="flex gap-2 text-sm leading-relaxed text-[var(--text-soft)] dark:text-aletis-sage">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-aletis-verde dark:bg-aletis-gold" />
+              <span>{line.replace(/^[-*]\s+/, '')}</span>
             </p>
-            <ul className="space-y-0.5 text-xs text-amber-900">
-              {data.metadados.necessarioRevisao.map((r, i) => (
-                <li key={i}>• {r}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-    </div>
+          )
+        }
+        return (
+          <p key={index} className="text-sm leading-relaxed text-[var(--text-soft)] dark:text-aletis-sage">
+            {line}
+          </p>
+        )
+      })}
+    </article>
   )
 }

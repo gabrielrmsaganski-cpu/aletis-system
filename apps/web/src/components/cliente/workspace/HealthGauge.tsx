@@ -24,10 +24,10 @@ export default function HealthGauge({ value, size = 80 }: { value: number; size?
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-display font-bold tabular-nums" style={{ color, fontSize: size * 0.26 }}>
+        <span className="font-display font-semibold tabular-nums" style={{ color, fontSize: size * 0.26 }}>
           {value}
         </span>
-        <span className="text-aletis-grafite-claro -mt-0.5" style={{ fontSize: size * 0.13 }}>saúde</span>
+        <span className="text-muted-foreground -mt-0.5" style={{ fontSize: size * 0.13 }}>saúde</span>
       </div>
     </div>
   )

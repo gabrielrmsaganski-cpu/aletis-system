@@ -18,13 +18,14 @@ describe('GET /api/prospeccao/leads/sql', () => {
     await app.close()
   })
 
-  it('retorna 200 com shape consistente (PG off → aviso, on → leads)', async () => {
+  it('retorna 200 com shape consistente (Postgres ou índice local)', async () => {
     const r = await app.inject({ url: '/api/prospeccao/leads/sql?limit=3' })
     expect(r.statusCode).toBe(200)
     const body = r.json()
     expect(body.success).toBe(true)
     expect(Array.isArray(body.leads)).toBe(true)
     expect(typeof body.total).toBe('number')
+    expect(['postgres', 'memory']).toContain(body.source)
   })
 
   it('aceita filtro uf=PR', async () => {

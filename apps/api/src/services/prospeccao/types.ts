@@ -382,6 +382,8 @@ export interface ProspeccaoFilters {
   maxDivida?: number
   minHectares?: number
   tipoPessoa?: TipoPessoa
+  /** Filtra pelo status de ajuizamento quando informado. */
+  temAjuizada?: boolean
   apenasAjuizadas?: boolean
   cnaeAgro?: boolean
   apenasAgroProvavel?: boolean
@@ -393,6 +395,8 @@ export interface ProspeccaoFilters {
   sortBy?: 'score' | 'divida' | 'hectares' | 'recencia'
   page?: number
   pageSize?: number
+  /** Offset absoluto para consumidores que usam paginação baseada em SQL. */
+  offset?: number
 }
 
 export interface ProspeccaoStats {

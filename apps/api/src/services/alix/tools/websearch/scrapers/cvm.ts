@@ -1,11 +1,11 @@
-import type { ClaudeTool, ClaudeToolRegistry } from '../../../../llm/ClaudeFoundryClient.js';
+import type { LLMTool, LLMToolRegistry } from '../../../../llm/OpenAIClient.js';
 
 // Circuit breaker em memória.
 let consecutiveFailures = 0;
 const FAIL_THRESHOLD = 3;
 
-export function buildCvmTool(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tool: ClaudeTool = {
+export function buildCvmTool(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tool: LLMTool = {
     name: 'consultar_cvm',
     description: 'Consulta CVM (sistema RAD) por fatos relevantes, RJ/RE, documentos de empresas listadas. Em F2, retorna query otimizada para web_search. Não cobre empresas fechadas.',
     input_schema: {

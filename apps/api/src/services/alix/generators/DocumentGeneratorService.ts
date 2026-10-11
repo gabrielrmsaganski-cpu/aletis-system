@@ -13,10 +13,12 @@ import { promises as fs } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import { z } from 'zod';
 
 import { renderHtmlToPdfBuffer } from './PdfGenerator.js';
 import { renderFluxoCaixaXlsxBuffer } from './XlsxGenerator.js';
 import { renderMemoriaCalculoDocxBuffer } from './DocxGenerator.js';
+import { documentText, groundedDraftSchema, renderGroundedDocumentDocx, renderGroundedDocumentHtml, validateGroundedDraft, hashDocumentValue, type GroundedBriefing, type GroundedDraft, type GroundedReview } from './GroundedDocument.js';
 import type {
   FluxoCaixaInput,
   GeneratedDocument,
@@ -85,6 +87,7 @@ interface PersistInput {
   baseName: string;
   clienteId?: string;
   metadata?: Record<string, unknown>;
+  beforePersist?: () => Promise<void>;
 }
 
 async function persistDocument(p: PersistInput): Promise<GeneratedDocument> {
@@ -96,6 +99,7 @@ async function persistDocument(p: PersistInput): Promise<GeneratedDocument> {
 
   const filename = `${p.baseName}-${id.slice(0, 8)}.${p.kind}`;
   const absPath = join(dir, filename);
+  await p.beforePersist?.();
   await fs.writeFile(absPath, p.buffer);
 
   const stat = await fs.stat(absPath);
@@ -208,6 +212,26 @@ export class DocumentGeneratorService {
     return this._instance;
   }
 
+  /** A revisão fica registrada junto do arquivo, sem conceder aprovação profissional. */
+  async generateGroundedDocument(rawDraft: GroundedDraft, briefing: GroundedBriefing, review: GroundedReview, beforePersist?: () => Promise<void>): Promise<GeneratedDocument> {
+    const draft = groundedDraftSchema.parse(rawDraft);
+    validateGroundedDraft(draft, briefing);
+    if (review.status !== 'verificado_automaticamente' || review.observacoes.length) throw new Error('Corrija o rascunho antes de emitir o arquivo.');
+    if (briefing.fontes.some(source => source.tipo === 'drive') && !beforePersist) throw new Error('Fontes do Drive exigem revalidação de acesso e versão antes de gravar o documento.');
+    const buffer = draft.formato === 'docx'
+      ? await renderGroundedDocumentDocx(draft, briefing, review)
+      : await renderHtmlToPdfBuffer(renderGroundedDocumentHtml(draft, briefing, review));
+    return persistDocument({
+      kind: draft.formato, buffer, baseName: `${draft.tipo}-${slugify(briefing.clienteNome)}`, clienteId: briefing.clienteId, beforePersist,
+      metadata: {
+        tipo: 'documento-fundamentado', documentKind: draft.tipo, status: 'rascunho', version: 1,
+        sessionId: briefing.sessionId, briefingId: briefing.id, briefingHash: briefing.hash,
+        contentHash: hashDocumentValue(draft), artifactHash: crypto.createHash('sha256').update(buffer).digest('hex'),
+        sources: briefing.fontes, coverage: briefing.coverage, gaps: [...new Set([...briefing.lacunas, ...draft.lacunas])], review,
+      },
+    });
+  }
+
   /** Utilitário cru: renderiza HTML para PDF e persiste. */
   async generateHtmlToPdf(
     html: string,
@@ -291,6 +315,8 @@ export class DocumentGeneratorService {
   }
 
   async generateParecer(input: ParecerInput): Promise<GeneratedDocument> {
+    // O schema do modelo é orientação; a fronteira que emite arquivos valida de fato.
+    z.object({ clienteId: documentText, clienteNome: documentText, assunto: documentText, diagnostico: documentText, viabilidade: documentText, recomendacao: documentText, anexos: z.array(documentText).optional(), consultor: documentText.optional() }).parse(input);
     const template = await loadTemplate('parecer-tecnico.html');
     const dataEmissao = input.dataEmissao ?? todayBR();
     const consultor = input.consultor ?? 'Christian Kohler';
@@ -403,6 +429,7 @@ export class DocumentGeneratorService {
   }
 
   async generateMemoriaCalculo(input: MemoriaInput): Promise<GeneratedDocument> {
+    z.object({ clienteId: documentText, clienteNome: documentText, titulo: documentText, premissas: z.array(documentText).min(1), itens: z.array(z.object({ titulo: documentText, descricao: documentText, formula: documentText.optional(), resultado: documentText.optional() })).min(1), conclusao: documentText, consultor: documentText.optional() }).parse(input);
     const buffer = await renderMemoriaCalculoDocxBuffer(input);
     return persistDocument({
       kind: 'docx',

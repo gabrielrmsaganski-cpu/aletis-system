@@ -87,6 +87,29 @@ export class DailyBriefingService {
         `• ${stats.leadsParaReengajar ?? 0} para reengajar (>15d sem interação)`,
       )
       partes.push(`• ${pendingsOpen} confirmações HITL abertas`)
+      try {
+        const { alixGetClientes } = await import('../../AlixService.js')
+        const hoje = new Date().toISOString().slice(0, 10)
+        let acoesHoje = 0
+        let acoesAtrasadas = 0
+        let ativosSemAcao = 0
+        const ativos = new Set(['lead', 'qualificacao', 'analise', 'proposta', 'negociacao', 'acordo', 'acompanhamento'])
+        for (const c of alixGetClientes()) {
+          const estagio = String(c?.estagio || '').toLowerCase()
+          if (!c?.id || !ativos.has(estagio)) continue
+          const acao = c.proximaAcao && typeof c.proximaAcao === 'object' ? c.proximaAcao as Record<string, unknown> : null
+          const data = acao?.data ? String(acao.data).slice(0, 10) : ''
+          if (!data) {
+            if (['proposta', 'negociacao', 'acordo'].includes(estagio)) ativosSemAcao++
+            continue
+          }
+          if (data < hoje) acoesAtrasadas++
+          else if (data === hoje) acoesHoje++
+        }
+        partes.push(`• CRM: ${acoesAtrasadas} ações atrasadas · ${acoesHoje} hoje · ${ativosSemAcao} deals sem próxima ação`)
+      } catch {
+        // agenda CRM é best-effort
+      }
     } catch (err) {
       partes.push('📂 *Sua agenda*\n_(indisponível)_')
     }
@@ -113,9 +136,21 @@ export class DailyBriefingService {
 
     // ── 4. Sugestão de próxima ação ────────────────────────────
     partes.push('🎯 *Sugestão de foco hoje*')
-    partes.push(
-      'Abrir a ALIX e pedir: "estruturar proposta para o hot-lead de maior dívida" — ela cruza tudo e monta cenário com números.',
-    )
+    try {
+      const proactive = getProactiveService(getProspeccaoService(), this.storageDir)
+      const insights = await proactive.getRecentInsights(2)
+      const crm = insights.find((i) =>
+        ['crm-acao-vencida', 'crm-acao-hoje', 'crm-sem-proxima-acao', 'stage-stuck'].includes(i.tipo) &&
+        (i.urgencia === 'critico' || i.urgencia === 'importante'),
+      )
+      if (crm) {
+        partes.push(`${crm.titulo} — peça para a ALIX preparar a ação e gerar confirmação.`)
+      } else {
+        partes.push('Abrir a ALIX e pedir: "priorize minha fila CRM de hoje" — ela cruza ações, estágio e risco de esfriar.')
+      }
+    } catch {
+      partes.push('Abrir a ALIX e pedir: "priorize minha fila CRM de hoje" — ela cruza ações, estágio e risco de esfriar.')
+    }
 
     return partes.join('\n')
   }

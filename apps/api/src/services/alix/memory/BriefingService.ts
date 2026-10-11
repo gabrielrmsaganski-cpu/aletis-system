@@ -12,9 +12,9 @@
 //
 // Política de "primeira ação"
 // ───────────────────────────
-// • Se há proximasAcoes na memória → usa a primeira.
-// • Senão, se há dívida crítica (>180d atraso, alerta crítico) → sugere
-//   alongar / falar com credor principal.
+// • Preserva próximas ações registradas e alertas críticos.
+// • Referências financeiras sem posição comprovada → acrescenta conferência
+//   com extratos; esta é a primeira sugestão apenas sem ação ou alerta anterior.
 // • Senão, sugere importar dados via dossiê (caminho vazio).
 // ============================================================
 
@@ -26,6 +26,8 @@ import type {
   BriefingDestaque,
   BriefingDivida,
   BriefingKpiBsc,
+  BriefingReferenciaFinanceiraMemoria,
+  BriefingResumoFinanceiro,
   MemoriaCliente,
   StatusPerspectivaBriefing,
 } from './types.js'
@@ -63,26 +65,34 @@ async function lerUltimaLinhaJsonl<T = unknown>(
   }
 }
 
-function brl(v: number): string {
-  if (!Number.isFinite(v)) return 'R$ —'
+function brl(v: number | null): string {
+  if (v === null || !Number.isFinite(v)) return 'saldo não informado'
   return v.toLocaleString('pt-BR', {
     style: 'currency',
     currency: 'BRL',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   })
+}
+
+/** Nunca interpreta texto, valores originais ou totais do CRM como saldo. */
+function saldoNumericoInformado(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? value
+    : null
 }
 
 // ── Mapeamentos do dossiê existente ─────────────────────────
 // O formato atual `cli-xxx.analise.json` traz `saldoRecalculado.porDivida[]`
-// + `alertasTop[]`. Tratamos como "best effort": se não existir,
-// caímos para memória.
+// + `alertasTop[]`. A fonte é uma análise, sem prova de posição bancária atual.
+// Textos da memória permanecem referências separadas, sem conversão monetária.
 
 interface AnaliseCliente {
   saldoRecalculado?: {
     porDivida?: Array<{
       credor?: string
       contrato?: string
-      saldoRecalculado?: number
+      saldoRecalculado?: number | null
       diasDesdeVencimento?: number
     }>
   }
@@ -130,9 +140,12 @@ function severidadeDeAlerta(nivel?: string): BriefingDestaque['severidade'] {
 
 export class BriefingService {
   private static instance: BriefingService | null = null
-  private readonly memoryService: AlixMemoryService
+  private readonly memoryService: Pick<AlixMemoryService, 'get'>
 
-  constructor(memoryService?: AlixMemoryService) {
+  constructor(
+    memoryService?: Pick<AlixMemoryService, 'get'>,
+    private readonly storageRoot: string = STORAGE_ROOT,
+  ) {
     this.memoryService = memoryService ?? AlixMemoryService.getInstance()
   }
 
@@ -147,41 +160,71 @@ export class BriefingService {
     const [memoria, analise, bsc] = await Promise.all([
       this.memoryService.get(safeId),
       lerJsonSeExistir<AnaliseCliente>(
-        join(STORAGE_ROOT, 'clientes', `${safeId}.json`),
+        join(this.storageRoot, 'clientes', `${safeId}.json`),
       ),
       lerUltimaLinhaJsonl<BscSnapshot>(
-        join(STORAGE_ROOT, 'bsc', `${safeId}.jsonl`),
+        join(this.storageRoot, 'bsc', `${safeId}.jsonl`),
       ),
     ])
 
     const clienteNome = memoria?.clienteNome || safeId
 
-    // ── Dívidas ─────────────────────────────────────────────
+    // ── Referências financeiras e cobertura ──────────────────
+    // O nome dividasAtivas é mantido por compatibilidade de API. Somente
+    // registros estruturados entram nele, sempre com posição não verificada.
     const dividasAtivas: BriefingDivida[] = []
-    if (analise?.saldoRecalculado?.porDivida?.length) {
-      for (const d of analise.saldoRecalculado.porDivida) {
-        const atraso = d.diasDesdeVencimento ?? 0
+    const registrosDaAnalise = analise?.saldoRecalculado?.porDivida
+    if (Array.isArray(registrosDaAnalise)) {
+      for (const d of registrosDaAnalise) {
+        if (!d || typeof d !== 'object') continue
+        const atraso = saldoNumericoInformado(d.diasDesdeVencimento)
         const status =
-          atraso > 180
-            ? `atraso ${atraso}d (crítico)`
-            : atraso > 0
-              ? `atraso ${atraso}d`
-              : 'em dia'
+          atraso === null
+            ? 'situação de atraso não informada na análise'
+            : atraso > 180
+              ? `atraso indicado na análise: ${atraso}d (crítico)`
+              : atraso > 0
+                ? `atraso indicado na análise: ${atraso}d`
+                : 'sem atraso indicado na análise'
+        const saldoBRL = saldoNumericoInformado(d.saldoRecalculado)
         dividasAtivas.push({
           credor: (d.credor || d.contrato || 'desconhecido').toString(),
-          saldoBRL: Number(d.saldoRecalculado || 0),
+          saldoBRL,
           status,
-        })
-      }
-    } else if (memoria?.dividasAtivas?.length) {
-      for (const linha of memoria.dividasAtivas) {
-        dividasAtivas.push({
-          credor: linha,
-          saldoBRL: 0,
-          status: 'memória',
+          origem: 'analise.saldoRecalculado.porDivida',
+          naturezaSaldo: saldoBRL === null ? 'nao_informado' : 'informado_na_analise',
+          situacaoAtual: 'nao_verificada',
         })
       }
     }
+    const referenciasFinanceirasMemoria: BriefingReferenciaFinanceiraMemoria[] =
+      (memoria?.dividasAtivas ?? [])
+        .filter((texto) => typeof texto === 'string' && texto.trim().length > 0)
+        .map((texto) => ({
+          texto,
+          origem: 'memoria',
+          memoriaAtualizadaEm: memoria!.atualizadoEm,
+          saldoAtualBRL: null,
+          situacaoAtual: 'nao_verificada',
+        }))
+    const registrosComSaldoInformado = dividasAtivas.filter((d) => d.saldoBRL !== null).length
+    const registrosSemSaldoInformado = dividasAtivas.length - registrosComSaldoInformado
+    const resumoFinanceiro: BriefingResumoFinanceiro = {
+      registrosNaAnalise: dividasAtivas.length,
+      registrosComSaldoInformado,
+      registrosSemSaldoInformado,
+      referenciasMemoriaNaoConciliadas: referenciasFinanceirasMemoria.length,
+      coberturaSaldosNaAnalise: dividasAtivas.length === 0
+        ? 'sem_registros'
+        : registrosComSaldoInformado === 0
+          ? 'nenhum_informado'
+          : registrosSemSaldoInformado > 0 ? 'parcial' : 'todos_informados',
+      saldoAtualTotalBRL: null,
+      situacaoAtual: 'nao_verificada',
+    }
+    const temReferenciasFinanceiras = dividasAtivas.length > 0 || referenciasFinanceirasMemoria.length > 0
+    const acaoConferenciaFinanceira =
+      'Confirmar a posição atual com extratos, contratos e comprovantes de amortização, registrando a data de referência antes de consolidar saldos ou priorizar credores.'
 
     // ── Destaques ───────────────────────────────────────────
     const destaques: BriefingDestaque[] = []
@@ -221,18 +264,33 @@ export class BriefingService {
     if (proximasAcoes.length === 0 && analise?.srai?.recomendacoes?.length) {
       proximasAcoes.push(...analise.srai.recomendacoes)
     }
+    const primeiraAcaoRegistrada = proximasAcoes[0]
+    if (temReferenciasFinanceiras && !proximasAcoes.includes(acaoConferenciaFinanceira)) {
+      proximasAcoes.push(acaoConferenciaFinanceira)
+    }
 
     // ── Resumo executivo ────────────────────────────────────
-    const totalSaldo = dividasAtivas.reduce((acc, d) => acc + d.saldoBRL, 0)
     const nCritico = destaques.filter((d) => d.severidade === 'critico').length
     const resumoParts: string[] = []
     resumoParts.push(`Cliente ${clienteNome}.`)
     if (dividasAtivas.length > 0) {
+      const rotulo = dividasAtivas.length === 1 ? 'obrigação relacionada' : 'obrigações relacionadas'
       resumoParts.push(
-        `${dividasAtivas.length} dívida${
-          dividasAtivas.length > 1 ? 's' : ''
-        } ativa${dividasAtivas.length > 1 ? 's' : ''} — saldo total ${brl(totalSaldo)}.`,
+        `${dividasAtivas.length} ${rotulo} na análise; ` +
+        `${registrosComSaldoInformado} com saldo numérico informado e ${registrosSemSaldoInformado} sem saldo informado.`,
       )
+    }
+    if (referenciasFinanceirasMemoria.length > 0) {
+      const rotulo = referenciasFinanceirasMemoria.length === 1
+        ? 'referência financeira textual na memória, ainda não conciliada'
+        : 'referências financeiras textuais na memória, ainda não conciliadas'
+      resumoParts.push(`${referenciasFinanceirasMemoria.length} ${rotulo} com documentos.`)
+    }
+    if (temReferenciasFinanceiras) {
+      resumoParts.push('Saldo atual total e situação dos contratos não verificados. Valores históricos ou calculados não comprovam a posição atual.')
+      if (dividasAtivas.some((d) => d.saldoBRL === 0)) {
+        resumoParts.push('Zero informado na análise não comprova quitação.')
+      }
     }
     if (nCritico > 0) {
       resumoParts.push(`${nCritico} alerta(s) crítico(s).`)
@@ -259,16 +317,13 @@ export class BriefingService {
       !memoria && !analise && !bsc && dividasAtivas.length === 0
     if (dadosVazios) {
       sugestaoPrimeiraAcao = 'Importar dados do cliente via dossiê'
-    } else if (proximasAcoes.length > 0) {
-      sugestaoPrimeiraAcao = `Hoje faça: ${proximasAcoes[0]}`
+    } else if (primeiraAcaoRegistrada) {
+      sugestaoPrimeiraAcao = `Hoje faça: ${primeiraAcaoRegistrada}`
     } else if (nCritico > 0) {
       const critico = destaques.find((d) => d.severidade === 'critico')!
       sugestaoPrimeiraAcao = `Endereçar alerta crítico: ${critico.detalhe}`
-    } else if (dividasAtivas.length > 0) {
-      const maior = [...dividasAtivas].sort(
-        (a, b) => b.saldoBRL - a.saldoBRL,
-      )[0]
-      sugestaoPrimeiraAcao = `Contactar ${maior.credor} (maior exposição — ${brl(maior.saldoBRL)})`
+    } else if (temReferenciasFinanceiras) {
+      sugestaoPrimeiraAcao = acaoConferenciaFinanceira
     } else {
       sugestaoPrimeiraAcao = 'Atualizar memória do cliente com próxima ação'
     }
@@ -284,6 +339,8 @@ export class BriefingService {
       proximasAcoes,
       kpisBscResumo,
       dividasAtivas,
+      referenciasFinanceirasMemoria,
+      resumoFinanceiro,
       sugestaoPrimeiraAcao,
       markdown: '', // preenchido abaixo
     }
@@ -324,9 +381,24 @@ export class BriefingService {
     }
 
     if (b.dividasAtivas.length > 0) {
-      lines.push('## Dívidas ativas')
+      lines.push('## Obrigações relacionadas na análise')
+      lines.push('Valores do campo saldoRecalculado da análise; cálculo, data-base, amortizações e posição atual precisam de conferência. Não há totalização nem ordem de exposição comprovada.')
+      lines.push('')
       for (const d of b.dividasAtivas) {
-        lines.push(`- ${d.credor} — ${brl(d.saldoBRL)} (${d.status})`)
+        const saldo = d.saldoBRL === null
+          ? 'saldo não informado'
+          : `${brl(d.saldoBRL)} informado na análise`
+        lines.push(`- ${d.credor} — ${saldo} (${d.status}; situação atual não verificada)`)
+      }
+      lines.push('')
+    }
+
+    if (b.referenciasFinanceirasMemoria.length > 0) {
+      lines.push('## Referências financeiras da memória (a confirmar)')
+      lines.push('Texto histórico ou declarativo, sem comprovação de dívida ativa, saldo atual ou titularidade. A atualização da memória não é a data-base financeira. Não somar nem ordenar credores por estes textos.')
+      lines.push('')
+      for (const referencia of b.referenciasFinanceirasMemoria) {
+        lines.push(`- Referência não verificada: ${referencia.texto}`)
       }
       lines.push('')
     }

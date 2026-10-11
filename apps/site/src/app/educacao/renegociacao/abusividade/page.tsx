@@ -85,7 +85,7 @@ export default function Abusividade() {
       <UL>
         <LI><Strong>Volume relevante</Strong>: dívida acima de R$ 500 mil. Ação revisional bem instruída pode reduzir 15-40% do saldo.</LI>
         <LI><Strong>Cláusulas claramente ilegais</Strong>: comissão de permanência cumulada, capitalização não pactuada, encargo abusivo identificável.</LI>
-        <LI><Strong>Banco recusa renegociar</Strong>: o ajuizamento muda o tom da mesa.</LI>
+        <LI><Strong>Banco recusa renegociar</Strong>: o ajuizamento muda o tom da conversa.</LI>
       </UL>
       <Callout tone="warn" title="Cuidado com perícia">
         Toda revisional bem-feita exige perícia contábil. Calcular o "valor justo" com base em tese de cálculo (capitalização anual, sem comissão, etc) leva 30-90 dias e custa entre R$ 5 mil e R$ 50 mil dependendo do volume. Vale para dívidas grandes, não para pequenas.

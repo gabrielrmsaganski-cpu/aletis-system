@@ -5,11 +5,12 @@
 //   2. Frankfurter (ECB)                — primary for others, history
 //   3. open.er-api.com                  — secondary
 //   4. AwesomeAPI                       — last resort (rate-limited)
-// Never fails: hardcoded fallback keeps the UI alive.
+// Falhas preservam a última observação real e sua data; sem dados, não há cotação.
 // ============================================================
 
 import axios, { type AxiosInstance } from 'axios';
 import NodeCache from 'node-cache';
+import { LastObservationStore } from './LastObservationStore.js';
 import type { DataSourceManager } from '../DataSourceManager.js';
 
 // ── Types ────────────────────────────────────────────────────
@@ -18,21 +19,25 @@ export interface CotacaoCambio {
   moeda: string;
   nome: string;
   bid: number;
-  ask: number;
-  high: number;
-  low: number;
-  varBid: number;
-  pctChange: number;
+  ask: number | null;
+  high: number | null;
+  low: number | null;
+  varBid: number | null;
+  pctChange: number | null;
   timestamp: string;
   createDate: string;
   fonte: 'api' | 'cache' | 'fallback';
+  estado?: 'disponivel' | 'atrasado';
+  periodoVariacao?: '24h' | 'pregao_anterior' | null;
   provedor?: string; // 'BCB PTAX' | 'Frankfurter' | 'open.er-api' | 'AwesomeAPI' | 'fallback'
 }
 
 export interface HistoricoCambio {
   moeda: string;
-  cotacoes: { data: string; valor: number; alta: number; baixa: number }[];
+  cotacoes: { data: string; valor: number; alta: number | null; baixa: number | null }[];
   fonte: 'api' | 'cache' | 'fallback';
+  estado?: 'disponivel' | 'atrasado';
+  periodoVariacao?: '24h' | 'pregao_anterior' | null;
   atualizadoEm: string;
   provedor?: string;
 }
@@ -46,13 +51,6 @@ const NOMES: Record<string, string> = {
   'GBP-BRL': 'Libra Esterlina',
   'JPY-BRL': 'Iene Japonês',
   'ARS-BRL': 'Peso Argentino',
-};
-
-const FALLBACK_RATES: Record<string, Omit<CotacaoCambio, 'fonte' | 'provedor'>> = {
-  'USD-BRL': { moeda: 'USD-BRL', nome: 'Dólar Americano', bid: 5.00, ask: 5.01, high: 5.05, low: 4.95, varBid: -0.02, pctChange: -0.4, timestamp: '', createDate: '' },
-  'EUR-BRL': { moeda: 'EUR-BRL', nome: 'Euro', bid: 5.70, ask: 5.71, high: 5.75, low: 5.65, varBid: 0.01, pctChange: 0.2, timestamp: '', createDate: '' },
-  'CNY-BRL': { moeda: 'CNY-BRL', nome: 'Yuan Chinês', bid: 0.69, ask: 0.70, high: 0.71, low: 0.68, varBid: 0.0, pctChange: 0.0, timestamp: '', createDate: '' },
-  'GBP-BRL': { moeda: 'GBP-BRL', nome: 'Libra Esterlina', bid: 6.35, ask: 6.36, high: 6.40, low: 6.30, varBid: 0.02, pctChange: 0.3, timestamp: '', createDate: '' },
 };
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -75,6 +73,7 @@ function previousBusinessDay(ref = new Date()): Date {
 // ── Service ──────────────────────────────────────────────────
 
 export class AwesomeApiService {
+  private readonly observations = new LastObservationStore('cambio');
   private http: AxiosInstance;
   private bcb: AxiosInstance;
   private frankfurter: AxiosInstance;
@@ -98,8 +97,7 @@ export class AwesomeApiService {
     const cacheKey = `cambio_atual_${pares.join(',')}`;
     const cached = this.cache.get<CotacaoCambio[]>(cacheKey);
     if (cached) {
-      this.dsm.updateSourceStatus('awesome_cambio', 'online', 0);
-      return cached.map(c => ({ ...c, fonte: 'cache' as const }));
+      return cached.map(c => ({ ...c, fonte: 'cache' as const, estado: c.estado === 'atrasado' || Date.now() - Date.parse(c.createDate) > 7 * 86400000 ? 'atrasado' : 'disponivel' }));
     }
 
     // Try in order: Frankfurter (one call gets all) → er-api → AwesomeAPI
@@ -119,6 +117,8 @@ export class AwesomeApiService {
             const ptax = await this.fetchUsdFromBcbPtax().catch(() => null);
             if (ptax) result[usdIdx] = ptax;
           }
+          for (const quote of result) quote.estado = Date.now() - Date.parse(quote.createDate) > 7 * 86400000 ? 'atrasado' : 'disponivel';
+          this.observations.set(cacheKey, result);
           this.cache.set(cacheKey, result);
           return result;
         }
@@ -127,12 +127,9 @@ export class AwesomeApiService {
       }
     }
 
-    // Last resort: fallback
-    this.dsm.updateSourceStatus('awesome_cambio', 'degraded', 0, 'all providers exhausted');
-    return pares.map(par => {
-      const fb = FALLBACK_RATES[par] || { ...FALLBACK_RATES['USD-BRL'], moeda: par, nome: NOMES[par] || par };
-      return { ...fb, fonte: 'fallback' as const, provedor: 'fallback' };
-    });
+    this.dsm.updateSourceStatus('awesome_cambio', 'degraded', 0, 'Provedores indisponíveis');
+    const last = this.observations.get<CotacaoCambio[]>(cacheKey);
+    return last?.map(c => ({ ...c, fonte: 'cache', estado: 'atrasado' })) || [];
   }
 
   // ── Provider 1: BCB OLINDA PTAX (USD oficial) ─────────────
@@ -159,10 +156,10 @@ export class AwesomeApiService {
               nome: 'Dólar Americano',
               bid,
               ask,
-              high: Math.max(bid, ask),
-              low: Math.min(bid, ask),
-              varBid: 0,
-              pctChange: 0,
+              high: null,
+              low: null,
+              varBid: null,
+              pctChange: null,
               timestamp: String(Math.floor(new Date(latest.dataHoraCotacao).getTime() / 1000)),
               createDate: latest.dataHoraCotacao,
               fonte: 'api',
@@ -191,14 +188,15 @@ export class AwesomeApiService {
       const resp = await this.frankfurter.get(`latest?base=${base}&symbols=BRL`);
       const rate = resp.data?.rates?.BRL;
       const date = resp.data?.date;
-      if (typeof rate !== 'number') throw new Error(`Frankfurter: no rate for ${base}`);
+      if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) throw new Error(`Frankfurter: no rate for ${base}`);
+      if (!Number.isFinite(Date.parse(date))) throw new Error('Cotação sem data válida');
       latestByBase[base] = { rate, date };
 
       // Try to get previous day for pctChange
       try {
         const prevResp = await this.frankfurter.get(`${isoDate(previousBusinessDay(new Date(date)))}?base=${base}&symbols=BRL`);
         const prevRate = prevResp.data?.rates?.BRL;
-        if (typeof prevRate === 'number') previousByBase[base] = prevRate;
+        if (typeof prevRate === 'number' && prevRate > 0 && prevResp.data.date < date) previousByBase[base] = prevRate;
       } catch { /* best-effort */ }
     }
 
@@ -207,17 +205,18 @@ export class AwesomeApiService {
       const entry = latestByBase[base];
       if (!entry) continue;
       const prev = previousByBase[base];
-      const varBid = prev ? +(entry.rate - prev).toFixed(4) : 0;
-      const pctChange = prev ? +(((entry.rate - prev) / prev) * 100).toFixed(3) : 0;
+      const varBid = prev ? +(entry.rate - prev).toFixed(4) : null;
+      const pctChange = prev ? +(((entry.rate - prev) / prev) * 100).toFixed(3) : null;
       results.push({
         moeda: par,
         nome: NOMES[par] || par,
         bid: +entry.rate.toFixed(4),
-        ask: +(entry.rate * 1.001).toFixed(4),
-        high: +entry.rate.toFixed(4),
-        low: +entry.rate.toFixed(4),
+        ask: null,
+        high: null,
+        low: null,
         varBid,
         pctChange,
+        periodoVariacao: 'pregao_anterior',
         timestamp: String(Math.floor(new Date(entry.date).getTime() / 1000)),
         createDate: `${entry.date} 00:00:00`,
         fonte: 'api',
@@ -240,19 +239,20 @@ export class AwesomeApiService {
       const resp = await this.erApi.get(`latest/${base}`);
       if (resp.data?.result !== 'success') throw new Error('er-api: not success');
       const rate = resp.data?.rates?.BRL;
-      if (typeof rate !== 'number') throw new Error(`er-api: no BRL rate for ${base}`);
+      if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) throw new Error(`er-api: no BRL rate for ${base}`);
       const date = resp.data?.time_last_update_utc;
+      if (!Number.isFinite(Date.parse(date))) throw new Error('Cotação sem data válida');
 
       for (const par of pares.filter(p => p.split('-')[0] === base)) {
         results.push({
           moeda: par,
           nome: NOMES[par] || par,
           bid: +rate.toFixed(4),
-          ask: +(rate * 1.001).toFixed(4),
-          high: +rate.toFixed(4),
-          low: +rate.toFixed(4),
-          varBid: 0,
-          pctChange: 0,
+          ask: null,
+          high: null,
+          low: null,
+          varBid: null,
+          pctChange: null,
           timestamp: String(Math.floor(new Date(date).getTime() / 1000)),
           createDate: date,
           fonte: 'api',
@@ -284,7 +284,9 @@ export class AwesomeApiService {
       createDate: item.create_date,
       fonte: 'api',
       provedor: 'AwesomeAPI',
+      periodoVariacao: '24h',
     }));
+    if (cotacoes.length !== pares.length || cotacoes.some(c => !pares.includes(c.moeda) || !Number.isFinite(c.bid) || c.bid <= 0 || !Number.isFinite(Date.parse(c.createDate)))) throw new Error('Cotações inválidas');
     this.dsm.updateSourceStatus('awesome_cambio', 'online', Date.now() - start);
     return cotacoes;
   }
@@ -292,40 +294,49 @@ export class AwesomeApiService {
   // ── History (cascade) ─────────────────────────────────────
 
   async getHistoricoDiario(par: string = 'USD-BRL', dias: number = 30): Promise<HistoricoCambio> {
+    if (!/^[A-Z]{3}-[A-Z]{3}$/.test(par) || !Number.isInteger(dias) || dias < 1 || dias > 365) throw new Error('Par ou período cambial inválido');
+    const endDate = new Date();
+    const startDate = new Date(endDate);
+    startDate.setUTCDate(startDate.getUTCDate() - dias);
+    const start = isoDate(startDate);
+    const end = isoDate(endDate);
+    // O endpoint diário pode devolver N pregões, não N dias corridos.
+    // O recorte também se aplica ao cache quando a janela avança.
+    const inPeriod = (points: HistoricoCambio['cotacoes']) => points.filter(point =>
+      Number.isFinite(point.valor) && point.valor > 0 && /^\d{4}-\d{2}-\d{2}$/.test(point.data) &&
+      Number.isFinite(Date.parse(point.data)) && point.data >= start && point.data <= end,
+    ).sort((a, b) => a.data.localeCompare(b.data));
     const cacheKey = `cambio_hist_${par}_${dias}`;
     const cached = this.cache.get<HistoricoCambio>(cacheKey);
-    if (cached) return { ...cached, fonte: 'cache' };
+    if (cached) return { ...cached, cotacoes: inPeriod(cached.cotacoes), fonte: 'cache' };
 
     const [base, quote] = par.split('-');
 
     // Try Frankfurter range endpoint (supports any currency combination)
     try {
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - dias);
       const resp = await this.frankfurter.get(
         `${isoDate(startDate)}..${isoDate(endDate)}?base=${base}&symbols=${quote}`
       );
       const rates = resp.data?.rates;
       if (rates && typeof rates === 'object') {
-        const cotacoes = Object.entries(rates)
+        const cotacoes = inPeriod(Object.entries(rates)
           .map(([data, obj]: [string, any]) => ({
             data,
             valor: Number(obj[quote]),
-            alta: Number(obj[quote]),
-            baixa: Number(obj[quote]),
-          }))
-          .filter(c => c.valor > 0)
-          .sort((a, b) => a.data.localeCompare(b.data));
+            alta: null,
+            baixa: null,
+          })));
 
         if (cotacoes.length > 0) {
           const result: HistoricoCambio = {
             moeda: par,
             cotacoes,
             fonte: 'api',
-            atualizadoEm: new Date().toISOString(),
+            estado: Date.now() - Date.parse(cotacoes.at(-1)!.data) > 7 * 86400000 ? 'atrasado' : 'disponivel',
+            atualizadoEm: cotacoes.at(-1)!.data,
             provedor: 'Frankfurter (ECB)',
           };
+          this.observations.set(cacheKey, result);
           this.cache.set(cacheKey, result, 3600);
           return result;
         }
@@ -337,44 +348,27 @@ export class AwesomeApiService {
       const resp = await this.http.get(`json/daily/${par}/${dias}`);
       const items = resp.data;
       if (!Array.isArray(items) || items.length === 0) throw new Error('Histórico vazio');
-      const cotacoes = items.map((item: any) => ({
+      const cotacoes = inPeriod(items.map((item: any) => ({
         data: item.create_date?.split(' ')[0] || new Date(parseInt(item.timestamp) * 1000).toISOString().slice(0, 10),
         valor: parseFloat(item.bid),
         alta: parseFloat(item.high),
         baixa: parseFloat(item.low),
-      })).reverse();
+      })));
+      if (!cotacoes.length) throw new Error('Histórico sem observações válidas');
       const result: HistoricoCambio = {
         moeda: par,
         cotacoes,
         fonte: 'api',
-        atualizadoEm: new Date().toISOString(),
+        estado: Date.now() - Date.parse(cotacoes.at(-1)!.data) > 7 * 86400000 ? 'atrasado' : 'disponivel',
+        atualizadoEm: cotacoes.at(-1)!.data,
         provedor: 'AwesomeAPI',
       };
+      this.observations.set(cacheKey, result);
       this.cache.set(cacheKey, result, 3600);
       return result;
     } catch { /* fall through */ }
 
-    // Synthetic fallback
-    const cotacoes = [];
-    const basePrice = FALLBACK_RATES[par]?.bid || 5.0;
-    for (let i = dias; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const variation = (Math.random() - 0.5) * 0.1;
-      const val = basePrice + variation;
-      cotacoes.push({
-        data: isoDate(d),
-        valor: Math.round(val * 10000) / 10000,
-        alta: Math.round((val + 0.03) * 10000) / 10000,
-        baixa: Math.round((val - 0.03) * 10000) / 10000,
-      });
-    }
-    return {
-      moeda: par,
-      cotacoes,
-      fonte: 'fallback',
-      atualizadoEm: new Date().toISOString(),
-      provedor: 'fallback',
-    };
+    const last = this.observations.get<HistoricoCambio>(cacheKey);
+    return last ? { ...last, cotacoes: inPeriod(last.cotacoes), fonte: 'cache', estado: 'atrasado' } : { moeda: par, cotacoes: [], fonte: 'fallback', atualizadoEm: '', provedor: 'indisponível' };
   }
 }

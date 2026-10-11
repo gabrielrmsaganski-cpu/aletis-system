@@ -8,12 +8,12 @@ const linhas = [
   {
     tema: 'Abordagem',
     convencional: 'Escritório ou banco atuando por interesse próprio',
-    aletis: 'Mesa técnica independente, do lado do produtor',
+    aletis: 'Assessoria independente, contratada para organizar a decisão do cliente',
   },
   {
     tema: 'Análise da dívida',
     convencional: 'Aceita a planilha do credor como verdade',
-    aletis: 'Recálculo auditável, peça por peça, com memória pública',
+    aletis: 'Reconstitui a conta a partir dos contratos, extratos e garantias',
   },
   {
     tema: 'Visão do agro',
@@ -23,12 +23,12 @@ const linhas = [
   {
     tema: 'Rigor técnico',
     convencional: 'Planilhas genéricas e retrabalho manual',
-    aletis: 'Memória de cálculo auditável apoiada por mesa digital interna',
+    aletis: 'Método documentado, revisão humana e tecnologia interna de apoio',
   },
   {
     tema: 'Negociação',
     convencional: 'Um credor por vez, sem coordenação',
-    aletis: 'Mesa multi-credor simultânea com cenário consolidado',
+    aletis: 'Cenário consolidado antes de abrir conversas com cada credor',
   },
   {
     tema: 'Entrega final',
@@ -52,14 +52,14 @@ export function Diferenciais() {
           </Reveal>
           <Reveal delay={80}>
             <h2 className="mt-6 display-lg text-white">
-              Não somos{' '}
-              <span className="italic text-aletis-dourado">mais um</span> no tabuleiro.
+              O que muda quando a decisão vem{' '}
+              <span className="italic text-aletis-dourado">bem montada</span>.
             </h2>
           </Reveal>
           <Reveal delay={160}>
             <p className="mt-5 text-white/65 md:text-lg">
-              Comparativo honesto entre o caminho tradicional e a abordagem ALETIS.
-              Sem marketing vazio — aqui está a diferença concreta na entrega.
+              A diferença não está no discurso. Está na ordem do trabalho:
+              documentos primeiro, tese depois, negociação por último.
             </p>
           </Reveal>
         </div>

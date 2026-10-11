@@ -3,7 +3,8 @@
 // ============================================================
 import { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '../../hooks/useApi'
-import { X, ArrowRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { ArrowRight, GitCompareArrows, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import AppDialog from '../ui/AppDialog'
 
 interface Snapshot {
   id: number
@@ -69,24 +70,18 @@ export default function SnapshotDiffModal({ grupoId, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
-        <header className="px-5 py-4 border-b border-aletis-grafite-claro/15 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-mono text-aletis-verde uppercase font-semibold">📸 Diff A/B</p>
-            <h2 className="text-base font-display font-semibold text-aletis-grafite-escuro">
-              Comparar snapshots
-            </h2>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-aletis-grafite-escuro/5 flex items-center justify-center">
-            <X className="w-5 h-5 text-aletis-grafite-claro" />
-          </button>
-        </header>
-
-        <div className="p-5 space-y-4">
+    <AppDialog
+      title="Comparar snapshots"
+      eyebrow="Diff A/B"
+      subtitle="Compare duas fotos do diagnóstico lado a lado e veja a variação dos KPIs principais."
+      icon={<GitCompareArrows className="h-5 w-5" />}
+      onClose={onClose}
+      size="xl"
+      bodyClassName="space-y-4"
+    >
           {error && <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700">{error}</div>}
 
-          {!snapshots && <div className="text-xs text-aletis-grafite-claro">Carregando…</div>}
+          {!snapshots && <div className="text-xs text-muted-foreground">Carregando…</div>}
 
           {snapshots && snapshots.length < 2 && (
             <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
@@ -122,7 +117,7 @@ export default function SnapshotDiffModal({ grupoId, onClose }: Props) {
               </div>
 
               <div className="card-premium p-4">
-                <h4 className="text-xs font-display font-semibold text-aletis-grafite-escuro mb-3">📈 Variação A → B</h4>
+                <h4 className="text-xs font-display font-semibold text-foreground mb-3">📈 Variação A → B</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <DiffRow label="EBITDA total" valueA={diff.a.kpis.ebitdaTotal ?? 0} valueB={diff.b.kpis.ebitdaTotal ?? 0} fmt={fmtBRL} positiveIsGood />
                   <DiffRow label="Margem EBITDA" valueA={diff.a.kpis.margemEbitda ?? 0} valueB={diff.b.kpis.margemEbitda ?? 0} fmt={(v) => `${(v * 100).toFixed(1)}%`} positiveIsGood />
@@ -133,7 +128,7 @@ export default function SnapshotDiffModal({ grupoId, onClose }: Props) {
               </div>
 
               <div className="card-premium p-3 bg-aletis-cream/30">
-                <p className="text-xs font-body text-aletis-grafite-escuro">
+                <p className="text-xs font-body text-foreground">
                   <strong>Resumo:</strong>{' '}
                   EBITDA {fmtDelta(diff.diff.ebitda, fmtBRL)} ·
                   Dívida {fmtDelta(diff.diff.divida, fmtBRL, true)} ·
@@ -143,16 +138,14 @@ export default function SnapshotDiffModal({ grupoId, onClose }: Props) {
               </div>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </AppDialog>
   )
 }
 
 function SnapshotPicker({ label, snapshots, value, onChange }: { label: string; snapshots: Snapshot[]; value: number | null; onChange: (id: number) => void }) {
   return (
     <div>
-      <label className="text-[10px] uppercase tracking-wider text-aletis-grafite-claro font-semibold">{label}</label>
+      <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</label>
       <select
         value={value ?? ''}
         onChange={(e) => onChange(parseInt(e.target.value, 10))}
@@ -174,11 +167,11 @@ function SnapshotCard({ label, snap, tone }: { label: string; snap: any; tone: '
   return (
     <div className={`card-premium p-3 border-l-4 ${cls}`}>
       <div className="flex items-center gap-2 mb-2">
-        <span className="px-2 py-0.5 rounded-full bg-white text-[10px] font-bold uppercase">{label}</span>
+        <span className="px-2 py-0.5 rounded-full bg-card text-[11px] font-bold uppercase">{label}</span>
         <span className="text-xs font-body font-semibold">#{snap.id}</span>
       </div>
-      <p className="text-[10px] text-aletis-grafite-claro">{snap.tipo}</p>
-      <p className="text-[10px] text-aletis-grafite-claro mt-0.5">{new Date(snap.calculadoEm).toLocaleString('pt-BR')}</p>
+      <p className="text-[11px] text-muted-foreground">{snap.tipo}</p>
+      <p className="text-[11px] text-muted-foreground mt-0.5">{new Date(snap.calculadoEm).toLocaleString('pt-BR')}</p>
       <div className="mt-2 space-y-1 text-[11px] tabular-nums">
         <div>EBITDA: <strong>{fmtBRL(snap.kpis.ebitdaTotal ?? 0)}</strong></div>
         <div>Dívida: <strong>{fmtBRL(snap.kpis.dividaTotal ?? 0)}</strong></div>
@@ -193,12 +186,12 @@ function DiffRow({ label, valueA, valueB, fmt, positiveIsGood }: { label: string
   const isUp = delta > 0
   const isGood = positiveIsGood ? isUp : !isUp
   const Icon = delta === 0 ? Minus : isUp ? TrendingUp : TrendingDown
-  const cls = delta === 0 ? 'text-aletis-grafite-claro' : isGood ? 'text-aletis-verde' : 'text-red-600'
+  const cls = delta === 0 ? 'text-muted-foreground' : isGood ? 'text-foreground' : 'text-red-600'
   return (
     <div className="flex items-center gap-2 text-xs font-body p-2 rounded bg-aletis-cream/30">
-      <span className="text-[10px] uppercase text-aletis-grafite-claro min-w-[110px]">{label}</span>
+      <span className="text-[11px] uppercase text-muted-foreground min-w-[110px]">{label}</span>
       <span className="tabular-nums">{fmt(valueA)}</span>
-      <ArrowRight className="w-3 h-3 text-aletis-grafite-claro" />
+      <ArrowRight className="w-3 h-3 text-muted-foreground" />
       <span className="tabular-nums font-semibold">{fmt(valueB)}</span>
       <span className={`ml-auto inline-flex items-center gap-1 tabular-nums ${cls}`}>
         <Icon className="w-3 h-3" />

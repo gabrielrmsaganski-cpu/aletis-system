@@ -1,3 +1,4 @@
+import PageHeader from '../components/ui/PageHeader'
 /**
  * Prospecção — visão Mapa.
  *
@@ -8,7 +9,7 @@
  * Quando o backend já tiver lat/lng (via GeoEnrichment), eles entram com
  * um pequeno jitter para evitar overlap exato.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { MapContainer, TileLayer, CircleMarker, Popup, LayersControl, ScaleControl } from 'react-leaflet'
 import L from 'leaflet'
@@ -62,6 +63,36 @@ interface Lead {
   lng?: number
 }
 
+interface SqlLead {
+  cnpjCpf?: string | null
+  nome?: string | null
+  uf?: string | null
+  totalDivida?: string | number | null
+  areaEstimadaHa?: string | number | null
+  agroScore?: number | null
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === '') return undefined
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function normalizeLead(item: SqlLead): Lead {
+  const cpfCnpj = String(item.cnpjCpf || '').trim()
+  const digits = cpfCnpj.replace(/\D/g, '')
+  return {
+    id: cpfCnpj || undefined,
+    cpfCnpj: cpfCnpj || undefined,
+    nome: String(item.nome || '').trim() || undefined,
+    uf: String(item.uf || '').trim().toUpperCase() || undefined,
+    divida: finiteNumber(item.totalDivida),
+    hectares: finiteNumber(item.areaEstimadaHa),
+    scoreFinal: finiteNumber(item.agroScore),
+    tipoPessoa: digits.length === 11 ? 'PF' : digits.length === 14 ? 'PJ' : undefined,
+  }
+}
+
 const COLOR_BY_CLASS: Record<string, { fill: string; stroke: string }> = {
   quente: { fill: '#a83232', stroke: '#7a2424' },
   morno: { fill: '#cb9d52', stroke: '#a87f3d' },
@@ -100,7 +131,7 @@ function formatBRL(v: number | undefined): string {
 }
 
 export default function ProspeccaoMapa() {
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -111,8 +142,12 @@ export default function ProspeccaoMapa() {
   const [minDivida, setMinDivida] = useState<number>(Number(params.get('minDivida') ?? 100_000))
 
   const mapRef = useRef<L.Map | null>(null)
+  const requestRef = useRef<AbortController | null>(null)
 
-  const loadLeads = async () => {
+  const loadLeads = useCallback(async () => {
+    requestRef.current?.abort()
+    const controller = new AbortController()
+    requestRef.current = controller
     setLoading(true)
     setError(null)
     try {
@@ -121,21 +156,34 @@ export default function ProspeccaoMapa() {
       if (tipoPessoa) qs.set('tipoPessoa', tipoPessoa)
       if (minDivida > 0) qs.set('minDivida', String(minDivida))
       qs.set('limit', '500')
-      const data = await apiFetch<{ leads?: Lead[]; items?: Lead[] }>(`/prospeccao/buscar?${qs.toString()}`)
-      const arr = (data?.leads ?? data?.items ?? []) as Lead[]
+      const data = await apiFetch<{ leads?: SqlLead[] }>(`/prospeccao/leads/sql?${qs.toString()}`, {
+        signal: controller.signal,
+        timeoutMs: 30_000,
+      })
+      const arr = (data?.leads ?? []).map(normalizeLead)
       setLeads(arr)
     } catch (e) {
+      if (controller.signal.aborted) return
       setError(e instanceof Error ? e.message : 'erro')
       setLeads([])
     } finally {
-      setLoading(false)
+      if (requestRef.current === controller) setLoading(false)
     }
-  }
+  }, [filtroUf, minDivida, tipoPessoa])
 
   useEffect(() => {
-    loadLeads()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    void loadLeads()
+    return () => requestRef.current?.abort()
+  }, [loadLeads])
+
+  const applyFilters = () => {
+    const next = new URLSearchParams()
+    if (filtroUf) next.set('uf', filtroUf)
+    if (tipoPessoa) next.set('tipoPessoa', tipoPessoa)
+    if (minDivida > 0) next.set('minDivida', String(minDivida))
+    setParams(next, { replace: true })
+    void loadLeads()
+  }
 
   const points = useMemo(() => {
     return leads
@@ -150,9 +198,9 @@ export default function ProspeccaoMapa() {
           }
         }
         if (lat === undefined || lng === undefined) return null
-        return { lead, lat, lng }
+        return { lead, lat, lng, locationSource: lead.lat !== undefined && lead.lng !== undefined ? 'coordenada' as const : 'centroide_uf' as const }
       })
-      .filter((p): p is { lead: Lead; lat: number; lng: number } => p !== null)
+      .filter((p): p is { lead: Lead; lat: number; lng: number; locationSource: 'coordenada' | 'centroide_uf' } => p !== null)
   }, [leads])
 
   const total = leads.length
@@ -163,39 +211,30 @@ export default function ProspeccaoMapa() {
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <Link
+      <PageHeader title={<><MapPin className="h-6 w-6" />Mapa de Prospecção</>} eyebrow={<> <Link
             to="/prospeccao"
             className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-aletis-verde-medio/70 hover:text-aletis-verde"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Lista de leads
-          </Link>
-          <h1 className="mt-1 flex items-center gap-2 font-display text-2xl font-bold text-aletis-verde">
-            <MapPin className="h-6 w-6" /> Mapa de Prospecção
-          </h1>
-          <p className="text-sm text-aletis-verde-medio">
+          </Link> </>} description={<> <p className="text-sm text-muted-foreground">
             {loading ? 'Carregando…' : `${total} leads · ${points.length} no mapa · ${ufsRepresentadas.length} UFs`}
-          </p>
-        </div>
-        <button
+          </p> </>} actions={<> <button
           type="button"
-          onClick={loadLeads}
+          onClick={() => void loadLeads()}
           disabled={loading}
           className="inline-flex items-center gap-1.5 rounded-xl bg-aletis-verde px-4 py-2 text-sm font-medium text-aletis-cream transition hover:bg-aletis-verde-escuro disabled:opacity-60"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Recarregar
-        </button>
-      </header>
+        </button> </>} />
 
-      <section className="flex flex-wrap gap-3 rounded-xl bg-white p-3 shadow-brand-sm ring-1 ring-aletis-cinza">
-        <Filter className="h-4 w-4 self-center text-aletis-verde-medio" />
+      <section className="flex flex-wrap gap-3 rounded-xl bg-card p-3 shadow-brand-sm ring-1 ring-aletis-cinza">
+        <Filter className="h-4 w-4 self-center text-muted-foreground" />
         <label className="flex items-center gap-2 text-xs">
           UF:
           <select
             value={filtroUf}
             onChange={(e) => setFiltroUf(e.target.value)}
-            className="rounded border border-aletis-cinza bg-white px-2 py-1 text-sm"
+            className="rounded border border-aletis-cinza bg-card px-2 py-1 text-sm"
           >
             <option value="">Todas</option>
             {Object.keys(UF_CENTROIDS).map((uf) => (
@@ -208,7 +247,7 @@ export default function ProspeccaoMapa() {
           <select
             value={tipoPessoa}
             onChange={(e) => setTipoPessoa(e.target.value as '' | 'PF' | 'PJ')}
-            className="rounded border border-aletis-cinza bg-white px-2 py-1 text-sm"
+            className="rounded border border-aletis-cinza bg-card px-2 py-1 text-sm"
           >
             <option value="">Todos</option>
             <option value="PF">PF</option>
@@ -222,13 +261,13 @@ export default function ProspeccaoMapa() {
             value={minDivida}
             step={50_000}
             onChange={(e) => setMinDivida(Number(e.target.value))}
-            className="w-32 rounded border border-aletis-cinza bg-white px-2 py-1 text-sm font-mono"
+            className="w-32 rounded border border-aletis-cinza bg-card px-2 py-1 text-sm font-mono"
           />
         </label>
         <button
           type="button"
-          onClick={loadLeads}
-          className="rounded bg-aletis-gold px-3 py-1 text-xs font-bold uppercase tracking-wider text-aletis-verde hover:bg-aletis-gold-escuro hover:text-aletis-cream"
+          onClick={applyFilters}
+          className="rounded bg-aletis-gold px-3 py-1 text-xs font-bold uppercase tracking-wider text-foreground hover:bg-aletis-gold-escuro hover:text-aletis-cream"
         >
           Aplicar
         </button>
@@ -240,7 +279,7 @@ export default function ProspeccaoMapa() {
         </div>
       )}
 
-      <section className="overflow-hidden rounded-2xl shadow-brand ring-1 ring-aletis-cinza">
+      <section className="overflow-hidden rounded-lg shadow-brand ring-1 ring-aletis-cinza">
         <MapContainer
           center={[-14.5, -52]}
           zoom={4}
@@ -267,7 +306,7 @@ export default function ProspeccaoMapa() {
             </LayersControl.BaseLayer>
           </LayersControl>
           <ScaleControl position="bottomleft" />
-          {points.map(({ lead, lat, lng }) => {
+          {points.map(({ lead, lat, lng, locationSource }) => {
             const c = colorFor(lead)
             return (
               <CircleMarker
@@ -278,13 +317,16 @@ export default function ProspeccaoMapa() {
               >
                 <Popup>
                   <div className="space-y-1 text-xs">
-                    <div className="font-bold text-aletis-verde">{lead.nome || lead.cpfCnpj || 'Lead'}</div>
+                    <div className="font-bold text-foreground">{lead.nome || lead.cpfCnpj || 'Lead'}</div>
                     <div>
                       {lead.tipoPessoa || ''} {lead.cpfCnpj && <code className="ml-1 font-mono">{lead.cpfCnpj}</code>}
                     </div>
                     <div>
                       {lead.municipio ? `${lead.municipio} / ` : ''}
                       <strong>{lead.uf}</strong>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {locationSource === 'coordenada' ? 'Coordenada confirmada' : 'Posição aproximada pelo centróide da UF'}
                     </div>
                     <div>Dívida: <strong>{formatBRL(lead.divida)}</strong></div>
                     {lead.hectares && <div>Área: <strong>{lead.hectares.toLocaleString('pt-BR')} ha</strong></div>}
@@ -297,7 +339,7 @@ export default function ProspeccaoMapa() {
                     {lead.cpfCnpj && (
                       <Link
                         to={`/prospeccao?cpf=${lead.cpfCnpj}`}
-                        className="mt-1 inline-block rounded bg-aletis-verde px-2 py-1 text-[10px] uppercase tracking-wider text-aletis-cream hover:bg-aletis-verde-escuro"
+                        className="mt-1 inline-block rounded bg-aletis-verde px-2 py-1 text-[11px] uppercase tracking-wider text-aletis-cream hover:bg-aletis-verde-escuro"
                       >
                         Abrir lead →
                       </Link>
@@ -310,7 +352,7 @@ export default function ProspeccaoMapa() {
         </MapContainer>
       </section>
 
-      <section className="flex items-center gap-4 rounded-xl bg-white p-3 text-xs text-aletis-verde-medio shadow-brand-sm ring-1 ring-aletis-cinza">
+      <section className="flex items-center gap-4 rounded-xl bg-card p-3 text-xs text-muted-foreground shadow-brand-sm ring-1 ring-aletis-cinza">
         <strong className="uppercase tracking-wider">Legenda:</strong>
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-3 w-3 rounded-full" style={{ background: COLOR_BY_CLASS.quente.fill }} /> quente / score ≥ 75

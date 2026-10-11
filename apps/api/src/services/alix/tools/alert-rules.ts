@@ -5,12 +5,12 @@
 // quando soja > 130 para o cliente X" via conversa natural com ALIX.
 // ============================================================
 
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 import { getAlertRulesService, type AlertOperador, type AlertTipo } from '../AlertRulesService.js'
 
-export function buildAlertRulesTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildAlertRulesTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   // ── definir_alerta_cliente ──────────────────────────────────
   tools.push({

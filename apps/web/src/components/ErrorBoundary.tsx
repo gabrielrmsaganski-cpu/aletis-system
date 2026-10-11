@@ -54,7 +54,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
 
     return (
       <div className="min-h-[60vh] flex items-center justify-center p-6">
-        <div className="max-w-2xl w-full bg-white dark:bg-aletis-grafite-escuro border border-red-200 dark:border-red-800 rounded-2xl shadow-lg overflow-hidden">
+        <div className="max-w-2xl w-full bg-card dark:bg-card border border-red-200 dark:border-red-800 rounded-lg shadow-lg overflow-hidden">
           <div className="bg-red-50 dark:bg-red-950/30 px-6 py-4 flex items-center gap-3 border-b border-red-200 dark:border-red-800">
             <AlertTriangle size={24} className="text-red-600 dark:text-red-400 shrink-0" />
             <div className="min-w-0">
@@ -67,20 +67,20 @@ export default class ErrorBoundary extends React.Component<Props, State> {
             </div>
           </div>
           <div className="px-6 py-5 space-y-4">
-            <p className="text-sm text-aletis-grafite-escuro dark:text-white/85">
+            <p className="text-sm text-foreground dark:text-white/85">
               <b>Mensagem:</b>{' '}
               <code className="font-mono text-xs bg-aletis-bege dark:bg-white/5 px-2 py-0.5 rounded">
                 {this.state.error?.message || 'erro sem mensagem'}
               </code>
             </p>
             {this.state.errorId && (
-              <p className="text-[11px] text-aletis-grafite-medio dark:text-white/50">
+              <p className="text-[11px] text-[var(--text-soft)] dark:text-white/50">
                 ID do erro: <code className="font-mono">{this.state.errorId}</code> · {new Date().toLocaleString('pt-BR')}
               </p>
             )}
             {isDev && this.state.error?.stack && (
               <details className="text-xs">
-                <summary className="cursor-pointer text-aletis-grafite-medio dark:text-white/60 hover:text-aletis-verde">
+                <summary className="cursor-pointer text-[var(--text-soft)] dark:text-white/60 hover:text-aletis-verde">
                   Ver stack trace (dev)
                 </summary>
                 <pre className="mt-2 p-3 bg-slate-100 dark:bg-slate-900 rounded overflow-x-auto text-[11px] leading-relaxed whitespace-pre-wrap break-words">
@@ -97,13 +97,13 @@ export default class ErrorBoundary extends React.Component<Props, State> {
               </button>
               <button
                 onClick={() => window.location.reload()}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-aletis-borda dark:border-white/10 text-aletis-grafite-escuro dark:text-white font-medium text-sm hover:bg-aletis-bege dark:hover:bg-white/5 transition"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-aletis-borda dark:border-white/10 text-foreground dark:text-white font-medium text-sm hover:bg-aletis-bege dark:hover:bg-white/5 transition"
               >
                 <RefreshCw size={14} /> Recarregar página
               </button>
               <button
                 onClick={this.handleGoHome}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-aletis-borda dark:border-white/10 text-aletis-grafite-medio dark:text-white/70 font-medium text-sm hover:bg-aletis-bege dark:hover:bg-white/5 transition"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-aletis-borda dark:border-white/10 text-[var(--text-soft)] dark:text-white/70 font-medium text-sm hover:bg-aletis-bege dark:hover:bg-white/5 transition"
               >
                 <Home size={14} /> Dashboard
               </button>

@@ -101,6 +101,7 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+    overflow-x: clip;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -112,6 +113,14 @@
     font-family: 'Verdana', 'Segoe UI', system-ui, sans-serif;
     font-size: 15px;
     line-height: 1.6;
+    overflow-x: clip;
+  }
+
+  @supports not (overflow: clip) {
+    html,
+    body {
+      overflow-x: hidden;
+    }
   }
 
   ::selection {
@@ -122,10 +131,10 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Chakra Petch', system-ui, sans-serif;
     color: inherit;
-    letter-spacing: 0.005em;
+    letter-spacing: 0;
     font-weight: 600;
   }
-  h1 { font-weight: 700; letter-spacing: 0.01em; }
+  h1 { font-weight: 700; letter-spacing: 0; }
 
   ::-webkit-scrollbar {
     width: 10px;
@@ -279,25 +288,28 @@
 
   /* ─── Tipografia display ─── */
   .display-3xl {
-    @apply font-display font-bold tracking-tight;
+    @apply font-display font-bold;
     font-size: clamp(48px, 7vw, 96px);
     line-height: 0.98;
-    letter-spacing: -0.01em;
+    letter-spacing: 0;
   }
   .display-xl {
-    @apply font-display font-bold tracking-tight;
+    @apply font-display font-bold;
     font-size: clamp(40px, 5.4vw, 72px);
     line-height: 1.02;
+    letter-spacing: 0;
   }
   .display-lg {
-    @apply font-display font-bold tracking-tight;
+    @apply font-display font-bold;
     font-size: clamp(32px, 4.4vw, 56px);
     line-height: 1.06;
+    letter-spacing: 0;
   }
   .display-md {
-    @apply font-display font-semibold tracking-tight;
+    @apply font-display font-semibold;
     font-size: clamp(24px, 3vw, 40px);
     line-height: 1.12;
+    letter-spacing: 0;
   }
 
   /* ─── Section padding ─── */

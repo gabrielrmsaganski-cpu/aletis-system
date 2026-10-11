@@ -1,3 +1,5 @@
+import { SectionNav } from '../components/ui/SectionNav'
+import PageHeader from '../components/ui/PageHeader'
 /**
  * Relatorios (Relatórios)
  *
@@ -7,42 +9,43 @@
  * e Auditoria/Compliance (LGPD). Cada relatorio renderiza graficos
  * (Recharts), KPIs e tabelas, com exportacao em PDF e Excel.
  */
-import React, { useState, useMemo, createContext, useContext } from 'react'
+import React, {
+  lazy,
+  Suspense,
+  useState,
+  useMemo,
+  createContext,
+  useContext,
+} from 'react'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
 import { InlineButton } from '../components/ui'
-import { exportPDF, exportExcel, nowStr, type ReportData } from '../utils/exportReports'
-import { useRelatoriosData } from '../hooks/useRelatoriosData'
+import {
+  exportPDF,
+  exportExcel,
+  exportCSV,
+  nowStr,
+  type ReportData,
+} from '../utils/exportReports'
+import { useRelatoriosData, type RelatoriosData, type MarketReportRow, type SectionState } from '../hooks/useRelatoriosData'
 
 // Context que injeta dados REAIS no JSX dos sub-Content components.
-// Quando vazio (loading/falha), as constantes mock-fallback abaixo são usadas.
+// Seções sem dados permanecem vazias e exibem sua indisponibilidade.
 interface RelatoriosCtxValue {
-  portfolioKpis?: typeof PORTFOLIO_KPIs_FALLBACK
-  clientesPorEstado?: typeof CLIENTES_POR_ESTADO_FALLBACK
-  clientesPorEstagio?: typeof CLIENTES_POR_ESTAGIO_FALLBACK
-  topClientes?: typeof TOP_CLIENTES_FALLBACK
-  rentabilidadeMensal?: typeof RENTABILIDADE_MENSAL_FALLBACK
-  fluxoMensal?: typeof FLUXO_MENSAL_FALLBACK
-  propostasKpis?: typeof PROPOSTAS_KPIS_FALLBACK
-  propostasStatus?: typeof PROPOSTAS_STATUS_FALLBACK
+  portfolioKpis?: typeof PORTFOLIO_KPIs_EMPTY
+  clientesPorEstado?: typeof CLIENTES_POR_ESTADO_EMPTY
+  clientesPorEstagio?: typeof CLIENTES_POR_ESTAGIO_EMPTY
+  topClientes?: typeof TOP_CLIENTES_EMPTY
+  rentabilidadeMensal?: typeof RENTABILIDADE_MENSAL_EMPTY
+  fluxoMensal?: typeof FLUXO_MENSAL_EMPTY
+  propostasKpis?: typeof PROPOSTAS_KPIS_EMPTY
+  propostasStatus?: typeof PROPOSTAS_STATUS_EMPTY
   source?: 'api' | 'partial' | 'fallback' | 'loading'
+  mercado?: MarketReportRow[]
+  snapshotEm?: string | null
 }
 const RelatoriosCtx = createContext<RelatoriosCtxValue>({})
-import {
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from 'recharts'
-import type { TooltipProps } from 'recharts'
-import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
+const RelatorioChart = lazy(() => import('./relatorios/RelatoriosCharts'))
 import {
   Users,
   TrendingUp,
@@ -67,10 +70,13 @@ import {
 // Formatters
 // ────────────────────────────────────────────────────────────
 const fmtBRL = (v: number): string =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+    v,
+  )
 
 const fmtBRLCompact = (v: number): string => {
-  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1).replace('.', ',')}M`
+  if (v >= 1_000_000)
+    return `R$ ${(v / 1_000_000).toFixed(1).replace('.', ',')}M`
   if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}K`
   return fmtBRL(v)
 }
@@ -79,7 +85,13 @@ const fmtBRLCompact = (v: number): string => {
 // Types
 // ────────────────────────────────────────────────────────────
 
-type ReportId = 'portfolio' | 'rentabilidade' | 'propostas' | 'mercado' | 'fluxo' | 'auditoria'
+type ReportId =
+  | 'portfolio'
+  | 'rentabilidade'
+  | 'propostas'
+  | 'mercado'
+  | 'fluxo'
+  | 'auditoria'
 
 interface ReportDef {
   id: ReportId
@@ -100,7 +112,7 @@ const REPORTS: ReportDef[] = [
     titulo: 'Portfólio de Clientes',
     descricao: 'Visão completa de todos os clientes e estágios',
     icon: Users,
-    cor: '#0F4C35',
+    cor: '#17251b',
     corBg: 'bg-aletis-verde/10',
   },
   {
@@ -108,7 +120,7 @@ const REPORTS: ReportDef[] = [
     titulo: 'Análise de Rentabilidade',
     descricao: 'ROI por cliente e período',
     icon: TrendingUp,
-    cor: '#C9A84C',
+    cor: '#cb9d52',
     corBg: 'bg-aletis-dourado/10',
   },
   {
@@ -122,15 +134,15 @@ const REPORTS: ReportDef[] = [
   {
     id: 'mercado',
     titulo: 'Inteligência de Mercado',
-    descricao: 'Evolução de preços e indicadores',
+    descricao: 'Preços e indicadores com origem e data de referência',
     icon: BarChart3,
     cor: '#8B5CF6',
     corBg: 'bg-purple-50',
   },
   {
     id: 'fluxo',
-    titulo: 'Fluxo de Caixa Consolidado',
-    descricao: 'Projeções e realizados',
+    titulo: 'Resultado Mensal por Competência',
+    descricao: 'Receitas, despesas e resultado do dashboard financeiro',
     icon: DollarSign,
     cor: '#27AE60',
     corBg: 'bg-positivo/10',
@@ -149,129 +161,21 @@ const REPORTS: ReportDef[] = [
 // Portfolio Report Data
 // ────────────────────────────────────────────────────────────
 
-const PORTFOLIO_KPIs_FALLBACK = [
-  { label: 'Total Clientes', valor: 47, icon: Users, cor: '#0F4C35', corBg: 'bg-aletis-verde/10' },
-  { label: 'Ativos', valor: 23, icon: CheckCircle2, cor: '#27AE60', corBg: 'bg-positivo/10' },
-  { label: 'Inadimplentes', valor: 5, icon: AlertTriangle, cor: '#C0392B', corBg: 'bg-alerta/10' },
-  { label: 'Em Acordo', valor: 12, icon: Briefcase, cor: '#C9A84C', corBg: 'bg-aletis-dourado/10' },
-]
+const PORTFOLIO_KPIs_EMPTY: { label: string; valor: number; icon: React.ElementType; cor: string; corBg: string }[] = []
+const CLIENTES_POR_ESTADO_EMPTY: RelatoriosData['clientesPorEstado'] = []
+const CLIENTES_POR_ESTAGIO_EMPTY: RelatoriosData['clientesPorEstagio'] = []
+const TOP_CLIENTES_EMPTY: RelatoriosData['topClientes'] = []
+const RENTABILIDADE_MENSAL_EMPTY: RelatoriosData['rentabilidadeMensal'] = []
+const PROPOSTAS_KPIS_EMPTY: RelatoriosData['propostasKpis'] = []
+const PROPOSTAS_STATUS_EMPTY: RelatoriosData['propostasStatus'] = []
+const FLUXO_MENSAL_EMPTY: RelatoriosData['fluxoMensal'] = []
 
-const CLIENTES_POR_ESTADO_FALLBACK = [
-  { estado: 'PR', clientes: 15 },
-  { estado: 'MS', clientes: 10 },
-  { estado: 'MT', clientes: 8 },
-  { estado: 'GO', clientes: 6 },
-  { estado: 'SP', clientes: 5 },
-  { estado: 'MG', clientes: 3 },
-]
-
-const CLIENTES_POR_ESTAGIO_FALLBACK = [
-  { name: 'Lead', value: 7, color: '#6B7280' },
-  { name: 'Qualificação', value: 5, color: '#3B82F6' },
-  { name: 'Análise', value: 8, color: '#8B5CF6' },
-  { name: 'Proposta', value: 6, color: '#C9A84C' },
-  { name: 'Negociação', value: 4, color: '#E67E22' },
-  { name: 'Acordo', value: 12, color: '#27AE60' },
-  { name: 'Concluído', value: 5, color: '#0F4C35' },
-]
-
-const TOP_CLIENTES_FALLBACK = [
-  { nome: 'Ailton Caeiro da Silva', cidade: 'Toledo/PR', divida: 2049802.53, estagio: 'Proposta', credor: 'Sicoob' },
-  { nome: 'Paulo Luciano Machado', cidade: 'Dourados/MS', divida: 1876543.21, estagio: 'Negociação', credor: 'Banco do Brasil' },
-  { nome: 'Fazenda Santa Rita Ltda', cidade: 'Sorriso/MT', divida: 1654321.00, estagio: 'Análise', credor: 'Cresol' },
-  { nome: 'Agro Cerrado S.A.', cidade: 'Rio Verde/GO', divida: 1432100.87, estagio: 'Acordo', credor: 'Bradesco' },
-  { nome: 'Coopernova Agric.', cidade: 'Sinop/MT', divida: 1298765.43, estagio: 'Acordo', credor: 'Itaú' },
-  { nome: 'João B. Fernandes', cidade: 'Cascavel/PR', divida: 987654.32, estagio: 'Proposta', credor: 'Sicredi' },
-  { nome: 'Maria Aparecida Cruz', cidade: 'Londrina/PR', divida: 876543.21, estagio: 'Acordo', credor: 'Banco do Brasil' },
-  { nome: 'Sítio Bela Vista', cidade: 'Uberlândia/MG', divida: 765432.10, estagio: 'Análise', credor: 'Santander' },
-  { nome: 'Fernando R. Teixeira', cidade: 'Ribeirão Preto/SP', divida: 654321.98, estagio: 'Lead', credor: 'Banco do Brasil' },
-  { nome: 'Agropec. Progresso', cidade: 'Rondonópolis/MT', divida: 543210.87, estagio: 'Acordo', credor: 'Caixa' },
-]
-
-// ────────────────────────────────────────────────────────────
-// Rentabilidade Data
-// ────────────────────────────────────────────────────────────
-
-const RENTABILIDADE_MENSAL_FALLBACK = [
-  { mes: 'Nov/25', receita: 85000, custo: 32000, lucro: 53000 },
-  { mes: 'Dez/25', receita: 92000, custo: 35000, lucro: 57000 },
-  { mes: 'Jan/26', receita: 78000, custo: 30000, lucro: 48000 },
-  { mes: 'Fev/26', receita: 105000, custo: 38000, lucro: 67000 },
-  { mes: 'Mar/26', receita: 118000, custo: 41000, lucro: 77000 },
-  { mes: 'Abr/26', receita: 95000, custo: 36000, lucro: 59000 },
-]
-
-// ────────────────────────────────────────────────────────────
-// Propostas Data
-// ────────────────────────────────────────────────────────────
-
-const PROPOSTAS_KPIS_FALLBACK = [
-  { label: 'Propostas Enviadas', valor: '34', sub: 'últimos 90 dias' },
-  { label: 'Taxa de Aceite', valor: '62%', sub: '21 de 34' },
-  { label: 'Tempo Médio Resposta', valor: '12 dias', sub: 'mediana: 9 dias' },
-  { label: 'Volume Total', valor: fmtBRLCompact(14_870_000), sub: 'em negociação' },
-]
-
-const PROPOSTAS_STATUS_FALLBACK = [
-  { name: 'Aceitas', value: 21, color: '#27AE60' },
-  { name: 'Pendentes', value: 8, color: '#C9A84C' },
-  { name: 'Rejeitadas', value: 5, color: '#C0392B' },
-]
-
-// ────────────────────────────────────────────────────────────
-// Fluxo Caixa Data
-// ────────────────────────────────────────────────────────────
-
-const FLUXO_MENSAL_FALLBACK = [
-  { mes: 'Jan/26', entrada: 245000, saida: 180000, saldo: 65000 },
-  { mes: 'Fev/26', entrada: 312000, saida: 195000, saldo: 117000 },
-  { mes: 'Mar/26', entrada: 287000, saida: 210000, saldo: 77000 },
-  { mes: 'Abr/26', entrada: 198000, saida: 175000, saldo: 23000 },
-  { mes: 'Mai/26', entrada: 356000, saida: 220000, saldo: 136000 },
-  { mes: 'Jun/26', entrada: 420000, saida: 240000, saldo: 180000 },
-]
-
-// ────────────────────────────────────────────────────────────
-// Auditoria Data
-// ────────────────────────────────────────────────────────────
-
-const AUDITORIA_LOG = [
-  { data: '16/04/2026 08:32', usuario: 'Christian Oliveira', acao: 'Login no sistema', tipo: 'acesso', status: 'ok' },
-  { data: '16/04/2026 08:45', usuario: 'Christian Oliveira', acao: 'Consulta dados Ailton Caeiro', tipo: 'dados_pessoais', status: 'ok' },
-  { data: '16/04/2026 09:12', usuario: 'Christian Oliveira', acao: 'Geração proposta PDF #2026-047', tipo: 'documento', status: 'ok' },
-  { data: '15/04/2026 17:30', usuario: 'Sistema', acao: 'Backup automático banco de dados', tipo: 'sistema', status: 'ok' },
-  { data: '15/04/2026 14:20', usuario: 'Christian Oliveira', acao: 'Exportação relatório clientes', tipo: 'exportacao', status: 'ok' },
-  { data: '15/04/2026 11:45', usuario: 'API', acao: 'Consulta SERASA - Paulo Luciano', tipo: 'api_externa', status: 'ok' },
-  { data: '14/04/2026 16:00', usuario: 'Sistema', acao: 'Anonimização dados ex-cliente #032', tipo: 'lgpd', status: 'ok' },
-  { data: '14/04/2026 10:30', usuario: 'Christian Oliveira', acao: 'Atualização contrato Fazenda Santa Rita', tipo: 'documento', status: 'ok' },
-]
-
-// ────────────────────────────────────────────────────────────
-// Chart Tooltip
-// ────────────────────────────────────────────────────────────
-
-function CustomTooltip({ active, payload, label }: TooltipProps<ValueType, NameType>) {
-  if (!active || !payload?.length) return null
+function ReportChartSkeleton({ height = 250 }: { height?: number }) {
   return (
-    <div className="bg-white rounded-xl border border-aletis-borda shadow-lg p-3">
-      <p className="text-xs font-semibold text-aletis-grafite-escuro mb-1">{label}</p>
-      {payload.map((p: any, i: number) => (
-        <p key={i} className="text-xs" style={{ color: p.color || p.fill }}>
-          {p.name}: {typeof p.value === 'number' && p.value > 1000 ? fmtBRLCompact(p.value) : p.value}
-        </p>
-      ))}
-    </div>
-  )
-}
-
-function PieTooltip({ active, payload }: TooltipProps<ValueType, NameType>) {
-  if (!active || !payload?.length) return null
-  const d = payload[0]
-  return (
-    <div className="bg-white rounded-xl border border-aletis-borda shadow-lg p-3">
-      <p className="text-xs font-semibold" style={{ color: d.payload.color }}>{d.name}</p>
-      <p className="text-xs text-aletis-grafite-medio">{d.value} clientes</p>
-    </div>
+    <div
+      className="h-full animate-pulse rounded-xl border border-aletis-verde/10 bg-muted"
+      style={{ minHeight: height }}
+    />
   )
 }
 
@@ -280,12 +184,14 @@ function PieTooltip({ active, payload }: TooltipProps<ValueType, NameType>) {
 // ────────────────────────────────────────────────────────────
 
 function PortfolioContent({ onExport }: { onExport: (fmt: string) => void }) {
-  // Real data via Context, fallback para mock se API falhou
+  // Snapshot real via Context; ausência de dados não cria valores.
   const ctx = useContext(RelatoriosCtx)
-  const PORTFOLIO_KPIs = ctx.portfolioKpis ?? PORTFOLIO_KPIs_FALLBACK
-  const CLIENTES_POR_ESTADO = ctx.clientesPorEstado ?? CLIENTES_POR_ESTADO_FALLBACK
-  const CLIENTES_POR_ESTAGIO = ctx.clientesPorEstagio ?? CLIENTES_POR_ESTAGIO_FALLBACK
-  const TOP_CLIENTES = ctx.topClientes ?? TOP_CLIENTES_FALLBACK
+  const PORTFOLIO_KPIs = ctx.portfolioKpis ?? PORTFOLIO_KPIs_EMPTY
+  const CLIENTES_POR_ESTADO =
+    ctx.clientesPorEstado ?? CLIENTES_POR_ESTADO_EMPTY
+  const CLIENTES_POR_ESTAGIO =
+    ctx.clientesPorEstagio ?? CLIENTES_POR_ESTAGIO_EMPTY
+  const TOP_CLIENTES = ctx.topClientes ?? TOP_CLIENTES_EMPTY
   return (
     <div className="space-y-6 animate-fade-in">
       {/* KPIs */}
@@ -293,12 +199,18 @@ function PortfolioContent({ onExport }: { onExport: (fmt: string) => void }) {
         {PORTFOLIO_KPIs.map((kpi) => (
           <div key={kpi.label} className="card p-4">
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl ${kpi.corBg} flex items-center justify-center`}>
+              <div
+                className={`w-10 h-10 rounded-xl ${kpi.corBg} flex items-center justify-center`}
+              >
                 <kpi.icon className="w-5 h-5" style={{ color: kpi.cor }} />
               </div>
               <div>
-                <p className="text-[11px] font-body text-aletis-grafite-claro">{kpi.label}</p>
-                <p className="text-2xl font-display font-bold text-aletis-grafite-escuro">{kpi.valor}</p>
+                <p className="text-[11px] font-body text-muted-foreground">
+                  {kpi.label}
+                </p>
+                <p className="text-2xl font-display font-semibold text-foreground">
+                  {kpi.valor}
+                </p>
               </div>
             </div>
           </div>
@@ -309,109 +221,106 @@ function PortfolioContent({ onExport }: { onExport: (fmt: string) => void }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Bar: Clientes por Estado */}
         <div className="card p-5">
-          <h3 className="text-sm font-display font-bold text-aletis-grafite-escuro mb-4">
+          <h3 className="text-sm font-display font-semibold text-foreground mb-4">
             Clientes por Estado
           </h3>
           <div className="h-[250px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={CLIENTES_POR_ESTADO}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2DDD5" />
-                <XAxis dataKey="estado" tick={{ fontSize: 11, fill: '#4A4A4A' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#6B6B6B' }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar
-                  dataKey="clientes"
-                  name="Clientes"
-                  fill="#0F4C35"
-                  radius={[4, 4, 0, 0]}
-                  barSize={36}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<ReportChartSkeleton />}>
+              <RelatorioChart
+                type="clientesEstado"
+                data={CLIENTES_POR_ESTADO}
+              />
+            </Suspense>
           </div>
         </div>
 
         {/* Pie: Clientes por Estagio */}
         <div className="card p-5">
-          <h3 className="text-sm font-display font-bold text-aletis-grafite-escuro mb-4">
+          <h3 className="text-sm font-display font-semibold text-foreground mb-4">
             Clientes por Estágio
           </h3>
           <div className="h-[250px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={CLIENTES_POR_ESTAGIO}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={90}
-                  innerRadius={45}
-                  paddingAngle={2}
-                  dataKey="value"
-                  label={({ name, value }) => `${name} (${value})`}
-                  labelLine={{ stroke: '#6B6B6B', strokeWidth: 0.5 }}
-                >
-                  {CLIENTES_POR_ESTAGIO.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip content={<PieTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<ReportChartSkeleton />}>
+              <RelatorioChart
+                type="clientesEstagio"
+                data={CLIENTES_POR_ESTAGIO}
+              />
+            </Suspense>
           </div>
         </div>
       </div>
 
       {/* Table: Top 10 */}
       <div className="card p-5">
-        <h3 className="text-sm font-display font-bold text-aletis-grafite-escuro mb-4">
+        <h3 className="text-sm font-display font-semibold text-foreground mb-4">
           Top 10 Clientes por Volume de Dívida
         </h3>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="ui-table w-full text-sm">
             <thead>
               <tr className="border-b border-aletis-borda">
-                <th className="text-left py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">#</th>
-                <th className="text-left py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Cliente</th>
-                <th className="text-left py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Cidade</th>
-                <th className="text-left py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Credor</th>
-                <th className="text-right py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Dívida</th>
-                <th className="text-center py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Estágio</th>
+                <th className="text-left py-2.5 px-3 font-display font-semibold text-foreground text-xs">
+                  #
+                </th>
+                <th className="text-left py-2.5 px-3 font-display font-semibold text-foreground text-xs">
+                  Cliente
+                </th>
+                <th className="text-left py-2.5 px-3 font-display font-semibold text-foreground text-xs">
+                  Cidade
+                </th>
+                <th className="text-left py-2.5 px-3 font-display font-semibold text-foreground text-xs">
+                  Credor
+                </th>
+                <th className="text-right py-2.5 px-3 font-display font-semibold text-foreground text-xs">
+                  Dívida
+                </th>
+                <th className="text-center py-2.5 px-3 font-display font-semibold text-foreground text-xs">
+                  Estágio
+                </th>
               </tr>
             </thead>
             <tbody>
               {TOP_CLIENTES.map((c, idx) => {
                 const estagioColor: Record<string, string> = {
                   Lead: 'bg-gray-100 text-gray-600',
-                  'Qualificação': 'bg-blue-50 text-blue-600',
-                  'Análise': 'bg-purple-50 text-purple-600',
+                  Qualificação: 'bg-blue-50 text-blue-600',
+                  Análise: 'bg-purple-50 text-purple-600',
                   Proposta: 'bg-aletis-dourado/10 text-aletis-dourado-escuro',
-                  'Negociação': 'bg-ambar/10 text-ambar',
+                  Negociação: 'bg-ambar/10 text-ambar',
                   Acordo: 'bg-positivo/10 text-positivo',
-                  'Concluído': 'bg-aletis-verde/10 text-aletis-verde',
+                  Concluído: 'bg-aletis-verde/10 text-foreground',
                 }
                 return (
                   <tr
                     key={c.nome}
                     className={`border-b border-aletis-borda/50 hover:bg-aletis-verde/5 transition-colors ${
-                      idx % 2 === 0 ? 'bg-white' : 'bg-aletis-bege/30'
+                      idx % 2 === 0 ? 'bg-card' : 'bg-aletis-bege/30'
                     }`}
                   >
-                    <td className="py-2.5 px-3 text-xs text-aletis-grafite-claro font-mono">{idx + 1}</td>
-                    <td className="py-2.5 px-3">
-                      <span className="font-body font-medium text-aletis-grafite-escuro text-xs">{c.nome}</span>
+                    <td className="py-2.5 px-3 text-xs text-muted-foreground font-mono">
+                      {idx + 1}
                     </td>
-                    <td className="py-2.5 px-3 text-xs text-aletis-grafite-medio font-body">
+                    <td className="py-2.5 px-3">
+                      <span className="font-body font-medium text-foreground text-xs">
+                        {c.nome}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-xs text-[var(--text-soft)] font-body">
                       <span className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-aletis-grafite-claro" />
+                        <MapPin className="w-3 h-3 text-muted-foreground" />
                         {c.cidade}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 text-xs text-aletis-grafite-medio font-body">{c.credor}</td>
-                    <td className="py-2.5 px-3 text-right text-xs font-mono font-medium text-aletis-grafite-escuro">
+                    <td className="py-2.5 px-3 text-xs text-[var(--text-soft)] font-body">
+                      {c.credor}
+                    </td>
+                    <td className="py-2.5 px-3 text-right text-xs font-mono font-medium text-foreground">
                       {fmtBRL(c.divida)}
                     </td>
                     <td className="py-2.5 px-3 text-center">
-                      <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-semibold ${estagioColor[c.estagio] || 'bg-gray-100 text-gray-500'}`}>
+                      <span
+                        className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold ${estagioColor[c.estagio] || 'bg-gray-100 text-gray-500'}`}
+                      >
                         {c.estagio}
                       </span>
                     </td>
@@ -425,59 +334,123 @@ function PortfolioContent({ onExport }: { onExport: (fmt: string) => void }) {
 
       {/* Export buttons */}
       <div className="flex gap-3">
-        <InlineButton variant="primary" size="sm" icon={Download} onClick={() => onExport('PDF')}>Exportar PDF</InlineButton>
-        <InlineButton variant="outline" size="sm" icon={Download} onClick={() => onExport('Excel')}>Exportar Excel</InlineButton>
+        <InlineButton
+          variant="primary"
+          size="sm"
+          icon={Download}
+          onClick={() => onExport('PDF')}
+        >
+          Exportar PDF
+        </InlineButton>
+        <InlineButton
+          variant="outline"
+          size="sm"
+          icon={Download}
+          onClick={() => onExport('Excel')}
+        >
+          Exportar Excel
+        </InlineButton>
+        <InlineButton
+          variant="outline"
+          size="sm"
+          icon={Download}
+          onClick={() => onExport('CSV')}
+        >
+          Exportar CSV
+        </InlineButton>
       </div>
     </div>
   )
 }
 
-function RentabilidadeContent({ onExport }: { onExport: (fmt: string) => void }) {
+function RentabilidadeContent({
+  onExport,
+}: {
+  onExport: (fmt: string) => void
+}) {
   const ctx = useContext(RelatoriosCtx)
-  const RENTABILIDADE_MENSAL = ctx.rentabilidadeMensal ?? RENTABILIDADE_MENSAL_FALLBACK
+  const RENTABILIDADE_MENSAL =
+    ctx.rentabilidadeMensal ?? RENTABILIDADE_MENSAL_EMPTY
   const totalReceita = RENTABILIDADE_MENSAL.reduce((s, r) => s + r.receita, 0)
   const totalLucro = RENTABILIDADE_MENSAL.reduce((s, r) => s + r.lucro, 0)
-  const margemMedia = totalReceita > 0 ? (totalLucro / totalReceita * 100) : 0
+  const margemMedia = totalReceita > 0 ? (totalLucro / totalReceita) * 100 : 0
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Receita Total', valor: fmtBRLCompact(totalReceita), cor: '#0F4C35', bg: 'bg-aletis-verde/10' },
-          { label: 'Lucro Líquido', valor: fmtBRLCompact(totalLucro), cor: '#27AE60', bg: 'bg-positivo/10' },
-          { label: 'Margem Média', valor: `${margemMedia.toFixed(1)}%`, cor: '#C9A84C', bg: 'bg-aletis-dourado/10' },
-          { label: 'ROI Período', valor: '287%', cor: '#3B82F6', bg: 'bg-blue-50' },
+          {
+            label: 'Receita Total',
+            valor: fmtBRLCompact(totalReceita),
+            cor: '#17251b',
+            bg: 'bg-aletis-verde/10',
+          },
+          {
+            label: 'Lucro Líquido',
+            valor: fmtBRLCompact(totalLucro),
+            cor: '#27AE60',
+            bg: 'bg-positivo/10',
+          },
+          {
+            label: 'Margem Média',
+            valor: `${margemMedia.toFixed(1)}%`,
+            cor: '#cb9d52',
+            bg: 'bg-aletis-dourado/10',
+          },
+          {
+            label: 'ROI Período',
+            valor: 'Indisponível',
+            cor: '#3B82F6',
+            bg: 'bg-blue-50',
+          },
         ].map((kpi) => (
           <div key={kpi.label} className="card p-4">
-            <p className="text-[11px] font-body text-aletis-grafite-claro mb-1">{kpi.label}</p>
-            <p className="text-2xl font-display font-bold text-aletis-grafite-escuro">{kpi.valor}</p>
+            <p className="text-[11px] font-body text-muted-foreground mb-1">
+              {kpi.label}
+            </p>
+            <p className="text-2xl font-display font-semibold text-foreground">
+              {kpi.valor}
+            </p>
           </div>
         ))}
       </div>
 
       <div className="card p-5">
-        <h3 className="text-sm font-display font-bold text-aletis-grafite-escuro mb-4">
+        <h3 className="text-sm font-display font-semibold text-foreground mb-4">
           Receita vs Custo vs Lucro — Últimos 6 Meses
         </h3>
         <div className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={RENTABILIDADE_MENSAL}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2DDD5" />
-              <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#4A4A4A' }} />
-              <YAxis tick={{ fontSize: 10, fill: '#6B6B6B' }} tickFormatter={(v) => fmtBRLCompact(v)} />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="receita" name="Receita" fill="#0F4C35" radius={[4, 4, 0, 0]} barSize={24} />
-              <Bar dataKey="custo" name="Custo" fill="#C0392B" radius={[4, 4, 0, 0]} barSize={24} />
-              <Bar dataKey="lucro" name="Lucro" fill="#27AE60" radius={[4, 4, 0, 0]} barSize={24} />
-            </BarChart>
-          </ResponsiveContainer>
+          <Suspense fallback={<ReportChartSkeleton height={300} />}>
+            <RelatorioChart type="rentabilidade" data={RENTABILIDADE_MENSAL} />
+          </Suspense>
         </div>
       </div>
 
       <div className="flex gap-3">
-        <InlineButton variant="primary" size="sm" icon={Download} onClick={() => onExport('PDF')}>Exportar PDF</InlineButton>
-        <InlineButton variant="outline" size="sm" icon={Download} onClick={() => onExport('Excel')}>Exportar Excel</InlineButton>
+        <InlineButton
+          variant="primary"
+          size="sm"
+          icon={Download}
+          onClick={() => onExport('PDF')}
+        >
+          Exportar PDF
+        </InlineButton>
+        <InlineButton
+          variant="outline"
+          size="sm"
+          icon={Download}
+          onClick={() => onExport('Excel')}
+        >
+          Exportar Excel
+        </InlineButton>
+        <InlineButton
+          variant="outline"
+          size="sm"
+          icon={Download}
+          onClick={() => onExport('CSV')}
+        >
+          Exportar CSV
+        </InlineButton>
       </div>
     </div>
   )
@@ -485,138 +458,96 @@ function RentabilidadeContent({ onExport }: { onExport: (fmt: string) => void })
 
 function PropostasContent({ onExport }: { onExport: (fmt: string) => void }) {
   const ctx = useContext(RelatoriosCtx)
-  const PROPOSTAS_KPIS = ctx.propostasKpis ?? PROPOSTAS_KPIS_FALLBACK
-  const PROPOSTAS_STATUS = ctx.propostasStatus ?? PROPOSTAS_STATUS_FALLBACK
+  const PROPOSTAS_KPIS = ctx.propostasKpis ?? PROPOSTAS_KPIS_EMPTY
+  const PROPOSTAS_STATUS = ctx.propostasStatus ?? PROPOSTAS_STATUS_EMPTY
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {PROPOSTAS_KPIS.map((kpi) => (
           <div key={kpi.label} className="card p-4">
-            <p className="text-[11px] font-body text-aletis-grafite-claro">{kpi.label}</p>
-            <p className="text-2xl font-display font-bold text-aletis-grafite-escuro mt-1">{kpi.valor}</p>
-            <p className="text-[10px] font-body text-aletis-grafite-claro mt-0.5">{kpi.sub}</p>
+            <p className="text-[11px] font-body text-muted-foreground">
+              {kpi.label}
+            </p>
+            <p className="text-2xl font-display font-semibold text-foreground mt-1">
+              {kpi.valor}
+            </p>
+            <p className="text-[11px] font-body text-muted-foreground mt-0.5">
+              {kpi.sub}
+            </p>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card p-5">
-          <h3 className="text-sm font-display font-bold text-aletis-grafite-escuro mb-4">
+          <h3 className="text-sm font-display font-semibold text-foreground mb-4">
             Status das Propostas
           </h3>
           <div className="h-[250px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={PROPOSTAS_STATUS}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={90}
-                  innerRadius={50}
-                  paddingAngle={3}
-                  dataKey="value"
-                  label={({ name, value }) => `${name} (${value})`}
-                >
-                  {PROPOSTAS_STATUS.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip content={<PieTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<ReportChartSkeleton />}>
+              <RelatorioChart type="propostasStatus" data={PROPOSTAS_STATUS} />
+            </Suspense>
           </div>
         </div>
 
         <div className="card p-5">
-          <h3 className="text-sm font-display font-bold text-aletis-grafite-escuro mb-4">
+          <h3 className="text-sm font-display font-semibold text-foreground mb-4">
             Tempo de Resposta (dias)
           </h3>
           <div className="h-[250px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={[
-                { faixa: '1-5d', qtd: 8 },
-                { faixa: '6-10d', qtd: 12 },
-                { faixa: '11-15d', qtd: 7 },
-                { faixa: '16-20d', qtd: 4 },
-                { faixa: '21-30d', qtd: 2 },
-                { faixa: '30d+', qtd: 1 },
-              ]}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2DDD5" />
-                <XAxis dataKey="faixa" tick={{ fontSize: 11, fill: '#4A4A4A' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#6B6B6B' }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="qtd" name="Propostas" fill="#C9A84C" radius={[4, 4, 0, 0]} barSize={30} />
-              </BarChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<ReportChartSkeleton />}>
+              <p className="text-sm text-[var(--text-soft)]">Tempo de resposta indisponível: datas de envio e resposta não foram fornecidas.</p>
+            </Suspense>
           </div>
         </div>
       </div>
 
       <div className="flex gap-3">
-        <InlineButton variant="primary" size="sm" icon={Download} onClick={() => onExport('PDF')}>Exportar PDF</InlineButton>
-        <InlineButton variant="outline" size="sm" icon={Download} onClick={() => onExport('Excel')}>Exportar Excel</InlineButton>
+        <InlineButton
+          variant="primary"
+          size="sm"
+          icon={Download}
+          onClick={() => onExport('PDF')}
+        >
+          Exportar PDF
+        </InlineButton>
+        <InlineButton
+          variant="outline"
+          size="sm"
+          icon={Download}
+          onClick={() => onExport('Excel')}
+        >
+          Exportar Excel
+        </InlineButton>
+        <InlineButton
+          variant="outline"
+          size="sm"
+          icon={Download}
+          onClick={() => onExport('CSV')}
+        >
+          Exportar CSV
+        </InlineButton>
       </div>
     </div>
   )
 }
 
 function MercadoContent({ onExport }: { onExport: (fmt: string) => void }) {
-  const indicadores = [
-    { nome: 'Soja (saca 60kg)', valor: 'R$ 128,50', variacao: '+2,3%', up: true },
-    { nome: 'Milho (saca 60kg)', valor: 'R$ 62,80', variacao: '-0,8%', up: false },
-    { nome: 'Dólar Comercial', valor: 'R$ 5,12', variacao: '+0,4%', up: true },
-    { nome: 'Selic (aa)', valor: '14,25%', variacao: '0,0%', up: true },
-  ]
-
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {indicadores.map((ind) => (
-          <div key={ind.nome} className="card p-4">
-            <p className="text-[11px] font-body text-aletis-grafite-claro">{ind.nome}</p>
-            <p className="text-xl font-display font-bold text-aletis-grafite-escuro mt-1">{ind.valor}</p>
-            <p className={`text-xs font-body mt-0.5 ${ind.up ? 'text-positivo' : 'text-alerta'}`}>{ind.variacao}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="card p-5">
-        <h3 className="text-sm font-display font-bold text-aletis-grafite-escuro mb-4">
-          Evolução Preços Commodities (últimos 6 meses)
-        </h3>
-        <div className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={[
-              { mes: 'Nov/25', soja: 121.4, milho: 64.2 },
-              { mes: 'Dez/25', soja: 124.8, milho: 63.5 },
-              { mes: 'Jan/26', soja: 126.2, milho: 61.8 },
-              { mes: 'Fev/26', soja: 130.1, milho: 60.2 },
-              { mes: 'Mar/26', soja: 127.5, milho: 63.1 },
-              { mes: 'Abr/26', soja: 128.5, milho: 62.8 },
-            ]}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2DDD5" />
-              <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#4A4A4A' }} />
-              <YAxis tick={{ fontSize: 10, fill: '#6B6B6B' }} tickFormatter={(v) => `R$${v}`} />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="soja" name="Soja" fill="#C9A84C" radius={[4, 4, 0, 0]} barSize={20} />
-              <Bar dataKey="milho" name="Milho" fill="#27AE60" radius={[4, 4, 0, 0]} barSize={20} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="flex gap-3">
-        <InlineButton variant="primary" size="sm" icon={Download} onClick={() => onExport('PDF')}>Exportar PDF</InlineButton>
-        <InlineButton variant="outline" size="sm" icon={Download} onClick={() => onExport('Excel')}>Exportar Excel</InlineButton>
-      </div>
-    </div>
-  )
+  const ctx = useContext(RelatoriosCtx)
+  const rows = ctx.mercado || []
+  return <div className="space-y-6">
+    <p className="text-sm text-[var(--text-soft)]">Snapshot consultado em {ctx.snapshotEm ? new Date(ctx.snapshotEm).toLocaleString('pt-BR') : '—'}. Cada indicador conserva sua data de referência. Histórico e variações ausentes não são estimados.</p>
+    <div className="card overflow-auto"><table className="ui-table w-full text-sm"><thead><tr>{['Indicador', 'Valor', 'Unidade', 'Praça', 'Referência', 'Fonte / estado'].map(label => <th className="p-3 text-left" key={label}>{label}</th>)}</tr></thead><tbody>
+      {rows.map(row => <tr key={`${row.nome}-${row.fonte}`} className="border-t"><td className="p-3">{row.nome}</td><td className="p-3 font-mono">{new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 4 }).format(row.valor)}</td><td className="p-3">{row.unidade}</td><td className="p-3">{row.praca}</td><td className="p-3">{row.data}</td><td className="p-3">{row.fonte} · {row.estado}</td></tr>)}
+    </tbody></table></div>
+    {!rows.length && <p>Dados de mercado indisponíveis para este snapshot.</p>}
+    <div className="flex gap-3">{['PDF', 'Excel', 'CSV'].map(format => <InlineButton key={format} variant="outline" size="sm" icon={Download} onClick={() => onExport(format)}>Exportar {format}</InlineButton>)}</div>
+  </div>
 }
 
 function FluxoCaixaContent({ onExport }: { onExport: (fmt: string) => void }) {
   const ctx = useContext(RelatoriosCtx)
-  const FLUXO_MENSAL = ctx.fluxoMensal ?? FLUXO_MENSAL_FALLBACK
+  const FLUXO_MENSAL = ctx.fluxoMensal ?? FLUXO_MENSAL_EMPTY
   const totalEntrada = FLUXO_MENSAL.reduce((s, r) => s + r.entrada, 0)
   const totalSaida = FLUXO_MENSAL.reduce((s, r) => s + r.saida, 0)
 
@@ -624,142 +555,81 @@ function FluxoCaixaContent({ onExport }: { onExport: (fmt: string) => void }) {
     <div className="space-y-6 animate-fade-in">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Entradas', valor: fmtBRLCompact(totalEntrada), cor: 'text-positivo' },
-          { label: 'Total Saídas', valor: fmtBRLCompact(totalSaida), cor: 'text-alerta' },
-          { label: 'Saldo Líquido', valor: fmtBRLCompact(totalEntrada - totalSaida), cor: 'text-aletis-verde' },
-          { label: 'Projeção Jun/26', valor: fmtBRLCompact(420000), cor: 'text-aletis-dourado-escuro' },
+          {
+            label: 'Receita Total',
+            valor: fmtBRLCompact(totalEntrada),
+            cor: 'text-positivo',
+          },
+          {
+            label: 'Despesas Totais',
+            valor: fmtBRLCompact(totalSaida),
+            cor: 'text-alerta',
+          },
+          {
+            label: 'Resultado Líquido',
+            valor: fmtBRLCompact(FLUXO_MENSAL.reduce((sum, m) => sum + m.saldo, 0)),
+            cor: 'text-foreground',
+          },
+          {
+            label: 'Projeção futura',
+            valor: 'Indisponível',
+            cor: 'text-aletis-dourado-escuro',
+          },
         ].map((kpi) => (
           <div key={kpi.label} className="card p-4">
-            <p className="text-[11px] font-body text-aletis-grafite-claro">{kpi.label}</p>
-            <p className={`text-2xl font-display font-bold ${kpi.cor} mt-1`}>{kpi.valor}</p>
+            <p className="text-[11px] font-body text-muted-foreground">
+              {kpi.label}
+            </p>
+            <p className={`text-2xl font-display font-semibold ${kpi.cor} mt-1`}>
+              {kpi.valor}
+            </p>
           </div>
         ))}
       </div>
 
       <div className="card p-5">
-        <h3 className="text-sm font-display font-bold text-aletis-grafite-escuro mb-4">
-          Fluxo de Caixa Mensal
+        <h3 className="text-sm font-display font-semibold text-foreground mb-4">
+          Resultado Mensal por Competência
         </h3>
         <div className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={FLUXO_MENSAL}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2DDD5" />
-              <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#4A4A4A' }} />
-              <YAxis tick={{ fontSize: 10, fill: '#6B6B6B' }} tickFormatter={(v) => fmtBRLCompact(v)} />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="entrada" name="Entradas" fill="#27AE60" radius={[4, 4, 0, 0]} barSize={24} />
-              <Bar dataKey="saida" name="Saídas" fill="#C0392B" radius={[4, 4, 0, 0]} barSize={24} />
-              <Bar dataKey="saldo" name="Saldo" fill="#C9A84C" radius={[4, 4, 0, 0]} barSize={24} />
-            </BarChart>
-          </ResponsiveContainer>
+          <Suspense fallback={<ReportChartSkeleton height={300} />}>
+            <RelatorioChart type="fluxo" data={FLUXO_MENSAL} />
+          </Suspense>
         </div>
       </div>
 
       <div className="flex gap-3">
-        <InlineButton variant="primary" size="sm" icon={Download} onClick={() => onExport('PDF')}>Exportar PDF</InlineButton>
-        <InlineButton variant="outline" size="sm" icon={Download} onClick={() => onExport('Excel')}>Exportar Excel</InlineButton>
+        <InlineButton
+          variant="primary"
+          size="sm"
+          icon={Download}
+          onClick={() => onExport('PDF')}
+        >
+          Exportar PDF
+        </InlineButton>
+        <InlineButton
+          variant="outline"
+          size="sm"
+          icon={Download}
+          onClick={() => onExport('Excel')}
+        >
+          Exportar Excel
+        </InlineButton>
+        <InlineButton
+          variant="outline"
+          size="sm"
+          icon={Download}
+          onClick={() => onExport('CSV')}
+        >
+          Exportar CSV
+        </InlineButton>
       </div>
     </div>
   )
 }
 
 function AuditoriaContent({ onExport }: { onExport: (fmt: string) => void }) {
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: 'Ações Registradas', valor: '1.247', cor: '#0F4C35', bg: 'bg-aletis-verde/10', Icon: Eye },
-          { label: 'Consultas LGPD', valor: '86', cor: '#3B82F6', bg: 'bg-blue-50', Icon: Shield },
-          { label: 'Exportações', valor: '34', cor: '#C9A84C', bg: 'bg-aletis-dourado/10', Icon: Download },
-          { label: 'Alertas', valor: '0', cor: '#27AE60', bg: 'bg-positivo/10', Icon: CheckCircle2 },
-        ].map((kpi) => (
-          <div key={kpi.label} className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl ${kpi.bg} flex items-center justify-center`}>
-                <kpi.Icon className="w-5 h-5" style={{ color: kpi.cor }} />
-              </div>
-              <div>
-                <p className="text-[11px] font-body text-aletis-grafite-claro">{kpi.label}</p>
-                <p className="text-2xl font-display font-bold text-aletis-grafite-escuro">{kpi.valor}</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="card p-5">
-        <h3 className="text-sm font-display font-bold text-aletis-grafite-escuro mb-4">
-          Log de Atividades Recentes
-        </h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-aletis-borda">
-                <th className="text-left py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Data/Hora</th>
-                <th className="text-left py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Usuário</th>
-                <th className="text-left py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Ação</th>
-                <th className="text-center py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Tipo</th>
-                <th className="text-center py-2.5 px-3 font-display font-bold text-aletis-grafite-escuro text-xs">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {AUDITORIA_LOG.map((log, idx) => {
-                const tipoColors: Record<string, string> = {
-                  acesso: 'bg-blue-50 text-blue-600',
-                  dados_pessoais: 'bg-purple-50 text-purple-600',
-                  documento: 'bg-aletis-dourado/10 text-aletis-dourado-escuro',
-                  sistema: 'bg-gray-100 text-gray-600',
-                  exportacao: 'bg-ambar/10 text-ambar',
-                  api_externa: 'bg-aletis-verde/10 text-aletis-verde',
-                  lgpd: 'bg-alerta/10 text-alerta',
-                }
-                return (
-                  <tr
-                    key={idx}
-                    className={`border-b border-aletis-borda/50 hover:bg-aletis-verde/5 transition-colors ${
-                      idx % 2 === 0 ? 'bg-white' : 'bg-aletis-bege/30'
-                    }`}
-                  >
-                    <td className="py-2.5 px-3 text-xs font-mono text-aletis-grafite-medio">{log.data}</td>
-                    <td className="py-2.5 px-3 text-xs font-body text-aletis-grafite-escuro font-medium">{log.usuario}</td>
-                    <td className="py-2.5 px-3 text-xs font-body text-aletis-grafite-medio">{log.acao}</td>
-                    <td className="py-2.5 px-3 text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${tipoColors[log.tipo] || 'bg-gray-100 text-gray-500'}`}>
-                        {log.tipo.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-center">
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-positivo">
-                        <CheckCircle2 className="w-3 h-3" />
-                        OK
-                      </span>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="bg-aletis-bege/80 rounded-xl p-4 flex items-start gap-3">
-        <Shield className="w-5 h-5 text-aletis-verde flex-shrink-0 mt-0.5" />
-        <div>
-          <p className="text-xs font-display font-bold text-aletis-grafite-escuro">Conformidade LGPD</p>
-          <p className="text-[11px] font-body text-aletis-grafite-medio mt-1">
-            Todos os acessos a dados pessoais são registrados conforme Art. 37 da LGPD (Lei 13.709/2018).
-            Dados anonimizados automaticamente após encerramento de contrato. Último backup: 15/04/2026 17:30.
-          </p>
-        </div>
-      </div>
-
-      <div className="flex gap-3">
-        <InlineButton variant="primary" size="sm" icon={Download} onClick={() => onExport('PDF')}>Exportar PDF</InlineButton>
-        <InlineButton variant="outline" size="sm" icon={Download} onClick={() => onExport('Excel')}>Exportar Excel</InlineButton>
-      </div>
-    </div>
-  )
+  return <p className="card p-5">Relatório de auditoria indisponível. Nenhum registro de exemplo é incluído no relatório operacional.</p>
 }
 
 // ────────────────────────────────────────────────────────────
@@ -770,46 +640,32 @@ export default function Relatorios() {
   const [selectedReport, setSelectedReport] = useState<ReportId | null>(null)
   const { toasts, show: showToast, dismiss: dismissToast } = useToast()
 
-  // Dados REAIS via APIs agregadas — distribuídos via Context para os
-  // sub-Content components. Quando vazio (loading/falha), os Content's
-  // caem nas constantes mock no escopo do módulo.
   const real = useRelatoriosData()
-  const ctxValue: RelatoriosCtxValue = useMemo(
-    () => ({
-      portfolioKpis:
-        real.portfolioKpis.length > 0
-          ? (real.portfolioKpis.map((k, i) => ({
-              label: k.label,
-              valor: k.valor,
-              icon: PORTFOLIO_KPIs_FALLBACK[i]?.icon ?? Users,
-              cor: PORTFOLIO_KPIs_FALLBACK[i]?.cor ?? '#0F4C35',
-              corBg: PORTFOLIO_KPIs_FALLBACK[i]?.corBg ?? 'bg-aletis-verde/10',
-            })) as typeof PORTFOLIO_KPIs_FALLBACK)
-          : undefined,
-      clientesPorEstado: real.clientesPorEstado.length > 0 ? real.clientesPorEstado : undefined,
-      clientesPorEstagio: real.clientesPorEstagio.length > 0 ? real.clientesPorEstagio : undefined,
-      topClientes: real.topClientes.length > 0 ? real.topClientes : undefined,
-      rentabilidadeMensal: real.rentabilidadeMensal.length > 0 ? real.rentabilidadeMensal : undefined,
-      fluxoMensal: real.fluxoMensal.length > 0 ? real.fluxoMensal : undefined,
-      propostasKpis: real.propostasKpis.length > 0 ? (real.propostasKpis as typeof PROPOSTAS_KPIS_FALLBACK) : undefined,
-      propostasStatus: real.propostasStatus.length > 0 ? real.propostasStatus : undefined,
-      source: real.source,
-    }),
-    [real],
-  )
+  const ctxValue: RelatoriosCtxValue = useMemo(() => ({ ...real, portfolioKpis: real.portfolioKpis.map(k => ({ ...k, icon: Users, cor: '#17251b', corBg: 'bg-aletis-verde/10' })) }), [real])
+  const sectionState = (id: ReportId): SectionState => id === 'auditoria' ? 'indisponivel' : real.sections[id === 'rentabilidade' || id === 'fluxo' ? 'financeiro' : id]
   // Locais para uso direto em buildReportData (PDF/Excel)
-  const PORTFOLIO_KPIs_LIVE = ctxValue.portfolioKpis ?? PORTFOLIO_KPIs_FALLBACK
-  const CLIENTES_POR_ESTADO_LIVE = ctxValue.clientesPorEstado ?? CLIENTES_POR_ESTADO_FALLBACK
-  const CLIENTES_POR_ESTAGIO_LIVE = ctxValue.clientesPorEstagio ?? CLIENTES_POR_ESTAGIO_FALLBACK
-  const TOP_CLIENTES_LIVE = ctxValue.topClientes ?? TOP_CLIENTES_FALLBACK
-  const RENTABILIDADE_MENSAL_LIVE = ctxValue.rentabilidadeMensal ?? RENTABILIDADE_MENSAL_FALLBACK
-  const FLUXO_MENSAL_LIVE = ctxValue.fluxoMensal ?? FLUXO_MENSAL_FALLBACK
-  const PROPOSTAS_KPIS_LIVE = ctxValue.propostasKpis ?? PROPOSTAS_KPIS_FALLBACK
-  const PROPOSTAS_STATUS_LIVE = ctxValue.propostasStatus ?? PROPOSTAS_STATUS_FALLBACK
+  const PORTFOLIO_KPIs_LIVE = ctxValue.portfolioKpis ?? PORTFOLIO_KPIs_EMPTY
+  const CLIENTES_POR_ESTADO_LIVE =
+    ctxValue.clientesPorEstado ?? CLIENTES_POR_ESTADO_EMPTY
+  const CLIENTES_POR_ESTAGIO_LIVE =
+    ctxValue.clientesPorEstagio ?? CLIENTES_POR_ESTAGIO_EMPTY
+  const TOP_CLIENTES_LIVE = ctxValue.topClientes ?? TOP_CLIENTES_EMPTY
+  const RENTABILIDADE_MENSAL_LIVE =
+    ctxValue.rentabilidadeMensal ?? RENTABILIDADE_MENSAL_EMPTY
+  const FLUXO_MENSAL_LIVE = ctxValue.fluxoMensal ?? FLUXO_MENSAL_EMPTY
+  const PROPOSTAS_KPIS_LIVE = ctxValue.propostasKpis ?? PROPOSTAS_KPIS_EMPTY
+  const PROPOSTAS_STATUS_LIVE =
+    ctxValue.propostasStatus ?? PROPOSTAS_STATUS_EMPTY
 
   const buildReportData = (id: ReportId): ReportData => {
-    const def = REPORTS.find(r => r.id === id)!
-    const base = { titulo: def.titulo, subtitulo: def.descricao, gerado: nowStr() }
+    const def = REPORTS.find((r) => r.id === id)!
+    const base = {
+      titulo: def.titulo,
+      subtitulo: `${def.descricao}. Snapshot: ${real.snapshotEm || 'indisponível'}. Estado: ${sectionState(id)}. Fonte: ${id === 'portfolio' ? '/clientes' : id === 'propostas' ? '/propostas' : id === 'mercado' ? 'fontes por indicador' : '/financeiro/dashboard; regime de competência'}.`,
+      gerado: nowStr(),
+    }
+
+    if (sectionState(id) === 'indisponivel' || sectionState(id) === 'loading') return { id, ...base, sections: [{ tipo: 'texto', titulo: 'Dados indisponíveis', texto: 'Esta seção não recebeu dados válidos. Nenhum valor foi substituído por exemplo ou por zero.' }] }
 
     if (id === 'portfolio') {
       return {
@@ -817,23 +673,36 @@ export default function Relatorios() {
         ...base,
         sections: [
           {
-            tipo: 'kpis', titulo: 'Indicadores Principais',
-            kpis: PORTFOLIO_KPIs_LIVE.map(k => ({ label: k.label, valor: k.valor })),
+            tipo: 'kpis',
+            titulo: 'Indicadores Principais',
+            kpis: PORTFOLIO_KPIs_LIVE.map((k) => ({
+              label: k.label,
+              valor: k.valor,
+            })),
           },
           {
-            tipo: 'tabela', titulo: 'Clientes por Estado',
+            tipo: 'tabela',
+            titulo: 'Clientes por Estado',
             colunas: ['Estado', 'Qtd Clientes'],
-            linhas: CLIENTES_POR_ESTADO_LIVE.map(c => [c.estado, c.clientes]),
+            linhas: CLIENTES_POR_ESTADO_LIVE.map((c) => [c.estado, c.clientes]),
           },
           {
-            tipo: 'tabela', titulo: 'Clientes por Estágio',
+            tipo: 'tabela',
+            titulo: 'Clientes por Estágio',
             colunas: ['Estágio', 'Qtd'],
-            linhas: CLIENTES_POR_ESTAGIO_LIVE.map(c => [c.name, c.value]),
+            linhas: CLIENTES_POR_ESTAGIO_LIVE.map((c) => [c.name, c.value]),
           },
           {
-            tipo: 'tabela', titulo: 'Top 10 Clientes por Dívida',
+            tipo: 'tabela',
+            titulo: 'Top 10 Clientes por Dívida',
             colunas: ['Cliente', 'Cidade/UF', 'Dívida', 'Estágio', 'Credor'],
-            linhas: TOP_CLIENTES_LIVE.map(c => [c.nome, c.cidade, fmtBRL(c.divida), c.estagio, c.credor]),
+            linhas: TOP_CLIENTES_LIVE.map((c) => [
+              c.nome,
+              c.cidade,
+              fmtBRL(c.divida),
+              c.estagio,
+              c.credor,
+            ]),
           },
         ],
       }
@@ -844,9 +713,15 @@ export default function Relatorios() {
         ...base,
         sections: [
           {
-            tipo: 'tabela', titulo: 'Rentabilidade Mensal',
+            tipo: 'tabela',
+            titulo: 'Rentabilidade Mensal',
             colunas: ['Mês', 'Receita', 'Custo', 'Lucro'],
-            linhas: RENTABILIDADE_MENSAL_LIVE.map(r => [r.mes, fmtBRL(r.receita), fmtBRL(r.custo), fmtBRL(r.lucro)]),
+            linhas: RENTABILIDADE_MENSAL_LIVE.map((r) => [
+              r.mes,
+              fmtBRL(r.receita),
+              fmtBRL(r.custo),
+              fmtBRL(r.lucro),
+            ]),
           },
         ],
       }
@@ -857,28 +732,27 @@ export default function Relatorios() {
         ...base,
         sections: [
           {
-            tipo: 'kpis', titulo: 'KPIs de Propostas',
-            kpis: PROPOSTAS_KPIS_LIVE.map(k => ({ label: k.label, valor: `${k.valor} (${k.sub})` })),
+            tipo: 'kpis',
+            titulo: 'KPIs de Propostas',
+            kpis: PROPOSTAS_KPIS_LIVE.map((k) => ({
+              label: k.label,
+              valor: `${k.valor} (${k.sub})`,
+            })),
           },
           {
-            tipo: 'tabela', titulo: 'Status das Propostas',
+            tipo: 'tabela',
+            titulo: 'Status das Propostas',
             colunas: ['Status', 'Quantidade'],
-            linhas: PROPOSTAS_STATUS_LIVE.map(p => [p.name, p.value]),
+            linhas: PROPOSTAS_STATUS_LIVE.map((p) => [p.name, p.value]),
           },
         ],
       }
     }
     if (id === 'mercado') {
-      return {
-        id: 'inteligencia_mercado',
-        ...base,
-        sections: [
-          {
-            tipo: 'texto', titulo: 'Resumo',
-            texto: 'Relatório de inteligência de mercado com indicadores econômicos (Selic, IPCA, Dólar), preços de commodities agrícolas (soja, milho, café, boi gordo, café arábica) e projeções de mercado. Dados obtidos em tempo real via APIs do BCB, CONAB e CEPEA.',
-          },
-        ],
-      }
+      return { id: 'inteligencia_mercado', ...base, sections: [
+        { tipo: 'texto', titulo: 'Período e lacunas', texto: `Snapshot consultado em ${real.snapshotEm}. Estado: ${real.sections.mercado}. As datas de referência pertencem a cada indicador. Histórico e variações insuficientes permanecem indisponíveis.` },
+        { tipo: 'tabela', titulo: 'Indicadores observados', colunas: ['Indicador', 'Valor', 'Unidade', 'Praça', 'Referência', 'Fonte', 'Estado', 'Snapshot consultado'], linhas: real.mercado.map(row => [row.nome, new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 4 }).format(row.valor), row.unidade, row.praca, row.data, row.fonte, row.estado, real.snapshotEm || '']) },
+      ] }
     }
     if (id === 'fluxo') {
       return {
@@ -886,45 +760,53 @@ export default function Relatorios() {
         ...base,
         sections: [
           {
-            tipo: 'tabela', titulo: 'Fluxo de Caixa Mensal',
-            colunas: ['Mês', 'Entrada', 'Saída', 'Saldo'],
-            linhas: FLUXO_MENSAL_LIVE.map(f => [f.mes, fmtBRL(f.entrada), fmtBRL(f.saida), fmtBRL(f.saldo)]),
+            tipo: 'tabela',
+            titulo: 'Resultado Mensal por Competência',
+            colunas: ['Competência', 'Receita', 'Despesa', 'Resultado'],
+            linhas: FLUXO_MENSAL_LIVE.map((f) => [
+              f.mes,
+              fmtBRL(f.entrada),
+              fmtBRL(f.saida),
+              fmtBRL(f.saldo),
+            ]),
           },
         ],
       }
     }
-    // auditoria
-    return {
-      id: 'auditoria_compliance',
-      ...base,
-      sections: [
-        {
-          tipo: 'tabela', titulo: 'Log de Auditoria',
-          colunas: ['Data/Hora', 'Usuário', 'Ação', 'Tipo', 'Status'],
-          linhas: AUDITORIA_LOG.map(a => [a.data, a.usuario, a.acao, a.tipo, a.status]),
-        },
-      ],
-    }
+    return { id: 'auditoria_compliance', ...base, sections: [{ tipo: 'texto', titulo: 'Indisponível', texto: 'Dados de auditoria não carregados.' }] }
   }
 
   const handleExport = (formato: string) => {
     if (!selectedReport) return
-    const def = REPORTS.find(r => r.id === selectedReport)
+    const def = REPORTS.find((r) => r.id === selectedReport)
     try {
       const data = buildReportData(selectedReport)
       if (formato === 'PDF') {
         exportPDF(data)
+      } else if (formato === 'CSV') {
+        const firstTable = data.sections.find(
+          (section) => section.tipo === 'tabela',
+        )
+        if (!firstTable?.colunas || !firstTable.linhas)
+          throw new Error('Relatório sem tabela para exportação CSV')
+        exportCSV(data.id, firstTable.colunas, firstTable.linhas)
       } else {
         exportExcel(data)
       }
       showToast(`${def?.titulo} exportado em ${formato}`, 'success')
     } catch (err) {
       console.error('[Export] Erro:', err)
-      showToast(`Erro ao exportar: ${err instanceof Error ? err.message : 'desconhecido'}`, 'warning')
+      showToast(
+        `Erro ao exportar: ${err instanceof Error ? err.message : 'desconhecido'}`,
+        'warning',
+      )
     }
   }
 
-  const ReportContent: Record<ReportId, React.FC<{ onExport: (fmt: string) => void }>> = {
+  const ReportContent: Record<
+    ReportId,
+    React.FC<{ onExport: (fmt: string) => void }>
+  > = {
     portfolio: PortfolioContent,
     rentabilidade: RentabilidadeContent,
     propostas: PropostasContent,
@@ -933,114 +815,116 @@ export default function Relatorios() {
     auditoria: AuditoriaContent,
   }
 
-  const selectedDef = REPORTS.find(r => r.id === selectedReport)
+  const selectedDef = REPORTS.find((r) => r.id === selectedReport)
 
   return (
     <RelatoriosCtx.Provider value={ctxValue}>
-    <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-display font-bold text-aletis-grafite-escuro">
-            Relatórios
-          </h1>
-          <p className="text-aletis-grafite-medio mt-1 font-body text-sm">
-            Relatórios dinâmicos e exportação de dados do sistema ALETIS
-            {ctxValue.source === 'api' && <span className="ml-2 text-positivo">· dados ao vivo</span>}
-            {ctxValue.source === 'partial' && <span className="ml-2 text-ambar-dark">· dados parciais</span>}
-            {ctxValue.source === 'fallback' && <span className="ml-2 text-aletis-grafite-medio">· usando snapshot</span>}
-            {ctxValue.source === 'loading' && <span className="ml-2 text-aletis-grafite-medio">· carregando…</span>}
-          </p>
-        </div>
-        {selectedReport && (
-          <button
-            onClick={() => setSelectedReport(null)}
-            className="flex items-center gap-2 text-sm font-body text-aletis-verde hover:text-aletis-verde-medio transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Voltar aos relatórios
-          </button>
-        )}
-      </div>
-
-      {/* ── Section 1: Report Grid ──────────────────────────────── */}
-      {!selectedReport && (
-        <section>
-          <div className="flex items-center gap-2 mb-4">
-            <BarChart3 className="w-5 h-5 text-aletis-verde" />
-            <h2 className="text-lg font-display font-bold text-aletis-grafite-escuro">
-              Relatórios Disponíveis
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {REPORTS.map((report) => {
-              const Icon = report.icon
-              return (
-                <button
-                  key={report.id}
-                  onClick={() => setSelectedReport(report.id)}
-                  className="text-left card p-5 group hover:shadow-lg hover:border-aletis-verde/40 hover:scale-[1.02] transition-all duration-300"
-                >
-                  <div className="flex items-start gap-4">
-                    <div
-                      className={`w-12 h-12 rounded-xl ${report.corBg} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300`}
-                    >
-                      <Icon className="w-6 h-6" style={{ color: report.cor }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-display font-bold text-aletis-grafite-escuro group-hover:text-aletis-verde transition-colors">
-                        {report.titulo}
-                      </h3>
-                      <p className="text-xs font-body text-aletis-grafite-claro mt-1 leading-relaxed">
-                        {report.descricao}
-                      </p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-aletis-grafite-claro group-hover:text-aletis-verde group-hover:translate-x-1 transition-all flex-shrink-0 mt-1" />
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* ── Section 2: Report Content ───────────────────────────── */}
-      {selectedReport && selectedDef && (
-        <section>
-          <div className="flex items-center gap-3 mb-6">
-            <div
-              className={`w-10 h-10 rounded-xl ${selectedDef.corBg} flex items-center justify-center`}
+      <div className="space-y-6 animate-fade-in">
+        {/* Header */}
+        <PageHeader title={<>Relatórios</>} description={<> <p className="text-[var(--text-soft)] mt-1 font-body text-sm">
+              Relatórios dinâmicos e exportação de dados do sistema ALETIS
+              <span className="ml-2">· {selectedReport ? sectionState(selectedReport) : real.loading ? 'carregando' : 'snapshots por seção'}</span>
+            </p> </>} actions={<> {selectedReport && (
+            <button
+              onClick={() => setSelectedReport(null)}
+              className="flex items-center gap-2 text-sm font-body text-foreground hover:text-aletis-verde-medio transition-colors"
             >
-              <selectedDef.icon className="w-5 h-5" style={{ color: selectedDef.cor }} />
-            </div>
-            <div>
-              <h2 className="text-lg font-display font-bold text-aletis-grafite-escuro">
-                {selectedDef.titulo}
+              <ArrowLeft className="w-4 h-4" />
+              Voltar aos relatórios
+            </button>
+          )} </>} />
+
+        <div className="task-workspace">
+          <SectionNav label="Navegação dos relatórios" vertical active={selectedReport ?? 'catalogo'} onChange={id => setSelectedReport(id === 'catalogo' ? null : id as ReportId)} items={[{id:'catalogo',label:'Todos os relatórios',icon:BarChart3},...REPORTS.map(report=>({id:report.id,label:report.titulo,icon:report.icon}))]} />
+          <div className="min-w-0">
+        {/* ── Section 1: Report Grid ──────────────────────────────── */}
+        {!selectedReport && (
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <BarChart3 className="w-5 h-5 text-foreground" />
+              <h2 className="text-lg font-display font-semibold text-foreground">
+                Relatórios Disponíveis
               </h2>
-              <p className="text-xs font-body text-aletis-grafite-claro">
-                {selectedDef.descricao}
-              </p>
             </div>
-            <span className="badge bg-aletis-verde/10 text-aletis-verde text-[10px] ml-auto">
-              <Calendar className="w-3 h-3 mr-1" />
-              Abr 2026
-            </span>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+              {REPORTS.map((report) => {
+                const Icon = report.icon
+                return (
+                  <button
+                    key={report.id}
+                    onClick={() => setSelectedReport(report.id)}
+                    className="text-left card p-5 group  hover:border-aletis-verde/40  transition-all duration-300"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div
+                        className={`w-12 h-12 rounded-xl ${report.corBg} flex items-center justify-center flex-shrink-0 `}
+                      >
+                        <Icon
+                          className="w-6 h-6"
+                          style={{ color: report.cor }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-display font-semibold text-foreground group-hover:text-aletis-verde transition-colors">
+                          {report.titulo}
+                        </h3>
+                        <p className="text-xs font-body text-muted-foreground mt-1 leading-relaxed">
+                          {report.descricao} · {sectionState(report.id)}
+                        </p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-aletis-verde group-hover:translate-x-1 transition-all flex-shrink-0 mt-1" />
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* ── Section 2: Report Content ───────────────────────────── */}
+        {selectedReport && selectedDef && (
+          <section>
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+              <div
+                className={`w-10 h-10 rounded-xl ${selectedDef.corBg} flex items-center justify-center`}
+              >
+                <selectedDef.icon
+                  className="w-5 h-5"
+                  style={{ color: selectedDef.cor }}
+                />
+              </div>
+              <div>
+                <h2 className="text-lg font-display font-semibold text-foreground">
+                  {selectedDef.titulo}
+                </h2>
+                <p className="text-xs font-body text-muted-foreground">
+                  {selectedDef.descricao}
+                </p>
+              </div>
+              <span className="badge bg-aletis-verde/10 text-foreground text-[11px] ml-auto">
+                <Calendar className="w-3 h-3 mr-1" />
+                {real.snapshotEm ? new Date(real.snapshotEm).toLocaleDateString('pt-BR') : 'Sem snapshot'}
+              </span>
+            </div>
+
+            {(() => {
+              if (sectionState(selectedReport) === 'loading') return <p className="card p-5">Carregando dados da seção…</p>
+              if (sectionState(selectedReport) === 'indisponivel') return <p className="card p-5">Dados desta seção indisponíveis. Nenhum resultado foi substituído por zero.</p>
+              const Content = ReportContent[selectedReport]
+              return <Content onExport={handleExport} />
+            })()}
+          </section>
+        )}
+
           </div>
+        </div>
+        {/* Bottom spacer */}
+        <div className="h-8" />
 
-          {(() => {
-            const Content = ReportContent[selectedReport]
-            return <Content onExport={handleExport} />
-          })()}
-        </section>
-      )}
-
-      {/* Bottom spacer */}
-      <div className="h-8" />
-
-      {/* Toast notifications */}
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-    </div>
+        {/* Toast notifications */}
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      </div>
     </RelatoriosCtx.Provider>
   )
 }

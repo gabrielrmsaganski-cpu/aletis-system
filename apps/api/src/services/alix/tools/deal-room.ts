@@ -12,12 +12,12 @@
 // antes de criar ou alterar negociação.
 // ============================================================
 
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 import { getDealRoomService, type NegociacaoStatus } from '../../dealRoom/DealRoomService.js'
 
-export function buildDealRoomTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildDealRoomTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   // ── listar_negociacoes_cliente ─────────────────────────────
   tools.push({

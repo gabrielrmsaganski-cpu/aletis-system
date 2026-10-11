@@ -34,8 +34,8 @@ export function Footer() {
               Pronto para a próxima conversa com seus credores?
             </p>
             <h2 className="mt-4 display-lg text-aletis-cream">
-              Diagnóstico inicial sem custo. Memória de cálculo auditável.{' '}
-              <span className="text-gold-gradient italic">Decisão em 72h.</span>
+              Primeira leitura com escopo claro, sigilo e{' '}
+              <span className="text-gold-gradient italic">próximos passos em 72h.</span>
             </h2>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">

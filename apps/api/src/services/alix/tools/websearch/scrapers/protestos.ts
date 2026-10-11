@@ -1,4 +1,4 @@
-import type { ClaudeTool, ClaudeToolRegistry } from '../../../../llm/ClaudeFoundryClient.js';
+import type { LLMTool, LLMToolRegistry } from '../../../../llm/OpenAIClient.js';
 
 /**
  * Consulta protestos em cartórios — cruza CENPROT (IEPTB) + bancos de
@@ -6,8 +6,8 @@ import type { ClaudeTool, ClaudeToolRegistry } from '../../../../llm/ClaudeFound
  *
  * Retorna query otimizada que o WebResearcher executa via web_search nativa.
  */
-export function buildProtestosTool(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tool: ClaudeTool = {
+export function buildProtestosTool(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tool: LLMTool = {
     name: 'consultar_protestos',
     description: 'Verifica se um CPF/CNPJ tem protestos públicos em cartórios. Cruza CENPROT (IEPTB), CNPJá e consultas públicas. Essencial em due-diligence pré-proposta.',
     input_schema: {

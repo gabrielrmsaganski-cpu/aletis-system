@@ -183,7 +183,7 @@ export function ContatoForm() {
             onChange={(e) => set('interesse', e.target.value as Interesse)}
             className="field-input"
           >
-            <option value="diagnostico">Diagnóstico gratuito</option>
+            <option value="diagnostico">Primeira leitura financeira</option>
             <option value="reestruturacao">Reestruturação de dívida</option>
             <option value="revisional">Revisional / abusividade</option>
             <option value="estruturacao">Estruturação financeira</option>
@@ -285,11 +285,11 @@ export function ContatoForm() {
         }
         .field-input:focus {
           outline: none;
-          border-color: #c9a84c;
+          border-color: #cb9d52;
           box-shadow: 0 0 0 4px rgba(201, 168, 76, 0.12);
         }
         .field-input:hover:not(:focus) {
-          border-color: #c9a84c40;
+          border-color: #cb9d5240;
         }
       `}</style>
     </form>

@@ -113,7 +113,7 @@ function PaletaSection() {
               onClick={() => {
                 navigator.clipboard?.writeText(hex)
               }}
-              className="group overflow-hidden rounded-2xl bg-white text-left shadow-brand-sm ring-1 ring-aletis-cinza transition hover:shadow-brand"
+              className="group overflow-hidden rounded-lg bg-white text-left shadow-brand-sm ring-1 ring-aletis-cinza transition hover:shadow-brand"
             >
               <div className="h-28" style={{ backgroundColor: hex }} />
               <div className="space-y-1 p-4">
@@ -126,7 +126,7 @@ function PaletaSection() {
                   </code>
                 </div>
                 <p className="text-xs text-aletis-verde-medio">{meta.role}</p>
-                <div className="grid grid-cols-2 gap-1 pt-2 text-[10px] uppercase tracking-wider text-aletis-verde-medio/70">
+                <div className="grid grid-cols-2 gap-1 pt-2 text-[11px] uppercase tracking-wider text-aletis-verde-medio/70">
                   <span>RGB {meta.rgb}</span>
                   <span>CMYK {meta.cmyk}</span>
                 </div>
@@ -186,13 +186,13 @@ function LogosSection({
 
       <div className="mt-6 space-y-6">
         {lines.map(([line, info]) => (
-          <article key={line} className="overflow-hidden rounded-2xl bg-white shadow-brand-sm ring-1 ring-aletis-cinza">
+          <article key={line} className="overflow-hidden rounded-lg bg-white shadow-brand-sm ring-1 ring-aletis-cinza">
             <header className="flex items-center justify-between gap-3 border-b border-aletis-cinza px-5 py-3">
               <div>
                 <h3 className="font-display text-base font-bold text-aletis-verde">{info.label}</h3>
                 <p className="text-xs text-aletis-verde-medio">{info.description}</p>
               </div>
-              <code className="font-mono text-[10px] uppercase tracking-wider text-aletis-verde-medio/70">
+              <code className="font-mono text-[11px] uppercase tracking-wider text-aletis-verde-medio/70">
                 {info.variants.length} variantes
               </code>
             </header>
@@ -242,7 +242,7 @@ function IconesSection() {
 function TipografiaSection() {
   return (
     <section className="grid gap-6 lg:grid-cols-2">
-      <article className="rounded-2xl bg-white p-6 shadow-brand-sm ring-1 ring-aletis-cinza">
+      <article className="rounded-lg bg-white p-6 shadow-brand-sm ring-1 ring-aletis-cinza">
         <p className="text-xs uppercase tracking-wider text-aletis-verde-medio">Display</p>
         <h2 className="font-display text-3xl font-bold text-aletis-verde">{ALETIS_FONTS.display}</h2>
         <p className="mt-2 text-sm text-aletis-verde-medio">
@@ -257,7 +257,7 @@ function TipografiaSection() {
           <p style={{ fontWeight: 700 }}>Bold · 700 — Verdade nos números.</p>
         </div>
       </article>
-      <article className="rounded-2xl bg-white p-6 shadow-brand-sm ring-1 ring-aletis-cinza">
+      <article className="rounded-lg bg-white p-6 shadow-brand-sm ring-1 ring-aletis-cinza">
         <p className="text-xs uppercase tracking-wider text-aletis-verde-medio">Body</p>
         <h2 className="font-body text-3xl font-bold text-aletis-verde">{ALETIS_FONTS.body}</h2>
         <p className="mt-2 font-body text-sm text-aletis-verde-medio">
@@ -281,7 +281,7 @@ function TipografiaSection() {
 function VozSection() {
   return (
     <section className="grid gap-6 lg:grid-cols-3">
-      <article className="rounded-2xl bg-white p-6 shadow-brand-sm ring-1 ring-aletis-cinza lg:col-span-2">
+      <article className="rounded-lg bg-white p-6 shadow-brand-sm ring-1 ring-aletis-cinza lg:col-span-2">
         <h2 className="font-display text-xl font-bold text-aletis-verde">Tom de voz</h2>
         <p className="mt-2 text-sm leading-relaxed text-aletis-verde-medio">{ALETIS_VOICE.tone}</p>
         <h3 className="mt-6 font-display text-base font-bold text-aletis-verde">Etimologia</h3>
@@ -289,7 +289,7 @@ function VozSection() {
         <h3 className="mt-6 font-display text-base font-bold text-aletis-verde">Origem do símbolo</h3>
         <p className="mt-1 text-sm leading-relaxed text-aletis-verde-medio">{ALETIS_VOICE.symbol}</p>
       </article>
-      <article className="rounded-2xl bg-aletis-verde p-6 text-aletis-cream shadow-brand">
+      <article className="rounded-lg bg-aletis-verde p-6 text-aletis-cream shadow-brand">
         <h3 className="font-display text-base font-bold uppercase tracking-wider text-aletis-gold">
           Taglines oficiais
         </h3>
@@ -312,7 +312,7 @@ function LegalSection() {
   return (
     <section>
       <h2 className="font-display text-xl font-bold text-aletis-verde">Identificação legal</h2>
-      <div className="mt-4 grid gap-2 rounded-2xl bg-white p-6 shadow-brand-sm ring-1 ring-aletis-cinza">
+      <div className="mt-4 grid gap-2 rounded-lg bg-white p-6 shadow-brand-sm ring-1 ring-aletis-cinza">
         {Object.entries(ALETIS_LEGAL).map(([k, v]) => (
           <div key={k} className="grid grid-cols-[160px_1fr] items-baseline gap-3 border-b border-aletis-cinza/60 py-2 last:border-0">
             <span className="text-xs uppercase tracking-wider text-aletis-verde-medio/80">

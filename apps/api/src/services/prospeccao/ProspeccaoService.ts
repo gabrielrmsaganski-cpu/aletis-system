@@ -6,7 +6,7 @@ import { LeadSourceRegistry } from './sources/LeadSourceRegistry'
 import type { LeadSourceManifest } from './sources/LeadSource'
 import { BrasilAPISource, isAgroCnae } from './BrasilAPISource'
 import { AreaEstimator } from './AreaEstimator'
-import { ScoringEngine } from './ScoringEngine'
+import { ScoringEngine, classifyLeadScore } from './ScoringEngine'
 import { SICARClient, SICARError, getSICARClient } from './SICARClient'
 import { SICARIndex, SicarIndexStats } from './SICARIndex'
 import { GeoEnrichmentSource, getGeoEnrichmentSource } from './GeoEnrichmentSource'
@@ -399,6 +399,7 @@ export class ProspeccaoService {
     if (filters.maxDivida != null && lead.totalDivida > filters.maxDivida) return false
     if (filters.minHectares != null && lead.area.hectaresEstimados < filters.minHectares) return false
     if (filters.tipoPessoa && lead.tipoPessoa !== filters.tipoPessoa) return false
+    if (filters.temAjuizada !== undefined && lead.temAjuizada !== filters.temAjuizada) return false
     if (filters.apenasAjuizadas && !lead.temAjuizada) return false
     if (filters.cnaeAgro && (!lead.cnpj?.cnaeFiscal || !isAgroCnae(lead.cnpj.cnaeFiscal))) return false
     if (filters.apenasAgroProvavel && !lead.agroProfile.provavel) return false
@@ -514,11 +515,7 @@ export class ProspeccaoService {
       out.feedback = feedback
       out.contatos = this.repo.getContatos(lead.cpfCnpjClean)
       const total = Math.max(0, Math.min(100, lead.score.total + feedback.ajusteScore))
-      let classificacao: typeof lead.score.classificacao
-      if (total >= 75) classificacao = 'quente'
-      else if (total >= 55) classificacao = 'morno'
-      else if (total >= 35) classificacao = 'frio'
-      else classificacao = 'reativo'
+      const classificacao = classifyLeadScore(total)
       out.score = { ...lead.score, total, classificacao }
     }
     return out
@@ -670,9 +667,12 @@ export class ProspeccaoService {
       }
     })
 
-    const page = Math.max(1, filters.page || 1)
-    const pageSize = Math.min(200, Math.max(10, filters.pageSize || 50))
-    const start = (page - 1) * pageSize
+    const pageSize = Math.min(500, Math.max(10, filters.pageSize || 50))
+    const requestedOffset = Number(filters.offset)
+    const start = Number.isFinite(requestedOffset) && requestedOffset >= 0
+      ? Math.floor(requestedOffset)
+      : (Math.max(1, filters.page || 1) - 1) * pageSize
+    const page = Math.floor(start / pageSize) + 1
     return {
       total: filtered.length,
       leads: filtered.slice(start, start + pageSize),

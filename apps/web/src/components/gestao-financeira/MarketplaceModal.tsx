@@ -100,20 +100,20 @@ export default function MarketplaceModal({ grupoId, consultorId, onClose, onAppl
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+      <div className="bg-card rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
         <header className="px-5 py-4 border-b border-aletis-grafite-claro/15 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-aletis-verde to-aletis-dourado flex items-center justify-center">
               <Store className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="text-[10px] font-mono text-aletis-verde uppercase font-semibold">🏬 Marketplace</p>
-              <h2 className="text-base font-display font-semibold text-aletis-grafite-escuro">Templates de cliente</h2>
-              <p className="text-[10px] text-aletis-grafite-claro">Reutilize estruturas de outros grupos da sua carteira</p>
+              <p className="text-[11px] font-mono text-foreground uppercase font-semibold">🏬 Marketplace</p>
+              <h2 className="text-base font-display font-semibold text-foreground">Templates de cliente</h2>
+              <p className="text-[11px] text-muted-foreground">Reutilize estruturas de outros grupos da sua carteira</p>
             </div>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-aletis-grafite-escuro/5 flex items-center justify-center">
-            <X className="w-4 h-4 text-aletis-grafite-claro" />
+            <X className="w-4 h-4 text-muted-foreground" />
           </button>
         </header>
 
@@ -140,7 +140,7 @@ export default function MarketplaceModal({ grupoId, consultorId, onClose, onAppl
               {filtered.length === 0 && !loading && (
                 <div className="rounded-lg border border-dashed border-aletis-grafite-claro/30 p-8 text-center bg-aletis-cream/20">
                   <Store className="w-6 h-6 text-aletis-grafite-claro/40 mx-auto mb-2" />
-                  <p className="text-xs text-aletis-grafite-claro">
+                  <p className="text-xs text-muted-foreground">
                     {filter ? `Nenhum template com "${filter}".` : 'Nenhum template ainda. Capture deste grupo na aba "Capturar".'}
                   </p>
                 </div>
@@ -184,7 +184,7 @@ function TabBtn({ active, onClick, label }: { active: boolean; onClick: () => vo
       type="button"
       onClick={onClick}
       className={`px-3 py-2 text-xs font-body font-semibold border-b-2 transition-colors ${
-        active ? 'border-aletis-verde text-aletis-verde' : 'border-transparent text-aletis-grafite-claro hover:text-aletis-grafite-escuro'
+        active ? 'border-aletis-verde text-foreground' : 'border-transparent text-muted-foreground hover:text-aletis-grafite-escuro'
       }`}
     >
       {label}
@@ -208,29 +208,29 @@ function TemplateCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-base">{template.emoji ?? '📦'}</span>
-            <h4 className="text-sm font-display font-semibold text-aletis-grafite-escuro">{template.rotulo}</h4>
+            <h4 className="text-sm font-display font-semibold text-foreground">{template.rotulo}</h4>
             {template.isOficial && (
-              <span className="px-1.5 py-0.5 rounded bg-aletis-dourado/15 text-aletis-dourado-escuro text-[9px] font-bold uppercase inline-flex items-center gap-0.5">
+              <span className="px-1.5 py-0.5 rounded bg-aletis-dourado/15 text-aletis-dourado-escuro text-[11px] font-bold uppercase inline-flex items-center gap-0.5">
                 <Star className="w-2.5 h-2.5" /> Oficial
               </span>
             )}
             {template.visibilidade === 'global' && !template.isOficial && (
-              <span className="px-1.5 py-0.5 rounded bg-aletis-verde/15 text-aletis-verde text-[9px] font-bold uppercase">🌐 Global</span>
+              <span className="px-1.5 py-0.5 rounded bg-aletis-verde/15 text-foreground text-[11px] font-bold uppercase">🌐 Global</span>
             )}
           </div>
-          <p className="text-[10px] text-aletis-grafite-claro font-mono mt-0.5">
+          <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
             {template.categoria} · {template.slug}
           </p>
           {template.descricao && (
-            <p className="text-[11px] text-aletis-grafite-escuro mt-1 line-clamp-2">{template.descricao}</p>
+            <p className="text-[11px] text-foreground mt-1 line-clamp-2">{template.descricao}</p>
           )}
-          <div className="flex items-center gap-2 mt-2 flex-wrap text-[10px] font-mono">
+          <div className="flex items-center gap-2 mt-2 flex-wrap text-[11px] font-mono">
             <Counter label="🌾 culturas" value={c.culturas} />
             <Counter label="💰 custos" value={c.custos} />
             <Counter label="📋 contratos" value={c.contratos} />
             <Counter label="🏞️ fazendas" value={c.fazendas} />
           </div>
-          <p className="text-[10px] text-aletis-grafite-claro mt-1.5">
+          <p className="text-[11px] text-muted-foreground mt-1.5">
             {template.autorNome ? `por ${template.autorNome} · ` : ''}usado {template.usoCount}×
           </p>
         </div>
@@ -250,7 +250,7 @@ function TemplateCard({
           <button
             type="button"
             onClick={onDelete}
-            className="px-2 py-1.5 rounded-lg text-aletis-grafite-claro hover:text-red-600 hover:bg-red-50 transition-colors"
+            className="px-2 py-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
             aria-label="Excluir"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -263,7 +263,7 @@ function TemplateCard({
 
 function Counter({ label, value }: { label: string; value: number }) {
   return (
-    <span className="px-1.5 py-0.5 rounded bg-aletis-cream/40 text-aletis-grafite-escuro tabular-nums">
+    <span className="px-1.5 py-0.5 rounded bg-aletis-cream/40 text-foreground tabular-nums">
       {label} <strong>{value}</strong>
     </span>
   )
@@ -330,8 +330,8 @@ function CaptureForm({
   return (
     <div className="space-y-3 max-w-2xl">
       <div className="rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
-        <p className="text-xs text-aletis-grafite-escuro inline-flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-aletis-verde" />
+        <p className="text-xs text-foreground inline-flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-foreground" />
           O sistema captura culturas, custos, contratos e fazendas deste grupo, despersonaliza (remove ids/datas/valores específicos) e disponibiliza no marketplace.
         </p>
       </div>
@@ -421,7 +421,7 @@ function CaptureForm({
 function Field({ label, children, optional, full }: { label: string; children: React.ReactNode; optional?: boolean; full?: boolean }) {
   return (
     <label className={`block ${full ? 'md:col-span-2' : ''}`}>
-      <span className="text-[11px] font-body font-medium uppercase tracking-wider text-aletis-grafite-claro">
+      <span className="text-[11px] font-body font-medium uppercase tracking-wider text-muted-foreground">
         {label} {optional && <span className="text-aletis-grafite-claro/60 normal-case font-normal">(opcional)</span>}
       </span>
       <div className="mt-1">{children}</div>
@@ -439,7 +439,7 @@ function RadioCard({ label, desc, checked, onChange }: { label: string; desc: st
       }`}
     >
       <p className="text-xs font-semibold">{label}</p>
-      <p className="text-[10px] text-aletis-grafite-claro mt-0.5">{desc}</p>
+      <p className="text-[11px] text-muted-foreground mt-0.5">{desc}</p>
     </button>
   )
 }

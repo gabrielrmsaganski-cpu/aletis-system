@@ -15,14 +15,21 @@ if (existsSync(envPath)) {
 
 export default defineConfig({
   test: {
-    include: ['tests/api/**/*.test.ts', 'tests/lib/**/*.test.ts', 'tests/db/**/*.test.ts', 'src/**/*.test.ts'],
-    // tests/alix/* + tests/sanity.test.ts ainda usam node:test runner;
-    // migram em wave separada. Por ora ficam de fora do Vitest.
+    include: [
+      'tests/api/**/*.test.ts',
+      'tests/lib/**/*.test.ts',
+      'tests/db/**/*.test.ts',
+      'tests/alix/**/*.test.ts',
+      'tests/whatsapp/**/*.test.ts',
+      'src/**/*.test.ts',
+    ],
     environment: 'node',
     globals: false,
     testTimeout: 15000,
     hookTimeout: 15000,
-    env: envFile,
+    // As suítes existentes exercitam rotas unitariamente sem sessão. O guard
+    // global fica desligado nos testes; auth.test.ts cobre o fluxo real.
+    env: { ...envFile, ALETIS_INTERNAL_AUTH_ENABLED: '0' },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],

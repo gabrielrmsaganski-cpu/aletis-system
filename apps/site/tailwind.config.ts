@@ -72,9 +72,9 @@ const config: Config = {
         mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       letterSpacing: {
-        wider2: '0.12em',
-        widest2: '0.22em',
-        widest3: '0.28em',
+        wider2: '0',
+        widest2: '0',
+        widest3: '0',
       },
       boxShadow: {
         premium: '0 22px 64px -28px rgba(13, 22, 17, 0.45)',
@@ -90,7 +90,7 @@ const config: Config = {
         grain:
           "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")",
         'hero-radial':
-          'radial-gradient(circle at 18% 18%, rgba(203, 157, 82, 0.22) 0%, transparent 38%), radial-gradient(circle at 82% 70%, rgba(178, 189, 161, 0.16) 0%, transparent 45%)',
+          'linear-gradient(115deg, rgba(203, 157, 82, 0.16) 0%, transparent 42%), linear-gradient(180deg, rgba(237, 233, 217, 0.08) 0%, transparent 54%)',
         'gold-sheen':
           'linear-gradient(135deg, rgba(203, 157, 82, 0) 0%, rgba(203, 157, 82, 0.28) 48%, rgba(203, 157, 82, 0) 100%)',
         'aletis-pattern': "url('/brand/pattern/repetidor.png')",

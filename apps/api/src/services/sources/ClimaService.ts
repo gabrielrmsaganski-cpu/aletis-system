@@ -52,9 +52,9 @@ export interface NASAPowerData {
     RH2M: Record<string, number>;      // Umidade relativa 2m (%)
   };
   resumo: {
-    tempMedia: number;
-    precipAcumulada: number;
-    umidadeMedia: number;
+    tempMedia: number | null;
+    precipAcumulada: number | null;
+    umidadeMedia: number | null;
   };
   fonte: 'api' | 'cache' | 'fallback';
 }
@@ -68,48 +68,6 @@ export interface AlertaClima {
   dataFim: string;
   fonte: 'api' | 'cache' | 'fallback';
 }
-
-// ── Fallback Data ────────────────────────────────────────────
-
-const FALLBACK_PREVISAO: PrevisaoDia[] = [
-  { data: '2026-04-16', condicao: 'ps', condicaoDesc: 'Parcialmente Nublado', min: 18, max: 29, indiceUv: 8 },
-  { data: '2026-04-17', condicao: 'cl', condicaoDesc: 'Céu Limpo', min: 17, max: 31, indiceUv: 10 },
-  { data: '2026-04-18', condicao: 'c', condicaoDesc: 'Chuva', min: 19, max: 26, indiceUv: 4 },
-  { data: '2026-04-19', condicao: 'ps', condicaoDesc: 'Parcialmente Nublado', min: 16, max: 27, indiceUv: 7 },
-];
-
-const FALLBACK_ESTACAO: Omit<EstacaoDados, 'codigo' | 'nome' | 'uf'> = {
-  data: '2026-04-16',
-  temperatura: 24.5,
-  umidade: 62,
-  pressao: 1013.2,
-  ventoVelocidade: 3.2,
-  ventoRajada: 8.1,
-  chuva: 0,
-  radiacao: 1850,
-  fonte: 'fallback',
-};
-
-const FALLBACK_ALERTAS: AlertaClima[] = [
-  {
-    estado: 'MS',
-    tipo: 'Chuva Intensa',
-    severidade: 'media',
-    descricao: 'Previsão de chuvas intensas nas próximas 24h com acumulado entre 50 e 100mm',
-    dataInicio: '2026-04-16T00:00:00',
-    dataFim: '2026-04-17T23:59:59',
-    fonte: 'fallback',
-  },
-  {
-    estado: 'GO',
-    tipo: 'Onda de Calor',
-    severidade: 'alta',
-    descricao: 'Temperaturas acima de 38°C previstas para os próximos 3 dias',
-    dataInicio: '2026-04-16T00:00:00',
-    dataFim: '2026-04-19T23:59:59',
-    fonte: 'fallback',
-  },
-];
 
 // ── Service Class ────────────────────────────────────────────
 
@@ -155,7 +113,9 @@ export class ClimaService {
     const cached = this.cache.get<PrevisaoClima>(cacheKey);
     if (cached) {
       console.log(`[Clima] Previsão ${codigoCidade} retornada do cache`);
-      return { ...cached, fonte: 'cache' };
+      // Fallbacks antigos podem ainda existir na memória durante uma atualização.
+      // Eles nunca podem ganhar o rótulo de cache, que é reservado a observações reais.
+      return cached.fonte === 'fallback' ? cached : { ...cached, fonte: 'cache' };
     }
 
     const startTime = Date.now();
@@ -173,7 +133,7 @@ export class ClimaService {
       const result: PrevisaoClima = {
         cidade: response.data.cidade || codigoCidade,
         estado: response.data.estado || '',
-        atualizadoEm: response.data.atualizado_em || new Date().toISOString(),
+        atualizadoEm: typeof response.data.atualizado_em === 'string' ? response.data.atualizado_em : '',
         clima: response.data.clima.map((dia: Record<string, unknown>) => ({
           data: dia.data as string,
           condicao: dia.condicao as string,
@@ -192,17 +152,16 @@ export class ClimaService {
       const latencia = Date.now() - startTime;
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       this.manager.updateSourceStatus('cptec_previsao', 'offline', latencia, msg);
-      console.warn(`[Clima] Erro previsao ${codigoCidade}: ${msg}. Usando fallback.`);
+      console.warn(`[Clima] Erro previsao ${codigoCidade}: ${msg}. Sem previsão publicada.`);
 
       const fallback: PrevisaoClima = {
         cidade: codigoCidade,
         estado: '',
-        atualizadoEm: new Date().toISOString(),
-        clima: FALLBACK_PREVISAO.slice(0, dias),
+        atualizadoEm: '',
+        clima: [],
         fonte: 'fallback',
       };
 
-      this.cache.set(cacheKey, fallback, 300);
       return fallback;
     }
   }
@@ -214,7 +173,7 @@ export class ClimaService {
     const cached = this.cache.get<EstacaoDados>(cacheKey);
     if (cached) {
       console.log(`[Clima] Estação ${codigoEstacao} retornada do cache`);
-      return { ...cached, fonte: 'cache' };
+      return cached.fonte === 'fallback' ? cached : { ...cached, fonte: 'cache' };
     }
 
     const startTime = Date.now();
@@ -239,7 +198,7 @@ export class ClimaService {
         codigo: codigoEstacao,
         nome: latest.DC_NOME || codigoEstacao,
         uf: latest.SG_ESTADO || '',
-        data: latest.DT_MEDICAO || today,
+        data: typeof latest.DT_MEDICAO === 'string' ? latest.DT_MEDICAO : '',
         temperatura: this.parseFloat(latest.TEM_INS),
         umidade: this.parseFloat(latest.UMD_INS),
         pressao: this.parseFloat(latest.PRE_INS),
@@ -257,16 +216,23 @@ export class ClimaService {
       const latencia = Date.now() - startTime;
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       this.manager.updateSourceStatus('inmet_estacao', 'offline', latencia, msg);
-      console.warn(`[Clima] Erro estação ${codigoEstacao}: ${msg}. Usando fallback.`);
+      console.warn(`[Clima] Erro estação ${codigoEstacao}: ${msg}. Sem observação publicada.`);
 
       const fallback: EstacaoDados = {
         codigo: codigoEstacao,
         nome: `Estação ${codigoEstacao}`,
         uf: '',
-        ...FALLBACK_ESTACAO,
+        data: '',
+        temperatura: null,
+        umidade: null,
+        pressao: null,
+        ventoVelocidade: null,
+        ventoRajada: null,
+        chuva: null,
+        radiacao: null,
+        fonte: 'fallback',
       };
 
-      this.cache.set(cacheKey, fallback, 300);
       return fallback;
     }
   }
@@ -283,7 +249,7 @@ export class ClimaService {
     const cached = this.cache.get<NASAPowerData>(cacheKey);
     if (cached) {
       console.log(`[Clima] NASA POWER dados retornados do cache`);
-      return { ...cached, fonte: 'cache' };
+      return cached.fonte === 'fallback' ? cached : { ...cached, fonte: 'cache' };
     }
 
     const startTime = Date.now();
@@ -322,8 +288,8 @@ export class ClimaService {
       const precValues = Object.values(prec).filter((v): v is number => typeof v === 'number' && v > -999);
       const rhValues = Object.values(rh2m).filter((v): v is number => typeof v === 'number' && v > -999);
 
-      const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
-      const sum = (arr: number[]) => arr.reduce((s, v) => s + v, 0);
+      const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
+      const sum = (arr: number[]) => arr.length > 0 ? arr.reduce((s, v) => s + v, 0) : null;
 
       const result: NASAPowerData = {
         latitude: lat,
@@ -336,21 +302,21 @@ export class ClimaService {
           RH2M: rh2m,
         },
         resumo: {
-          tempMedia: parseFloat(avg(tempValues).toFixed(1)),
-          precipAcumulada: parseFloat(sum(precValues).toFixed(1)),
-          umidadeMedia: parseFloat(avg(rhValues).toFixed(1)),
+          tempMedia: avg(tempValues) === null ? null : parseFloat(avg(tempValues)!.toFixed(1)),
+          precipAcumulada: sum(precValues) === null ? null : parseFloat(sum(precValues)!.toFixed(1)),
+          umidadeMedia: avg(rhValues) === null ? null : parseFloat(avg(rhValues)!.toFixed(1)),
         },
         fonte: 'api',
       };
 
       this.cache.set(cacheKey, result, 86400);
-      console.log(`[Clima] NASA POWER OK em ${latencia}ms: temp media ${result.resumo.tempMedia}C`);
+      console.log(`[Clima] NASA POWER OK em ${latencia}ms: temp media ${result.resumo.tempMedia ?? 'indisponível'}C`);
       return result;
     } catch (error) {
       const latencia = Date.now() - startTime;
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       this.manager.updateSourceStatus('nasa_power', 'offline', latencia, msg);
-      console.warn(`[Clima] Erro NASA POWER: ${msg}. Usando fallback.`);
+      console.warn(`[Clima] Erro NASA POWER: ${msg}. Sem série publicada.`);
 
       const fallback: NASAPowerData = {
         latitude: lat,
@@ -358,82 +324,29 @@ export class ClimaService {
         periodoInicio: startDate,
         periodoFim: endDate,
         parametros: {
-          T2M: { '20260401': 25.3, '20260402': 26.1, '20260403': 24.8 },
-          PRECTOTCORR: { '20260401': 2.1, '20260402': 0, '20260403': 12.5 },
-          RH2M: { '20260401': 68, '20260402': 55, '20260403': 82 },
+          T2M: {},
+          PRECTOTCORR: {},
+          RH2M: {},
         },
         resumo: {
-          tempMedia: 25.4,
-          precipAcumulada: 14.6,
-          umidadeMedia: 68.3,
+          tempMedia: null,
+          precipAcumulada: null,
+          umidadeMedia: null,
         },
         fonte: 'fallback',
       };
 
-      this.cache.set(cacheKey, fallback, 300);
       return fallback;
     }
   }
 
   // ── Public: Alertas por Região ───────────────────────────
 
-  async getAlertasRegiao(estado: string): Promise<AlertaClima[]> {
-    const cacheKey = `clima_alertas_${estado}`;
-    const cached = this.cache.get<AlertaClima[]>(cacheKey);
-    if (cached) {
-      console.log(`[Clima] Alertas ${estado} retornados do cache`);
-      return cached.map((a) => ({ ...a, fonte: 'cache' as const }));
-    }
-
-    const startTime = Date.now();
-    try {
-      // BrasilAPI has a weather alerts endpoint
-      console.log(`[Clima] Buscando alertas para ${estado}`);
-      const response = await this.httpBrasilAPI.get(`/ondas`);
-      const latencia = Date.now() - startTime;
-
-      if (!response.data || !Array.isArray(response.data)) {
-        throw new Error('Resposta inválida');
-      }
-
-      // Filter for the requested state if the data supports it
-      const alertas: AlertaClima[] = response.data
-        .filter((a: Record<string, unknown>) => {
-          const aEstado = (a.estado as string) || '';
-          return !estado || aEstado.toUpperCase() === estado.toUpperCase();
-        })
-        .slice(0, 10)
-        .map((a: Record<string, unknown>) => ({
-          estado: (a.estado as string) || estado,
-          tipo: (a.descricao as string) || 'Alerta meteorológico',
-          severidade: this.mapSeveridade(a.aviso as string),
-          descricao: (a.descricao as string) || '',
-          dataInicio: (a.data_inicio as string) || new Date().toISOString(),
-          dataFim: (a.data_fim as string) || new Date().toISOString(),
-          fonte: 'api' as const,
-        }));
-
-      this.cache.set(cacheKey, alertas, 3600);
-      console.log(`[Clima] Alertas ${estado} OK em ${latencia}ms: ${alertas.length} alertas`);
-      return alertas;
-    } catch (error) {
-      const latencia = Date.now() - startTime;
-      const msg = error instanceof Error ? error.message : 'Erro desconhecido';
-      console.warn(`[Clima] Erro alertas ${estado}: ${msg}. Usando fallback.`);
-
-      const fallback = FALLBACK_ALERTAS.filter(
-        (a) => !estado || a.estado.toUpperCase() === estado.toUpperCase()
-      );
-
-      // If no match for the state, return generic ones
-      const result = fallback.length > 0 ? fallback : FALLBACK_ALERTAS.map((a) => ({
-        ...a,
-        estado,
-      }));
-
-      this.cache.set(cacheKey, result, 300);
-      return result;
-    }
+  async getAlertasRegiao(_estado: string): Promise<AlertaClima[]> {
+    // O endpoint CPTEC /ondas descreve condições do litoral, não avisos por UF.
+    // Sem um conector de avisos com contrato verificado, o consumidor sinaliza
+    // indisponibilidade. Não convertemos ondas nem referências locais em alertas.
+    return [];
   }
 
   // ── Private Helpers ──────────────────────────────────────
@@ -441,15 +354,6 @@ export class ClimaService {
   private parseFloat(val: unknown): number | null {
     if (val === null || val === undefined || val === '') return null;
     const num = Number(val);
-    return isNaN(num) ? null : num;
-  }
-
-  private mapSeveridade(aviso: string | undefined): AlertaClima['severidade'] {
-    if (!aviso) return 'baixa';
-    const lower = aviso.toLowerCase();
-    if (lower.includes('extremo') || lower.includes('grande perigo')) return 'extrema';
-    if (lower.includes('perigo') || lower.includes('alto')) return 'alta';
-    if (lower.includes('moderado') || lower.includes('medio')) return 'media';
-    return 'baixa';
+    return Number.isFinite(num) && num > -900 ? num : null;
   }
 }

@@ -47,6 +47,12 @@ export interface DataSourceEntry {
   erros24h: number;
   ultimoErro: string | null;
   ttlSegundos: number;
+  conectividade?: 'conectado' | 'falha';
+  ultimaSondagem?: string;
+  ultimaColeta?: string;
+  ultimaObservacao?: string;
+  dadosValidadosEm?: string;
+  dadosDisponiveis?: boolean;
 }
 
 export interface SourceFetchResult<T = unknown> {
@@ -400,14 +406,24 @@ export class DataSourceManager {
     nome: string,
     status: SourceHealth,
     latenciaMs: number,
-    erro?: string
+    erro?: string,
+    observacao?: { observadoEm?: string; coletadoEm?: string }
   ): void {
     const entry = this.registry.get(nome);
     if (!entry) return;
 
     entry.status = status;
     entry.latenciaMs = latenciaMs;
-    entry.ultimaAtualizacao = new Date().toISOString();
+    entry.ultimaColeta = observacao?.coletadoEm || new Date().toISOString();
+    if (observacao?.observadoEm) entry.ultimaObservacao = observacao.observadoEm;
+    if (status === 'online') {
+      entry.ultimaAtualizacao = entry.ultimaColeta;
+      entry.dadosValidadosEm = entry.ultimaColeta;
+      entry.dadosDisponiveis = true;
+      entry.ultimoErro = null;
+    } else {
+      entry.dadosDisponiveis = false;
+    }
 
     if (erro) {
       entry.ultimoErro = erro;
@@ -587,9 +603,8 @@ export class DataSourceManager {
    * updates their status accordingly. Intended to populate the dashboard
    * status even when individual sources haven't been consumed yet.
    *
-   * Semantics: any HTTP response (2xx, 3xx, 4xx) counts as "online" —
-   * it means the endpoint is reachable. Only network errors, DNS failures,
-   * or timeouts flip the status to "offline". HTTP 5xx → "degraded".
+   * A sondagem verifica conectividade. Somente uma coleta validada pode
+   * comprovar disponibilidade de dados; HTML, 404 e 429 nunca a comprovam.
    */
   async probeAllSources(options?: {
     concurrency?: number;
@@ -640,18 +655,30 @@ export class DataSourceManager {
           /* ignore */
         }
         const latencia = Date.now() - start;
-        if (resp.status >= 500) {
-          this.updateSourceStatus(entry.nome, 'degraded', latencia, `HTTP ${resp.status}`);
+        entry.ultimaSondagem = new Date().toISOString();
+        entry.latenciaMs = latencia;
+        entry.conectividade = resp.status >= 200 && resp.status < 300 ? 'conectado' : 'falha';
+        const isHtml = String(resp.headers?.['content-type'] || '').includes('text/html');
+        if (entry.conectividade === 'falha' || isHtml || !entry.dadosValidadosEm || Date.now() - Date.parse(entry.dadosValidadosEm) > entry.ttlSegundos * 1000) {
+          entry.status = 'degraded';
+          entry.dadosDisponiveis = false;
+          entry.ultimoErro = entry.conectividade === 'falha' ? `HTTP ${resp.status}` : 'Conexão disponível; dados ainda não validados por coleta';
           summary.degraded++;
-        } else {
-          // 2xx, 3xx, 4xx, 206 — endpoint responde. 4xx geralmente é falta de parâmetro.
-          this.updateSourceStatus(entry.nome, 'online', latencia);
+        } else if (entry.status === 'online') {
           summary.online++;
+        } else {
+          summary.degraded++;
         }
+
       } catch (error) {
         const latencia = Date.now() - start;
         const msg = error instanceof Error ? error.message : 'probe failed';
-        this.updateSourceStatus(entry.nome, 'offline', latencia, msg);
+        entry.conectividade = 'falha';
+        entry.ultimaSondagem = new Date().toISOString();
+        entry.status = 'offline';
+        entry.dadosDisponiveis = false;
+        entry.latenciaMs = latencia;
+        entry.ultimoErro = msg;
         summary.offline++;
       }
       summary.probed++;
@@ -732,12 +759,14 @@ export class DataSourceManager {
     try {
       const dados = await fetcher();
       const latenciaMs = Date.now() - start;
-      return {
-        dados,
-        fonte: 'api',
-        latenciaMs,
-        atualizadoEm: new Date().toISOString(),
-      };
+      const entries = Array.isArray(dados) ? dados : dados && typeof dados === 'object' ? [dados] : [];
+      const origins = entries.map(d => (d as { fonte?: string }).fonte).filter(Boolean);
+      const fonte = !entries.length || !origins.length || origins.includes('fallback') ? 'fallback' : origins.every(f => f === 'api') ? 'api' : 'cache';
+      const payload = dados as { atualizadoEm?: string; data?: string; dataHoraCotacao?: string; estado?: string } | null;
+      const observed = payload?.data || payload?.dataHoraCotacao || payload?.atualizadoEm;
+      this.updateSourceStatus(nome, fonte === 'fallback' || payload?.estado === 'atrasado' ? 'degraded' : 'online', latenciaMs, fonte === 'fallback' ? 'Sem observação validada' : undefined, { observadoEm: observed });
+      return { dados, fonte, latenciaMs, atualizadoEm: observed || '', ...(fonte === 'fallback' ? { erro: 'Dados indisponíveis ou referência sem observação validada' } : {}) };
+
     } catch (error) {
       const latenciaMs = Date.now() - start;
       return {

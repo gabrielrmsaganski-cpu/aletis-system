@@ -120,13 +120,18 @@ export interface PendenciaRow {
   descricao?: string | null
   categoria?: string | null
   obrigatorio: boolean
-  status: 'pendente' | 'enviado' | 'aprovado' | 'rejeitado'
+  status: 'pendente' | 'enviado' | 'aprovado' | 'rejeitado' | 'cancelado'
   uploadId?: string | null
   solicitadoPor?: string | null
   solicitadoEm: Date
   enviadoEm?: Date | null
   revisadoEm?: Date | null
   observacao?: string | null
+  prioridade?: 'normal' | 'alta' | 'urgente'
+  prazo?: string | null
+  tipoDocumento?: string | null
+  updatedAt?: Date
+  metadata?: Record<string, unknown> | null
 }
 
 export async function dbUpsertPendencia(row: PendenciaRow): Promise<void> {
@@ -191,6 +196,11 @@ export async function dbLoadAllPendencias(): Promise<PendenciaRow[]> {
       enviadoEm: r.enviadoEm,
       revisadoEm: r.revisadoEm,
       observacao: r.observacao,
+      prioridade: r.prioridade as PendenciaRow['prioridade'],
+      prazo: r.prazo,
+      tipoDocumento: r.tipoDocumento,
+      updatedAt: r.updatedAt,
+      metadata: (r.metadata as Record<string, unknown> | null) ?? null,
     }))
   } catch (err) {
     console.warn('[PortalRepo.dbLoadAllPendencias]', (err as Error).message)

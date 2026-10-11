@@ -141,7 +141,7 @@ export default function PGFNTransacao() {
           },
           {
             q: 'Posso aderir agora e ainda complementar com transação individual depois?',
-            a: 'Para o mesmo débito, não — a transação consome a dívida. Para débitos diferentes (ex: ITR vs Funrural separados), pode misturar — adesão para um, individual para outro. A mesa ALETIS mapeia isso na fase de diagnóstico.',
+            a: 'Para o mesmo débito, não — a transação consome a dívida. Para débitos diferentes (ex: ITR vs Funrural separados), pode misturar — adesão para um, individual para outro. ALETIS mapeia isso na fase de diagnóstico.',
           },
           {
             q: 'Vale esperar um Refis novo ou aderir agora?',

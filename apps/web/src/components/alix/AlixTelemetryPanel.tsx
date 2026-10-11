@@ -18,6 +18,9 @@ import {
 import { apiFetch } from '../../hooks/useApi'
 
 interface TelemetryDashboard {
+  provider?: 'openai' | 'foundry'
+  costKnown?: boolean
+  costNote?: string
   period: 'day' | 'month' | 'all'
   geradoEm: string
   totals: {
@@ -26,11 +29,11 @@ interface TelemetryDashboard {
     outputTokens: number
     cacheReadTokens: number
     thinkingTokens: number
-    costUsd: number
+    costUsd: number | null
     avgLatencyMs: number
   }
-  custoHoje: number
-  custoMes: number
+  custoHoje: number | null
+  custoMes: number | null
   limites: { mensal: number; diario: number }
   latencia: { p50: number; p95: number; p99: number }
   byModel: Record<string, { requests: number; costUsd: number; inputTokens: number; outputTokens: number }>
@@ -57,7 +60,7 @@ function ringColor(used: number, limit: number): string {
   const pct = limit > 0 ? used / limit : 0
   if (pct >= 1) return 'text-red-500 stroke-red-500'
   if (pct >= 0.8) return 'text-aletis-gold-escuro stroke-aletis-gold'
-  return 'text-aletis-verde-medio stroke-aletis-verde-medio'
+  return 'text-muted-foreground stroke-aletis-verde-medio'
 }
 
 function CostRing({ used, limit, label }: { used: number; limit: number; label: string }) {
@@ -86,7 +89,13 @@ function CostRing({ used, limit, label }: { used: number; limit: number; label: 
   )
 }
 
-export default function AlixTelemetryPanel({ onClose }: { onClose?: () => void }) {
+export default function AlixTelemetryPanel({
+  onClose,
+  embedded = false,
+}: {
+  onClose?: () => void
+  embedded?: boolean
+}) {
   const [data, setData] = useState<TelemetryDashboard | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
@@ -117,46 +126,65 @@ export default function AlixTelemetryPanel({ onClose }: { onClose?: () => void }
   const top5 = useMemo(() => (data?.topTools ?? []).slice(0, 5), [data])
   const maxToolCount = top5[0]?.count ?? 1
 
+  const actions = (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => setPeriod((p) => (p === 'day' ? 'month' : 'day'))}
+        className="px-2.5 py-1 rounded-full font-display text-[10px] font-semibold uppercase tracking-wider bg-aletis-cream/[0.06] hover:bg-aletis-cream/[0.12] border border-aletis-sage/20"
+      >
+        {period === 'day' ? 'Hoje' : 'Mês'}
+      </button>
+      <button
+        onClick={fetchData}
+        disabled={loading}
+        aria-label="Atualizar"
+        className="p-1.5 rounded-lg text-aletis-cream/70 hover:bg-aletis-cream/[0.06]"
+      >
+        {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+      </button>
+      {!embedded && onClose && (
+        <button
+          onClick={onClose}
+          aria-label="Fechar painel de telemetria"
+          className="p-1.5 rounded-lg text-aletis-cream/70 hover:bg-aletis-cream/[0.06]"
+        >
+          <X size={14} />
+        </button>
+      )}
+    </div>
+  )
+
   return (
-    <div className="rounded-2xl border border-aletis-sage/15 bg-aletis-verde-escuro/95 backdrop-blur p-5 shadow-brand-lg text-aletis-cream max-w-2xl w-full">
-      <header className="flex items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-aletis-gold/15 border border-aletis-gold/40 flex items-center justify-center">
-            <Activity className="w-4 h-4 text-aletis-gold" />
+    <div
+      className={
+        embedded
+          ? 'text-aletis-cream'
+          : 'rounded-2xl border border-aletis-sage/15 bg-aletis-verde-escuro/95 backdrop-blur p-5 shadow-brand-lg text-aletis-cream max-w-2xl w-full'
+      }
+    >
+      {embedded ? (
+        <header className="flex items-center justify-between gap-3 mb-4 rounded-xl border border-aletis-sage/15 bg-aletis-cream/[0.04] px-3 py-2">
+          <p className="font-body text-[11.5px] text-aletis-sage">
+            Atualizado {data ? new Date(data.geradoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—'}
+          </p>
+          {actions}
+        </header>
+      ) : (
+        <header className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-aletis-gold/15 border border-aletis-gold/40 flex items-center justify-center">
+              <Activity className="w-4 h-4 text-aletis-gold" />
+            </div>
+            <div>
+              <p className="font-display text-base font-bold tracking-wide">Uso & custo da ALIX</p>
+              <p className="font-body text-[11.5px] text-aletis-sage">
+                Atualizado {data ? new Date(data.geradoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—'}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="font-display text-base font-bold tracking-wide">Uso & custo da Aletéia</p>
-            <p className="font-body text-[11.5px] text-aletis-sage">
-              Atualizado {data ? new Date(data.geradoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—'}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setPeriod((p) => (p === 'day' ? 'month' : 'day'))}
-            className="px-2.5 py-1 rounded-full font-display text-[10px] font-semibold uppercase tracking-wider bg-aletis-cream/[0.06] hover:bg-aletis-cream/[0.12] border border-aletis-sage/20"
-          >
-            {period === 'day' ? 'Hoje' : 'Mês'}
-          </button>
-          <button
-            onClick={fetchData}
-            disabled={loading}
-            aria-label="Atualizar"
-            className="p-1.5 rounded-lg text-aletis-cream/70 hover:bg-aletis-cream/[0.06]"
-          >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          </button>
-          {onClose && (
-            <button
-              onClick={onClose}
-              aria-label="Fechar painel de telemetria"
-              className="p-1.5 rounded-lg text-aletis-cream/70 hover:bg-aletis-cream/[0.06]"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
-      </header>
+          {actions}
+        </header>
+      )}
 
       {erro && (
         <div className="mb-3 p-2.5 rounded-lg bg-red-950/40 border border-red-800 text-[12px]">
@@ -188,10 +216,10 @@ export default function AlixTelemetryPanel({ onClose }: { onClose?: () => void }
           )}
 
           {/* Rings de custo */}
-          <div className="grid grid-cols-2 gap-3 mb-4">
+          {data.costKnown === false ? <p className="mb-4 rounded-lg border border-aletis-sage/20 p-3 text-xs leading-relaxed text-aletis-sage">{data.costNote || 'O custo destas chamadas não está disponível nesta tela.'}</p> : <div className="grid grid-cols-2 gap-3 mb-4">
             <CostRing used={data.custoHoje ?? 0} limit={data.limites?.diario ?? 5} label="Custo hoje" />
             <CostRing used={data.custoMes ?? 0} limit={data.limites?.mensal ?? 50} label="Custo do mês" />
-          </div>
+          </div>}
 
           {/* KPIs lineares */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">

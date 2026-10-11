@@ -12,7 +12,7 @@ export default function Comparativos() {
   return (
     <EduLayout
       titulo="Comparativos rápidos — quando usar o quê"
-      subtitulo="Lado a lado. Cinco decisões que aparecem todo dia na mesa de produtor — resolvidas em uma tabela."
+      subtitulo="Lado a lado. Cinco decisões que aparecem todo dia na gestão do produtor — resolvidas em uma tabela."
       breadcrumbs={[
         { label: 'Educação', href: '/educacao' },
         { label: 'Comparativos' },

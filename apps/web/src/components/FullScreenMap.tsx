@@ -183,7 +183,7 @@ export function FullScreenMap({ lat, lng, titulo, subtitulo, areaHa, zoom = 16, 
               <Maximize2 size={12} className="text-amber-400" />
               <span>Círculo estimado: <strong>{areaHa.toFixed(1)} ha</strong> (raio {(radius).toFixed(0)} m)</span>
             </div>
-            <div className="text-[10px] text-white/60 mt-0.5">Geometria exata do CAR não disponível — círculo representa área declarada.</div>
+            <div className="text-[11px] text-white/60 mt-0.5">Geometria exata do CAR não disponível — círculo representa área declarada.</div>
           </div>
         )}
       </div>

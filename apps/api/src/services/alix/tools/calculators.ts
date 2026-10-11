@@ -6,16 +6,16 @@
 // side-effects, sem HITL. Podem ser chamadas livremente pelo Orchestrator,
 // DealAnalyzer ou CRMWriter para estruturar uma recomendação com números.
 // ============================================================
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 import { getDesenrolaRuralService } from '../../desenrola/DesenrolaRuralService.js'
 import { getReformaTributariaService } from '../../reforma/ReformaTributariaService.js'
 import { getFunruralService } from '../../funrural/FunruralService.js'
 import { getCusteioService } from '../../custeio/CusteioService.js'
 import { getFinanceiroService } from '../../financeiro/FinanceiroService.js'
 
-export function buildCalculatorTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildCalculatorTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   // ────────────────────────────────────────────────────────────
   // Desenrola Rural — MP 1208/2024: descontos em dívidas PGFN/RFB rurais

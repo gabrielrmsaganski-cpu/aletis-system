@@ -9,8 +9,18 @@ import { join } from 'path'
 import { DataSourceManager } from '../services/DataSourceManager.js'
 import { AlixService, registerStores } from '../services/AlixService.js'
 import { getWhatsAppService, WhatsAppService } from '../services/whatsapp/WhatsAppService.js'
-import { getAzureSpeechService, AzureSpeechService, VOZES_PT_BR_FEMININAS } from '../services/whatsapp/AzureSpeechService.js'
+import { getOpenAIAudioService, OpenAIAudioService, OPENAI_VOICES_PT_BR } from '../services/whatsapp/OpenAIAudioService.js'
 import { getWhatsAppBrain, WhatsAppBrain } from '../services/whatsapp/WhatsAppBrain.js'
+import { getEvolutionClient, EvolutionClient } from '../services/whatsapp/evolution/EvolutionClient.js'
+import { isEvolutionWebhook, normalizeEvolutionWebhook } from '../services/whatsapp/evolution/EvolutionWebhookNormalizer.js'
+import { getConversationStateService, ConversationStateService } from '../services/whatsapp/ConversationStateService.js'
+import { getWhatsAppIaService, WhatsAppIaService } from '../services/whatsapp/WhatsAppIaService.js'
+import { getDocumentIntakeService, DocumentIntakeService } from '../services/whatsapp/DocumentIntakeService.js'
+import { getGoogleCalendarService, GoogleCalendarService } from '../services/whatsapp/GoogleCalendarService.js'
+import { getWhatsAppOutboxService, WhatsAppOutboxService } from '../services/whatsapp/WhatsAppOutboxService.js'
+import { WhatsAppWebhookQueueService } from '../services/whatsapp/WhatsAppWebhookQueueService.js'
+import { getHumanTakeoverService, HumanTakeoverService } from '../services/whatsapp/HumanTakeoverService.js'
+import { isWhatsAppAutoLeadCreationEnabled, isWhatsAppAutomationEnabled, isEvolutionWebhookEnabled } from '../services/whatsapp/AutomationSafety.js'
 import { clientes } from './clientes.js'
 import { propostas, propostasInteligentes } from './propostas.js'
 
@@ -18,13 +28,36 @@ import { propostas, propostasInteligentes } from './propostas.js'
 
 let brain: WhatsAppBrain | null = null
 let wa: WhatsAppService | null = null
-let speech: AzureSpeechService | null = null
+let speech: OpenAIAudioService | null = null
+let evolution: EvolutionClient | null = null
+let state: ConversationStateService | null = null
+let whatsappIa: WhatsAppIaService | null = null
+let documentIntake: DocumentIntakeService | null = null
+let calendar: GoogleCalendarService | null = null
+let outbox: WhatsAppOutboxService | null = null
+let takeover: HumanTakeoverService | null = null
+
+function sendOutcome(reply: FastifyReply, result: { status?: string; messageId?: string }, data: unknown = result) {
+  if (result.status === 'sent' || (!result.status && result.messageId)) return reply.send({ success: true, data })
+  const status = result.status || 'uncertain'
+  const error = status === 'dry_run' ? 'Modo de simulação: nenhuma mensagem foi enviada.'
+    : status === 'uncertain' ? 'O provedor não confirmou o envio. Confira a conversa antes de tentar novamente.'
+      : 'A mensagem não foi enviada. O resultado foi registrado para acompanhamento.'
+  return reply.status(status === 'failed' ? 502 : 409).send({ success: false, status, error, data })
+}
 
 function init(): void {
   if (brain) return
 
   wa = getWhatsAppService()
-  speech = getAzureSpeechService()
+  speech = getOpenAIAudioService()
+  evolution = getEvolutionClient()
+  state = getConversationStateService()
+  whatsappIa = getWhatsAppIaService()
+  documentIntake = getDocumentIntakeService()
+  calendar = getGoogleCalendarService()
+  outbox = getWhatsAppOutboxService()
+  takeover = getHumanTakeoverService()
 
   // Build an isolated AlixService for WhatsApp (separate storage dir)
   const dsm = DataSourceManager.getInstance()
@@ -47,13 +80,27 @@ function init(): void {
   brain = getWhatsAppBrain(alix, brainStorage)
 
   console.log('[WhatsApp] Routes initialized. Configured:',
-    `meta=${wa.isConfigured()} speech=${speech.isConfigured()}`)
+    `provider=${process.env.WHATSAPP_PROVIDER || 'evolution'} meta=${wa.isConfigured()} evolution=${evolution.isConfigured()} speech=${speech.isConfigured()}`)
 }
 
 // ── Plugin ──────────────────────────────────────────────────
 
 export default async function whatsappRoutes(fastify: FastifyInstance): Promise<void> {
   init()
+  const webhookQueue = new WhatsAppWebhookQueueService(state!, whatsappIa!, outbox!, {
+    logger: fastify.log,
+    metaHandler: async (payload) => {
+      const messages = wa!.parseInbound(payload as unknown as Parameters<NonNullable<typeof wa>['parseInbound']>[0])
+      for (const message of messages) await handleInbound(message, fastify)
+    },
+  })
+  fastify.addHook('onReady', async () => { webhookQueue.start() })
+  fastify.addHook('onClose', async () => { await webhookQueue.stop() })
+
+  fastify.get('/api/whatsapp/queue', async (_request, reply) => {
+    const events = await state!.listWebhookQueueEvents(100)
+    return reply.send({ success: true, data: { events, limit: 100, automationEnabled: isWhatsAppAutomationEnabled() } })
+  })
 
   // ── GET /api/whatsapp/webhook ──────────────────────────
   // Meta handshake: returns hub.challenge when verify_token matches
@@ -76,37 +123,64 @@ export default async function whatsappRoutes(fastify: FastifyInstance): Promise<
   // ── POST /api/whatsapp/webhook ──────────────────────────
   // Receives inbound messages + status updates from Meta
   fastify.post('/api/whatsapp/webhook', async (
-    request: FastifyRequest<{ Body: any }>,
+    request: FastifyRequest<{ Body: any; Querystring: Record<string, string | undefined> }>,
     reply: FastifyReply,
   ) => {
-    // Respond 200 immediately (Meta retries if slow)
-    reply.status(200).send({ success: true })
+    const configuredSecret = process.env.WHATSAPP_WEBHOOK_SECRET || process.env.EVOLUTION_WEBHOOK_SECRET
+    if (configuredSecret) {
+      const presented =
+        request.headers['x-whatsapp-webhook-secret'] ||
+        request.headers['x-evolution-webhook-secret'] ||
+        request.headers['x-webhook-secret'] ||
+        request.query?.secret
+      if (presented !== configuredSecret) {
+        return reply.status(401).send({ success: false, error: 'Webhook nao autorizado' })
+      }
+    }
+
+    const maxBytes = Number(process.env.WHATSAPP_WEBHOOK_MAX_BYTES || 2_000_000)
+    const approxBytes = Buffer.byteLength(JSON.stringify(request.body || {}))
+    if (approxBytes > maxBytes) {
+      return reply.status(413).send({ success: false, error: 'Payload do webhook excede limite' })
+    }
 
     try {
-      const payload = request.body as Parameters<NonNullable<typeof wa>['parseInbound']>[0]
-      const messages = wa!.parseInbound(payload)
-      if (messages.length === 0) return
-
-      for (const msg of messages) {
-        // Fire and forget, but log errors
-        handleInbound(msg, fastify).catch((err) => {
-          fastify.log.error({ err, msg }, '[WhatsApp] handleInbound error')
-        })
-      }
+      const payload = request.body
+      const accepted = isEvolutionWebhook(payload)
+        ? await webhookQueue.acceptEvolution(normalizeEvolutionWebhook(payload))
+        : await webhookQueue.acceptMeta(payload || {})
+      // Confirma recebimento apenas depois do registro durável. O worker recupera
+      // entradas pendentes e respostas preparadas após reinício.
+      return reply.status(200).send({ success: true, ...accepted })
     } catch (err) {
-      fastify.log.error({ err }, '[WhatsApp] Webhook parse error')
+      fastify.log.error({ err }, '[WhatsApp] Falha ao persistir webhook')
+      return reply.status(503).send({ success: false, error: 'Não foi possível registrar o evento. Tente novamente.' })
     }
   })
 
   // ── GET /api/whatsapp/status ────────────────────────────
   // Health / config summary (does not expose secrets)
   fastify.get('/api/whatsapp/status', async (_request, reply) => {
+    const evolutionStatus = await evolution!.getRuntimeStatus()
     return reply.send({
       success: true,
       data: {
+        provider: process.env.WHATSAPP_PROVIDER || 'evolution',
+        automation: {
+          enabled: isWhatsAppAutomationEnabled(),
+          autoCreateLeads: isWhatsAppAutoLeadCreationEnabled(),
+          evolutionWebhookEnabled: isEvolutionWebhookEnabled(),
+        },
+        evolution: evolutionStatus,
         whatsapp: wa!.getConfigSummary(),
         speech: speech!.getConfigSummary(),
-        vozesDisponiveis: Object.values(VOZES_PT_BR_FEMININAS).map((v) => ({
+        calendar: calendar!.getConfigSummary(),
+        storage: {
+          provider: process.env.WHATSAPP_STORAGE_PROVIDER || 'local',
+          dir: process.env.WHATSAPP_STORAGE_DIR || 'storage/whatsapp-media',
+        },
+        documentosObrigatorios: documentIntake!.getRequiredDocuments(),
+        vozesDisponiveis: Object.values(OPENAI_VOICES_PT_BR).map((v) => ({
           nome: v.nome,
           descricao: v.descricao,
         })),
@@ -117,6 +191,215 @@ export default async function whatsappRoutes(fastify: FastifyInstance): Promise<
         },
       },
     })
+  })
+
+  // ── GET /api/whatsapp/instances ─────────────────────────
+  fastify.get('/api/whatsapp/instances', async (_request, reply) => {
+    try {
+      const instances = await evolution!.fetchInstances()
+      return reply.send({ success: true, data: { instances } })
+    } catch (err) {
+      return reply.status(502).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  // ── POST /api/whatsapp/evolution/instances ─────────────
+  fastify.post('/api/whatsapp/evolution/instances', async (
+    request: FastifyRequest<{ Body: { instanceName?: string; qrcode?: boolean } }>,
+    reply,
+  ) => {
+    try {
+      const created = await evolution!.createInstance({
+        instanceName: request.body?.instanceName,
+        qrcode: request.body?.qrcode ?? true,
+      })
+      return reply.send({ success: true, data: created })
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  // ── POST /api/whatsapp/evolution/instances/:instance/connect ──
+  fastify.post('/api/whatsapp/evolution/instances/:instance/connect', async (
+    request: FastifyRequest<{ Params: { instance: string } }>,
+    reply,
+  ) => {
+    try {
+      let qr: unknown
+      try {
+        qr = await evolution!.connect(request.params.instance)
+      } catch (err) {
+        const msg = (err as Error).message.toLowerCase()
+        if (msg.includes('not found') || msg.includes('nao encontrada') || msg.includes('não encontrada')) {
+          await evolution!.createInstance({ instanceName: request.params.instance, qrcode: true })
+          qr = await evolution!.connect(request.params.instance)
+        } else {
+          throw err
+        }
+      }
+      return reply.send({ success: true, data: qr })
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  // ── GET /api/whatsapp/evolution/instances/:instance/status ──
+  fastify.get('/api/whatsapp/evolution/instances/:instance/status', async (
+    request: FastifyRequest<{ Params: { instance: string } }>,
+    reply,
+  ) => {
+    try {
+      const [health, connection] = await Promise.all([
+        evolution!.health(),
+        evolution!.connectionState(request.params.instance),
+      ])
+      return reply.send({ success: true, data: { health, connection } })
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  // ── POST /api/whatsapp/evolution/webhook/set ────────────
+  fastify.post('/api/whatsapp/evolution/webhook/set', async (
+    request: FastifyRequest<{ Body: { instance?: string; url?: string } }>,
+    reply,
+  ) => {
+    try {
+      const out = await evolution!.setWebhook(request.body?.instance, request.body?.url)
+      return reply.send({ success: true, data: out })
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  // ── GET /api/whatsapp/conversations ─────────────────────
+  fastify.get('/api/whatsapp/conversations', async (
+    request: FastifyRequest<{ Querystring: { limit?: string; search?: string } }>,
+    reply,
+  ) => {
+    const limit = Math.min(Number(request.query.limit || 80) || 80, 200)
+    const conversations = await state!.listConversations(limit, request.query.search || '')
+    return reply.send({ success: true, data: { conversations, total: conversations.length } })
+  })
+
+  // ── GET /api/whatsapp/conversations/:id ─────────────────
+  fastify.get('/api/whatsapp/conversations/:id', async (
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply,
+  ) => {
+    const bundle = await state!.getConversationBundle(request.params.id)
+    if (!bundle.conversation) return reply.status(404).send({ success: false, error: 'Conversa nao encontrada' })
+    const checklist = await documentIntake!.getChecklistStatus(request.params.id)
+    return reply.send({ success: true, data: { ...bundle, checklist } })
+  })
+
+  // ── POST /api/whatsapp/conversations/:id/handoff ────────
+  fastify.post('/api/whatsapp/conversations/:id/handoff', async (
+    request: FastifyRequest<{ Params: { id: string }; Body: { assignedUserId?: string; reason?: string } }>,
+    reply,
+  ) => {
+    await takeover!.takeover({
+      conversationId: request.params.id,
+      assignedUserId: request.body?.assignedUserId,
+      reason: request.body?.reason,
+    })
+    return reply.send({ success: true, data: { id: request.params.id, atendimentoModo: 'humano' } })
+  })
+
+  // ── POST /api/whatsapp/conversations/:id/ai ─────────────
+  fastify.post('/api/whatsapp/conversations/:id/ai', async (
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply,
+  ) => {
+    await takeover!.release({ conversationId: request.params.id, actor: 'system' })
+    return reply.send({ success: true, data: { id: request.params.id, atendimentoModo: 'ia' } })
+  })
+
+  // ── POST /api/whatsapp/conversations/:id/send ───────────
+  fastify.post('/api/whatsapp/conversations/:id/send', async (
+    request: FastifyRequest<{ Params: { id: string }; Body: { text: string; idempotencyKey?: string } }>,
+    reply,
+  ) => {
+    const text = request.body?.text?.trim()
+    if (!text) return reply.status(400).send({ success: false, error: 'Campo "text" obrigatorio' })
+    const bundle = await state!.getConversationBundle(request.params.id)
+    const conversation = bundle.conversation
+    if (!conversation) return reply.status(404).send({ success: false, error: 'Conversa nao encontrada' })
+    try {
+      const sent = await outbox!.send({
+        conversationId: conversation.id,
+        instanceName: conversation.instanceName,
+        toNumber: conversation.telefone,
+        type: 'text',
+        text,
+        idempotencyKey: request.body?.idempotencyKey,
+      })
+      const msg = await state!.recordMessage({
+        conversationId: conversation.id,
+        instanceName: conversation.instanceName,
+        providerMessageId: sent.providerMessageId || `outbox:${sent.outboxId}`,
+        direction: 'outbound',
+        type: 'text',
+        status: sent.status,
+        text,
+        toNumber: conversation.telefone,
+        timestamp: new Date(),
+        payload: { ...sent },
+      })
+      return sendOutcome(reply, sent, msg.message)
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: (err as Error).message })
+    }
+  })
+
+  // ── GET /api/whatsapp/documents ─────────────────────────
+  fastify.get('/api/whatsapp/documents', async (
+    request: FastifyRequest<{ Querystring: { limit?: string } }>,
+    reply,
+  ) => {
+    const limit = Math.min(Number(request.query.limit || 200) || 200, 500)
+    const documents = await state!.listDocuments(limit)
+    return reply.send({ success: true, data: { documents, total: documents.length } })
+  })
+
+  // ── POST /api/whatsapp/conversations/:id/documents/checklist ──
+  fastify.post('/api/whatsapp/conversations/:id/documents/checklist', async (
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply,
+  ) => {
+    const bundle = await state!.getConversationBundle(request.params.id)
+    const conversation = bundle.conversation
+    if (!conversation) return reply.status(404).send({ success: false, error: 'Conversa nao encontrada' })
+    const checklist = await documentIntake!.getChecklistStatus(request.params.id)
+    await state!.upsertDocumentRequests({
+      conversationId: request.params.id,
+      clienteId: conversation.clienteId,
+      requests: checklist.map((d) => ({ key: d.key, label: d.label, status: d.status })),
+    })
+    const pendentes = checklist.filter((d) => d.status !== 'recebido')
+    const text = pendentes.length
+      ? `Para seguir com a analise, envie por aqui: ${pendentes.map((d) => d.label).join('; ')}.`
+      : 'Checklist documental completo nesta etapa. Vou deixar registrado para analise da equipe ALETIS.'
+    const sent = await outbox!.send({
+      conversationId: conversation.id,
+      instanceName: conversation.instanceName,
+      toNumber: conversation.telefone,
+      type: 'text',
+      text,
+    })
+    await state!.recordMessage({
+      conversationId: conversation.id,
+      instanceName: conversation.instanceName,
+      providerMessageId: sent.providerMessageId,
+      direction: 'outbound',
+      type: 'text',
+      status: sent.status,
+      text,
+      toNumber: conversation.telefone,
+      timestamp: new Date(),
+      payload: { ...sent },
+    })
+    return sendOutcome(reply, sent, { checklist, sent })
   })
 
   // ── GET /api/whatsapp/sessions ──────────────────────────
@@ -162,14 +445,22 @@ export default async function whatsappRoutes(fastify: FastifyInstance): Promise<
   // ── POST /api/whatsapp/send-text ────────────────────────
   // Admin: send arbitrary text (e.g., from CRM)
   fastify.post('/api/whatsapp/send-text', async (
-    request: FastifyRequest<{ Body: { to: string; text: string; previewUrl?: boolean } }>,
+    request: FastifyRequest<{ Body: { to: string; text: string; previewUrl?: boolean; idempotencyKey?: string } }>,
     reply: FastifyReply,
   ) => {
     const { to, text, previewUrl } = request.body || {}
     if (!to || !text) return reply.status(400).send({ success: false, error: 'Campos "to" e "text" obrigatórios' })
     try {
-      const r = await wa!.sendText(to, text, previewUrl || false)
-      return reply.send({ success: true, data: r })
+      const r = (process.env.WHATSAPP_PROVIDER || 'evolution') === 'evolution'
+        ? await outbox!.send({
+            instanceName: evolution!.getDefaultInstance(),
+            toNumber: to,
+            type: 'text',
+            text,
+            idempotencyKey: request.body.idempotencyKey,
+          })
+        : await wa!.sendText(to, text, previewUrl || false)
+      return sendOutcome(reply, r)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro'
       return reply.status(500).send({ success: false, error: msg })
@@ -177,17 +468,26 @@ export default async function whatsappRoutes(fastify: FastifyInstance): Promise<
   })
 
   // ── POST /api/whatsapp/send-audio-tts ───────────────────
-  // Admin: synthesize text via Azure TTS and send as WhatsApp audio note
+  // Admin: sintetiza texto via OpenAI e envia como nota de voz no WhatsApp
   fastify.post('/api/whatsapp/send-audio-tts', async (
-    request: FastifyRequest<{ Body: { to: string; text: string; voice?: string; style?: string } }>,
+    request: FastifyRequest<{ Body: { to: string; text: string; voice?: string; style?: string; idempotencyKey?: string } }>,
     reply: FastifyReply,
   ) => {
     const { to, text, voice, style } = request.body || {}
     if (!to || !text) return reply.status(400).send({ success: false, error: 'Campos "to" e "text" obrigatórios' })
     try {
       const audio = await speech!.textToSpeech(text, { voice, style: style as any })
-      const r = await wa!.sendAudio(to, audio, 'audio/ogg')
-      return reply.send({ success: true, data: r })
+      const r = (process.env.WHATSAPP_PROVIDER || 'evolution') === 'evolution'
+        ? await outbox!.send({
+            instanceName: evolution!.getDefaultInstance(),
+            toNumber: to,
+            type: 'audio',
+            mediaBase64: audio.toString('base64'),
+            mediaMime: 'audio/ogg',
+            idempotencyKey: request.body.idempotencyKey,
+          })
+        : await wa!.sendAudio(to, audio, 'audio/ogg')
+      return sendOutcome(reply, r)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro'
       return reply.status(500).send({ success: false, error: msg })
@@ -241,7 +541,7 @@ export default async function whatsappRoutes(fastify: FastifyInstance): Promise<
     }
   })
 
-  console.log('[WhatsApp] Rotas registradas: /api/whatsapp/{webhook,status,sessions,session/:waId,send-text,send-audio-tts,test-tts,test-brain}')
+  console.log('[WhatsApp] Rotas registradas: /api/whatsapp/{webhook,status,instances,conversations,documents,sessions,send-text,send-audio-tts,test-tts,test-brain}')
 }
 
 // ── Inbound handler ──────────────────────────────────────────
@@ -267,23 +567,23 @@ async function handleInbound(
     kind = 'text'
   } else if (msg.type === 'audio' && msg.audio) {
     kind = 'audio'
+    let audioFallback: string | undefined
     try {
-      const { buffer, mimeType } = await wa.downloadMedia(msg.audio.mediaId)
       if (!speech.isConfigured()) {
-        await wa.sendText(from, 'Recebi seu áudio, mas nossa transcrição não está configurada agora. Pode escrever por favor?')
-        return
-      }
-      const stt = await speech.speechToText(buffer, mimeType || msg.audio.mimeType, 'pt-BR')
-      texto = stt.texto || ''
-      audioTranscricao = texto
-      fastify.log.info({ from, confianca: stt.confianca, duracaoMs: stt.duracaoMs }, '[WhatsApp] STT result')
-      if (!texto.trim()) {
-        await wa.sendText(from, 'Não consegui entender o áudio. Pode repetir ou escrever?')
-        return
+        audioFallback = 'Recebi seu áudio, mas nossa transcrição não está configurada agora. Pode escrever por favor?'
+      } else {
+        const { buffer, mimeType } = await wa.downloadMedia(msg.audio.mediaId)
+        const stt = await speech.speechToText(buffer, mimeType || msg.audio.mimeType, 'pt-BR')
+        texto = stt.texto || ''
+        audioTranscricao = texto
+        if (!texto.trim()) audioFallback = 'Não consegui entender o áudio. Pode repetir ou escrever?'
       }
     } catch (err) {
       fastify.log.error({ err, from }, '[WhatsApp] STT falhou')
-      await wa.sendText(from, 'Tive um problema pra ouvir seu áudio. Pode escrever por favor?')
+      audioFallback = 'Tive um problema pra ouvir seu áudio. Pode escrever por favor?'
+    }
+    if (audioFallback) {
+      await wa.sendText(from, audioFallback)
       return
     }
   } else if (msg.type === 'interactive' && msg.buttonReply) {
@@ -302,22 +602,24 @@ async function handleInbound(
 
   // Ship reply: audio-in → audio-out when Speech is configured, otherwise fallback to text
   if (out.sendAsAudio && speech.isConfigured()) {
+    let audio: Buffer | undefined
     try {
-      const audio = await speech.textToSpeech(out.reply)
-      await wa.sendAudio(from, audio, 'audio/ogg')
-      return
+      audio = await speech.textToSpeech(out.reply)
     } catch (err) {
       fastify.log.warn({ err }, '[WhatsApp] TTS falhou, caindo pra texto')
       // fall through to text
+    }
+    if (audio) {
+      // Falha de envio pode acontecer depois da aceitação: não duplicar em texto.
+      await wa.sendAudio(from, audio, 'audio/ogg')
+      return
     }
   }
 
   // Text response (split if huge — WhatsApp hard-limit is 4096)
   const chunks = splitForWhatsApp(out.reply, 3800)
   for (const chunk of chunks) {
-    await wa.sendText(from, chunk).catch((err) => {
-      fastify.log.error({ err }, '[WhatsApp] sendText falhou')
-    })
+    await wa.sendText(from, chunk)
   }
 }
 

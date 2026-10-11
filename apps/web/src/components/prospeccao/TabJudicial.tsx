@@ -32,10 +32,10 @@ function KpiLine({
       ? 'text-emerald-700 dark:text-emerald-300'
       : accent === 'red'
       ? 'text-red-700 dark:text-red-300'
-      : 'text-aletis-grafite-escuro dark:text-white'
+      : 'text-foreground dark:text-white'
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50">{label}</p>
+      <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50">{label}</p>
       <p className={`font-display text-sm font-bold ${tone}`}>{value}</p>
     </div>
   )
@@ -69,7 +69,7 @@ export function TabJudicial({ lead }: { lead: LeadFull }) {
             {lead.judicialProfile.ativo ? `severidade ${lead.judicialProfile.severidade}` : 'sem crise judicial materializada'}
           </span>
         </div>
-        <p className="text-sm text-aletis-grafite-escuro dark:text-white mb-3">
+        <p className="text-sm text-foreground dark:text-white mb-3">
           {lead.judicialProfile.explicacao}
         </p>
         <div className="flex flex-wrap gap-2">
@@ -78,13 +78,13 @@ export function TabJudicial({ lead }: { lead: LeadFull }) {
               {JUDICIAL_LABEL[tipo]}
             </span>
           )) : (
-            <span className="text-xs text-aletis-grafite-medio dark:text-white/50">nenhum tipo judicial estruturado</span>
+            <span className="text-xs text-[var(--text-soft)] dark:text-white/50">nenhum tipo judicial estruturado</span>
           )}
         </div>
         {lead.judicialProfile.evidencias.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {lead.judicialProfile.evidencias.map((item) => (
-              <span key={item} className="px-2.5 py-1 rounded-full bg-white/60 dark:bg-black/20 border border-aletis-borda dark:border-white/10 text-xs text-aletis-grafite-escuro dark:text-white/80">
+              <span key={item} className="px-2.5 py-1 rounded-full bg-white/60 dark:bg-black/20 border border-aletis-borda dark:border-white/10 text-xs text-foreground dark:text-white/80">
                 {item}
               </span>
             ))}
@@ -95,12 +95,12 @@ export function TabJudicial({ lead }: { lead: LeadFull }) {
       {/* Sinais cruzados: PGFN x DOU x BrasilAPI x SICAR */}
       <div className="rounded-xl border border-aletis-borda dark:border-white/10 p-4">
         <p className="font-semibold text-sm mb-3 flex items-center gap-2">
-          <Archive size={14} className="text-aletis-verde" /> Sinais cruzados · mapa das fontes
+          <Archive size={14} className="text-foreground" /> Sinais cruzados · mapa das fontes
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
           {/* PGFN */}
           <div className={`p-3 rounded-lg border ${ajuizadasDebts.length > 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900' : 'bg-aletis-bege/40 dark:bg-white/5 border-aletis-borda dark:border-white/10'}`}>
-            <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-1">PGFN · execução fiscal</p>
+            <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50 mb-1">PGFN · execução fiscal</p>
             {ajuizadasDebts.length > 0 ? (
               <>
                 <p className="text-sm font-semibold text-red-700 dark:text-red-300">
@@ -118,16 +118,16 @@ export function TabJudicial({ lead }: { lead: LeadFull }) {
                 )}
               </>
             ) : (
-              <p className="text-xs text-aletis-grafite-medio dark:text-white/50">Nenhuma inscrição PGFN ajuizada</p>
+              <p className="text-xs text-[var(--text-soft)] dark:text-white/50">Nenhuma inscrição PGFN ajuizada</p>
             )}
           </div>
 
           {/* BrasilAPI · CNPJ */}
           <div className={`p-3 rounded-lg border ${sitEspecial || motivoCad ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900' : 'bg-aletis-bege/40 dark:bg-white/5 border-aletis-borda dark:border-white/10'}`}>
-            <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-1">BrasilAPI · situação cadastral</p>
+            <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50 mb-1">BrasilAPI · situação cadastral</p>
             {lead.cnpj ? (
               <>
-                <p className="text-sm text-aletis-grafite-escuro dark:text-white">
+                <p className="text-sm text-foreground dark:text-white">
                   {lead.cnpj.situacaoCadastral || '—'}
                 </p>
                 {sitEspecial && (
@@ -136,13 +136,13 @@ export function TabJudicial({ lead }: { lead: LeadFull }) {
                   </p>
                 )}
                 {motivoCad && (
-                  <p className="text-[11px] text-aletis-grafite-medio dark:text-white/60 mt-1">
+                  <p className="text-[11px] text-[var(--text-soft)] dark:text-white/60 mt-1">
                     Motivo: {motivoCad}
                   </p>
                 )}
               </>
             ) : (
-              <p className="text-xs text-aletis-grafite-medio dark:text-white/50">
+              <p className="text-xs text-[var(--text-soft)] dark:text-white/50">
                 CNPJ ainda não enriquecido · clique em "Enriquecer agora" para materializar
               </p>
             )}
@@ -150,7 +150,7 @@ export function TabJudicial({ lead }: { lead: LeadFull }) {
 
           {/* DOU */}
           <div className={`p-3 rounded-lg border ${rawJudicialSignals.length > 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900' : 'bg-aletis-bege/40 dark:bg-white/5 border-aletis-borda dark:border-white/10'}`}>
-            <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-1">DOU · publicações oficiais</p>
+            <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50 mb-1">DOU · publicações oficiais</p>
             {events.length > 0 ? (
               <p className="text-sm font-semibold text-red-700 dark:text-red-300">
                 {events.length} evento(s) estruturado(s) · ver abaixo
@@ -160,7 +160,7 @@ export function TabJudicial({ lead }: { lead: LeadFull }) {
                 Sinais brutos DOU presentes mas sem evento estruturado
               </p>
             ) : (
-              <p className="text-xs text-aletis-grafite-medio dark:text-white/50">
+              <p className="text-xs text-[var(--text-soft)] dark:text-white/50">
                 Sem publicação DOU recente associada
               </p>
             )}
@@ -168,20 +168,20 @@ export function TabJudicial({ lead }: { lead: LeadFull }) {
 
           {/* SICAR/CAR */}
           <div className={`p-3 rounded-lg border ${lead.car ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900' : 'bg-aletis-bege/40 dark:bg-white/5 border-aletis-borda dark:border-white/10'}`}>
-            <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-medio dark:text-white/50 mb-1">SICAR · patrimônio rural</p>
+            <p className="text-[11px] uppercase tracking-wider text-[var(--text-soft)] dark:text-white/50 mb-1">SICAR · patrimônio rural</p>
             {lead.car ? (
               <>
                 <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
                   CAR {lead.car.codImovel} · {fmtNum(lead.car.areaImovel)} ha
                 </p>
                 {lead.car.municipio && (
-                  <p className="text-[11px] text-aletis-grafite-medio dark:text-white/60 mt-1">
+                  <p className="text-[11px] text-[var(--text-soft)] dark:text-white/60 mt-1">
                     {lead.car.municipio}/{lead.car.uf} · {lead.car.condicaoCadastro || lead.car.statusAnalise || '—'}
                   </p>
                 )}
               </>
             ) : (
-              <p className="text-xs text-aletis-grafite-medio dark:text-white/50">
+              <p className="text-xs text-[var(--text-soft)] dark:text-white/50">
                 CAR não materializado · pode ancorar penhora/alienação judicial
               </p>
             )}
@@ -195,7 +195,7 @@ export function TabJudicial({ lead }: { lead: LeadFull }) {
           <Gavel size={14} className="text-red-600 dark:text-red-400" /> Eventos estruturados do DOU
         </p>
         {events.length === 0 ? (
-          <p className="text-xs text-aletis-grafite-medio dark:text-white/50">
+          <p className="text-xs text-[var(--text-soft)] dark:text-white/50">
             Nenhum evento judicial estruturado ainda. Quando DOU/BrasilAPI materializam sinais (recuperação judicial, falência, leilão, penhora), eles aparecem aqui com tipo, severidade, data e resumo auditável.
           </p>
         ) : (
@@ -206,24 +206,24 @@ export function TabJudicial({ lead }: { lead: LeadFull }) {
                 <div key={`${event.tipo}-${event.data}-${index}`} className={`rounded-lg border p-3 ${style.badge} ${style.border}`}>
                   <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${style.badge} ${style.text} ${style.border}`}>
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${style.badge} ${style.text} ${style.border}`}>
                         {JUDICIAL_LABEL[event.tipo]}
                       </span>
-                      <span className="text-[11px] text-aletis-grafite-medio dark:text-white/50">
+                      <span className="text-[11px] text-[var(--text-soft)] dark:text-white/50">
                         {event.fonte} · {fmtDate(event.data)}
                       </span>
                     </div>
-                    <span className={`text-[10px] font-semibold uppercase tracking-wider ${style.text}`}>
+                    <span className={`text-[11px] font-semibold uppercase tracking-wider ${style.text}`}>
                       {event.severidade}
                     </span>
                   </div>
-                  <p className="text-sm text-aletis-grafite-escuro dark:text-white/90">{event.resumo}</p>
+                  <p className="text-sm text-foreground dark:text-white/90">{event.resumo}</p>
                   {event.url && (
                     <a
                       href={event.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 mt-2 text-xs text-aletis-verde hover:underline"
+                      className="inline-flex items-center gap-1 mt-2 text-xs text-foreground hover:underline"
                     >
                       <Eye size={12} /> abrir publicação no DOU
                     </a>
@@ -238,7 +238,7 @@ export function TabJudicial({ lead }: { lead: LeadFull }) {
       {/* Leitura comercial */}
       <div className="rounded-xl border border-aletis-borda dark:border-white/10 p-4 bg-aletis-bege/40 dark:bg-white/5">
         <p className="font-semibold text-sm mb-2 flex items-center gap-2">
-          <Info size={14} className="text-aletis-verde" /> Leitura comercial
+          <Info size={14} className="text-foreground" /> Leitura comercial
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
           <KpiLine label="Dívida total" value={fmtBRL(lead.totalDivida)} />
@@ -255,17 +255,17 @@ export function TabJudicial({ lead }: { lead: LeadFull }) {
         <div className="rounded-xl border border-aletis-borda dark:border-white/10 p-4">
           <button
             onClick={() => setShowRaw((v) => !v)}
-            className="w-full flex items-center justify-between text-sm font-semibold text-aletis-grafite-escuro dark:text-white"
+            className="w-full flex items-center justify-between text-sm font-semibold text-foreground dark:text-white"
           >
             <span className="flex items-center gap-2">
-              <Hash size={14} className="text-aletis-grafite-medio" /> Sinais brutos para auditoria ({rawJudicialSignals.length})
+              <Hash size={14} className="text-[var(--text-soft)]" /> Sinais brutos para auditoria ({rawJudicialSignals.length})
             </span>
-            <span className="text-[11px] text-aletis-grafite-medio">{showRaw ? 'ocultar' : 'ver'}</span>
+            <span className="text-[11px] text-[var(--text-soft)]">{showRaw ? 'ocultar' : 'ver'}</span>
           </button>
           {showRaw && (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {rawJudicialSignals.map((s) => (
-                <code key={s} className="px-2 py-0.5 rounded bg-aletis-bege/50 dark:bg-white/5 border border-aletis-borda dark:border-white/10 text-[10px] font-mono text-aletis-grafite-escuro dark:text-white/70">
+                <code key={s} className="px-2 py-0.5 rounded bg-aletis-bege/50 dark:bg-white/5 border border-aletis-borda dark:border-white/10 text-[11px] font-mono text-foreground dark:text-white/70">
                   {s}
                 </code>
               ))}

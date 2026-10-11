@@ -6,7 +6,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiFetch } from '../../hooks/useApi'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts'
-import { X, Loader2, TrendingDown, TrendingUp, DollarSign } from 'lucide-react'
+import { Loader2, TrendingDown, TrendingUp, DollarSign } from 'lucide-react'
+import AppDialog from '../ui/AppDialog'
 
 interface Contrato {
   id: string
@@ -124,7 +125,7 @@ export default function SimuladorRenegociacao({ grupoId, onClose }: Props) {
   if (!contratos) {
     return (
       <ModalShell onClose={onClose} title="Simulador de Renegociação">
-        <div className="text-xs text-aletis-grafite-claro p-4 text-center">
+        <div className="text-xs text-muted-foreground p-4 text-center">
           <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
           Carregando contratos…
         </div>
@@ -135,7 +136,7 @@ export default function SimuladorRenegociacao({ grupoId, onClose }: Props) {
   if (contratos.length === 0) {
     return (
       <ModalShell onClose={onClose} title="Simulador de Renegociação">
-        <div className="text-xs text-aletis-grafite-claro p-4 text-center">
+        <div className="text-xs text-muted-foreground p-4 text-center">
           Nenhum contrato cadastrado. Vá em Endividamento e adicione um contrato primeiro.
         </div>
       </ModalShell>
@@ -155,7 +156,7 @@ export default function SimuladorRenegociacao({ grupoId, onClose }: Props) {
       <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
         {/* Seleção de contrato */}
         <div>
-          <label className="text-[10px] uppercase tracking-wider text-aletis-grafite-claro font-semibold">
+          <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
             Contrato a renegociar
           </label>
           <select
@@ -196,7 +197,7 @@ export default function SimuladorRenegociacao({ grupoId, onClose }: Props) {
                 originalValue={contratoAtual.prazoParcelas ?? 60}
               />
               <div>
-                <label className="text-[10px] uppercase tracking-wider text-aletis-grafite-claro font-semibold">
+                <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
                   Novo método (atual: {contratoAtual.metodoCalculo})
                 </label>
                 <select
@@ -247,7 +248,7 @@ export default function SimuladorRenegociacao({ grupoId, onClose }: Props) {
                 </div>
 
                 <div className="card-premium p-4">
-                  <h4 className="text-xs font-display font-semibold text-aletis-grafite-escuro mb-2">
+                  <h4 className="text-xs font-display font-semibold text-foreground mb-2">
                     📊 Comparação visual
                   </h4>
                   <ResponsiveContainer width="100%" height={200}>
@@ -256,21 +257,21 @@ export default function SimuladorRenegociacao({ grupoId, onClose }: Props) {
                       <YAxis tick={{ fontSize: 10 }} />
                       <Tooltip />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Line type="monotone" dataKey="original" stroke="#A0392F" strokeWidth={2} name="Original" />
-                      <Line type="monotone" dataKey="simulado" stroke="#0F4C35" strokeWidth={2.5} name="Simulado" />
+                      <Line type="monotone" dataKey="original" stroke="#a83232" strokeWidth={2} name="Original" />
+                      <Line type="monotone" dataKey="simulado" stroke="#17251b" strokeWidth={2.5} name="Simulado" />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
 
                 <div className="card-premium p-4 grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-red-700 font-semibold">📋 Original</p>
+                    <p className="text-[11px] uppercase tracking-wider text-red-700 font-semibold">📋 Original</p>
                     <p className="text-sm font-body mt-1">{resultado.original.metodo} · {resultado.original.prazo}m</p>
                     <p className="text-sm font-body">Total juros: {fmtBRL(resultado.original.totalJuros)}</p>
                     <p className="text-sm font-body">Total pago: {fmtBRL(resultado.original.totalParcelas)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-aletis-verde font-semibold">✨ Simulado</p>
+                    <p className="text-[11px] uppercase tracking-wider text-foreground font-semibold">✨ Simulado</p>
                     <p className="text-sm font-body mt-1">{resultado.simulado.metodo} · {resultado.simulado.prazo}m</p>
                     <p className="text-sm font-body">Total juros: {fmtBRL(resultado.simulado.totalJuros)}</p>
                     <p className="text-sm font-body">Total pago: {fmtBRL(resultado.simulado.totalParcelas)}</p>
@@ -301,10 +302,10 @@ function SliderField({
   return (
     <div>
       <div className="flex items-baseline justify-between">
-        <label className="text-[10px] uppercase tracking-wider text-aletis-grafite-claro font-semibold">
+        <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
           {label}
         </label>
-        <span className="text-[10px] text-aletis-grafite-claro">orig: {originalValue}{suffix}</span>
+        <span className="text-[11px] text-muted-foreground">orig: {originalValue}{suffix}</span>
       </div>
       <div className="flex items-center gap-2 mt-1">
         <input
@@ -324,8 +325,8 @@ function SliderField({
           className="w-20 px-2 py-1 text-sm text-right tabular-nums rounded border border-aletis-grafite-claro/20"
         />
       </div>
-      <div className="text-[10px] mt-0.5 tabular-nums">
-        Δ: <span className={delta > 0 ? 'text-amber-600' : delta < 0 ? 'text-aletis-verde' : 'text-aletis-grafite-claro'}>
+      <div className="text-[11px] mt-0.5 tabular-nums">
+        Δ: <span className={delta > 0 ? 'text-amber-600' : delta < 0 ? 'text-foreground' : 'text-muted-foreground'}>
           {delta > 0 ? '+' : ''}{delta.toFixed(2)}{suffix}
         </span>
       </div>
@@ -340,30 +341,26 @@ function ResultCard({ label, value, tone, icon }: { label: string; value: string
   return (
     <div className={`card-premium p-3 border-l-4 ${cls}`}>
       <div className="flex items-center gap-1.5">
-        {icon && <span className={tone === 'good' ? 'text-aletis-verde' : tone === 'bad' ? 'text-red-600' : ''}>{icon}</span>}
-        <p className="text-[10px] uppercase tracking-wider text-aletis-grafite-claro font-semibold">{label}</p>
+        {icon && <span className={tone === 'good' ? 'text-foreground' : tone === 'bad' ? 'text-red-600' : ''}>{icon}</span>}
+        <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</p>
       </div>
-      <p className="text-base font-display font-bold text-aletis-grafite-escuro tabular-nums mt-0.5">{value}</p>
+      <p className="text-base font-display font-semibold text-foreground tabular-nums mt-0.5">{value}</p>
     </div>
   )
 }
 
 function ModalShell({ onClose, title, subtitle, children }: { onClose: () => void; title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl">
-        <header className="px-5 py-4 border-b border-aletis-grafite-claro/15 flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-display font-semibold text-aletis-grafite-escuro">{title}</h2>
-            {subtitle && <p className="text-[11px] text-aletis-grafite-claro mt-0.5">{subtitle}</p>}
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-aletis-grafite-escuro/5 flex items-center justify-center">
-            <X className="w-5 h-5 text-aletis-grafite-claro" />
-          </button>
-        </header>
-        {children}
-      </div>
-    </div>
+    <AppDialog
+      title={title}
+      subtitle={subtitle}
+      icon={<DollarSign className="h-5 w-5" />}
+      onClose={onClose}
+      size="xl"
+      bodyClassName="p-0"
+    >
+      {children}
+    </AppDialog>
   )
 }
 

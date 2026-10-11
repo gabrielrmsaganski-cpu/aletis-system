@@ -7,6 +7,7 @@
 
 import axios, { type AxiosInstance } from 'axios';
 import NodeCache from 'node-cache';
+import { LastObservationStore } from './LastObservationStore.js';
 import type { DataSourceManager } from '../DataSourceManager.js';
 
 // ── Types ────────────────────────────────────────────────────
@@ -33,6 +34,9 @@ export interface PrecoConabResumo {
   estados: { uf: string; preco: number }[];
   fonte: 'api' | 'cache' | 'fallback';
   atualizadoEm: string;
+  coletadoEm?: string;
+  estado?: 'disponivel' | 'atrasado' | 'indisponivel';
+  historico?: { data: string; valor: string; fonte: string; praca: string; unidade: string }[];
 }
 
 export interface PrecosConabCompleto {
@@ -109,7 +113,7 @@ const PRODUCT_FILTERS: Record<string, ProductFilter> = {
   },
   feijao: {
     productName: 'FEIJAO',
-    classification: 'CORES',
+    classification: 'COMUM CORES',
     nivelComercializacao: 'RECEBIDO',
     displayName: 'Feijão Cores',
     unidade: 'R$/saca 60kg',
@@ -117,371 +121,197 @@ const PRODUCT_FILTERS: Record<string, ProductFilter> = {
   },
 };
 
-// ── Fallback Data (April 2026 real CONAB values) ────────────
+// As observações do arquivo são semanais e os valores originais são em R$/kg.
+export function conabWeekEnd(semana: string): string | null {
+  const dates = [...semana.matchAll(/(\d{2})[-/](\d{2})[-/](\d{4})/g)];
+  const last = dates.at(-1);
+  if (!last) return null;
+  const iso = `${last[3]}-${last[2]}-${last[1]}`;
+  return Number.isFinite(Date.parse(iso)) && new Date(iso).toISOString().slice(0, 10) === iso ? iso : null;
+}
 
-const FALLBACK_PRECOS: Record<string, PrecoConabResumo> = {
-  soja: {
-    produto: 'Soja em Grãos', unidade: 'R$/saca 60kg',
-    precoMedio: 115.20, precoMinimo: 106.20, precoMaximo: 121.80,
-    semana: '06-04-2026 - 10-04-2026',
-    estados: [
-      { uf: 'MT', preco: 108.00 }, { uf: 'PR', preco: 117.00 },
-      { uf: 'GO', preco: 109.80 }, { uf: 'SP', preco: 115.20 },
-      { uf: 'RS', preco: 112.80 }, { uf: 'MS', preco: 111.00 },
-    ],
-    fonte: 'fallback', atualizadoEm: '2026-04-10',
-  },
-  milho: {
-    produto: 'Milho em Grãos', unidade: 'R$/saca 60kg',
-    precoMedio: 59.40, precoMinimo: 55.80, precoMaximo: 64.80,
-    semana: '06-04-2026 - 10-04-2026',
-    estados: [
-      { uf: 'MT', preco: 55.80 }, { uf: 'PR', preco: 58.80 },
-      { uf: 'GO', preco: 57.60 }, { uf: 'SP', preco: 59.40 },
-      { uf: 'RS', preco: 57.60 }, { uf: 'MS', preco: 58.20 },
-    ],
-    fonte: 'fallback', atualizadoEm: '2026-04-10',
-  },
-  cafe_arabica: {
-    produto: 'Café Arábica', unidade: 'R$/saca 60kg',
-    precoMedio: 1224.00, precoMinimo: 1224.00, precoMaximo: 1322.40,
-    semana: '06-04-2026 - 10-04-2026',
-    estados: [{ uf: 'ES', preco: 1224.00 }, { uf: 'MG', preco: 1322.40 }],
-    fonte: 'fallback', atualizadoEm: '2026-04-10',
-  },
-  algodao: {
-    produto: 'Algodão em Pluma', unidade: 'R$/arroba',
-    precoMedio: 122.55, precoMinimo: 115.05, precoMaximo: 130.05,
-    semana: '06-04-2026 - 10-04-2026',
-    estados: [
-      { uf: 'MT', preco: 115.05 }, { uf: 'BA', preco: 130.05 },
-      { uf: 'GO', preco: 120.00 },
-    ],
-    fonte: 'fallback', atualizadoEm: '2026-04-10',
-  },
-  trigo: {
-    produto: 'Trigo', unidade: 'R$/saca 60kg',
-    precoMedio: 60.60, precoMinimo: 59.40, precoMaximo: 64.20,
-    semana: '06-04-2026 - 10-04-2026',
-    estados: [
-      { uf: 'RS', preco: 59.40 }, { uf: 'PR', preco: 60.60 },
-      { uf: 'SC', preco: 61.20 }, { uf: 'SP', preco: 64.20 },
-    ],
-    fonte: 'fallback', atualizadoEm: '2026-04-10',
-  },
-  arroz: {
-    produto: 'Arroz Longo Fino', unidade: 'R$/saca 50kg',
-    precoMedio: 67.50, precoMinimo: 55.00, precoMaximo: 77.00,
-    semana: '06-04-2026 - 10-04-2026',
-    estados: [
-      { uf: 'RS', preco: 55.50 }, { uf: 'SC', preco: 58.00 },
-      { uf: 'MT', preco: 73.00 }, { uf: 'GO', preco: 71.00 },
-    ],
-    fonte: 'fallback', atualizadoEm: '2026-04-10',
-  },
-  feijao: {
-    produto: 'Feijão Cores', unidade: 'R$/saca 60kg',
-    precoMedio: 270.00, precoMinimo: 240.00, precoMaximo: 300.00,
-    semana: '06-04-2026 - 10-04-2026',
-    estados: [
-      { uf: 'PR', preco: 264.00 }, { uf: 'MG', preco: 276.00 },
-      { uf: 'GO', preco: 258.00 }, { uf: 'SP', preco: 282.00 },
-    ],
-    fonte: 'fallback', atualizadoEm: '2026-04-10',
-  },
-};
+// Aritmética monetária em milionésimos de real; number só na saída legada.
+function parseKgPrice(value: string): bigint | null {
+  const decimal = value.includes(',') ? value.replace(/\./g, '').replace(',', '.') : value;
+  if (!/^\d+(?:\.\d{1,6})?$/.test(decimal)) return null;
+  const [whole, fraction = ''] = decimal.split('.');
+  const scaled = BigInt(whole) * 1000000n + BigInt(fraction.padEnd(6, '0'));
+  return scaled > 0n ? scaled : null;
+}
+function average(values: bigint[]): bigint {
+  return (values.reduce((sum, value) => sum + value, 0n) + BigInt(values.length) / 2n) / BigInt(values.length);
+}
+function priceString(micros: bigint): string {
+  const cents = (micros + 5000n) / 10000n;
+  return `${cents / 100n}.${(cents % 100n).toString().padStart(2, '0')}`;
+}
 
-// ── Service Class ────────────────────────────────────────────
+function normalized(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+}
+
+interface ConabColumns {
+  product: number;
+  classification: number;
+  productId: number;
+  uf: number;
+  week: number;
+  level: number;
+  price: number;
+  unit: number;
+  priceIsPerKg: boolean;
+}
+
+/** O arquivo oficial usa id_produto na terceira coluna e declara R$/kg no cabeçalho do valor. */
+function conabColumns(header: string): ConabColumns {
+  const names = header.replace(/^\uFEFF/, '').split(';').map(normalized);
+  const index = (...aliases: string[]) => {
+    const matches = names.flatMap((name, i) => aliases.includes(name) ? [i] : []);
+    if (matches.length > 1) throw new Error('Cabeçalho CONAB ambíguo');
+    return matches[0] ?? -1;
+  };
+  const perKg = index('VALOR_PRODUTO_KG');
+  const columns: ConabColumns = {
+    product: index('PRODUTO'),
+    classification: index('CLASSIFICAO_PRODUTO', 'CLASSIFICACAO_PRODUTO', 'CLASSIFICACAO'),
+    productId: index('ID_PRODUTO'),
+    uf: index('UF'),
+    week: names.includes('DATA_INICIAL_FINAL_SEMANA') ? index('DATA_INICIAL_FINAL_SEMANA') : index('SEMANA'),
+    level: index('DSC_NIVEL_COMERCIALIZACAO', 'NIVEL_COMERCIALIZACAO', 'NIVEL'),
+    price: perKg >= 0 ? perKg : index('VALOR'),
+    unit: index('UNIDADE'),
+    priceIsPerKg: perKg >= 0,
+  };
+  if ([columns.product, columns.classification, columns.uf, columns.week, columns.level, columns.price].some(i => i < 0)
+      || (!columns.priceIsPerKg && columns.unit < 0)) {
+    throw new Error('Arquivo CONAB sem cabeçalhos de produto, praça, semana e valor por kg');
+  }
+  return columns;
+}
+
+function decodeConab(data: ArrayBuffer | Uint8Array | string): string {
+  if (typeof data === 'string') return data;
+  // O portal já publicou latin1 apesar de declarar UTF-8 no Content-Type.
+  const bytes = data instanceof ArrayBuffer ? Buffer.from(data) : Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+  catch { return bytes.toString('latin1'); }
+}
 
 export class ConabPrecosService {
-  private readonly cache: NodeCache;
+  private readonly cache = new NodeCache({ stdTTL: 3600, checkperiod: 300 });
   private readonly http: AxiosInstance;
-  private readonly manager: DataSourceManager;
-
-  constructor(manager: DataSourceManager) {
-    this.manager = manager;
-
-    this.cache = new NodeCache({
-      stdTTL: 3600, // CONAB updates weekly, cache 1h
-      checkperiod: 300,
-      useClones: false,
-    });
-
-    this.http = axios.create({
-      timeout: 15000, // large file
-      headers: {
-        'User-Agent': 'ALETIS-System/1.0',
-        'Accept': 'text/plain,text/csv,*/*',
-      },
-      responseType: 'arraybuffer', // to handle Latin1 encoding
-    });
+  private readonly observations = new LastObservationStore('conab');
+  private lastReal: PrecosConabCompleto | null = this.observations.get<PrecosConabCompleto>('all') || null;
+  private inFlight: Promise<PrecosConabCompleto> | null = null;
+  constructor(private readonly manager: DataSourceManager) {
+    this.http = axios.create({ timeout: 15000, responseType: 'arraybuffer', headers: { 'User-Agent': 'ALETIS-System/1.0' } });
   }
 
-  // ── Public: All Commodity Prices ────────────────────────────
-
-  async getAllPrecos(): Promise<PrecosConabCompleto> {
-    const cacheKey = 'conab_precos_all';
-    const cached = this.cache.get<PrecosConabCompleto>(cacheKey);
-    if (cached) {
-      console.log('[CONAB] Preços retornados do cache');
-      return { ...cached, fonte: 'cache' };
-    }
-
-    const startTime = Date.now();
-    try {
-      console.log('[CONAB] Baixando PrecosSemanalUF.txt...');
-      const response = await this.http.get(
-        'https://portaldeinformacoes.conab.gov.br/downloads/arquivos/PrecosSemanalUF.txt'
-      );
-      const latencia = Date.now() - startTime;
-
-      // Decode Latin1 to UTF-8
-      const buffer = Buffer.from(response.data);
-      const text = buffer.toString('latin1');
-      const lines = text.split('\n');
-
-      console.log(`[CONAB] Arquivo baixado: ${lines.length} linhas em ${latencia}ms`);
-
-      if (lines.length < 100) {
-        throw new Error(`Arquivo CONAB muito pequeno: ${lines.length} linhas`);
-      }
-
-      // Find the most recent week in the data
-      const latestWeek = this.findLatestWeek(lines);
-      console.log(`[CONAB] Semana mais recente: ${latestWeek}`);
-
-      // Parse each commodity
-      const result: PrecosConabCompleto = {
-        soja: this.parseCommodity(lines, 'soja', latestWeek),
-        milho: this.parseCommodity(lines, 'milho', latestWeek),
-        cafe_arabica: this.parseCommodity(lines, 'cafe_arabica', latestWeek),
-        algodao: this.parseCommodity(lines, 'algodao', latestWeek),
-        trigo: this.parseCommodity(lines, 'trigo', latestWeek),
-        arroz: this.parseCommodity(lines, 'arroz', latestWeek),
-        feijao: this.parseCommodity(lines, 'feijao', latestWeek),
-        fonte: 'api',
-        atualizadoEm: new Date().toISOString(),
+  private cachedResult(data: PrecosConabCompleto, stale = false): PrecosConabCompleto {
+    const result = { ...data, fonte: 'cache' as const };
+    for (const key of Object.keys(PRODUCT_FILTERS)) {
+      const item = data[key as keyof PrecosConabCompleto] as PrecoConabResumo;
+      (result as unknown as Record<string, unknown>)[key] = item.fonte === 'fallback' ? item : {
+        ...item, fonte: 'cache', estado: stale ? 'atrasado' : item.estado,
       };
-
-      this.manager.updateSourceStatus('conab_precos', 'online', latencia);
-      this.cache.set(cacheKey, result, 3600);
-
-      const commoditiesOk = Object.entries(result)
-        .filter(([k, v]) => k !== 'fonte' && k !== 'atualizadoEm' && (v as PrecoConabResumo).fonte === 'api')
-        .length;
-      console.log(`[CONAB] ${commoditiesOk}/7 commodities com dados reais da API`);
-
-      return result;
-    } catch (error) {
-      const latencia = Date.now() - startTime;
-      const msg = error instanceof Error ? error.message : 'Erro desconhecido';
-      this.manager.updateSourceStatus('conab_precos', 'offline', latencia, msg);
-      console.warn(`[CONAB] Erro: ${msg}. Usando fallback.`);
-
-      const fallback: PrecosConabCompleto = {
-        soja: FALLBACK_PRECOS.soja,
-        milho: FALLBACK_PRECOS.milho,
-        cafe_arabica: FALLBACK_PRECOS.cafe_arabica,
-        algodao: FALLBACK_PRECOS.algodao,
-        trigo: FALLBACK_PRECOS.trigo,
-        arroz: FALLBACK_PRECOS.arroz,
-        feijao: FALLBACK_PRECOS.feijao,
-        fonte: 'fallback',
-        atualizadoEm: new Date().toISOString(),
-      };
-      this.cache.set(cacheKey, fallback, 300);
-      return fallback;
     }
-  }
-
-  // ── Public: Single Commodity ────────────────────────────────
-
-  async getPreco(commodity: string): Promise<PrecoConabResumo> {
-    const all = await this.getAllPrecos();
-    const key = commodity.toLowerCase().replace(/[- ]/g, '_') as keyof PrecosConabCompleto;
-    const data = all[key];
-    if (data && typeof data === 'object' && 'produto' in data) {
-      return data as PrecoConabResumo;
-    }
-    throw new Error(`Commodity '${commodity}' não disponível. Disponíveis: soja, milho, cafe_arabica, algodao, trigo, arroz, feijao`);
-  }
-
-  // ── Public: Prices by UF ───────────────────────────────────
-
-  async getPrecosPorUF(uf: string): Promise<Record<string, { produto: string; preco: number; unidade: string }>> {
-    const all = await this.getAllPrecos();
-    const ufUpper = uf.toUpperCase();
-    const result: Record<string, { produto: string; preco: number; unidade: string }> = {};
-
-    for (const [key, filter] of Object.entries(PRODUCT_FILTERS)) {
-      const data = all[key as keyof PrecosConabCompleto];
-      if (data && typeof data === 'object' && 'estados' in data) {
-        const resumo = data as PrecoConabResumo;
-        const estado = resumo.estados.find(e => e.uf === ufUpper);
-        if (estado) {
-          result[key] = {
-            produto: filter.displayName,
-            preco: estado.preco,
-            unidade: filter.unidade,
-          };
-        }
-      }
-    }
-
     return result;
   }
 
-  // ── Private: Find Latest Week ──────────────────────────────
+  async getAllPrecos(): Promise<PrecosConabCompleto> {
+    const cached = this.cache.get<PrecosConabCompleto>('all');
+    if (cached) return this.cachedResult(cached);
+    if (!this.inFlight) {
+      this.inFlight = this.fetchAllPrecos().finally(() => { this.inFlight = null; });
+    }
+    return this.inFlight;
+  }
 
-  private findLatestWeek(lines: string[]): string {
-    let latestYear = 0;
-    let latestMonth = 0;
-    let latestWeekNum = 0;
-    let latestWeekStr = '';
-
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(';');
-      if (cols.length < 9) continue;
-
-      const ano = parseInt(cols[5], 10);
-      const mes = parseInt(cols[6], 10);
-      const semanaNum = parseInt(cols[8], 10);
-
-      if (ano > latestYear || (ano === latestYear && mes > latestMonth) ||
-          (ano === latestYear && mes === latestMonth && semanaNum > latestWeekNum)) {
-        latestYear = ano;
-        latestMonth = mes;
-        latestWeekNum = semanaNum;
-        latestWeekStr = (cols[7] || '').trim();
+  private async fetchAllPrecos(): Promise<PrecosConabCompleto> {
+    const start = Date.now();
+    try {
+      const response = await this.http.get('https://portaldeinformacoes.conab.gov.br/downloads/arquivos/PrecosSemanalUF.txt');
+      const lines = decodeConab(response.data).split(/\r?\n/);
+      if (lines.length < 2 || !lines[0].includes(';') || /<html/i.test(lines[0])) throw new Error('Arquivo CONAB inválido');
+      const columns = conabColumns(lines[0]);
+      const rows = lines.slice(1).map(line => line.split(';').map(v => v.trim()));
+      const requiredLength = Math.max(...Object.values(columns).filter((v): v is number => typeof v === 'number')) + 1;
+      const today = new Date().toISOString().slice(0, 10);
+      const result = { fonte: 'api', atualizadoEm: '' } as PrecosConabCompleto;
+      const coletadoEm = new Date().toISOString();
+      for (const [key, filter] of Object.entries(PRODUCT_FILTERS)) {
+        const weeks = new Map<string, { semana: string; values: Map<string, bigint[]>; observations: Map<string, bigint>; conflicting: boolean }>();
+        for (const c of rows) {
+          if (c.length < requiredLength || normalized(c[columns.product]) !== filter.productName ||
+              (filter.classification && !normalized(c[columns.classification]).startsWith(filter.classification)) ||
+              !normalized(c[columns.level]).includes(filter.nivelComercializacao)) continue;
+          // Unidade explícita, quando presente, não pode contradizer o cabeçalho por kg.
+          if (columns.unit >= 0 && !/^(?:1\s*)?kg$/i.test(c[columns.unit])) continue;
+          const date = conabWeekEnd(c[columns.week]);
+          const valor = parseKgPrice(c[columns.price]);
+          const uf = c[columns.uf];
+          if (!date || date > today || valor == null || !/^[A-Z]{2}$/.test(uf)) continue;
+          if (!weeks.has(date)) weeks.set(date, { semana: c[columns.week], values: new Map(), observations: new Map(), conflicting: false });
+          const week = weeks.get(date)!;
+          const identity = [normalized(c[columns.product]), normalized(c[columns.classification]), columns.productId >= 0 ? c[columns.productId] : '', 'KG', uf, normalized(c[columns.level])].join('|');
+          const previous = week.observations.get(identity);
+          if (previous !== undefined) {
+            // Repetir a mesma linha não altera seu peso; valores conflitantes não formam uma média confiável.
+            if (previous !== valor) week.conflicting = true;
+            continue;
+          }
+          week.observations.set(identity, valor);
+          const values = week.values;
+          values.set(uf, [...(values.get(uf) || []), valor]);
+        }
+        const dates = [...weeks.keys()].filter(date => !weeks.get(date)!.conflicting).sort();
+        const date = dates.at(-1);
+        let item: PrecoConabResumo = { produto: filter.displayName, unidade: filter.unidade, precoMedio: 0, precoMinimo: 0, precoMaximo: 0, semana: '', estados: [], fonte: 'fallback', atualizadoEm: '', estado: 'indisponivel', historico: [] };
+        if (date) {
+          const latest = weeks.get(date)!;
+          const ufs = [...latest.values.keys()].sort();
+          const estados = ufs.map(uf => ({ uf, preco: Number(priceString(average(latest.values.get(uf)!) * BigInt(filter.conversao))) }));
+          const praca = `Média das UFs: ${ufs.join(', ')}`;
+          const latestCoverage = [...latest.observations.keys()].sort().join(';');
+          const historico = dates.filter(d => [...weeks.get(d)!.observations.keys()].sort().join(';') === latestCoverage)
+            .slice(-60).map(data => ({ data, valor: priceString(average(ufs.map(uf => average(weeks.get(data)!.values.get(uf)!) * BigInt(filter.conversao)))), fonte: 'CONAB', praca, unidade: filter.unidade }));
+          item = { produto: filter.displayName, unidade: filter.unidade, precoMedio: Number(historico.at(-1)!.valor), precoMinimo: Math.min(...estados.map(e => e.preco)), precoMaximo: Math.max(...estados.map(e => e.preco)), semana: latest.semana, estados, fonte: 'api', atualizadoEm: date, coletadoEm, estado: Date.now() - Date.parse(date) > 14 * 86400000 ? 'atrasado' : 'disponivel', historico };
+        } else if (this.lastReal) {
+          const previous = this.lastReal[key as keyof PrecosConabCompleto] as PrecoConabResumo;
+          if (previous.fonte !== 'fallback') item = { ...previous, fonte: 'cache', estado: 'atrasado' };
+        }
+        (result as unknown as Record<string, unknown>)[key] = item;
       }
+      const items = Object.keys(PRODUCT_FILTERS).map(k => result[k as keyof PrecosConabCompleto] as PrecoConabResumo);
+      const valid = items.filter(v => v.fonte === 'api');
+      if (!valid.length) throw new Error('CONAB sem observações válidas com unidade e data');
+      result.atualizadoEm = valid.map(v => v.atualizadoEm).sort().at(-1)!;
+      this.lastReal = result;
+      this.observations.set('all', result);
+      this.cache.set('all', result);
+      this.manager.updateSourceStatus('conab_precos', valid.length === items.length ? 'online' : 'degraded', Date.now() - start, valid.length === items.length ? undefined : 'Cobertura parcial de commodities', { observadoEm: result.atualizadoEm, coletadoEm });
+      return result;
+    } catch (error) {
+      this.manager.updateSourceStatus('conab_precos', 'degraded', Date.now() - start, error instanceof Error ? error.message : 'Falha CONAB');
+      if (this.lastReal) return this.cachedResult(this.lastReal, true);
+      throw new Error('Preços CONAB indisponíveis; nenhuma observação real preservada.');
     }
-
-    return latestWeekStr;
   }
-
-  // ── Private: Parse Single Commodity ────────────────────────
-
-  private parseCommodity(lines: string[], key: string, targetWeek: string): PrecoConabResumo {
-    const filter = PRODUCT_FILTERS[key];
-    if (!filter) return FALLBACK_PRECOS[key] || this.emptyResumo(key);
-
-    const matches: { uf: string; valorKg: number }[] = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(';');
-      if (cols.length < 11) continue;
-
-      const produto = (cols[0] || '').trim().toUpperCase();
-      const classificacao = (cols[1] || '').trim().toUpperCase();
-      const uf = (cols[3] || '').trim().toUpperCase();
-      const semana = (cols[7] || '').trim();
-      const nivelComercializacao = (cols[9] || '').trim().toUpperCase();
-      const valorStr = (cols[10] || '').trim().replace(',', '.');
-      const valor = parseFloat(valorStr);
-
-      if (isNaN(valor) || valor <= 0) continue;
-      if (semana !== targetWeek) continue;
-      if (!produto.startsWith(filter.productName)) continue;
-      if (filter.classification && !classificacao.startsWith(filter.classification)) continue;
-      if (!nivelComercializacao.includes(filter.nivelComercializacao)) continue;
-
-      matches.push({ uf, valorKg: valor });
-    }
-
-    if (matches.length === 0) {
-      // Try previous week: search for the second most recent week matching this product
-      const prevWeekMatches = this.parseCommodityPrevWeek(lines, filter);
-      if (prevWeekMatches.length > 0) {
-        return this.buildResumo(prevWeekMatches, filter, key, 'api');
-      }
-      console.warn(`[CONAB] Sem dados para ${key} na semana ${targetWeek}, usando fallback`);
-      return FALLBACK_PRECOS[key] || this.emptyResumo(key);
-    }
-
-    return this.buildResumo(matches, filter, key, 'api');
+  async getPreco(commodity: string): Promise<PrecoConabResumo> {
+    const all = await this.getAllPrecos();
+    const key = commodity.toLowerCase().replace(/[- ]/g, '_');
+    const item = all[key as keyof PrecosConabCompleto];
+    if (!item || typeof item !== 'object' || item.fonte === 'fallback') throw new Error('Commodity indisponível');
+    return item;
   }
-
-  private parseCommodityPrevWeek(lines: string[], filter: ProductFilter): { uf: string; valorKg: number }[] {
-    // Find the most recent week that has data for this specific product
-    const weekValues = new Map<string, { uf: string; valorKg: number }[]>();
-
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(';');
-      if (cols.length < 11) continue;
-
-      const produto = (cols[0] || '').trim().toUpperCase();
-      const classificacao = (cols[1] || '').trim().toUpperCase();
-      const uf = (cols[3] || '').trim().toUpperCase();
-      const ano = parseInt(cols[5], 10);
-      const mes = parseInt(cols[6], 10);
-      const semana = (cols[7] || '').trim();
-      const nivelComercializacao = (cols[9] || '').trim().toUpperCase();
-      const valorStr = (cols[10] || '').trim().replace(',', '.');
-      const valor = parseFloat(valorStr);
-
-      if (isNaN(valor) || valor <= 0) continue;
-      if (ano < 2026 || (ano === 2026 && mes < 3)) continue; // only recent data
-      if (!produto.startsWith(filter.productName)) continue;
-      if (filter.classification && !classificacao.startsWith(filter.classification)) continue;
-      if (!nivelComercializacao.includes(filter.nivelComercializacao)) continue;
-
-      if (!weekValues.has(semana)) weekValues.set(semana, []);
-      weekValues.get(semana)!.push({ uf, valorKg: valor });
+  async getPrecosPorUF(uf: string): Promise<Record<string, { produto: string; preco: number; unidade: string }>> {
+    const all = await this.getAllPrecos();
+    const result: Record<string, { produto: string; preco: number; unidade: string }> = {};
+    for (const key of Object.keys(PRODUCT_FILTERS)) {
+      const item = all[key as keyof PrecosConabCompleto] as PrecoConabResumo;
+      const state = item.estados.find(e => e.uf === uf.toUpperCase());
+      if (state && item.fonte !== 'fallback') result[key] = { produto: item.produto, preco: state.preco, unidade: item.unidade };
     }
-
-    // Get the most recent week's data
-    const weeks = Array.from(weekValues.keys()).sort().reverse();
-    return weeks.length > 0 ? weekValues.get(weeks[0])! : [];
-  }
-
-  private buildResumo(
-    matches: { uf: string; valorKg: number }[],
-    filter: ProductFilter,
-    key: string,
-    fonte: 'api' | 'cache' | 'fallback'
-  ): PrecoConabResumo {
-    // Aggregate by UF (take latest/single value per UF)
-    const byUf = new Map<string, number>();
-    for (const m of matches) {
-      byUf.set(m.uf, m.valorKg);
-    }
-
-    const estados = Array.from(byUf.entries())
-      .map(([uf, valorKg]) => ({
-        uf,
-        preco: Number((valorKg * filter.conversao).toFixed(2)),
-      }))
-      .sort((a, b) => a.uf.localeCompare(b.uf));
-
-    const precos = estados.map(e => e.preco);
-    const precoMedio = Number((precos.reduce((s, p) => s + p, 0) / precos.length).toFixed(2));
-    const precoMinimo = Math.min(...precos);
-    const precoMaximo = Math.max(...precos);
-
-    return {
-      produto: filter.displayName,
-      unidade: filter.unidade,
-      precoMedio,
-      precoMinimo,
-      precoMaximo,
-      semana: matches.length > 0 ? 'semana corrente' : '',
-      estados,
-      fonte,
-      atualizadoEm: new Date().toISOString(),
-    };
-  }
-
-  private emptyResumo(key: string): PrecoConabResumo {
-    return {
-      produto: key,
-      unidade: 'R$/unidade',
-      precoMedio: 0,
-      precoMinimo: 0,
-      precoMaximo: 0,
-      semana: '',
-      estados: [],
-      fonte: 'fallback',
-      atualizadoEm: new Date().toISOString(),
-    };
+    return result;
   }
 }

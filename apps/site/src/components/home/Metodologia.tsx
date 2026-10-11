@@ -9,32 +9,32 @@ const etapas = [
     titulo: 'Diagnóstico',
     prazo: '72h',
     descricao:
-      'Coleta dos contratos, planilhas e extratos. Recálculo integral, mapeamento de abusividade e identificação de pontos revisionais.',
-    pontos: ['Contratos analisados peça a peça', 'Memória de cálculo auditável', 'Relatório executivo'],
+      'Recebemos contratos, extratos, garantias e informações de safra. A primeira entrega separa fato, dúvida e prioridade.',
+    pontos: ['Contratos e garantias organizados', 'Mapa de credores', 'Resumo executivo'],
   },
   {
     numero: '02',
     titulo: 'Estratégia',
     prazo: '1 semana',
     descricao:
-      'Construção do cenário alvo. Projetamos fluxo de caixa com stress de safra, definimos deságio justo e desenhamos ordem de negociação.',
-    pontos: ['DSCR alvo ≥ 1.25', 'Stress de −15% no preço', 'Priorização por credor'],
+      'Montamos o cenário alvo, testamos fluxo de caixa sob pressão e definimos a ordem de conversa com cada credor.',
+    pontos: ['Cenário central e stress', 'Capacidade de pagamento', 'Ordem de negociação'],
   },
   {
     numero: '03',
     titulo: 'Negociação',
     prazo: '60–90d',
     descricao:
-      'Vamos à mesa com os credores — um ou todos, simultaneamente. Apresentamos proposta com memória pública e empurramos até o acordo.',
-    pontos: ['Acordos extrajudiciais', 'Termo de renegociação', 'Transação excepcional quando cabível'],
+      'A proposta é apresentada com racional financeiro claro. Cada ajuste volta para o modelo antes de ir para contrato.',
+    pontos: ['Acordos extrajudiciais', 'Termo de renegociação', 'Transação quando cabível'],
   },
   {
     numero: '04',
     titulo: 'Execução',
     prazo: 'Contínuo',
     descricao:
-      'Minutas prontas, assinatura eletrônica e acompanhamento pós-acordo. Reportamos DSCR mensal e gatilhos de atenção ao cliente.',
-    pontos: ['Contratos gerados e revisados', 'Assinatura digital ICP-Brasil', 'Monitoramento contínuo'],
+      'Depois do aceite, acompanhamos a formalização, os vencimentos e os sinais de atenção que podem exigir nova conversa.',
+    pontos: ['Contratos revisados', 'Assinatura digital', 'Acompanhamento de caixa'],
   },
 ]
 
@@ -48,14 +48,14 @@ export function Metodologia() {
           </Reveal>
           <Reveal delay={80}>
             <h2 className="mt-6 display-lg text-white">
-              Quatro etapas, uma{' '}
-              <span className="italic text-aletis-dourado">engenharia só</span>.
+              Quatro etapas para sair do ruído e chegar a uma{' '}
+              <span className="italic text-aletis-dourado">decisão executável</span>.
             </h2>
           </Reveal>
           <Reveal delay={160}>
             <p className="mt-5 text-white/65 md:text-lg">
-              Uma ordem clara, com entregáveis mensuráveis em cada estágio. O produtor
-              sabe onde está, o que vem a seguir e quando espera fechar o acordo.
+              Cada fase tem saída objetiva. O cliente sabe o que foi analisado,
+              o que ainda falta e qual decisão está pronta para ser tomada.
             </p>
           </Reveal>
         </div>

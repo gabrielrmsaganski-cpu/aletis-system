@@ -1,14 +1,14 @@
 // ============================================================
 // Tools ALIX — Inventário patrimonial + Custo operacional
 // ============================================================
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 import { getInventarioService } from '../../inventario/InventarioService.js'
 import { getCustoOperacionalService, type CulturaAgro } from '../../inventario/CustoOperacionalService.js'
 import type { TipoPatrimonio } from '../../inventario/types.js'
 
-export function buildInventarioTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildInventarioTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   // ── Listar patrimônio completo ─────────────────────────
   tools.push({

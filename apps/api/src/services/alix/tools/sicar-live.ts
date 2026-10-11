@@ -7,12 +7,12 @@
 // Custo: cada chamada consome ~US$ 0.003 do saldo 2captcha.
 // Status: degrada com graça quando portal offline (aviso Dataprev).
 // ============================================================
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 import { getSICARClient } from '../../prospeccao/SICARClient.js'
 
-export function buildSicarLiveTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildSicarLiveTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   tools.push({
     name: 'sicar_status_live',

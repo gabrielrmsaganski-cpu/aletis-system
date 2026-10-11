@@ -4,7 +4,8 @@
 // ============================================================
 import { useState } from 'react'
 import { apiFetch } from '../../hooks/useApi'
-import { X, Upload, Check, Loader2, AlertTriangle, Banknote } from 'lucide-react'
+import { Upload, Check, Loader2, Banknote } from 'lucide-react'
+import AppDialog from '../ui/AppDialog'
 
 interface OfxParsed {
   banco?: string
@@ -83,33 +84,25 @@ export default function ImportOfxModal({ grupoId, onClose, onSuccess }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
-        <header className="px-5 py-4 border-b border-aletis-grafite-claro/15 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Banknote className="w-5 h-5 text-aletis-verde" />
-            <div>
-              <h2 className="text-base font-display font-semibold text-aletis-grafite-escuro">🏦 Importar Extrato OFX</h2>
-              <p className="text-[11px] text-aletis-grafite-claro">Bancos brasileiros exportam extratos no formato .ofx — categorização automática</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-aletis-grafite-escuro/5 flex items-center justify-center">
-            <X className="w-5 h-5 text-aletis-grafite-claro" />
-          </button>
-        </header>
-
-        <div className="p-5 space-y-4">
+    <AppDialog
+      title="Importar Extrato OFX"
+      subtitle="Bancos brasileiros exportam extratos no formato .ofx; o ALETIS faz a categorização automática."
+      icon={<Banknote className="h-5 w-5" />}
+      onClose={onClose}
+      size="xl"
+      bodyClassName="space-y-4"
+    >
           {!parsed && (
             <>
               <div>
-                <label className="text-[11px] uppercase tracking-wider text-aletis-grafite-claro font-semibold">Arquivo .ofx</label>
+                <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Arquivo .ofx</label>
                 <input
                   type="file"
                   accept=".ofx,.qfx"
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                   className="block w-full mt-1 text-sm file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-aletis-verde/10 file:text-aletis-verde file:font-semibold"
                 />
-                {file && <p className="text-[10px] text-aletis-grafite-claro mt-1">{file.name}</p>}
+                {file && <p className="text-[11px] text-muted-foreground mt-1">{file.name}</p>}
               </div>
               {error && <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700">{error}</div>}
               <div className="flex justify-end">
@@ -138,7 +131,7 @@ export default function ImportOfxModal({ grupoId, onClose, onSuccess }: Props) {
               </div>
 
               <div>
-                <label className="text-[11px] uppercase tracking-wider text-aletis-grafite-claro font-semibold">Safra de destino</label>
+                <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Safra de destino</label>
                 <input
                   type="text"
                   value={safra}
@@ -149,7 +142,7 @@ export default function ImportOfxModal({ grupoId, onClose, onSuccess }: Props) {
               </div>
 
               <div>
-                <h3 className="text-xs font-display font-semibold text-aletis-grafite-escuro mb-2">
+                <h3 className="text-xs font-display font-semibold text-foreground mb-2">
                   📊 Categorias detectadas — selecione as que deseja importar como custos:
                 </h3>
                 <div className="space-y-1 max-h-64 overflow-y-auto">
@@ -168,7 +161,7 @@ export default function ImportOfxModal({ grupoId, onClose, onSuccess }: Props) {
                           <span className="text-xs font-body font-semibold">{c.categoria}</span>
                           <span className="text-xs font-mono tabular-nums">{fmtBRL(c.total)}</span>
                         </div>
-                        <p className="text-[10px] text-aletis-grafite-claro truncate">
+                        <p className="text-[11px] text-muted-foreground truncate">
                           {c.count} transações · tipo: {c.tipo} · {c.exemplos.slice(0, 2).join(' / ')}
                         </p>
                       </div>
@@ -191,7 +184,7 @@ export default function ImportOfxModal({ grupoId, onClose, onSuccess }: Props) {
           )}
 
           {result && (
-            <div className="rounded-lg bg-aletis-verde/10 border border-aletis-verde/30 p-3 text-xs text-aletis-verde">
+            <div className="rounded-lg bg-aletis-verde/10 border border-aletis-verde/30 p-3 text-xs text-foreground">
               <div className="flex items-center gap-2 mb-1">
                 <Check className="w-4 h-4" />
                 <strong>{result.inserted} categorias importadas</strong>
@@ -199,7 +192,7 @@ export default function ImportOfxModal({ grupoId, onClose, onSuccess }: Props) {
               {result.errors.length > 0 && (
                 <details className="mt-1">
                   <summary className="cursor-pointer">⚠ {result.errors.length} erros</summary>
-                  <ul className="text-[10px] list-disc list-inside mt-1">
+                  <ul className="text-[11px] list-disc list-inside mt-1">
                     {result.errors.slice(0, 5).map((e, i) => <li key={i}>{e}</li>)}
                   </ul>
                 </details>
@@ -213,16 +206,14 @@ export default function ImportOfxModal({ grupoId, onClose, onSuccess }: Props) {
               </button>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </AppDialog>
   )
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="card-premium p-2">
-      <p className="text-[9px] uppercase tracking-wider text-aletis-grafite-claro">{label}</p>
+      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</p>
       <p className="text-xs font-display font-semibold tabular-nums truncate">{value}</p>
     </div>
   )

@@ -38,13 +38,15 @@ export function fmtDataHora(iso: string | undefined): string {
 }
 
 /** Classifica saúde 0-100 em cor padronizada do design system. */
-export function healthColor(value: number): string {
+export function healthColor(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '#78716c'
   if (value >= 70) return '#27AE60'
   if (value >= 40) return '#E67E22'
   return '#C0392B'
 }
 
-export function healthLabel(value: number): string {
+export function healthLabel(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return 'Não calculada'
   if (value >= 80) return 'Excelente'
   if (value >= 60) return 'Saudável'
   if (value >= 40) return 'Atenção'

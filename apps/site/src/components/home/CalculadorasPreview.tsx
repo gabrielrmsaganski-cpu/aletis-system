@@ -1,39 +1,40 @@
 import Link from 'next/link'
-import { Calculator, Sprout, Scale, ArrowRight } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { Reveal } from '@/components/ui/Reveal'
 import { Eyebrow } from '@/components/ui/Eyebrow'
+import { BrandIcon } from '@/components/ui/BrandIcon'
 
 const calcs = [
   {
-    icone: Calculator,
     slug: 'reestruturacao',
     titulo: 'Simulador de Reestruturação',
-    subtitulo: 'Estime a economia real em um acordo ALETIS',
+    subtitulo: 'Teste prazo, parcela e folga de caixa',
     descricao:
       'Informe o saldo devedor, o perfil dos credores e o prazo desejado. Retornamos a economia estimada, o fluxo mensal e o DSCR do cenário.',
-    destaque: 'R$ 1.3M economizados · média',
+    destaque: 'Cenário indicativo',
+    brandIcon: 3,
     cor: 'from-aletis-verde-escuro to-aletis-verde',
   },
   {
-    icone: Sprout,
     slug: 'capacidade-safra',
     titulo: 'Capacidade de Pagamento Safra',
     subtitulo: 'Quanto de dívida sua próxima safra suporta',
     descricao:
       'Entra receita bruta projetada, custeio, CPR comprometida e despesas fixas. Sai a capacidade máxima de serviço da dívida e stress test de preço.',
     destaque: 'DSCR · stress de −15%',
+    brandIcon: 8,
     cor: 'from-aletis-verde to-aletis-verde-medio',
   },
   {
-    icone: Scale,
     slug: 'abusividade',
     titulo: 'Detector de Abusividade',
     subtitulo: 'Sinaliza descaracterização de crédito rural',
     descricao:
       'Compara a taxa contratada com o PRONAF/PRONAMP da época, detecta capitalização mensal e sinaliza cláusulas revisáveis conforme súmulas STJ.',
     destaque: 'Base: Res. BCB 4.966/21',
+    brandIcon: 13,
     cor: 'from-aletis-dourado-escuro to-aletis-dourado',
   },
 ]
@@ -54,16 +55,14 @@ export function CalculadorasPreview() {
           </Reveal>
           <Reveal delay={160}>
             <p className="mt-5 text-base text-aletis-grafite-medio md:text-lg">
-              Ferramentas reais, feitas pelo time técnico da ALETIS. Rodam direto no
-              navegador e você só entrega contato se quiser o diagnóstico humano.
+              Ferramentas para uma primeira leitura. Rodam direto no navegador
+              e ajudam a chegar à conversa com mais contexto.
             </p>
           </Reveal>
         </div>
 
         <div className="mt-16 grid gap-6 lg:grid-cols-3">
-          {calcs.map((c, i) => {
-            const Icon = c.icone
-            return (
+          {calcs.map((c, i) => (
               <Reveal key={c.slug} delay={i * 100}>
                 <Link
                   href={`/calculadoras/${c.slug}`}
@@ -78,7 +77,7 @@ export function CalculadorasPreview() {
                     />
                     <div className="relative flex items-center justify-between">
                       <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-aletis-dourado/40 bg-aletis-dourado/15">
-                        <Icon className="h-5 w-5 text-aletis-dourado" />
+                        <BrandIcon id={c.brandIcon} size={44} />
                       </div>
                       <span className="rounded-full border border-aletis-dourado/40 bg-aletis-dourado/10 px-3 py-1 text-[10px] font-display font-semibold uppercase tracking-wider text-aletis-dourado">
                         {c.destaque}
@@ -102,8 +101,7 @@ export function CalculadorasPreview() {
                   </div>
                 </Link>
               </Reveal>
-            )
-          })}
+          ))}
         </div>
       </Container>
     </Section>

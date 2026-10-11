@@ -1,329 +1,116 @@
-// ============================================================
-// Portal — Cofre digital + Preview inline.
-// ============================================================
-// CofreDigital: lista uploads, busca, seleção múltipla, download
-// individual e bulk (zip). Cada arquivo entra autenticado via JWT.
-// PreviewModal: PDF (iframe) ou imagem (img), via blob URL revogada
-// automaticamente ao desmontar.
-// ============================================================
 import { useEffect, useMemo, useState } from 'react'
-import { Vault, Download, Eye, PaperclipIcon as Paperclip } from 'lucide-react'
-import type { UploadDTO } from './types'
-import { fmtBytes, relativeTime } from './utils'
+import * as Dialog from '@radix-ui/react-dialog'
+import { Archive, CheckCircle2, Download, Eye, FileText, Search, Sparkles, Vault, X } from 'lucide-react'
+import { CATEGORIA_LABEL, type PendenciaDTO, type UploadDTO } from './types'
+import { fmtBytes, formatDateTime } from './utils'
+import { portalDownloadPath, publicAnalysisLabel, publicDriveLabel } from './DocumentWorkflow'
 
-export function CofreDigital({ uploads, token }: { uploads: UploadDTO[]; token: string }) {
+const actionClass = 'inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-aletis-cream-escuro px-3 text-xs font-semibold text-foreground hover:bg-aletis-cream disabled:opacity-50'
+const saveBlob = (blob: Blob, name: string) => {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = name; a.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 4000)
+}
+
+export function CofreDigital({ uploads, token, pendencias = [] }: { uploads: UploadDTO[]; token: string; pendencias?: PendenciaDTO[] }) {
   const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<'todos' | 'pedido' | 'avulso'>('todos')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [previewing, setPreviewing] = useState<UploadDTO | null>(null)
-  const [bulkDownloading, setBulkDownloading] = useState(false)
-
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [visible, setVisible] = useState(20)
+  const requestNames = useMemo(() => new Map(pendencias.map(p => [p.id, p.titulo])), [pendencias])
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return uploads
-    return uploads.filter(
-      (u) =>
-        u.nomeOriginal.toLowerCase().includes(q) ||
-        (u.categoria ?? '').toLowerCase().includes(q),
-    )
-  }, [uploads, search])
+    const q = search.trim().toLocaleLowerCase('pt-BR')
+    return [...uploads].filter(u => (filter === 'todos' || (filter === 'pedido' ? Boolean(u.pendenciaId) : !u.pendenciaId)) && (!q || `${u.nomeOriginal} ${u.categoria || ''} ${u.id} ${requestNames.get(u.pendenciaId || '') || ''}`.toLocaleLowerCase('pt-BR').includes(q))).sort((a, b) => b.enviadoEm.localeCompare(a.enviadoEm))
+  }, [uploads, search, filter, requestNames])
+  useEffect(() => setVisible(20), [search, filter])
+  useEffect(() => setSelected(previous => new Set([...previous].filter(id => uploads.some(u => u.id === id)))), [uploads])
+  const shown = filtered.slice(0, visible)
+  const toggleOne = (id: string) => setSelected(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next })
 
-  const allSelected = filtered.length > 0 && filtered.every((u) => selected.has(u.id))
-
-  const toggleAll = () => {
-    if (allSelected) {
-      setSelected(new Set())
-    } else {
-      setSelected(new Set(filtered.map((u) => u.id)))
-    }
+  const downloadOne = async (upload: UploadDTO) => {
+    const url = portalDownloadPath(upload)
+    if (!url) throw new Error(`O arquivo “${upload.nomeOriginal}” está indisponível. Fale com a equipe.`)
+    const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {}, credentials: 'same-origin' })
+    if (!response.ok) throw new Error(response.status === 401 ? 'Sua sessão terminou. Entre novamente para baixar o arquivo.' : `Não foi possível baixar “${upload.nomeOriginal}”. Tente novamente.`)
+    return response.blob()
   }
-  const toggleOne = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  const singleDownload = async (upload: UploadDTO) => {
+    setError(null); setBusy(true)
+    try { saveBlob(await downloadOne(upload), upload.nomeOriginal) }
+    catch (error) { setError(error instanceof Error ? error.message : 'Não foi possível baixar o arquivo.') }
+    finally { setBusy(false) }
   }
-
-  /** Download autenticado de um único arquivo (em blob para forçar download). */
-  const downloadOne = async (u: UploadDTO) => {
-    if (!u.url) return null
-    const r = await fetch(u.url, { headers: { Authorization: `Bearer ${token}` } })
-    if (!r.ok) return null
-    return r.blob()
-  }
-
-  const handleSingleDownload = async (u: UploadDTO) => {
-    const blob = await downloadOne(u)
-    if (!blob) return
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = u.nomeOriginal
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(url), 2_000)
-  }
-
-  /** Bulk download — empacota selecionados num zip via JSZip. */
-  const handleBulkDownload = async () => {
-    if (selected.size === 0) return
-    setBulkDownloading(true)
+  const bulkDownload = async () => {
+    const items = uploads.filter(u => selected.has(u.id))
+    if (!items.length) return
+    setError(null)
+    if (items.length > 20 || items.reduce((sum, u) => sum + u.tamanho, 0) > 50 * 1024 * 1024) { setError('Para baixar juntos, selecione até 20 arquivos e 50 MB. Arquivos maiores podem ser baixados individualmente.'); return }
+    setBusy(true)
     try {
-      const JSZip = (await import('jszip')).default
-      const zip = new JSZip()
-      const items = uploads.filter((u) => selected.has(u.id))
-      const queue = [...items]
-      const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
-        while (queue.length > 0) {
-          const u = queue.shift()
-          if (!u) break
-          const blob = await downloadOne(u).catch(() => null)
-          if (blob) {
-            const fname = ((): string => {
-              let candidate = u.nomeOriginal
-              let i = 1
-              while (zip.file(candidate)) {
-                const dot = u.nomeOriginal.lastIndexOf('.')
-                candidate =
-                  dot > 0
-                    ? `${u.nomeOriginal.slice(0, dot)} (${i})${u.nomeOriginal.slice(dot)}`
-                    : `${u.nomeOriginal} (${i})`
-                i++
-              }
-              return candidate
-            })()
-            zip.file(fname, blob)
-          }
-        }
-      })
-      await Promise.all(workers)
-      const zipBlob = await zip.generateAsync({ type: 'blob' })
-      const url = URL.createObjectURL(zipBlob)
-      const a = document.createElement('a')
-      const today = new Date().toISOString().slice(0, 10)
-      a.href = url
-      a.download = `cofre-aletis-${today}.zip`
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(url), 4_000)
+      const Zip = (await import('jszip')).default
+      const zip = new Zip()
+      for (const [index, upload] of items.entries()) {
+        const name = upload.nomeOriginal.replace(/[\\/]/g, '_')
+        zip.file(`${String(index + 1).padStart(2, '0')}-${name}`, await downloadOne(upload))
+      }
+      saveBlob(await zip.generateAsync({ type: 'blob' }), `documentos-aletis-${new Date().toISOString().slice(0, 10)}.zip`)
       setSelected(new Set())
-    } finally {
-      setBulkDownloading(false)
-    }
+    } catch (error) { setError(error instanceof Error ? error.message : 'Não foi possível concluir o pacote. Tente baixar os arquivos individualmente.') }
+    finally { setBusy(false) }
   }
-
-  const isPreviewableInline = (u: UploadDTO) => {
-    const m = (u.mime || '').toLowerCase()
-    return m.includes('pdf') || m.startsWith('image/')
-  }
-
-  return (
-    <>
-      <div className="card-premium p-6">
-        <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <div className="w-10 h-10 rounded-xl bg-aletis-sage/25 border border-aletis-sage/40 flex items-center justify-center">
-            <Vault className="w-5 h-5 text-aletis-verde" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-display text-base font-bold text-aletis-verde">Meu cofre digital</p>
-            <p className="font-body text-[12.5px] text-aletis-verde-medio">
-              {uploads.length} arquivo{uploads.length !== 1 ? 's' : ''} ·{' '}
-              {fmtBytes(uploads.reduce((s, u) => s + (u.tamanho || 0), 0))} no total
-            </p>
-          </div>
-          {selected.size > 0 && (
-            <button
-              type="button"
-              onClick={handleBulkDownload}
-              disabled={bulkDownloading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-aletis-verde text-white text-[12px] font-body font-semibold hover:bg-aletis-verde-escuro transition disabled:opacity-60"
-            >
-              <Download size={14} />
-              {bulkDownloading ? 'Empacotando…' : `Baixar ${selected.size} (.zip)`}
-            </button>
-          )}
-        </div>
-
-        {uploads.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="font-body text-[13px] text-aletis-verde-medio">
-              Seu cofre digital está vazio. Documentos que você enviar aparecerão aqui.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="relative mb-3">
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por nome ou categoria…"
-                className="w-full pl-9 pr-3 py-2 text-sm font-body rounded-lg border border-aletis-cream-escuro focus:border-aletis-verde focus:outline-none focus:ring-2 focus:ring-aletis-verde/20"
-              />
-              <svg
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-verde-medio pointer-events-none"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="m21 21-4.35-4.35" />
-              </svg>
-            </div>
-
-            {filtered.length > 0 && (
-              <div className="flex items-center gap-3 px-1 py-1.5 border-b border-aletis-cream-escuro/40 mb-1">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  className="w-3.5 h-3.5 rounded border-aletis-borda accent-aletis-verde cursor-pointer"
-                  title={allSelected ? 'Limpar seleção' : 'Selecionar todos'}
-                />
-                <span className="text-[10px] font-body uppercase tracking-wider text-aletis-verde-medio flex-1">
-                  Documento
-                </span>
-                <span className="text-[10px] font-body uppercase tracking-wider text-aletis-verde-medio">
-                  Ações
-                </span>
-              </div>
-            )}
-
-            <ul className="divide-y divide-aletis-cream-escuro/50">
-              {filtered.map((u) => (
-                <li key={u.id} className="py-2.5 flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(u.id)}
-                    onChange={() => toggleOne(u.id)}
-                    className="w-3.5 h-3.5 rounded border-aletis-borda accent-aletis-verde cursor-pointer flex-shrink-0"
-                  />
-                  <Paperclip size={14} className="text-aletis-gold-escuro flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-body text-sm font-medium text-aletis-verde truncate">{u.nomeOriginal}</p>
-                    <p className="font-body text-[11px] text-aletis-verde-medio">
-                      {fmtBytes(u.tamanho)} · {relativeTime(u.enviadoEm)} {u.categoria ? `· ${u.categoria}` : ''}
-                    </p>
-                  </div>
-                  {u.url && (
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {isPreviewableInline(u) && (
-                        <button
-                          type="button"
-                          onClick={() => setPreviewing(u)}
-                          className="text-aletis-verde-medio hover:text-aletis-gold-escuro transition"
-                          title="Visualizar"
-                        >
-                          <Eye size={16} />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleSingleDownload(u)}
-                        className="text-aletis-verde-medio hover:text-aletis-gold-escuro transition"
-                        title="Baixar"
-                      >
-                        <Download size={16} />
-                      </button>
-                    </div>
-                  )}
-                </li>
-              ))}
-              {filtered.length === 0 && search && (
-                <li className="py-6 text-center font-body text-[13px] text-aletis-verde-medio">
-                  Nenhum documento corresponde a &ldquo;{search}&rdquo;.
-                </li>
-              )}
-            </ul>
-          </>
-        )}
+  return <>
+    <section className="card-premium min-w-0 p-4 sm:p-6" aria-labelledby="portal-upload-history">
+      <div className="mb-5 flex flex-wrap items-start gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-aletis-sage/40 bg-aletis-sage/20 text-foreground"><Vault size={21} /></div>
+        <div className="min-w-0 flex-1"><h3 id="portal-upload-history" className="font-display text-lg font-bold text-foreground">Documentos e comprovantes de envio</h3><p className="mt-1 text-sm text-muted-foreground">{uploads.length} arquivo(s) · {fmtBytes(uploads.reduce((sum, u) => sum + (u.tamanho || 0), 0))}</p></div>
+        {selected.size > 0 && <div className="flex flex-wrap gap-2"><button type="button" onClick={() => void bulkDownload()} disabled={busy} className={actionClass}><Download size={14} />{busy ? 'Preparando…' : `Baixar ${selected.size} selecionado(s)`}</button><button type="button" onClick={() => setSelected(new Set())} className={actionClass}>Limpar seleção</button></div>}
       </div>
-
-      {previewing && (
-        <PreviewModal upload={previewing} token={token} onClose={() => setPreviewing(null)} />
-      )}
-    </>
-  )
+      <p className="mb-4 text-sm leading-relaxed text-muted-foreground">O recebimento confirma que seu arquivo chegou. A leitura da ALIX, a organização e a conferência do pedido são etapas separadas; você pode acompanhá-las aqui.</p>
+      {error && <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+      {uploads.length === 0 ? <p className="rounded-xl bg-muted p-5 text-sm text-muted-foreground">Os arquivos enviados e seus comprovantes aparecerão aqui.</p> : <>
+        <div className="mb-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <label className="relative block"><span className="sr-only">Buscar documentos ou comprovantes</span><Search size={16} className="pointer-events-none absolute left-3 top-3.5 text-muted-foreground" /><input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Nome do arquivo, pedido ou comprovante" className="min-h-11 w-full min-w-0 rounded-xl border border-aletis-cream-escuro py-2 pl-10 pr-3 text-sm focus:border-aletis-verde focus:outline-none focus:ring-2 focus:ring-aletis-verde/20" /></label>
+          <label><span className="sr-only">Tipo de envio</span><select value={filter} onChange={event => setFilter(event.target.value as typeof filter)} className="min-h-11 w-full rounded-xl border border-aletis-cream-escuro bg-card px-3 text-sm text-foreground"><option value="todos">Todos os envios</option><option value="pedido">Vinculados a um pedido</option><option value="avulso">Outros documentos</option></select></label>
+        </div>
+        <ul className="space-y-3">{shown.map(u => <li key={u.id} className="min-w-0 rounded-2xl border border-aletis-cream-escuro bg-card p-4">
+          <div className="flex items-start gap-3">
+            <label className="flex h-10 w-8 shrink-0 cursor-pointer items-center justify-center"><input type="checkbox" checked={selected.has(u.id)} onChange={() => toggleOne(u.id)} aria-label={`Selecionar ${u.nomeOriginal}`} className="h-4 w-4 accent-aletis-verde" /></label>
+            <div className="min-w-0 flex-1"><p className="break-words text-sm font-semibold text-foreground">{u.nomeOriginal}</p><p className="mt-1 text-xs text-muted-foreground">{fmtBytes(u.tamanho)} · {formatDateTime(u.enviadoEm)} · {u.enviadoPor === 'consultor' ? 'Enviado pela equipe' : 'Enviado por você'}</p><p className="mt-1 break-words text-xs text-muted-foreground">{requestNames.get(u.pendenciaId || '') || (u.pendenciaId ? 'Documento solicitado' : 'Outro documento')}{u.categoria ? ` · ${CATEGORIA_LABEL[u.categoria as PendenciaDTO['categoria']] || u.categoria}` : ''}</p></div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold">
+            <span className="inline-flex items-center gap-1 rounded-full bg-aletis-sage/20 px-2.5 py-1.5 text-foreground"><CheckCircle2 size={12} />Recebido</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-aletis-cream px-2.5 py-1.5 text-foreground"><Sparkles size={12} />{publicAnalysisLabel(u.analiseStatus)}</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-aletis-cream px-2.5 py-1.5 text-foreground"><Archive size={12} />{publicDriveLabel(u.driveStatus)}</span>
+          </div>
+          {u.review && <p className={`mt-3 whitespace-pre-wrap break-words rounded-xl p-3 text-xs leading-relaxed ${u.review.status === 'aprovado' ? 'bg-aletis-sage/15 text-foreground' : 'bg-amber-50 text-amber-900'}`}><strong>{u.review.status === 'aprovado' ? 'Conferido pela equipe' : 'Conferência: ajuste solicitado'}</strong>{u.review.revisadoEm ? ` · ${formatDateTime(u.review.revisadoEm)}` : ''}{u.review.observacao ? `\n${u.review.observacao}` : ''}</p>}
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="break-all text-[11px] text-muted-foreground">Comprovante: {u.id}</p>{portalDownloadPath(u) && <div className="flex shrink-0 gap-2">{(u.mime === 'application/pdf' || ['image/jpeg', 'image/png', 'image/webp'].includes(u.mime)) && <button type="button" onClick={() => setPreviewing(u)} className={actionClass} aria-label={`Visualizar ${u.nomeOriginal}`}><Eye size={14} />Ver</button>}<button type="button" disabled={busy} onClick={() => void singleDownload(u)} className={actionClass} aria-label={`Baixar ${u.nomeOriginal}`}><Download size={14} />Baixar</button></div>}</div>
+        </li>)}</ul>
+        {!filtered.length && <p className="py-6 text-center text-sm text-muted-foreground">Nenhum documento corresponde à busca.</p>}
+        {filtered.length > shown.length && <button type="button" onClick={() => setVisible(value => value + 20)} className={`${actionClass} mt-4 w-full`}>Mostrar mais · {shown.length} de {filtered.length}</button>}
+      </>}
+    </section>
+    {previewing && <PreviewModal key={previewing.id} upload={previewing} token={token} onClose={() => setPreviewing(null)} />}
+  </>
 }
 
-/** Modal de preview inline — PDF via iframe blob, imagem via <img>. */
-function PreviewModal({
-  upload,
-  token,
-  onClose,
-}: {
-  upload: UploadDTO
-  token: string
-  onClose: () => void
-}) {
+function PreviewModal({ upload, token, onClose }: { upload: UploadDTO; token: string; onClose: () => void }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-
   useEffect(() => {
+    const controller = new AbortController()
     let revokeUrl: string | null = null
-    let cancelled = false
-    if (!upload.url) return
-    fetch(upload.url, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.blob()
-      })
-      .then((blob) => {
-        if (cancelled) return
-        const url = URL.createObjectURL(blob)
-        revokeUrl = url
-        setBlobUrl(url)
-      })
-      .catch((err) => !cancelled && setError(String(err?.message || err)))
-    return () => {
-      cancelled = true
-      if (revokeUrl) URL.revokeObjectURL(revokeUrl)
-    }
-  }, [upload.url, token])
-
-  const isImage = (upload.mime || '').toLowerCase().startsWith('image/')
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" role="dialog" aria-modal="true">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] overflow-hidden flex flex-col">
-        <header className="px-5 py-3 border-b border-aletis-cream-escuro flex items-center gap-3">
-          <Paperclip size={16} className="text-aletis-gold-escuro flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="font-display text-sm font-bold text-aletis-verde truncate">{upload.nomeOriginal}</p>
-            <p className="font-body text-[11px] text-aletis-verde-medio">
-              {fmtBytes(upload.tamanho)} · {upload.mime}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-aletis-verde-medio hover:bg-aletis-cream transition"
-            aria-label="Fechar"
-          >
-            ✕
-          </button>
-        </header>
-        <div className="flex-1 overflow-auto bg-aletis-cream/50">
-          {error ? (
-            <div className="p-8 text-center font-body text-sm text-aletis-grafite-escuro">
-              Não consegui carregar o preview: {error}
-            </div>
-          ) : !blobUrl ? (
-            <div className="p-8 text-center font-body text-sm text-aletis-verde-medio animate-pulse">
-              Carregando…
-            </div>
-          ) : isImage ? (
-            <img src={blobUrl} alt={upload.nomeOriginal} className="mx-auto max-w-full max-h-[80vh] object-contain" />
-          ) : (
-            <iframe
-              src={blobUrl}
-              title={upload.nomeOriginal}
-              className="w-full"
-              style={{ height: '80vh', border: 'none' }}
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  )
+    const path = portalDownloadPath(upload)
+    if (!path) { setError('O documento não está disponível para visualização.'); return }
+    fetch(path, { headers: token ? { Authorization: `Bearer ${token}` } : {}, credentials: 'same-origin', signal: controller.signal }).then(response => { if (!response.ok) throw new Error('Não foi possível abrir o arquivo. Tente baixá-lo ou fale com a equipe.'); return response.blob() }).then(blob => { if (controller.signal.aborted) return; revokeUrl = URL.createObjectURL(blob); setBlobUrl(revokeUrl) }).catch(error => { if (!controller.signal.aborted) setError(error.message) })
+    return () => { controller.abort(); if (revokeUrl) URL.revokeObjectURL(revokeUrl) }
+  }, [upload, token])
+  return <Dialog.Root open onOpenChange={open => { if (!open) onClose() }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-[90] bg-black/60" /><Dialog.Content className="fixed left-1/2 top-1/2 z-[91] flex max-h-[92dvh] w-[calc(100%_-_2rem)] max-w-5xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-card shadow-2xl">
+    <div className="flex items-start gap-3 border-b border-aletis-cream-escuro px-4 py-3"><FileText size={18} className="mt-1 shrink-0 text-aletis-gold-escuro" /><div className="min-w-0 flex-1"><Dialog.Title className="break-words text-sm font-bold text-foreground">{upload.nomeOriginal}</Dialog.Title><Dialog.Description className="mt-1 text-xs text-muted-foreground">Documento recebido em {formatDateTime(upload.enviadoEm)} · {fmtBytes(upload.tamanho)}</Dialog.Description></div><Dialog.Close className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl hover:bg-aletis-cream" aria-label="Fechar documento"><X size={18} /></Dialog.Close></div>
+    <div className="min-h-48 flex-1 overflow-auto bg-aletis-cream/30">{error ? <p role="alert" className="p-6 text-sm text-red-800">{error}</p> : !blobUrl ? <p role="status" className="p-6 text-sm text-muted-foreground">Carregando documento…</p> : upload.mime.startsWith('image/') ? <img src={blobUrl} alt={upload.nomeOriginal} className="mx-auto max-h-[75dvh] max-w-full object-contain" /> : upload.mime === 'application/pdf' ? <iframe src={blobUrl} title={upload.nomeOriginal} className="h-[75dvh] w-full border-0" /> : <div className="p-6 text-sm text-foreground"><p>Este tipo de arquivo pode ser baixado para abrir no seu dispositivo.</p><a href={blobUrl} download={upload.nomeOriginal} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-aletis-verde px-4 font-semibold text-white"><Download size={16} />Baixar arquivo</a></div>}</div>
+  </Dialog.Content></Dialog.Portal></Dialog.Root>
 }
+
+export { PreviewModal as PortalDocumentPreview }

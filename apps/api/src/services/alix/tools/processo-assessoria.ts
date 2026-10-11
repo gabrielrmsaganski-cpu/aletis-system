@@ -1,6 +1,6 @@
 // ============================================================
 // processo-assessoria — tools ALIX para os 25 documentos do
-// Processo de Assessoria TEX CAPITAL.
+// Processo de Assessoria ALETIS.
 // ============================================================
 //   - listar_documentos_processo()           → catálogo
 //   - preview_documento_processo()           → ver placeholders resolvidos
@@ -8,7 +8,7 @@
 //   - listar_checklists_cliente()            → estado dos checklists
 //   - atualizar_item_checklist()             → marcar/desmarcar/anotar
 // ============================================================
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 import {
   getProcessoAssessoriaService,
   type ProcessoClienteData,
@@ -20,6 +20,17 @@ import {
 } from '../../processo-assessoria/manifest.js'
 import { getChecklistRepository } from '../../processo-assessoria/ChecklistRepository.js'
 import { alixGetClientes } from '../../AlixService.js'
+
+function parseInputs(value: unknown): Record<string, string> {
+  if (!value) return {}
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    return Object.fromEntries(Object.entries(parsed).map(([key, item]) => [key, String(item ?? '')]))
+  } catch {
+    return {}
+  }
+}
 
 function loadCliente(clienteId: string): ProcessoClienteData | null {
   const list = alixGetClientes()
@@ -63,11 +74,11 @@ function resolveProcessoSlug(input: string): string | null {
 }
 
 export function buildProcessoAssessoriaTools(): {
-  tools: ClaudeTool[]
-  registry: ClaudeToolRegistry
+  tools: LLMTool[]
+  registry: LLMToolRegistry
 } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
   const service = getProcessoAssessoriaService()
   const checklistRepo = getChecklistRepository()
 
@@ -75,7 +86,7 @@ export function buildProcessoAssessoriaTools(): {
   tools.push({
     name: 'listar_documentos_processo',
     description:
-      'Lista os 25 documentos oficiais do Processo de Assessoria TEX CAPITAL ' +
+      'Lista os 25 documentos oficiais do Processo de Assessoria ALETIS ' +
       '(checklists, contratos, planilhas financeiras, planilhas operacionais, gerenciadores, ' +
       'políticas, POPs, instruções de trabalho, relatórios, registros). ' +
       'Use para escolher qual documento gerar/preencher para um cliente.',
@@ -134,7 +145,7 @@ export function buildProcessoAssessoriaTools(): {
       properties: {
         clienteId: { type: 'string', description: 'ID do cliente CRM' },
         templateSlug: { type: 'string', description: 'slug, código ou nome do template' },
-        inputs: { type: 'object', description: 'overrides para campos manuais' },
+        inputsJson: { type: 'string', description: 'JSON válido com overrides para campos manuais' },
       },
       required: ['clienteId', 'templateSlug'],
     },
@@ -146,7 +157,8 @@ export function buildProcessoAssessoriaTools(): {
       if (!cli) return { ok: false, error: `Cliente ${input.clienteId} não encontrado` }
       const slug = resolveProcessoSlug(String(input.templateSlug))
       if (!slug) return { ok: false, error: `Template "${input.templateSlug}" não identificado` }
-      const out = service.preview({ templateSlug: slug, cliente: cli, inputs: input?.inputs ?? {} })
+      const inputs = parseInputs(input?.inputsJson)
+      const out = service.preview({ templateSlug: slug, cliente: cli, inputs })
       return {
         ok: true,
         template: {
@@ -174,7 +186,7 @@ export function buildProcessoAssessoriaTools(): {
       properties: {
         clienteId: { type: 'string' },
         templateSlug: { type: 'string', description: 'slug, código ou nome do template' },
-        inputs: { type: 'object' },
+        inputsJson: { type: 'string', description: 'JSON válido com overrides para campos manuais' },
       },
       required: ['clienteId', 'templateSlug'],
     },
@@ -187,16 +199,17 @@ export function buildProcessoAssessoriaTools(): {
       const slug = resolveProcessoSlug(String(input.templateSlug))
       if (!slug) return { ok: false, error: `Template "${input.templateSlug}" não identificado` }
       try {
+        const inputs = parseInputs(input?.inputsJson)
         const out = await service.render({
           templateSlug: slug,
           cliente: cli,
-          inputs: input?.inputs ?? {},
+          inputs,
         })
         return {
           ok: true,
           downloadUrl: `/api/processo-assessoria/templates/${slug}/render`,
           httpMethod: 'POST',
-          httpBody: { clienteId: cli.id, inputs: input?.inputs ?? {} },
+          httpBody: { clienteId: cli.id, inputs },
           template: {
             slug: out.template.slug,
             codigo: out.template.codigo,

@@ -10,9 +10,9 @@ export const siteConfig = {
   name: 'ALETIS',
   tagline: 'Finanças Estratégicas & Agrobusiness',
   shortDescription:
-    'Inteligência financeira e estratégica para o agronegócio brasileiro.',
+    'Assessoria financeira estratégica para o agronegócio brasileiro.',
   longDescription:
-    'A ALETIS reúne quatro pilares — Agro, Corporate, Fomento e Gestão — em uma mesa técnica independente. Reestruturação de dívida rural, BPO financeiro, captação estruturada e governança corporativa, com metodologia proprietária e tecnologia sob medida.',
+    'A ALETIS organiza dívida, caixa, contratos, garantias e negociação para produtores, grupos e empresas do agronegócio. Atua em quatro frentes — Agro, Corporate, Fomento e Gestão — com método financeiro, documentação clara e tecnologia própria de apoio.',
   url: 'https://aletis.com.br',
   // OG image gerada dinamicamente em /opengraph-image.tsx (não há arquivo
   // estático em /public — Next.js cuida disso pelo App Router).
@@ -36,6 +36,8 @@ export const siteConfig = {
 export const nav = {
   primary: [
     { label: 'Sobre', href: '/sobre' },
+    { label: 'Para quem é', href: '/para-quem-e' },
+    { label: 'Documentos', href: '/documentos-necessarios' },
     { label: 'Soluções', href: '/solucoes' },
     { label: 'Cases', href: '/cases' },
     { label: 'Educação', href: '/educacao' },
@@ -46,6 +48,8 @@ export const nav = {
   footer: {
     empresa: [
       { label: 'Sobre a ALETIS', href: '/sobre' },
+      { label: 'Para quem é', href: '/para-quem-e' },
+      { label: 'Documentos Necessários', href: '/documentos-necessarios' },
       { label: 'Metodologia', href: '/sobre#metodologia' },
       { label: 'Insights & Mercado', href: '/insights' },
       { label: 'Contato', href: '/contato' },
@@ -89,26 +93,32 @@ export const pilares = [
     key: 'agro',
     titulo: 'ALETIS Agro',
     descricao: 'Crédito rural & gestão financeira do produtor',
-    icone: 'Wheat',
+    icone: '01',
   },
   {
     key: 'corporate',
     titulo: 'ALETIS Corporate',
     descricao: 'BPO & gestão financeira para empresas',
-    icone: 'Building2',
+    icone: '06',
   },
   {
     key: 'fomento',
     titulo: 'ALETIS Fomento',
     descricao: 'Crédito & reestruturação',
-    icone: 'Sprout',
+    icone: '11',
   },
   {
     key: 'gestao',
     titulo: 'ALETIS Gestão',
     descricao: 'Governança & controles',
-    icone: 'ShieldCheck',
+    icone: '16',
   },
 ] as const
 
 export type Pilar = (typeof pilares)[number]
+
+export function getWhatsappHref(message: string): string | null {
+  const phone = siteConfig.contact.whatsapp?.replace(/\D/g, '')
+  if (!phone) return null
+  return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+}

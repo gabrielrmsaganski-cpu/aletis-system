@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { ArrowRight, Download, MessageCircle } from 'lucide-react'
 import { cn } from '@/lib/cn'
-import { siteConfig } from '@/lib/siteConfig'
+import { getWhatsappHref } from '@/lib/siteConfig'
 
 interface ResultadoItem {
   label: string
@@ -23,9 +23,9 @@ export function ResultadoCard({
   cta?: React.ReactNode
   children?: React.ReactNode
 }) {
-  const waLink = `https://wa.me/${siteConfig.contact.whatsapp}?text=${encodeURIComponent(
+  const waLink = getWhatsappHref(
     `Olá ALETIS, simulei no site (${titulo}) e gostaria de validar o resultado com um especialista.`,
-  )}`
+  )
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-aletis-dourado/30 bg-gradient-to-br from-aletis-verde-profundo to-aletis-verde-escuro p-7 text-white shadow-premium">
@@ -85,23 +85,25 @@ export function ResultadoCard({
                 Falar com especialista
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <a
-                href={waLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-full border border-aletis-dourado/40 bg-transparent px-5 py-3 font-display text-sm font-semibold uppercase tracking-wider2 text-aletis-dourado transition hover:border-aletis-dourado hover:bg-aletis-dourado/10"
-              >
-                <MessageCircle className="h-4 w-4" />
-                Enviar pelo WhatsApp
-              </a>
+              {waLink && (
+                <a
+                  href={waLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full border border-aletis-dourado/40 bg-transparent px-5 py-3 font-display text-sm font-semibold uppercase tracking-wider2 text-aletis-dourado transition hover:border-aletis-dourado hover:bg-aletis-dourado/10"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Enviar pelo WhatsApp
+                </a>
+              )}
             </>
           )}
         </div>
 
         <p className="mt-6 flex items-start gap-2 text-[11px] leading-relaxed text-white/45">
           <Download className="mt-0.5 h-3 w-3 flex-shrink-0 text-aletis-dourado" />
-          Estimativa preliminar. O diagnóstico oficial ALETIS é feito com os contratos originais
-          e memória de cálculo auditável, entregue em 72h.
+          Estimativa preliminar. A primeira leitura ALETIS depende dos contratos originais,
+          extratos e garantias disponíveis.
         </p>
       </div>
     </div>

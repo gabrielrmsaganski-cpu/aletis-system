@@ -1,4 +1,6 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react'
+import { WorkspaceDeck } from '../components/ui/SectionNav'
+import PageHeader from '../components/ui/PageHeader'
+import React, { useId, useState, useMemo, useEffect, useCallback } from 'react'
 import {
   Calculator,
   TrendingUp,
@@ -34,7 +36,7 @@ function useDebounce<T>(value: T, delay: number): T {
 function ServerVerifiedBadge({ loading, verified, error }: { loading: boolean; verified: boolean; error: string | null }) {
   if (loading) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[11px] font-body text-aletis-grafite-claro animate-pulse">
+      <span className="inline-flex items-center gap-1.5 text-[11px] font-body text-muted-foreground animate-pulse">
         <Loader2 className="w-3.5 h-3.5 animate-spin" />
         Verificando no servidor...
       </span>
@@ -171,13 +173,13 @@ function SectionCard({
     <div className="card-premium p-6">
       <div className="flex items-center gap-3 mb-6">
         <div className="w-11 h-11 rounded-xl bg-aletis-verde/10 flex items-center justify-center">
-          <Icon className="w-5 h-5 text-aletis-verde" />
+          <Icon className="w-5 h-5 text-foreground" />
         </div>
         <div>
-          <h2 className="text-lg font-display font-semibold text-aletis-grafite-escuro">
+          <h2 className="text-lg font-display font-semibold text-foreground">
             {title}
           </h2>
-          <p className="text-xs font-body text-aletis-grafite-claro">{subtitle}</p>
+          <p className="text-xs font-body text-muted-foreground">{subtitle}</p>
         </div>
       </div>
       {children}
@@ -203,13 +205,15 @@ function InputField({
   suffix?: string
   type?: string
 }) {
+  const fieldId = useId()
   return (
     <div>
-      <label className="block text-xs font-body font-medium text-aletis-grafite-medio mb-1.5">
+      <label htmlFor={fieldId} className="block text-xs font-body font-medium text-[var(--text-soft)] mb-1.5">
         {label}
       </label>
       <div className="relative">
         <input
+          id={fieldId}
           type={type}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -217,7 +221,7 @@ function InputField({
           className="input-field pr-12"
         />
         {suffix && (
-          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-aletis-grafite-claro font-body">
+          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-body">
             {suffix}
           </span>
         )}
@@ -253,8 +257,8 @@ function ResultBadge({
 
   return (
     <div className={`rounded-xl border ${bg} p-4`}>
-      <p className="text-xs font-body text-aletis-grafite-claro mb-1">{label}</p>
-      <p className={`text-xl font-display font-bold ${text}`}>{value}</p>
+      <p className="text-xs font-body text-muted-foreground mb-1">{label}</p>
+      <p className={`text-xl font-display font-semibold ${text}`}>{value}</p>
     </div>
   )
 }
@@ -466,15 +470,15 @@ function CalculadoraCET() {
 
           {/* Comparison bar */}
           <div className="bg-aletis-bege rounded-xl p-4">
-            <p className="text-xs font-body text-aletis-grafite-claro mb-3">
+            <p className="text-xs font-body text-muted-foreground mb-3">
               Comparação: Taxa Informada vs CET
             </p>
             <div className="space-y-2">
               <div className="flex items-center gap-3">
-                <span className="text-xs font-body w-28 text-aletis-grafite-medio">
+                <span className="text-xs font-body w-28 text-[var(--text-soft)]">
                   Informada
                 </span>
-                <div className="flex-1 h-6 bg-white rounded-full overflow-hidden">
+                <div className="flex-1 h-6 bg-card rounded-full overflow-hidden">
                   <div
                     className="h-full bg-positivo rounded-full flex items-center justify-end pr-2 transition-all duration-700"
                     style={{
@@ -484,20 +488,20 @@ function CalculadoraCET() {
                       )}%`,
                     }}
                   >
-                    <span className="text-[10px] text-white font-semibold">
+                    <span className="text-[11px] text-white font-semibold">
                       {fmtPct(displayResult.taxaMensalPct)}
                     </span>
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-xs font-body w-28 text-aletis-grafite-medio">CET</span>
-                <div className="flex-1 h-6 bg-white rounded-full overflow-hidden">
+                <span className="text-xs font-body w-28 text-[var(--text-soft)]">CET</span>
+                <div className="flex-1 h-6 bg-card rounded-full overflow-hidden">
                   <div
                     className="h-full bg-aletis-dourado rounded-full flex items-center justify-end pr-2 transition-all duration-700"
                     style={{ width: '100%' }}
                   >
-                    <span className="text-[10px] text-white font-semibold">
+                    <span className="text-[11px] text-white font-semibold">
                       {fmtPct(displayResult.cetMensal)}
                     </span>
                   </div>
@@ -643,20 +647,20 @@ function CalculadoraSpread() {
 
           {/* Visual comparison bar */}
           <div className="bg-aletis-bege rounded-xl p-4">
-            <p className="text-xs font-body text-aletis-grafite-claro mb-3">
+            <p className="text-xs font-body text-muted-foreground mb-3">
               Comparação Visual
             </p>
             <div className="space-y-3">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-body text-aletis-grafite-medio">
+                  <span className="text-xs font-body text-[var(--text-soft)]">
                     Taxa Original
                   </span>
                   <span className="text-xs font-body font-semibold text-positivo">
                     {fmtPct(displayResult.orig)}
                   </span>
                 </div>
-                <div className="w-full h-5 bg-white rounded-full overflow-hidden">
+                <div className="w-full h-5 bg-card rounded-full overflow-hidden">
                   <div
                     className="h-full bg-positivo rounded-full transition-all duration-700"
                     style={{
@@ -667,14 +671,14 @@ function CalculadoraSpread() {
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-body text-aletis-grafite-medio">
+                  <span className="text-xs font-body text-[var(--text-soft)]">
                     Taxa Praticada
                   </span>
                   <span className="text-xs font-body font-semibold text-alerta">
                     {fmtPct(displayResult.prat)}
                   </span>
                 </div>
-                <div className="w-full h-5 bg-white rounded-full overflow-hidden">
+                <div className="w-full h-5 bg-card rounded-full overflow-hidden">
                   <div
                     className="h-full bg-alerta rounded-full transition-all duration-700"
                     style={{ width: '100%' }}
@@ -686,7 +690,7 @@ function CalculadoraSpread() {
 
           {displayResult.analiseServidor && (
             <div className="bg-aletis-bege rounded-xl p-3">
-              <p className="text-[11px] font-body text-aletis-grafite-claro leading-relaxed">
+              <p className="text-[11px] font-body text-muted-foreground leading-relaxed">
                 <strong>Análise do servidor:</strong> {displayResult.analiseServidor}
               </p>
             </div>
@@ -859,7 +863,7 @@ function SimuladorAmortizacao() {
           suffix="meses"
         />
         <div>
-          <label className="block text-xs font-body font-medium text-aletis-grafite-medio mb-1.5">
+          <label className="block text-xs font-body font-medium text-[var(--text-soft)] mb-1.5">
             Sistema de Amortização
           </label>
           <div className="relative">
@@ -871,11 +875,11 @@ function SimuladorAmortizacao() {
               <option value="PRICE">PRICE (Parcelas Fixas)</option>
               <option value="SAC">SAC (Amortização Constante)</option>
             </select>
-            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-grafite-claro pointer-events-none" />
+            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           </div>
         </div>
         <div>
-          <label className="block text-xs font-body font-medium text-aletis-grafite-medio mb-1.5">
+          <label className="block text-xs font-body font-medium text-[var(--text-soft)] mb-1.5">
             Data de Início
           </label>
           <input
@@ -915,7 +919,7 @@ function SimuladorAmortizacao() {
           </div>
 
           <div className="max-h-[480px] overflow-auto rounded-xl border border-aletis-borda custom-scrollbar">
-            <table className="w-full text-xs font-body">
+            <table className="ui-table w-full text-xs font-body">
               <thead className="sticky top-0 bg-aletis-verde text-white z-10">
                 <tr>
                   <th className="px-3 py-2.5 text-left font-semibold">#</th>
@@ -932,14 +936,14 @@ function SimuladorAmortizacao() {
                   <tr
                     key={row.parcela}
                     className={`border-b border-aletis-borda/50 hover:bg-aletis-dourado/5 transition-colors ${
-                      i % 2 === 0 ? 'bg-white' : 'bg-aletis-bege/50'
+                      i % 2 === 0 ? 'bg-card' : 'bg-aletis-bege/50'
                     }`}
                   >
-                    <td className="px-3 py-2 text-aletis-grafite-medio font-semibold">
+                    <td className="px-3 py-2 text-[var(--text-soft)] font-semibold">
                       {row.parcela}
                     </td>
-                    <td className="px-3 py-2 text-aletis-grafite-medio">{row.data}</td>
-                    <td className="px-3 py-2 text-right text-aletis-grafite-escuro">
+                    <td className="px-3 py-2 text-[var(--text-soft)]">{row.data}</td>
+                    <td className="px-3 py-2 text-right text-foreground">
                       {fmtBRL(row.saldoInicial)}
                     </td>
                     <td className="px-3 py-2 text-right text-alerta">
@@ -948,10 +952,10 @@ function SimuladorAmortizacao() {
                     <td className="px-3 py-2 text-right text-positivo">
                       {fmtBRL(row.amortizacao)}
                     </td>
-                    <td className="px-3 py-2 text-right font-semibold text-aletis-grafite-escuro">
+                    <td className="px-3 py-2 text-right font-semibold text-foreground">
                       {fmtBRL(row.pagamento)}
                     </td>
-                    <td className="px-3 py-2 text-right text-aletis-grafite-medio">
+                    <td className="px-3 py-2 text-right text-[var(--text-soft)]">
                       {fmtBRL(row.saldoFinal)}
                     </td>
                   </tr>
@@ -1173,17 +1177,17 @@ function SimuladorRenegociacao() {
               </h3>
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-xs font-body text-aletis-grafite-claro">Taxa mensal</span>
+                  <span className="text-xs font-body text-muted-foreground">Taxa mensal</span>
                   <span className="text-sm font-body font-semibold text-alerta">2,50% a.m.</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-xs font-body text-aletis-grafite-claro">Prazo</span>
-                  <span className="text-sm font-body font-semibold text-aletis-grafite-escuro">
+                  <span className="text-xs font-body text-muted-foreground">Prazo</span>
+                  <span className="text-sm font-body font-semibold text-foreground">
                     12 meses
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-xs font-body text-aletis-grafite-claro">
+                  <span className="text-xs font-body text-muted-foreground">
                     Parcela mensal
                   </span>
                   <span className="text-sm font-body font-semibold text-alerta">
@@ -1191,10 +1195,10 @@ function SimuladorRenegociacao() {
                   </span>
                 </div>
                 <div className="border-t border-alerta/20 pt-3 flex justify-between">
-                  <span className="text-xs font-body font-semibold text-aletis-grafite-medio">
+                  <span className="text-xs font-body font-semibold text-[var(--text-soft)]">
                     TOTAL
                   </span>
-                  <span className="text-lg font-display font-bold text-alerta">
+                  <span className="text-lg font-display font-semibold text-alerta">
                     {fmtBRL(result.totalAtual)}
                   </span>
                 </div>
@@ -1209,19 +1213,19 @@ function SimuladorRenegociacao() {
               </h3>
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-xs font-body text-aletis-grafite-claro">Taxa mensal</span>
+                  <span className="text-xs font-body text-muted-foreground">Taxa mensal</span>
                   <span className="text-sm font-body font-semibold text-positivo">
                     {fmtPct(parseBRL(taxaJusta))} a.m.
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-xs font-body text-aletis-grafite-claro">Prazo</span>
-                  <span className="text-sm font-body font-semibold text-aletis-grafite-escuro">
+                  <span className="text-xs font-body text-muted-foreground">Prazo</span>
+                  <span className="text-sm font-body font-semibold text-foreground">
                     {novoPrazo} meses + {carencia}m carência
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-xs font-body text-aletis-grafite-claro">
+                  <span className="text-xs font-body text-muted-foreground">
                     Parcela mensal
                   </span>
                   <span className="text-sm font-body font-semibold text-positivo">
@@ -1229,10 +1233,10 @@ function SimuladorRenegociacao() {
                   </span>
                 </div>
                 <div className="border-t border-positivo/20 pt-3 flex justify-between">
-                  <span className="text-xs font-body font-semibold text-aletis-grafite-medio">
+                  <span className="text-xs font-body font-semibold text-[var(--text-soft)]">
                     TOTAL
                   </span>
-                  <span className="text-lg font-display font-bold text-positivo">
+                  <span className="text-lg font-display font-semibold text-positivo">
                     {fmtBRL(result.totalNovo)}
                   </span>
                 </div>
@@ -1244,7 +1248,7 @@ function SimuladorRenegociacao() {
           {result.economia > 0 && (
             <div className="bg-positivo/10 border border-positivo/20 rounded-xl p-5 text-center">
               <p className="text-xs font-body text-positivo mb-1">Economia Total Estimada</p>
-              <p className="text-3xl font-display font-bold text-positivo">
+              <p className="text-3xl font-display font-semibold text-positivo">
                 {fmtBRL(result.economia)}
               </p>
               <p className="text-sm font-body text-positivo/80 mt-1">
@@ -1255,11 +1259,11 @@ function SimuladorRenegociacao() {
 
           {/* New payment schedule */}
           <div>
-            <h3 className="text-sm font-display font-semibold text-aletis-grafite-escuro mb-3">
+            <h3 className="text-sm font-display font-semibold text-foreground mb-3">
               Cronograma de Pagamentos Proposto
             </h3>
             <div className="max-h-[320px] overflow-auto rounded-xl border border-aletis-borda custom-scrollbar">
-              <table className="w-full text-xs font-body">
+              <table className="ui-table w-full text-xs font-body">
                 <thead className="sticky top-0 bg-aletis-verde text-white z-10">
                   <tr>
                     <th className="px-3 py-2.5 text-left font-semibold">#</th>
@@ -1273,16 +1277,16 @@ function SimuladorRenegociacao() {
                     <tr
                       key={i}
                       className={`border-b border-aletis-borda/50 ${
-                        i % 2 === 0 ? 'bg-white' : 'bg-aletis-bege/50'
+                        i % 2 === 0 ? 'bg-card' : 'bg-aletis-bege/50'
                       }`}
                     >
-                      <td className="px-3 py-2 text-aletis-grafite-medio font-semibold">
+                      <td className="px-3 py-2 text-[var(--text-soft)] font-semibold">
                         {i + 1}
                       </td>
-                      <td className="px-3 py-2 text-aletis-grafite-medio">{row.data}</td>
+                      <td className="px-3 py-2 text-[var(--text-soft)]">{row.data}</td>
                       <td className="px-3 py-2">
                         <span
-                          className={`badge text-[10px] ${
+                          className={`badge text-[11px] ${
                             row.tipo === 'Carência'
                               ? 'bg-ambar/10 text-ambar'
                               : 'bg-positivo/10 text-positivo'
@@ -1291,7 +1295,7 @@ function SimuladorRenegociacao() {
                           {row.tipo}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-right font-semibold text-aletis-grafite-escuro">
+                      <td className="px-3 py-2 text-right font-semibold text-foreground">
                         {row.valor > 0 ? fmtBRL(row.valor) : '---'}
                       </td>
                     </tr>
@@ -1392,7 +1396,7 @@ function ConversorTaxas() {
           suffix={mode === 'mensal_to_anual' ? '% a.m.' : '% a.a.'}
         />
         <div>
-          <label className="block text-xs font-body font-medium text-aletis-grafite-medio mb-1.5">
+          <label className="block text-xs font-body font-medium text-[var(--text-soft)] mb-1.5">
             Direção da Conversão
           </label>
           <div className="flex rounded-xl border border-aletis-borda overflow-hidden">
@@ -1401,7 +1405,7 @@ function ConversorTaxas() {
               className={`flex-1 py-3 text-xs font-body font-medium transition-all ${
                 mode === 'mensal_to_anual'
                   ? 'bg-aletis-verde text-white'
-                  : 'bg-white text-aletis-grafite-medio hover:bg-aletis-bege'
+                  : 'bg-card text-[var(--text-soft)] hover:bg-aletis-bege'
               }`}
             >
               Mensal → Anual
@@ -1411,7 +1415,7 @@ function ConversorTaxas() {
               className={`flex-1 py-3 text-xs font-body font-medium transition-all ${
                 mode === 'anual_to_mensal'
                   ? 'bg-aletis-verde text-white'
-                  : 'bg-white text-aletis-grafite-medio hover:bg-aletis-bege'
+                  : 'bg-card text-[var(--text-soft)] hover:bg-aletis-bege'
               }`}
             >
               Anual → Mensal
@@ -1438,7 +1442,7 @@ function ConversorTaxas() {
       )}
 
       <div className="mt-4 bg-aletis-bege rounded-xl p-3">
-        <p className="text-[11px] font-body text-aletis-grafite-claro leading-relaxed">
+        <p className="text-[11px] font-body text-muted-foreground leading-relaxed">
           <strong>Fórmula:</strong> Conversão por juros compostos. Mensal → Anual: (1 + i)<sup>12</sup> - 1.
           Anual → Mensal: (1 + i)<sup>1/12</sup> - 1. Diária utiliza 252 dias úteis (21 d.u./mês para mensal, 252 d.u./ano para anual).
         </p>
@@ -1454,36 +1458,21 @@ export default function Credito() {
   return (
     <div className="min-h-screen bg-aletis-bege">
       {/* Page Header */}
-      <header className="mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
-          <div>
-            <h1 className="text-3xl lg:text-4xl font-display font-bold text-aletis-grafite-escuro tracking-tight">
-              Análise de Crédito
-            </h1>
-            <p className="text-aletis-grafite-claro font-body mt-1 text-sm">
+      <PageHeader eyebrow="Operação" title={<>Análise de Crédito</>} description={<> <p className="text-muted-foreground font-body mt-1 text-sm">
               Ferramentas de cálculo financeiro para análise e renegociação de dívidas rurais
-            </p>
-          </div>
-          <div className="flex items-center gap-2 text-xs font-body text-aletis-grafite-claro">
-            <Calculator className="w-4 h-4 text-aletis-verde" />
-            13 calculadoras disponíveis (5 básicas + 8 premium)
-          </div>
-        </div>
-      </header>
+            </p> </>} actions={<> <div className="flex items-center gap-2 text-xs font-body text-muted-foreground">
+            <Calculator className="w-4 h-4 text-foreground" />
+            14 calculadoras · 5 básicas e 9 avançadas
+          </div> </>} />
 
-      {/* Calculator Sections */}
-      <div className="space-y-6">
-        <CalculadoraCET />
-        <CalculadoraSpread />
-        <SimuladorAmortizacao />
-        <SimuladorRenegociacao />
-        <ConversorTaxas />
-
-        {/* Premium calculators (MCR, Sumulas STJ, Plano Safra 2025/26) */}
-        <div className="pt-4 border-t border-aletis-bege-escuro">
-          <CreditoPremium />
-        </div>
-      </div>
+      <WorkspaceDeck label="Escolher análise de crédito" items={[
+        { id: 'cet', label: 'Custo efetivo total', icon: Calculator, detail: 'Compare o custo completo da operação, incluindo taxas e encargos.', content: <CalculadoraCET /> },
+        { id: 'spread', label: 'Spread bancário', icon: TrendingUp, detail: 'Analise a diferença entre a taxa contratada e a referência.', content: <CalculadoraSpread /> },
+        { id: 'amortizacao', label: 'Amortização', icon: Table, content: <SimuladorAmortizacao /> },
+        { id: 'renegociacao', label: 'Renegociação', icon: ArrowRightLeft, content: <SimuladorRenegociacao /> },
+        { id: 'taxas', label: 'Conversão de taxas', icon: RefreshCw, content: <ConversorTaxas /> },
+        { id: 'avancadas', label: 'Análises avançadas', icon: ShieldCheck, content: <CreditoPremium /> },
+      ]} />
 
       {/* Bottom spacer */}
       <div className="h-8" />

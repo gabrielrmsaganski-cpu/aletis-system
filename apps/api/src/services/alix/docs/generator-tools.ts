@@ -4,7 +4,7 @@
 // via AlixService. Agente apenas orquestra chamada → retorna URL.
 // ============================================================
 
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js';
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js';
 
 export interface DocGeneratorHandlers {
   tool_gerar_proposta_reestruturacao: (i: Record<string, unknown>) => unknown;
@@ -15,8 +15,8 @@ export interface DocGeneratorHandlers {
   tool_gerar_plano_custeio_pdf: (i: Record<string, unknown>) => unknown;
 }
 
-export function buildDocGeneratorTools(h: DocGeneratorHandlers): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = [
+export function buildDocGeneratorTools(h: DocGeneratorHandlers): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = [
     {
       name: 'gerar_proposta_reestruturacao',
       description: 'Gera PDF REAL de proposta de reestruturação de dívida (layout ALETIS, cronograma Price com carência). Retorna downloadUrl.',
@@ -63,7 +63,31 @@ export function buildDocGeneratorTools(h: DocGeneratorHandlers): { tools: Claude
           clienteId: { type: 'string' },
           clienteNome: { type: 'string' },
           periodo: { type: 'string' },
-          perspectivas: { type: 'array' },
+          perspectivas: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                nome: { type: 'string', enum: ['Financeira', 'Cliente', 'Processos', 'Aprendizado'] },
+                resumo: { type: 'string' },
+                kpis: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      nome: { type: 'string' },
+                      valorAtual: { type: ['string', 'number'] },
+                      meta: { type: ['string', 'number'] },
+                      unidade: { type: 'string' },
+                      status: { type: 'string', enum: ['verde', 'amarelo', 'vermelho'] },
+                    },
+                    required: ['nome', 'valorAtual', 'meta', 'status'],
+                  },
+                },
+              },
+              required: ['nome', 'kpis'],
+            },
+          },
           observacoes: { type: 'string' },
           consultor: { type: 'string' },
         },
@@ -79,7 +103,19 @@ export function buildDocGeneratorTools(h: DocGeneratorHandlers): { tools: Claude
           clienteId: { type: 'string' },
           clienteNome: { type: 'string' },
           periodoReferencia: { type: 'string' },
-          meses: { type: 'array' },
+          meses: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                mes: { type: 'string' },
+                receitaProducao: { type: 'number' },
+                custoOperacional: { type: 'number' },
+                parcelaCredito: { type: 'number' },
+              },
+              required: ['mes', 'receitaProducao', 'custoOperacional', 'parcelaCredito'],
+            },
+          },
           observacoes: { type: 'string' },
         },
         required: ['clienteId', 'clienteNome', 'periodoReferencia', 'meses'],
@@ -95,11 +131,23 @@ export function buildDocGeneratorTools(h: DocGeneratorHandlers): { tools: Claude
           clienteNome: { type: 'string' },
           titulo: { type: 'string' },
           premissas: { type: 'array', items: { type: 'string' } },
-          itens: { type: 'array' },
+          itens: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                titulo: { type: 'string' },
+                descricao: { type: 'string' },
+                formula: { type: 'string' },
+                resultado: { type: 'string' },
+              },
+              required: ['titulo', 'descricao'],
+            },
+          },
           conclusao: { type: 'string' },
           consultor: { type: 'string' },
         },
-        required: ['clienteId', 'clienteNome', 'titulo', 'premissas', 'itens'],
+        required: ['clienteId', 'clienteNome', 'titulo', 'premissas', 'itens', 'conclusao'],
       },
     },
     {
@@ -115,7 +163,7 @@ export function buildDocGeneratorTools(h: DocGeneratorHandlers): { tools: Claude
     },
   ];
 
-  const registry: ClaudeToolRegistry = {
+  const registry: LLMToolRegistry = {
     gerar_proposta_reestruturacao: { spec: tools[0], handler: async (i) => h.tool_gerar_proposta_reestruturacao(i) },
     gerar_parecer_tecnico: { spec: tools[1], handler: async (i) => h.tool_gerar_parecer_tecnico(i) },
     gerar_relatorio_bsc: { spec: tools[2], handler: async (i) => h.tool_gerar_relatorio_bsc(i) },

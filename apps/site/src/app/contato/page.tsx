@@ -8,7 +8,7 @@ import { ContatoForm } from '@/components/ContatoForm'
 import { siteConfig } from '@/lib/siteConfig'
 
 export const metadata: Metadata = {
-  title: 'Contato · Fale com a mesa ALETIS',
+  title: 'Contato · Fale com a ALETIS',
   description:
     'Solicite diagnóstico gratuito, proposta comercial ou NDA. Retorno em até 1 dia útil — consultoria financeira estratégica para o agro.',
   alternates: { canonical: '/contato' },
@@ -26,10 +26,10 @@ export default function ContatoPage() {
         titulo={
           <>
             Uma conversa{' '}
-            <span className="italic text-aletis-dourado">sob sigilo</span> pode mudar o rumo da sua safra.
+            <span className="italic text-aletis-dourado">sob sigilo</span> pode organizar o próximo passo.
           </>
         }
-        subtitulo="Preencha o formulário, escreva por e-mail ou chame no WhatsApp. Em até 1 dia útil um consultor ALETIS retorna com próximos passos — com NDA quando o caso pedir."
+        subtitulo="Preencha o formulário, escreva por e-mail ou chame no WhatsApp. Em até 1 dia útil um consultor ALETIS retorna com os próximos passos e indica se faz sentido assinar NDA antes de enviar documentos."
         breadcrumbs={[
           { label: 'Início', href: '/' },
           { label: 'Contato' },
@@ -46,7 +46,7 @@ export default function ContatoPage() {
                   Formulário estratégico
                 </p>
                 <h2 className="mt-4 font-display text-2xl font-semibold text-aletis-grafite-escuro md:text-3xl">
-                  Conte seu cenário. Nós devolvemos um caminho.
+                  Conte o cenário. Nós indicamos o melhor começo.
                 </h2>
                 <p className="mt-3 text-[14px] leading-relaxed text-aletis-grafite-medio">
                   Quanto mais contexto você trouxer (saldo aproximado, credores, prazo ideal), mais assertivo será o retorno.

@@ -8,7 +8,7 @@
 // Quando pedido "cultura/uf" sem match exato, retorna a regra do
 // MCR/Plano Safra geral + observação.
 // ============================================================
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 
 type Janela = {
   inicio: string // "MM-DD"
@@ -99,9 +99,9 @@ function withinWindow(now: Date, janela: Janela): 'dentro' | 'antes' | 'depois' 
   return 'dentro'
 }
 
-export function buildCalendarioSafraTools(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+export function buildCalendarioSafraTools(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
 
   tools.push({
     name: 'calendario_safra',

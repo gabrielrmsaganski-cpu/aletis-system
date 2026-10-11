@@ -54,7 +54,7 @@ export default function SumulasSTJ() {
 
       <H2 id="dica-pratica">Dica prática</H2>
       <Callout tone="tip" title="Como usar">
-        Em <Strong>mesa de negociação</Strong>: levante as súmulas aplicáveis ao seu contrato — o gerente sabe quando você sabe. Muda postura.{' '}
+        Em <Strong>negociação</Strong>: levante as súmulas aplicáveis ao seu contrato — o gerente sabe quando você sabe. Muda postura.{' '}
         Em <Strong>defesa judicial</Strong>: peticionar com referência expressa à súmula força o juiz a se posicionar sobre a tese. Tese estabilizada raramente é ignorada.
       </Callout>
     </EduLayout>

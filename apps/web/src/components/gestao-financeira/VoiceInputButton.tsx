@@ -100,7 +100,7 @@ export default function VoiceInputButton({ onResult, append = true, size = 'md',
 
   const buttonCls = listening
     ? 'bg-red-500 text-white animate-pulse'
-    : 'bg-aletis-verde/10 text-aletis-verde hover:bg-aletis-verde/20'
+    : 'bg-aletis-verde/10 text-foreground hover:bg-aletis-verde/20'
 
   const sz = size === 'sm' ? 'w-6 h-6' : 'w-8 h-8'
 
@@ -117,12 +117,12 @@ export default function VoiceInputButton({ onResult, append = true, size = 'md',
           : <Mic className={size === 'sm' ? 'w-3 h-3' : 'w-4 h-4'} />}
       </button>
       {listening && interim && (
-        <span className="text-[10px] text-aletis-grafite-claro italic max-w-[200px] truncate" title={interim}>
+        <span className="text-[11px] text-muted-foreground italic max-w-[200px] truncate" title={interim}>
           "{interim}"
         </span>
       )}
       {error && (
-        <span className="text-[10px] text-red-600">{error}</span>
+        <span className="text-[11px] text-red-600">{error}</span>
       )}
     </div>
   )

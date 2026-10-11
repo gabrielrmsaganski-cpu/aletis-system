@@ -1,3 +1,6 @@
+import { resolveConfirmationChat } from './alix/ConfirmationChat.js';
+import { normalizeAlixProposalPatch } from './alix/crm/proposal-patch.js';
+import { getAlixTurnContext, withAlixTurnContext } from './alix/AlixTurnContext.js';
 // ============================================================
 // ALETIS — ALIX Service (AI brain)
 // Intent classification + tool execution + persistent history
@@ -35,13 +38,13 @@ import {
   type Periodicidade,
 } from '@aletis/financial-calc';
 import {
-  runClaude,
-  isLLMEnabled,
-  CLAUDE_MODEL_SONNET,
-  type ClaudeTool,
-  type ClaudeToolRegistry,
-  type ClaudeMessage,
-} from './llm/ClaudeFoundryClient.js';
+  runOpenAI,
+  isOpenAIEnabled,
+  OPENAI_MODEL_PRIMARY,
+  type LLMTool,
+  type LLMToolRegistry,
+  type LLMMessage,
+} from './llm/OpenAIClient.js';
 import { getDossieRepository } from './cliente/DossieRepository.js';
 import { getCusteioService } from './custeio/CusteioService.js';
 // ── Wave 7b — Simuladores regulatórios 2026 ──────────────────
@@ -58,6 +61,16 @@ import type {
 } from '@aletis/shared-types';
 // ── Wave 9 — Intake + Generators + Memory + Briefing ──────────
 import { getDocumentIntakeService } from './alix/intake/DocumentIntakeService.js';
+import { readDocumentPage, type DocumentReadOptions } from './alix/intake/DocumentReadService.js';
+import { attachAlixDocumentToCliente } from './alix/intake/DocumentVaultBridgeService.js';
+import { buildClienteDocumentDiff } from './alix/crm/CrmDiffService.js';
+import { buildDocumentFinancialReview, documentMoney, normalizeDocumentDebt } from './alix/crm/DocumentFinancialReview.js';
+import { getClienteDemandaService } from './cliente/ClienteDemandaService.js';
+import {
+  assertDocumentGrounding,
+  validateDocumentGrounding,
+} from './alix/reliability/AlixGroundingGuardService.js';
+import { analyzeDocumentDeep } from './alix/intake/DocumentAnalysisService.js';
 import { DocumentGeneratorService } from './alix/generators/DocumentGeneratorService.js';
 import type {
   PropostaInput,
@@ -67,6 +80,7 @@ import type {
   MemoriaInput,
 } from './alix/generators/types.js';
 import { getAlixMemoryService } from './alix/memory/AlixMemoryService.js';
+import { formatFactsForPrompt, getFactsForCliente } from './alix/memory/AlixMemoryFactExtractor.js';
 import { getBriefingService } from './alix/memory/BriefingService.js';
 import type { MemoriaCliente, SecaoNota } from './alix/memory/types.js';
 import {
@@ -100,11 +114,23 @@ import { buildFetchUrlTool } from './alix/tools/websearch/fetchUrl.js';
 import { buildCnpjTool } from './alix/tools/websearch/scrapers/cnpj.js';
 import { buildCvmTool } from './alix/tools/websearch/scrapers/cvm.js';
 import { buildJusbrasilTool } from './alix/tools/websearch/scrapers/jusbrasil.js';
+import {
+  createExecutorRegistry,
+  getExecutorFromRegistry,
+} from './alix/tools/unified-registry.js';
+import { isValidCpfCnpj, normalizeCpfCnpj } from '../db/ClienteRepository.js';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname as _dirname } from 'path';
 import { fileURLToPath as _fileURLToPath } from 'url';
 
 // ── Types ────────────────────────────────────────────────────
+
+const CRM_OFFICES = ['Aletis', 'Canarana'] as const;
+
+function normalizeCrmOffice(value: unknown): string {
+  const office = String(value || '').trim();
+  return CRM_OFFICES.find((candidate) => candidate.toLowerCase() === office.toLowerCase()) || '';
+}
 
 export type ChatRole = 'user' | 'assistant' | 'system';
 
@@ -122,6 +148,10 @@ export interface ChatMessage {
 export interface ChatSession {
   id: string;
   title: string;
+  consultorId?: string;
+  clienteId?: string;
+  archivedAt?: number;
+  pinnedAt?: number;
   createdAt: number;
   updatedAt: number;
   messages: ChatMessage[];
@@ -130,6 +160,10 @@ export interface ChatSession {
 export interface SessionSummary {
   id: string;
   title: string;
+  consultorId?: string;
+  clienteId?: string;
+  archivedAt?: number;
+  pinnedAt?: number;
   createdAt: number;
   updatedAt: number;
   messageCount: number;
@@ -210,12 +244,31 @@ type Intent =
   | { tipo: 'fin_das_previsto'; competencia?: string }
   | { tipo: 'fin_inadimplencia' }
   | { tipo: 'fin_fechamento_contador'; competencia?: string }
+  // Alix Smart Confirm — reconhece aprovação textual no chat
+  | { tipo: 'confirmar_acao'; confirmationId?: string }
+  | { tipo: 'confirmar_tudo' }
   | { tipo: 'generico' };
 
 // ── Intent classifier ────────────────────────────────────────
 
 function classify(input: string): Intent {
   const q = normalize(input);
+
+  // ── Alix Smart Confirm: detecta aprovação textual no chat ──
+  // Padrão 1: "confirmo conf_xxx" / "aprovo conf_xxx"
+  const confIdMatch = q.match(/\b(conf_[a-f0-9]{16})\b/);
+  if (confIdMatch) {
+    return { tipo: 'confirmar_acao', confirmationId: confIdMatch[1] };
+  }
+  // Padrão 2: "confirmo", "aprovo", "pode prosseguir", "pode fazer", "executa", "sim faça"
+  if (/^(confirmo|aprovo|executa|pode\s+(?:prosseguir|fazer|executar|ir|continuar)|sim[,;:\s]+(?:pode|faça|faz|fazer|confirma)|ok[,;:\s]+(?:pode|faça|faz|fazer|confirma)|tudo\s+bem[,;:\s]+(?:pode|faça|faz))/.test(q)) {
+    return { tipo: 'confirmar_acao' };
+  }
+
+  // Padrão 3: "fecha tudo", "aprova tudo", "confirma tudo", "executa tudo"
+  if (/^(fecha|aprova|confirma|executa)\s+tudo/.test(q)) {
+    return { tipo: 'confirmar_tudo' };
+  }
 
   // Greetings
   if (/^(oi|ola|e ai|bom dia|boa tarde|boa noite|hey|salve)\b/.test(q)) return { tipo: 'saudacao' };
@@ -430,6 +483,8 @@ export class AlixService {
   private sessions = new Map<string, ChatSession>();
   private loaded = false;
   private webSearchProvider: WebSearchProvider | null = null;
+  /** SessionId corrente no turno respond() — usado para vincular HITL à sessão. */
+  private get activeSessionId(): string | undefined { return getAlixTurnContext()?.sessionId; }
 
   setWebSearchProvider(p: WebSearchProvider): void {
     this.webSearchProvider = p;
@@ -459,7 +514,15 @@ export class AlixService {
     this.loaded = true;
   }
 
-  private async persist(session: ChatSession): Promise<void> {
+  private async persist(session: ChatSession, options: { strict?: boolean } = {}): Promise<void> {
+    try {
+      const { upsertSession } = await import('../db/AlixSessionRepository.js');
+      const saved = await upsertSession(session as unknown as Parameters<typeof upsertSession>[0], options);
+      if (saved) session.consultorId = saved.consultorId;
+    } catch (error) {
+      if (options.strict || (error as { code?: string }).code === 'ALIX_SESSION_OWNER_CONFLICT') throw error;
+      /* PG best-effort */
+    }
     const path = join(this.storageDir, `${session.id}.json`);
     await fs.writeFile(path, JSON.stringify(session, null, 2), 'utf8');
   }
@@ -491,12 +554,36 @@ export class AlixService {
 
   async listSessions(): Promise<SessionSummary[]> {
     await this.ensureLoaded();
+    try {
+      const { listSessions } = await import('../db/AlixSessionRepository.js');
+      const pgSessions = await listSessions(200);
+      if (pgSessions.length > 0) {
+        return pgSessions.map((s) => ({
+          id: s.id,
+          title: s.title ?? 'Nova conversa',
+          consultorId: s.consultorId,
+          clienteId: s.clienteId,
+          archivedAt: typeof s.archivedAt === 'number' ? s.archivedAt : s.archivedAt ? new Date(s.archivedAt).getTime() : undefined,
+          pinnedAt: typeof s.pinnedAt === 'number' ? s.pinnedAt : s.pinnedAt ? new Date(s.pinnedAt).getTime() : undefined,
+          createdAt: typeof s.createdAt === 'number' ? s.createdAt : new Date(s.createdAt ?? Date.now()).getTime(),
+          updatedAt: typeof s.updatedAt === 'number' ? s.updatedAt : new Date(s.updatedAt ?? Date.now()).getTime(),
+          messageCount: s.messageCount ?? s.messages?.length ?? 0,
+          lastMessage: s.lastMessage,
+        }));
+      }
+    } catch {
+      /* PG indisponível: usa cache em disco */
+    }
     await this.rescanStorage();
     return Array.from(this.sessions.values())
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .map(s => ({
         id: s.id,
         title: s.title,
+        consultorId: s.consultorId,
+        clienteId: s.clienteId,
+        archivedAt: s.archivedAt,
+        pinnedAt: s.pinnedAt,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
         messageCount: s.messages.length,
@@ -506,6 +593,16 @@ export class AlixService {
 
   async getSession(id: string): Promise<ChatSession | null> {
     await this.ensureLoaded();
+    try {
+      const { getSession } = await import('../db/AlixSessionRepository.js');
+      const fromPg = await getSession(id);
+      if (fromPg) {
+        this.sessions.set(fromPg.id, fromPg as ChatSession);
+        return fromPg as ChatSession;
+      }
+    } catch {
+      /* PG indisponível: usa cache em memória/disco */
+    }
     const cached = this.sessions.get(id);
     if (cached) return cached;
     // Fallback: tenta ler direto do disco (sessões criadas pelo
@@ -521,29 +618,97 @@ export class AlixService {
     return null;
   }
 
-  async createSession(title?: string): Promise<ChatSession> {
+  async createSession(title?: string, consultorId?: string): Promise<ChatSession> {
     await this.ensureLoaded();
     const now = Date.now();
     const session: ChatSession = {
       id: `alix_${randomUUID().slice(0, 8)}_${now.toString(36)}`,
       title: title || 'Nova conversa',
+      consultorId,
       createdAt: now,
       updatedAt: now,
       messages: [],
     };
+    await this.persist(session, { strict: true });
     this.sessions.set(session.id, session);
-    await this.persist(session);
+    return session;
+  }
+
+  /** Retry de importação não recria conversa nem altera seu histórico/contexto. */
+  async ensureSession(id: string, title: string, consultorId: string, clienteId: string): Promise<ChatSession> {
+    if (!/^[A-Za-z0-9_-]{1,180}$/.test(id) || !consultorId?.trim() || consultorId === 'anonymous' || !clienteId?.trim()) {
+      throw Object.assign(new Error('A criação idempotente exige sessão, proprietário e cliente válidos.'), { statusCode: 400 });
+    }
+    await this.ensureLoaded();
+    const now = Date.now();
+    const proposed: ChatSession & { consultorId: string; clienteId: string } = {
+      id, title: title.trim().slice(0, 120) || 'Nova conversa', consultorId, clienteId,
+      createdAt: now, updatedAt: now, messages: [],
+    };
+    const { ensureSession } = await import('../db/AlixSessionRepository.js');
+    const persisted = await ensureSession(proposed);
+    let session = (persisted || proposed) as ChatSession;
+    const path = join(this.storageDir, `${id}.json`);
+    try {
+      // Mesmo sem PG, instâncias concorrentes não sobrescrevem o vencedor.
+      await fs.writeFile(path, JSON.stringify(session, null, 2), { encoding: 'utf8', flag: 'wx' });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      if (!persisted) {
+        session = JSON.parse(await fs.readFile(path, 'utf8')) as ChatSession;
+        if (session.id !== id || session.consultorId !== consultorId || session.clienteId !== clienteId) {
+          throw Object.assign(new Error('A sessão já existe com outro proprietário ou cliente.'), {
+            code: 'ALIX_SESSION_SCOPE_CONFLICT', statusCode: 409,
+          });
+        }
+      }
+    }
+    this.sessions.set(id, session);
+    return session;
+  }
+
+  async updateSession(
+    id: string,
+    patch: { title?: string; archived?: boolean; pinned?: boolean; clienteId?: string | null },
+    options: { strict?: boolean } = {},
+  ): Promise<ChatSession | null> {
+    await this.ensureLoaded();
+    const current = await this.getSession(id);
+    if (!current) return null;
+    const session = { ...current };
+
+    if (typeof patch.title === 'string') session.title = patch.title.trim().slice(0, 120) || 'Nova conversa';
+    if (typeof patch.archived === 'boolean') {
+      session.archivedAt = patch.archived ? Date.now() : undefined;
+      if (patch.archived) session.pinnedAt = undefined;
+    }
+    if (typeof patch.pinned === 'boolean' && !session.archivedAt) {
+      session.pinnedAt = patch.pinned ? Date.now() : undefined;
+    }
+    if (patch.clienteId === null) session.clienteId = undefined;
+    else if (typeof patch.clienteId === 'string') session.clienteId = patch.clienteId.trim() || undefined;
+    session.updatedAt = Date.now();
+    await this.persist(session, options);
+    this.sessions.set(session.id, session);
     return session;
   }
 
   async deleteSession(id: string): Promise<boolean> {
     await this.ensureLoaded();
-    if (!this.sessions.has(id)) return false;
+    const existedInMemory = this.sessions.has(id);
     this.sessions.delete(id);
+    let deletedFromPg = false;
+    try {
+      const { deleteSession } = await import('../db/AlixSessionRepository.js');
+      deletedFromPg = await deleteSession(id);
+    } catch {
+      /* PG best-effort */
+    }
     try {
       await fs.unlink(join(this.storageDir, `${id}.json`));
+      return true;
     } catch { /* file may not exist */ }
-    return true;
+    return existedInMemory || deletedFromPg;
   }
 
   // ── Main chat entry point ───────────────────────────────
@@ -551,17 +716,34 @@ export class AlixService {
   async chat(
     sessionId: string | undefined,
     userMessage: string,
-    opts?: { attachments?: string[]; clienteId?: string; onToolCall?: (name: string) => void },
+    opts?: { attachments?: string[]; clienteId?: string; consultorId?: string; actor?: { id?: string; nome?: string }; onToolCall?: (name: string) => void; onTextDelta?: (text: string) => void },
   ): Promise<{ session: ChatSession; reply: ChatMessage }> {
     await this.ensureLoaded();
-    let session = sessionId ? this.sessions.get(sessionId) : undefined;
+    const attachments = Array.isArray(opts?.attachments) ? opts!.attachments!.filter(Boolean) : undefined;
+    const clienteId = typeof opts?.clienteId === 'string' && opts!.clienteId.trim() ? opts!.clienteId.trim() : undefined;
+    let session = sessionId ? ((await this.getSession(sessionId)) ?? undefined) : undefined;
     if (!session) {
-      session = await this.createSession(generateTitle(userMessage));
+      if (sessionId) {
+        const nowSession = Date.now();
+        session = {
+          id: sessionId,
+          title: generateTitle(userMessage),
+          consultorId: opts?.consultorId,
+          createdAt: nowSession,
+          updatedAt: nowSession,
+          messages: [],
+        };
+        await this.persist(session, { strict: true });
+        this.sessions.set(session.id, session);
+      } else {
+        session = await this.createSession(generateTitle(userMessage), opts?.consultorId);
+      }
+    }
+    if (clienteId) {
+      (session as ChatSession & { clienteId?: string }).clienteId = clienteId;
     }
 
     const now = Date.now();
-    const attachments = Array.isArray(opts?.attachments) ? opts!.attachments!.filter(Boolean) : undefined;
-    const clienteId = typeof opts?.clienteId === 'string' && opts!.clienteId.trim() ? opts!.clienteId.trim() : undefined;
     const userMsg: ChatMessage = {
       id: `msg_${randomUUID().slice(0, 6)}_${now.toString(36)}`,
       role: 'user',
@@ -572,7 +754,12 @@ export class AlixService {
     session.messages.push(userMsg);
 
     const intent = classify(userMessage);
-    const response = await this.respond(intent, userMessage, session, { attachments, clienteId });
+    const response = await withAlixTurnContext({ sessionId: session.id, clienteId, actor: opts?.actor }, () => this.respond(intent, userMessage, session, {
+      attachments,
+      clienteId,
+      onToolCall: opts?.onToolCall,
+      onTextDelta: opts?.onTextDelta,
+    }));
 
     const replyMsg: ChatMessage = {
       id: `msg_${randomUUID().slice(0, 6)}_${Date.now().toString(36)}`,
@@ -591,6 +778,25 @@ export class AlixService {
     }
     await this.persist(session);
 
+    const factClienteId = clienteId || session.clienteId;
+    if (factClienteId) {
+      try {
+        const { getAiJobQueueService } = await import('./alix/jobs/AiJobQueueService.js');
+        const queue = getAiJobQueueService();
+        if (queue.ready()) {
+          await queue.enqueueConversationFacts({
+            sourceId: userMsg.id,
+            clienteId: factClienteId,
+            sessionId: session.id,
+            consultorId: session.consultorId,
+            conversationText: userMessage,
+          });
+        }
+      } catch (err) {
+        console.warn('[Alix] Falha ao enfileirar fatos da conversa:', (err as Error).message);
+      }
+    }
+
     return { session, reply: replyMsg };
   }
 
@@ -600,12 +806,18 @@ export class AlixService {
     intent: Intent,
     raw: string,
     session: ChatSession,
-    opts?: { attachments?: string[]; clienteId?: string },
+    opts?: { attachments?: string[]; clienteId?: string; onToolCall?: (name: string) => void; onTextDelta?: (text: string) => void },
   ): Promise<{ content: string; sources?: string[]; toolsUsed?: string[]; metadata?: Record<string, unknown> }> {
-    // Cérebro LLM (Claude Sonnet 4.6 via Foundry) é a primeira tentativa.
+    // A confirmação usa o contexto atual e o mesmo recibo durável do painel.
+    // Nenhuma interpretação do modelo nem busca global pode trocar a ação aprovada.
+    if (intent.tipo === 'confirmar_acao' || intent.tipo === 'confirmar_tudo') {
+      const resolved = await resolveConfirmationChat(raw, { sessionId: session.id, clienteId: opts?.clienteId || session.clienteId }, getAlixConfirmationStore(), name => this.getExecutor(name));
+      return { content: resolved?.reply || 'Não encontrei uma confirmação nesta conversa.', sources: [], toolsUsed: [intent.tipo], metadata: resolved?.metadata };
+    }
+    // O modelo OpenAI e a primeira tentativa; regras locais cobrem o fallback.
     // Se falhar por qualquer motivo (rede/auth/limite), cai para o switch
     // rule-based a seguir — garantia de que o Alix nunca fica mudo.
-    if (isLLMEnabled()) {
+    if (isOpenAIEnabled()) {
       try {
         const llmResult = await this.runLLMPath(raw, session, opts);
         if (llmResult && llmResult.content) return llmResult;
@@ -794,8 +1006,8 @@ Posso responder tudo em segundos. Manda.`;
         return { content: `Não achei ${moeda}. Disponíveis: ${cotacoes.map(c => c.moeda).join(', ')}.`, sources: [], toolsUsed: [] };
       }
       const linhas = lista.map(c => {
-        const setaVar = c.pctChange > 0 ? '+' : (c.pctChange < 0 ? '' : '=');
-        return `• **${c.moeda}** — ${fmtBRL(c.bid)} (${setaVar}${fmtPct(c.pctChange)}) — ${c.provedor || 'fonte desconhecida'}`;
+        const variation = c.pctChange == null ? 'variação indisponível' : `${c.pctChange > 0 ? '+' : ''}${fmtPct(c.pctChange)} (${c.periodoVariacao === '24h' ? '24h' : 'pregão anterior'})`;
+        return `• **${c.moeda}** — ${fmtBRL(c.bid)} (${variation}) — ${c.provedor || 'fonte desconhecida'}${c.estado === 'atrasado' ? ' · atualização pendente' : ''}`;
       }).join('\n');
       const dataRef = lista[0]?.createDate || 'agora';
       return {
@@ -811,14 +1023,14 @@ Posso responder tudo em segundos. Manda.`;
   private async cambioHistorico(moeda: string, dias: number): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
     try {
       const hist = await this.dsm.awesomeApi.getHistoricoDiario(moeda, dias);
-      if (!hist.cotacoes?.length) throw new Error('sem histórico');
+      if (!hist.cotacoes || hist.cotacoes.length < 2) throw new Error('histórico insuficiente');
       const primeira = hist.cotacoes[0];
       const ultima = hist.cotacoes[hist.cotacoes.length - 1];
       const var30d = ((ultima.valor - primeira.valor) / primeira.valor) * 100;
       const min = Math.min(...hist.cotacoes.map(c => c.valor));
       const max = Math.max(...hist.cotacoes.map(c => c.valor));
       return {
-        content: `**${moeda}** — últimos ${hist.cotacoes.length} dias (${hist.provedor}):\n\n• Atual: ${fmtBRL(ultima.valor)}\n• ${dias} dias atrás: ${fmtBRL(primeira.valor)}\n• Variação: ${fmtPct(var30d)}\n• Máxima: ${fmtBRL(max)}\n• Mínima: ${fmtBRL(min)}\n\n_Fonte: ${hist.provedor}_`,
+        content: `**${moeda}** — ${hist.cotacoes.length} observações de ${primeira.data} a ${ultima.data} (${hist.provedor}):\n\n• Atual: ${fmtBRL(ultima.valor)}\n• Primeira observação (${primeira.data}): ${fmtBRL(primeira.valor)}\n• Variação: ${fmtPct(var30d)}\n• Máxima: ${fmtBRL(max)}\n• Mínima: ${fmtBRL(min)}\n\n_Fonte: ${hist.provedor}_`,
         sources: [hist.provedor || 'unknown'],
         toolsUsed: ['awesome.getHistoricoDiario'],
       };
@@ -831,7 +1043,7 @@ Posso responder tudo em segundos. Manda.`;
     try {
       const all = await this.dsm.bancoCentral.getAllIndicators();
       const ind = (all as any)[serieKey];
-      if (!ind) throw new Error(`indicador ${nome} não encontrado`);
+      if (!ind || ind.fonte === 'fallback') throw new Error(`sem observação real de ${nome}`);
       return {
         content: `**${ind.nome}**: **${fmtNum(ind.valor, 2)} ${ind.unidade}**\n\n• Referência: ${ind.data}\n• Fonte: BCB SGS (série ${ind.serie})${ind.fonte === 'fallback' ? ' — _dado em fallback_' : ''}`,
         sources: [`BCB SGS (série ${ind.serie})`],
@@ -845,14 +1057,11 @@ Posso responder tudo em segundos. Manda.`;
   private async todosIndicadores(): Promise<{ content: string; sources: string[]; toolsUsed: string[] }> {
     try {
       const all = await this.dsm.bancoCentral.getAllIndicators();
-      const linhas: string[] = [
-        `• **${all.selic.nome}**: ${fmtNum(all.selic.valor, 2)} ${all.selic.unidade}`,
-        `• **${all.ipca.nome}**: ${fmtNum(all.ipca.valor, 2)} ${all.ipca.unidade}`,
-        `• **${all.igpm.nome}**: ${fmtNum(all.igpm.valor, 2)} ${all.igpm.unidade}`,
-        `• **${all.cdi.nome}**: ${fmtNum(all.cdi.valor, 2)} ${all.cdi.unidade}`,
-        `• **Dólar PTAX**: ${fmtBRL(all.ptax.cotacaoVenda)} (${all.ptax.dataHoraCotacao?.slice(0, 10) || '—'})`,
-        `• **Crédito Rural (${all.creditoRural.periodo})**: ${all.creditoRural.unidade} ${fmtNum(all.creditoRural.volume, 0)}`,
-      ];
+      const linhas = [all.selic, all.ipca, all.igpm, all.cdi].map(ind => ind.fonte === 'fallback'
+        ? `• **${ind.nome}**: indisponível`
+        : `• **${ind.nome}**: ${fmtNum(ind.valor, 2)} ${ind.unidade} — referência ${ind.data}${ind.estado === 'atrasado' ? ' · atualização pendente' : ''}`);
+      linhas.push(all.ptax.fonte === 'fallback' ? '• **Dólar PTAX**: indisponível' : `• **Dólar PTAX**: ${fmtBRL(all.ptax.cotacaoVenda)} — ${all.ptax.dataHoraCotacao}`);
+      linhas.push(all.creditoRural.fonte === 'fallback' ? '• **Crédito Rural**: indisponível' : `• **Crédito Rural (${all.creditoRural.periodo})**: ${all.creditoRural.unidade} ${fmtNum(all.creditoRural.volume, 0)}`);
       return { content: `**Indicadores macroeconômicos (BCB):**\n\n${linhas.join('\n')}`, sources: ['BCB SGS'], toolsUsed: ['bancoCentral.getAllIndicators'] };
     } catch (err) {
       return { content: `Indicadores indisponível (${(err as Error).message}).`, sources: [], toolsUsed: [] };
@@ -899,7 +1108,7 @@ Posso responder tudo em segundos. Manda.`;
       const topUFs = agg.topUFs.slice(0, 3).map(u => `${u.uf} ${fmtBRL(u.valor / 1e9)}Bi`).join(', ');
       return {
         content: `**SICOR — crédito rural ${agg.periodo}:**\n\n• Total: ${fmtBRL(agg.valorTotal / 1e9)} Bi em ${agg.totalContratos.toLocaleString('pt-BR')} contratos\n• Valor médio: ${fmtBRL(agg.valorMedio)}\n• Área: ${(agg.areaTotal / 1e6).toFixed(1)} Mi ha\n• Top produtos: ${topProd}\n• Top UFs: ${topUFs}`,
-        sources: ['BCB SICOR (fallback: direcional CY 2025)'],
+        sources: ['BCB SICOR'],
         toolsUsed: ['sicor.getAgregado'],
       };
     } catch (err) {
@@ -1037,7 +1246,7 @@ Posso responder tudo em segundos. Manda.`;
 
   // ── Dossiê Agro (Daycoval 2025) ────────────────────────
   //
-  // Três tools expostas ao Claude: visão geral, produção e dívidas.
+  // Tres ferramentas expostas ao modelo: visao geral, producao e dividas.
   // Todas resolvem "clienteId ou nome" → id → dossiê. Retornam markdown
   // pronto para resposta do chat, seguindo o padrão dos outros handlers.
 
@@ -1642,21 +1851,21 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
     }
   }
 
-  // ── LLM path (Claude Sonnet 4.6 via Foundry) ──────────
+  // ── Caminho LLM OpenAI ────────────────────────────────
 
   /**
-   * Constroi tools + system prompt + histórico e deixa o Claude orquestrar.
+   * Constroi ferramentas, instrucoes e historico para o modelo orquestrar.
    * Tools retornam dados estruturados (strings prontas das handlers existentes,
-   * que já vêm formatadas). Claude sintetiza a resposta final em linguagem natural.
+   * que ja vem formatadas). O modelo sintetiza a resposta final em linguagem natural.
    */
   private async runLLMPath(
     userMessage: string,
     session: ChatSession,
-    opts?: { attachments?: string[]; clienteId?: string; onToolCall?: (name: string) => void },
+    opts?: { attachments?: string[]; clienteId?: string; onToolCall?: (name: string) => void; onTextDelta?: (text: string) => void },
   ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
     const { tools, registry } = this.buildAlixTools({ sessionId: session.id, clienteId: opts?.clienteId });
     const systemPrompt = await this.buildAlixSystemPrompt(opts?.clienteId);
-    const convo = this.sessionToClaudeMessages(session);
+    const convo = this.sessionToLLMMessages(session);
 
     // Se a última mensagem ainda não é user (edge case onde push não aconteceu),
     // adiciona. Normalmente session.messages já inclui o userMessage atual.
@@ -1711,8 +1920,8 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
     const sourcesAggregate = new Set<string>();
     const documentsAggregate: Array<Record<string, unknown>> = [];
 
-    const result = await runClaude(convo, {
-      model: CLAUDE_MODEL_SONNET,
+    const result = await runOpenAI(convo, {
+      model: OPENAI_MODEL_PRIMARY,
       maxTokens: 2048,
       system: [
         { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },
@@ -1721,6 +1930,9 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
       toolRegistry: registry,
       maxIterations: 6,
       temperature: 0.2,
+      promptCacheKey: 'aletis:alix:legacy:v2',
+      reasoning: { effort: 'low', summary: 'auto' },
+      onTextDelta: opts?.onTextDelta,
       onToolCall: (name, _input, result: any) => {
         toolsUsedAggregate.push(name);
         // Propaga callback do chamador (SSE stream real)
@@ -1754,7 +1966,7 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
       toolsUsed: Array.from(new Set(toolsUsedAggregate)),
       metadata: {
         llm: true,
-        model: CLAUDE_MODEL_SONNET,
+        model: OPENAI_MODEL_PRIMARY,
         iterations: result.iterations,
         stopReason: result.stopReason,
         tokens: result.usage,
@@ -1764,14 +1976,14 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
   }
 
   /**
-   * Converte histórico de sessão em mensagens no formato Anthropic.
+   * Converte o historico da sessao em mensagens neutras para a Responses API.
    * Ignora mensagens 'system' (o Alix usa system prompt separado) e compacta
    * metadata pra economizar contexto.
    */
-  private sessionToClaudeMessages(session: ChatSession): ClaudeMessage[] {
+  private sessionToLLMMessages(session: ChatSession): LLMMessage[] {
     // Limita a últimas 20 mensagens pra não estourar contexto
     const recent = session.messages.slice(-20);
-    const out: ClaudeMessage[] = [];
+    const out: LLMMessage[] = [];
     for (const m of recent) {
       if (m.role === 'system') continue;
       if (!m.content || !m.content.trim()) continue;
@@ -1786,15 +1998,28 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
   private async buildAlixSystemPrompt(clienteId?: string): Promise<string> {
     const base = this.buildAlixSystemPromptBase();
     if (!clienteId) return base;
+    const blocks: string[] = [];
     try {
       const mem = getAlixMemoryService();
       const rendered = await mem.render(clienteId);
-      if (!rendered) return base;
-      return `${base}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n**MEMÓRIA PERSISTENTE DO CLIENTE** (clienteId=${clienteId}). Use como contexto prioritário. Se decidir algo novo/relevante, atualize via tool memoria_cliente_adicionar_nota ou memoria_cliente_atualizar.\n\n${rendered}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+      if (rendered) {
+        blocks.push(`**MEMÓRIA PERSISTENTE DO CLIENTE** (clienteId=${clienteId}). Use como contexto prioritário. Se decidir algo novo/relevante, atualize via tool memoria_cliente_adicionar_nota ou memoria_cliente_atualizar.\n\n${rendered}`);
+      }
     } catch (err) {
       console.warn('[Alix] Falha ao injetar memória do cliente:', (err as Error).message);
-      return base;
     }
+    try {
+      const facts = await getFactsForCliente(clienteId, 80);
+      const ledger = formatFactsForPrompt(facts);
+      if (ledger) {
+        blocks.push(`**LIVRO DE FATOS VERSIONADO DO CLIENTE**\nUse fatos confirmados como fonte prioritária. Itens pending_review ou contested são pendências e não devem ser afirmados como certeza.\n\n${ledger}`);
+      }
+    } catch (err) {
+      console.warn('[Alix] Falha ao injetar Livro de Fatos:', (err as Error).message);
+    }
+    return blocks.length
+      ? `${base}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${blocks.join('\n\n')}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+      : base;
   }
 
   private buildAlixSystemPromptBase(): string {
@@ -1834,13 +2059,13 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
   }
 
   /**
-   * Define todas as tools expostas ao Claude e seus handlers.
+   * Define todas as ferramentas expostas ao modelo e seus handlers.
    * Handlers delegam para métodos existentes do AlixService — zero duplicação.
    */
-  private buildAlixTools(ctx?: { sessionId?: string; clienteId?: string }): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
+  private buildAlixTools(ctx?: { sessionId?: string; clienteId?: string }): { tools: LLMTool[]; registry: LLMToolRegistry } {
     const sessionId = ctx?.sessionId ?? 'anon';
     const ctxClienteId = ctx?.clienteId;
-    const specs: Array<{ spec: ClaudeTool; handler: (input: Record<string, unknown>) => any }> = [
+    const specs: Array<{ spec: LLMTool; handler: (input: Record<string, unknown>) => any }> = [
       // ── Câmbio ─────────────────────────────────────────
       {
         spec: {
@@ -3040,16 +3265,38 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
         spec: {
           name: 'ler_documento_sessao',
           description:
-            'Retorna o texto extraído de um documento anexado (ou previews tabulares no caso de planilhas). Use após listar_documentos_sessao ou quando o usuário indicar um id. Retorna até 50k caracteres.',
+            'Lê partes do documento com fonte e cobertura. Continue passando nextCursor para ler os demais trechos; uma parte não significa leitura integral.',
           input_schema: {
             type: 'object',
             properties: {
               id: { type: 'string', description: 'ID do documento (uuid) retornado por listar_documentos_sessao ou upload.' },
+              cursor: { type: 'string' },
+              maxChars: { type: 'integer', minimum: 1000, maximum: 16000 },
             },
             required: ['id'],
           },
         },
-        handler: (i) => this.tool_ler_documento_sessao(sessionId, String(i.id)),
+        handler: (i) => this.tool_ler_documento_sessao(sessionId, String(i.id), { cursor: typeof i.cursor === 'string' ? i.cursor : undefined, maxChars: typeof i.maxChars === 'number' ? i.maxChars : undefined }),
+      },
+      {
+        spec: {
+          name: 'analisar_documento_profundo',
+          description:
+            'Analisa profundamente um documento anexado (PDF, DOCX, XLSX, CSV, imagem/texto). Retorna diagnóstico, indicadores, riscos, lacunas, evidências e ações possíveis dentro do sistema ALETIS. Use antes de decidir com base em arquivo ou planilha.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'ID do documento retornado por listar_documentos_sessao ou upload.' },
+              foco: { type: 'string', description: 'Objetivo da análise: viabilidade financeira, extração para CRM, auditoria de fluxo, etc.' },
+            },
+            required: ['id'],
+          },
+        },
+        handler: (i) => this.tool_analisar_documento_profundo(
+          sessionId,
+          String(i.id),
+          typeof i.foco === 'string' ? i.foco : undefined,
+        ),
       },
 
       // ══════════════════════════════════════════════════════════
@@ -3160,7 +3407,7 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
               conclusao: { type: 'string' },
               consultor: { type: 'string' },
             },
-            required: ['clienteId', 'clienteNome', 'titulo', 'premissas', 'itens'],
+            required: ['clienteId', 'clienteNome', 'titulo', 'premissas', 'itens', 'conclusao'],
           },
         },
         handler: (i) => this.tool_gerar_memoria_calculo_docx(i),
@@ -3246,18 +3493,11 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
     // ── Alix Insano F2 — web_search + fetch_url + scrapers ──
     if (this.webSearchProvider) {
       const provider = this.webSearchProvider;
-      const nativeTool = provider.asClaudeTool();
+      const nativeTool = provider.asLLMTool();
       if (nativeTool) {
         specs.push({
           spec: nativeTool,
-          handler: async (input) => {
-            // Para TavilyWebSearch, o handler é chamado com { query, ... }.
-            // Para ClaudeNativeWebSearch, o LLM executa — o handler é stub.
-            if (provider.name === 'tavily') {
-              return provider.search(String(input.query || ''), input as any);
-            }
-            return { note: 'web_search nativa é executada pelo LLM (Claude)' };
-          },
+          handler: async (input) => provider.search(String(input.query || ''), input as any),
         });
       }
     }
@@ -3268,8 +3508,8 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
       }
     }
 
-    const tools: ClaudeTool[] = specs.map((s) => s.spec);
-    const registry: ClaudeToolRegistry = {};
+    const tools: LLMTool[] = specs.map((s) => s.spec);
+    const registry: LLMToolRegistry = {};
     for (const s of specs) {
       registry[s.spec.name] = {
         spec: s.spec,
@@ -4205,29 +4445,44 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
   public getExecutor(
     toolName: string,
   ): ((payload: unknown) => Promise<unknown>) | null {
-    const map: Record<string, (payload: unknown) => Promise<unknown>> = {
-      criar_plano_custeio: (p) => this.exec_criar_plano_custeio(p as Record<string, unknown>),
-      atualizar_plano_custeio: (p) => this.exec_atualizar_plano_custeio(p as Record<string, unknown>),
-      duplicar_e_ajustar_custeio: (p) => this.exec_duplicar_e_ajustar_custeio(p as Record<string, unknown>),
-      criar_evento_cliente: (p) => this.exec_criar_evento_cliente(p as Record<string, unknown>),
-      criar_tarefa: (p) => this.exec_criar_tarefa(p as Record<string, unknown>),
-      agendar_reuniao: (p) => this.exec_agendar_reuniao(p as Record<string, unknown>),
-      enviar_mensagem_whatsapp_intent: (p) => this.exec_enviar_mensagem_whatsapp_intent(p as Record<string, unknown>),
-      gerar_proposta_renegociacao_intent: (p) => this.exec_gerar_proposta_renegociacao_intent(p as Record<string, unknown>),
-      // ── Alix Insano F4 ──
-      criar_cliente: (p) => this.exec_criar_cliente(p as Record<string, unknown>),
-      promover_lead_para_cliente: (p) => this.exec_promover_lead_para_cliente(p as Record<string, unknown>),
-      criar_proposta_inteligente: (p) => this.exec_criar_proposta_inteligente(p as Record<string, unknown>),
-      atualizar_proposta: (p) => this.exec_atualizar_proposta(p as Record<string, unknown>),
-      atualizar_dossie_dividas: (p) => this.exec_atualizar_dossie_dividas(p as Record<string, unknown>),
-      anexar_documento_cliente: (p) => this.exec_anexar_documento_cliente(p as Record<string, unknown>),
+    const writeMeta = {
+      owner: 'legacy-alix' as const,
+      risk: 'write' as const,
+      requiresConfirmation: true as const,
+      tags: ['hitl', 'legacy-executor'],
     };
-    return map[toolName] ?? null;
+    const registry = createExecutorRegistry({
+      criar_plano_custeio: { meta: writeMeta, handler: (p) => this.exec_criar_plano_custeio(p as Record<string, unknown>) },
+      atualizar_plano_custeio: { meta: writeMeta, handler: (p) => this.exec_atualizar_plano_custeio(p as Record<string, unknown>) },
+      duplicar_e_ajustar_custeio: { meta: writeMeta, handler: (p) => this.exec_duplicar_e_ajustar_custeio(p as Record<string, unknown>) },
+      criar_evento_cliente: { meta: writeMeta, handler: (p) => this.exec_criar_evento_cliente(p as Record<string, unknown>) },
+      criar_tarefa: { meta: writeMeta, handler: (p) => this.exec_criar_tarefa(p as Record<string, unknown>) },
+      agendar_reuniao: { meta: writeMeta, handler: (p) => this.exec_agendar_reuniao(p as Record<string, unknown>) },
+      enviar_mensagem_whatsapp_intent: { meta: { ...writeMeta, risk: 'external' as const }, handler: (p) => this.exec_enviar_mensagem_whatsapp_intent(p as Record<string, unknown>) },
+      gerar_proposta_renegociacao_intent: { meta: { ...writeMeta, risk: 'generate' as const }, handler: (p) => this.exec_gerar_proposta_renegociacao_intent(p as Record<string, unknown>) },
+      // ── Alix Insano F4 ──
+      criar_cliente: { meta: writeMeta, handler: (p) => this.exec_criar_cliente(p as Record<string, unknown>) },
+      promover_lead_para_cliente: { meta: writeMeta, handler: (p) => this.exec_promover_lead_para_cliente(p as Record<string, unknown>) },
+      criar_proposta_inteligente: { meta: writeMeta, handler: (p) => this.exec_criar_proposta_inteligente(p as Record<string, unknown>) },
+      atualizar_proposta: { meta: writeMeta, handler: (p) => this.exec_atualizar_proposta(p as Record<string, unknown>) },
+      atualizar_dossie_dividas: { meta: writeMeta, handler: (p) => this.exec_atualizar_dossie_dividas(p as Record<string, unknown>) },
+      anexar_documento_cliente: { meta: writeMeta, handler: (p) => this.exec_anexar_documento_cliente(p as Record<string, unknown>) },
+      definir_proxima_acao_cliente: { meta: writeMeta, handler: (p) => this.exec_definir_proxima_acao_cliente(p as Record<string, unknown>) },
+      registrar_contato_cliente: { meta: writeMeta, handler: (p) => this.exec_registrar_contato_cliente(p as Record<string, unknown>) },
+      alterar_estagio_cliente: { meta: writeMeta, handler: (p) => this.exec_alterar_estagio_cliente(p as Record<string, unknown>) },
+      onboarding_cliente_completo: { meta: writeMeta, handler: (p) => this.exec_onboarding_cliente_completo(p as Record<string, unknown>) },
+      atualizar_cliente_completo: { meta: writeMeta, handler: (p) => this.exec_atualizar_cliente_completo(p as Record<string, unknown>) },
+      criar_demanda_cliente: { meta: writeMeta, handler: (p) => this.exec_criar_demanda_cliente(p as Record<string, unknown>) },
+      atualizar_demanda_cliente: { meta: writeMeta, handler: (p) => this.exec_atualizar_demanda_cliente(p as Record<string, unknown>) },
+      registrar_atividade_demanda: { meta: writeMeta, handler: (p) => this.exec_registrar_atividade_demanda(p as Record<string, unknown>) },
+      gerenciar_checklist_demanda: { meta: writeMeta, handler: (p) => this.exec_gerenciar_checklist_demanda(p as Record<string, unknown>) },
+    });
+    return getExecutorFromRegistry(registry, toolName);
   }
 
   /**
    * Gera a resposta padrão de um handler de executor:
-   * cria o intent no store e retorna o payload que o Claude
+   * cria o intent no store e retorna o payload que o modelo
    * vai surfaceirar ao usuário.
    */
   private buildPendingResponse(
@@ -4236,11 +4491,11 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
     payload: Record<string, unknown>,
     preview: Record<string, unknown>,
   ): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
-    const entry = getAlixConfirmationStore().create(toolName, description, payload);
+    const entry = getAlixConfirmationStore().create(toolName, description, payload, this.activeSessionId);
     return {
       content:
         `**Aguardando confirmação:** ${description}\n\n` +
-        `Confirma que posso prosseguir? (ID \`${entry.id}\`)`,
+        `Aprova pelo painel lateral ou responde no chat: \`confirmo ${entry.id}\` (ou simplesmente \`confirmo\` se for a única ação pendente).`,
       sources: [],
       toolsUsed: [`${toolName}.pending`],
       metadata: {
@@ -4760,6 +5015,7 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
   private async tool_ler_documento_sessao(
     sessionId: string,
     id: string,
+    options: DocumentReadOptions = {},
   ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
     const intake = getDocumentIntakeService();
     const doc = await intake.get(sessionId, id);
@@ -4771,19 +5027,67 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
         metadata: { found: false },
       };
     }
-    const texto = doc.extractedText && doc.extractedText.length > 50000
-      ? doc.extractedText.slice(0, 50000) + '\n…(truncado)'
-      : doc.extractedText || '[sem texto extraído]';
+    const page = readDocumentPage(doc, options);
+    const texto = page.extractedText || '[sem texto extraído]';
     const header = `**${doc.filename}** (${doc.kind}${doc.pageCount ? `, ${doc.pageCount} pág` : ''}, ${Math.round(doc.sizeBytes / 1024)} KB)`;
     return {
-      content: `${header}\n\n${texto}`,
+      content: `${header}\n\n${texto}\n\n${page.instruction}\nCobertura: ${JSON.stringify(page.coverage)}\nnextCursor: ${page.nextCursor || 'fim'}`,
       sources: [`intake:${doc.id}`],
       toolsUsed: ['DocumentIntakeService.get'],
       metadata: {
+        ...page,
         id: doc.id,
         kind: doc.kind,
         pageCount: doc.pageCount,
         sheets: doc.metadata?.sheets,
+      },
+    };
+  }
+
+  private async tool_analisar_documento_profundo(
+    sessionId: string,
+    id: string,
+    foco?: string,
+  ): Promise<{ content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> }> {
+    const intake = getDocumentIntakeService();
+    const doc = await intake.get(sessionId, id);
+    if (!doc) {
+      return {
+        content: `Documento id=${id} não encontrado nesta sessão.`,
+        sources: [],
+        toolsUsed: ['DocumentAnalysisService.analyze'],
+        metadata: { found: false },
+      };
+    }
+    const analysis = await analyzeDocumentDeep({ doc, foco });
+    const indicadores = analysis.indicadores
+      .slice(0, 8)
+      .map((i) => `- ${i.nome}: ${i.valor}${i.unidade ? ` ${i.unidade}` : ''}${i.fonte ? ` (${i.fonte})` : ''}`)
+      .join('\n');
+    const riscos = analysis.riscos.slice(0, 6).map((r) => `- ${r}`).join('\n');
+    const lacunas = analysis.lacunas.slice(0, 6).map((l) => `- ${l}`).join('\n');
+    const acoes = analysis.acoesSistema
+      .slice(0, 6)
+      .map((a) => `- ${a.tipo}: ${a.descricao}`)
+      .join('\n');
+    return {
+      content: [
+        `**Análise profunda: ${analysis.filename}**`,
+        `Tipo: ${analysis.tipoDocumento} · modo=${analysis.status}`,
+        '',
+        analysis.resumoExecutivo,
+        analysis.achadosChave.length ? `\n**Achados-chave**\n${analysis.achadosChave.map((a) => `- ${a}`).join('\n')}` : '',
+        indicadores ? `\n**Indicadores**\n${indicadores}` : '',
+        riscos ? `\n**Riscos**\n${riscos}` : '',
+        lacunas ? `\n**Lacunas**\n${lacunas}` : '',
+        acoes ? `\n**Ações no sistema**\n${acoes}` : '',
+        analysis.aviso ? `\n_${analysis.aviso}_` : '',
+      ].filter(Boolean).join('\n'),
+      sources: [`intake:${doc.id}`, `analysis:${doc.id}`],
+      toolsUsed: ['DocumentAnalysisService.analyze'],
+      metadata: {
+        found: true,
+        analysis,
       },
     };
   }
@@ -5092,75 +5396,177 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
   public handle_criar_cliente(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
     const nome = String(input.nome || '').trim();
     const tipoPessoa = String(input.tipoPessoa || 'PF').toUpperCase();
-    const cpfCnpj = String(input.cpfCnpj || '').replace(/\D/g, '');
+    const cpfCnpj = normalizeCpfCnpj(input.cpfCnpj);
     const uf = String(input.uf || '').toUpperCase();
-    if (!nome || !cpfCnpj) return this.invalidInput('Faltam campos obrigatórios: nome e cpfCnpj');
+    const escritorio = normalizeCrmOffice(input.escritorio);
+    if (!nome) return this.invalidInput('Falta campo obrigatório: nome');
+    if (!escritorio) return this.invalidInput('Falta campo obrigatório: escritório. Pergunte ao usuário se o cliente pertence a Aletis ou Canarana.');
+    if (cpfCnpj && !isValidCpfCnpj(cpfCnpj)) return this.invalidInput('CPF/CNPJ informado é incompleto. Cadastre sem documento ou envie CPF/CNPJ com 11 ou 14 dígitos.');
     if (!['PF', 'PJ'].includes(tipoPessoa)) return this.invalidInput('tipoPessoa deve ser PF ou PJ');
+    const existente = cpfCnpj ? this.clientePorCpfCnpj(cpfCnpj) : null;
+    if (existente) {
+      input.observacoes = [
+        String(input.observacoes || '').trim(),
+        `ALIX identificou CPF/CNPJ já usado por ${existente.nome ?? existente.id} (${existente.id}); cadastro permitido para revisão.`,
+      ].filter(Boolean).join('\n')
+    }
     const payload = {
-      nome, tipoPessoa, cpfCnpj, uf,
+      nome, tipoPessoa, cpfCnpj, uf, escritorio,
+      cidade: String(input.cidade || ''),
       email: String(input.email || ''),
       telefone: String(input.telefone || ''),
-      dividaTotal: Number(input.dividaTotal ?? 0),
+      credor: String(input.credor || 'A definir'),
+      valorTotalDivida: Number(input.valorTotalDivida ?? input.dividaTotal ?? 0),
+      consultor: String(input.consultor || 'Christian Kohler'),
       origem: String(input.origem || 'alix'),
+      observacoes: String(input.observacoes || ''),
+      grupoFamiliar: Array.isArray(input.grupoFamiliar) ? input.grupoFamiliar : [],
     };
     return this.buildPendingResponse('criar_cliente',
-      `Criar cliente ${nome} (${tipoPessoa} ${cpfCnpj})`, payload,
-      { nome, tipoPessoa, cpfCnpj, uf });
+      `Criar cliente ${nome}${cpfCnpj ? ` (${tipoPessoa} ${cpfCnpj})` : ' (sem CPF/CNPJ validado)'} no escritório ${escritorio}`, payload,
+      { nome, tipoPessoa, cpfCnpj, uf, escritorio });
   }
 
   private async exec_criar_cliente(payload: Record<string, unknown>): Promise<unknown> {
     const b = getCrmWriteBackends();
     if (!b.setCliente) throw new Error('Backend setCliente não registrado');
+    const cpfCnpj = normalizeCpfCnpj(payload.cpfCnpj);
+    const escritorio = normalizeCrmOffice(payload.escritorio);
+    if (cpfCnpj && !isValidCpfCnpj(cpfCnpj)) throw new Error('CPF/CNPJ informado é incompleto. Cadastre sem documento ou envie 11/14 dígitos.');
+    if (!escritorio) throw new Error('Escritório obrigatório: Aletis ou Canarana.');
+    const existente = cpfCnpj ? this.clientePorCpfCnpj(cpfCnpj) : null;
     const id = `cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const now = new Date().toISOString();
+    const hoje = now.slice(0, 10);
+    const valorTotalDivida = Number(payload.valorTotalDivida ?? payload.dividaTotal ?? 0);
     const cliente = {
-      id, nome: payload.nome, tipoPessoa: payload.tipoPessoa, cpfCnpj: payload.cpfCnpj,
-      uf: payload.uf, email: payload.email, telefone: payload.telefone,
-      dividaTotal: Number(payload.dividaTotal ?? 0),
-      statusAtendimento: 'ativo', origem: payload.origem,
-      criadoEm: now, atualizadoEm: now,
+      id,
+      nome: payload.nome,
+      tipoPessoa: payload.tipoPessoa,
+      cpfCnpj,
+      cidade: payload.cidade || '',
+      uf: payload.uf || '',
+      telefone: payload.telefone || '',
+      email: payload.email || '',
+      atividade: '',
+      areaTotalHa: 0,
+      culturas: [],
+      estagio: 'lead',
+      consultor: payload.consultor || 'Christian Kohler',
+      escritorio,
+      credor: payload.credor || 'A definir',
+      valorTotalDivida: Number.isFinite(valorTotalDivida) ? valorTotalDivida : 0,
+      valorTotalPago: 0,
+      dividas: [],
+      pagamentos: [],
+      timeline: [
+        { data: hoje, tipo: 'contato', descricao: 'Cliente cadastrado pela ALIX' },
+        ...(existente ? [{
+          data: hoje,
+          tipo: 'analise',
+          descricao: 'CPF/CNPJ já existe em outro cadastro',
+          detalhes: `Possível vínculo com ${existente.nome ?? existente.id}; cadastro mantido para revisão.`,
+        }] : []),
+      ],
+      dataCadastro: hoje,
+      ultimaAtualizacao: hoje,
+      observacoes: payload.observacoes || '',
+      grupoFamiliar: Array.isArray(payload.grupoFamiliar) ? payload.grupoFamiliar : [],
+      origem: payload.origem,
+      criadoEm: now,
+      atualizadoEm: now,
     };
-    b.setCliente(cliente);
+    await b.setCliente(cliente);
     return { id, cliente };
   }
 
   public handle_promover_lead_para_cliente(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
-    const cpfCnpj = String(input.cpfCnpj || '').replace(/\D/g, '');
+    const cpfCnpj = normalizeCpfCnpj(input.cpfCnpj);
+    const escritorio = normalizeCrmOffice(input.escritorio);
     if (!cpfCnpj) return this.invalidInput('cpfCnpj obrigatório');
+    if (!escritorio) return this.invalidInput('Falta campo obrigatório: escritório. Pergunte ao usuário se o cliente pertence a Aletis ou Canarana.');
+    if (!isValidCpfCnpj(cpfCnpj)) return this.invalidInput('cpfCnpj deve conter CPF/CNPJ completo com 11 ou 14 dígitos');
+    const existente = this.clientePorCpfCnpj(cpfCnpj);
+    if (existente) {
+      return this.invalidInput(`Cliente já existe no CRM: ${existente.nome ?? existente.id} (${existente.id}).`);
+    }
     const b = getCrmWriteBackends();
     const lead = b.getLead ? b.getLead(cpfCnpj) : null;
     if (!lead) return this.invalidInput(`Lead ${cpfCnpj} não encontrado na prospecção`);
     const l = lead as { nome?: string; uf?: string; totalDivida?: number };
     return this.buildPendingResponse('promover_lead_para_cliente',
-      `Promover lead ${l.nome ?? cpfCnpj} para cliente no CRM`,
-      { cpfCnpj, lead: l },
-      { cpfCnpj, nome: l.nome, uf: l.uf, divida: l.totalDivida });
+      `Promover lead ${l.nome ?? cpfCnpj} para cliente do escritório ${escritorio}`,
+      { cpfCnpj, escritorio, lead: l },
+      { cpfCnpj, escritorio, nome: l.nome, uf: l.uf, divida: l.totalDivida });
   }
 
   private async exec_promover_lead_para_cliente(payload: Record<string, unknown>): Promise<unknown> {
     const b = getCrmWriteBackends();
     if (!b.setCliente || !b.getLead) throw new Error('Backends CRM não registrados');
-    const cpfCnpj = String(payload.cpfCnpj);
+    const cpfCnpj = normalizeCpfCnpj(payload.cpfCnpj);
+    const escritorio = normalizeCrmOffice(payload.escritorio);
+    if (!isValidCpfCnpj(cpfCnpj)) throw new Error('cpfCnpj deve conter CPF/CNPJ completo com 11 ou 14 dígitos');
+    if (!escritorio) throw new Error('Escritório obrigatório: Aletis ou Canarana.');
+    const existente = this.clientePorCpfCnpj(cpfCnpj);
+    if (existente) throw new Error(`Cliente já existe no CRM para CPF/CNPJ ${cpfCnpj}: ${existente.id}`);
     const lead = b.getLead(cpfCnpj) as {
       nome?: string; tipoPessoa?: string; uf?: string; totalDivida?: number;
+      qtdInscricoes?: number; temAjuizada?: boolean; debts?: Array<{ inscricao?: string; valor?: number; dataInscricao?: string; ajuizado?: boolean; fonte?: string }>;
+      score?: { total?: number; classificacao?: string; honorariosEstimados?: number };
+      cnpj?: { razaoSocial?: string; email?: string; telefone1?: string; endereco?: { municipio?: string; uf?: string; cep?: string }; cnaeFiscalDescricao?: string };
       enrichment?: { razaoSocial?: string; email?: string; telefone1?: string };
     };
     if (!lead) throw new Error('Lead sumiu entre handle e apply');
     const id = `cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const now = new Date().toISOString();
+    const hoje = now.slice(0, 10);
+    const dividas = Array.isArray(lead.debts)
+      ? lead.debts.map((d) => ({
+          contrato: d.inscricao || 'PGFN',
+          valorOriginal: Number(d.valor || 0),
+          valorAtualizado: Number(d.valor || 0),
+          vencimento: d.dataInscricao || hoje,
+          status: 'ativa',
+          credor: d.fonte === 'PREV' ? 'RFB/Previdência' : d.fonte === 'FGTS' ? 'FGTS' : 'RFB/Dívida Ativa',
+        }))
+      : [];
     const cliente = {
       id,
-      nome: lead.enrichment?.razaoSocial ?? lead.nome ?? `Lead ${cpfCnpj}`,
+      nome: lead.cnpj?.razaoSocial ?? lead.enrichment?.razaoSocial ?? lead.nome ?? `Lead ${cpfCnpj}`,
       tipoPessoa: lead.tipoPessoa ?? 'PF',
-      cpfCnpj, uf: lead.uf ?? '',
-      email: lead.enrichment?.email ?? '',
-      telefone: lead.enrichment?.telefone1 ?? '',
-      dividaTotal: Number(lead.totalDivida ?? 0),
-      statusAtendimento: 'ativo', origem: 'prospeccao',
+      cpfCnpj,
+      cidade: lead.cnpj?.endereco?.municipio ?? '',
+      uf: lead.cnpj?.endereco?.uf ?? lead.uf ?? '',
+      telefone: lead.cnpj?.telefone1 ?? lead.enrichment?.telefone1 ?? '',
+      email: lead.cnpj?.email ?? lead.enrichment?.email ?? '',
+      atividade: lead.cnpj?.cnaeFiscalDescricao ?? 'Produtor rural',
+      areaTotalHa: 0,
+      culturas: [],
+      estagio: 'prospeccao',
+      consultor: 'Christian Kohler',
+      escritorio,
+      credor: 'PGFN',
+      valorTotalDivida: Number(lead.totalDivida ?? 0),
+      valorTotalPago: 0,
+      dividas,
+      pagamentos: [],
+      timeline: [{
+        data: hoje,
+        tipo: 'contato',
+        descricao: 'Lead promovido da Prospecção pela ALIX',
+        detalhes: `Score ${lead.score?.total ?? '—'}${lead.qtdInscricoes ? ` · ${lead.qtdInscricoes} inscrições` : ''}${lead.temAjuizada ? ' · com ajuizamento' : ''}`,
+      }],
+      dataCadastro: hoje,
+      ultimaAtualizacao: hoje,
+      observacoes: lead.score?.honorariosEstimados
+        ? `Honorários estimados: R$ ${Number(lead.score.honorariosEstimados).toLocaleString('pt-BR')}.`
+        : '',
+      origem: 'prospeccao',
       leadCpfCnpj: cpfCnpj,
-      criadoEm: now, atualizadoEm: now,
+      criadoEm: now,
+      atualizadoEm: now,
     };
-    b.setCliente(cliente);
+    await b.setCliente(cliente);
     return { id, cliente };
   }
 
@@ -5187,20 +5593,22 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
       criadoEm: new Date().toISOString(), criadoPor: 'alix',
       secoes: Array(15).fill(0).map((_, i) => ({ ordem: i + 1, titulo: `Seção ${i + 1}`, status: 'rascunho' })),
     };
-    b.setPropostaInteligente(proposta);
+    await b.setPropostaInteligente(proposta);
     return { id, proposta };
   }
 
   public handle_atualizar_proposta(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
     const id = String(input.id || '').trim();
     if (!id) return this.invalidInput('id obrigatório');
-    const partial: Record<string, unknown> = {};
-    for (const k of ['estrategia', 'dividaTotal', 'observacao', 'status', 'valor', 'prazoMeses', 'taxaNominal']) {
-      if (input[k] !== undefined) partial[k] = input[k];
+    let partial: ReturnType<typeof normalizeAlixProposalPatch>;
+    try {
+      const { id: _id, ...fields } = input;
+      partial = normalizeAlixProposalPatch(fields);
+    } catch (error) {
+      return this.invalidInput((error as Error).message);
     }
-    if (Object.keys(partial).length === 0) {
-      return this.invalidInput('Envie ao menos um de: estrategia, dividaTotal, observacao, status, valor, prazoMeses, taxaNominal');
-    }
+    const current = getPropostasStore().find((proposal) => proposal.id === id);
+    if (current && partial.expectedRevision === undefined) partial.expectedRevision = current.revision || 0;
     return this.buildPendingResponse('atualizar_proposta',
       `Atualizar proposta ${id} (${Object.keys(partial).join(', ')})`,
       { id, partial },
@@ -5212,9 +5620,9 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
     if (!b.updateProposta) throw new Error('Backend updateProposta não registrado');
     const id = String(payload.id);
     const partial = (payload.partial as Record<string, unknown>) ?? {};
-    const ok = b.updateProposta(id, partial);
+    const ok = await b.updateProposta(id, partial);
     if (!ok) throw new Error(`Proposta ${id} não encontrada`);
-    return { id, atualizado: true, campos: Object.keys(partial) };
+    return { id, atualizado: true, campos: Object.keys(partial).filter(key => key !== 'expectedRevision'), ...(typeof ok === 'object' ? { proposta: ok.data, vinculos: ok.meta } : {}) };
   }
 
   // ── F5 · atualizar_dossie_dividas ──────────────────────
@@ -5279,6 +5687,757 @@ _Lembre-se: toda minuta requer revisão jurídica antes da assinatura._`;
       throw new Error(`Falha anexando documento: ${(err as Error).message}`);
     }
   }
+
+  // ── Demandas do cliente ──────────────────────────────────
+  public handle_criar_demanda_cliente(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    const titulo = String(input.titulo || '').trim();
+    if (!clienteId || !titulo) return this.invalidInput('clienteId e titulo obrigatórios');
+    if (!this.clienteExiste(clienteId)) return this.invalidInput(`Cliente ${clienteId} não encontrado`);
+    const payload = {
+      clienteId,
+      titulo,
+      assunto: String(input.assunto || titulo).trim(),
+      descricao: String(input.descricao || '').trim(),
+      categoria: String(input.categoria || 'outro').trim(),
+      status: String(input.status || 'nova').trim(),
+      prioridade: String(input.prioridade || 'normal').trim(),
+      responsavel: String(input.responsavel || 'ALIX').trim(),
+      credor: String(input.credor || '').trim(),
+      valorPretendido: input.valorPretendido,
+      prazoAlvo: String(input.prazoAlvo || '').trim(),
+      proximaAcao: String(input.proximaAcao || '').trim(),
+      proximaAcaoEm: String(input.proximaAcaoEm || '').trim(),
+      probabilidade: input.probabilidade,
+      resultadoEsperado: String(input.resultadoEsperado || '').trim(),
+      documentoIds: Array.isArray(input.documentoIds) ? input.documentoIds : [],
+      tags: Array.isArray(input.tags) ? input.tags : [],
+      origem: 'cadastro_ia',
+    };
+    return this.buildPendingResponse(
+      'criar_demanda_cliente',
+      `Criar demanda "${titulo}" no cliente ${clienteId}`,
+      payload,
+      { clienteId, titulo, assunto: payload.assunto, prioridade: payload.prioridade, prazoAlvo: payload.prazoAlvo },
+    );
+  }
+
+  private async exec_criar_demanda_cliente(payload: Record<string, unknown>): Promise<unknown> {
+    const clienteId = String(payload.clienteId || '').trim();
+    if (!clienteId || !this.clienteExiste(clienteId)) throw new Error(`Cliente ${clienteId || '(vazio)'} não encontrado`);
+    const demanda = await getClienteDemandaService().create(clienteId, payload);
+    return { clienteId, ok: true, demanda };
+  }
+
+  public handle_atualizar_demanda_cliente(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    const demandaId = String(input.demandaId || '').trim();
+    if (!clienteId || !demandaId) return this.invalidInput('clienteId e demandaId obrigatórios');
+    if (!this.clienteExiste(clienteId)) return this.invalidInput(`Cliente ${clienteId} não encontrado`);
+    const patch: Record<string, unknown> = {};
+    for (const field of ['titulo', 'assunto', 'descricao', 'categoria', 'status', 'prioridade', 'responsavel', 'credor', 'valorPretendido', 'prazoAlvo', 'proximaAcao', 'proximaAcaoEm', 'probabilidade', 'resultadoEsperado', 'documentoIds', 'tags']) {
+      if (input[field] !== undefined) patch[field] = input[field];
+    }
+    if (Object.keys(patch).length === 0) return this.invalidInput('Informe ao menos um campo para atualizar');
+    return this.buildPendingResponse(
+      'atualizar_demanda_cliente',
+      `Atualizar demanda ${demandaId} do cliente ${clienteId} (${Object.keys(patch).join(', ')})`,
+      { clienteId, demandaId, patch },
+      { clienteId, demandaId, campos: Object.keys(patch) },
+    );
+  }
+
+  private async exec_atualizar_demanda_cliente(payload: Record<string, unknown>): Promise<unknown> {
+    const clienteId = String(payload.clienteId || '').trim();
+    const demandaId = String(payload.demandaId || '').trim();
+    const patch = payload.patch && typeof payload.patch === 'object' ? payload.patch as Record<string, unknown> : {};
+    const demanda = await getClienteDemandaService().update(clienteId, demandaId, patch);
+    if (!demanda) throw new Error(`Demanda ${demandaId} não encontrada no cliente ${clienteId}`);
+    if (patch.titulo !== undefined) {
+      const backend = getCrmWriteBackends();
+      for (const proposal of getPropostasStore().filter((item: any) => item.demandaId === demandaId)) {
+        if (backend.updateProposta) await backend.updateProposta(String(proposal.id), { demandaTitulo: demanda.titulo });
+      }
+    }
+    return { clienteId, ok: true, demanda };
+  }
+
+  public handle_registrar_atividade_demanda(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    const demandaId = String(input.demandaId || '').trim();
+    const titulo = String(input.titulo || '').trim();
+    const tipo = String(input.tipo || 'nota').trim();
+    if (!clienteId || !demandaId || !titulo) return this.invalidInput('clienteId, demandaId e titulo obrigatórios');
+    if (!this.clienteExiste(clienteId)) return this.invalidInput(`Cliente ${clienteId} não encontrado`);
+    const payload = {
+      clienteId,
+      demandaId,
+      tipo,
+      titulo,
+      descricao: String(input.descricao || '').trim(),
+      autor: String(input.autor || 'ALIX').trim(),
+    };
+    return this.buildPendingResponse(
+      'registrar_atividade_demanda',
+      `Registrar atividade "${titulo}" na demanda ${demandaId}`,
+      payload,
+      { clienteId, demandaId, tipo, titulo },
+    );
+  }
+
+  private async exec_registrar_atividade_demanda(payload: Record<string, unknown>): Promise<unknown> {
+    const clienteId = String(payload.clienteId || '').trim();
+    const demandaId = String(payload.demandaId || '').trim();
+    const demanda = await getClienteDemandaService().addEvent(clienteId, demandaId, payload);
+    if (!demanda) throw new Error(`Demanda ${demandaId} não encontrada no cliente ${clienteId}`);
+    return { clienteId, ok: true, demanda };
+  }
+
+  public handle_gerenciar_checklist_demanda(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    const demandaId = String(input.demandaId || '').trim();
+    const operacao = String(input.operacao || '').trim();
+    const itemId = String(input.itemId || '').trim();
+    const titulo = String(input.titulo || '').trim();
+    if (!clienteId || !demandaId || !['adicionar', 'concluir', 'reabrir', 'remover'].includes(operacao)) {
+      return this.invalidInput('clienteId, demandaId e operacao válida são obrigatórios');
+    }
+    if (operacao === 'adicionar' && !titulo) return this.invalidInput('titulo é obrigatório para adicionar');
+    if (operacao !== 'adicionar' && !itemId) return this.invalidInput('itemId é obrigatório para concluir, reabrir ou remover');
+    if (!this.clienteExiste(clienteId)) return this.invalidInput(`Cliente ${clienteId} não encontrado`);
+    const payload = { clienteId, demandaId, operacao, itemId, titulo, responsavel: input.responsavel, prazo: input.prazo, autor: 'ALIX' };
+    return this.buildPendingResponse(
+      'gerenciar_checklist_demanda',
+      `${operacao} item do checklist da demanda ${demandaId}${titulo ? `: "${titulo}"` : ''}`,
+      payload,
+      { clienteId, demandaId, operacao, itemId, titulo },
+    );
+  }
+
+  private async exec_gerenciar_checklist_demanda(payload: Record<string, unknown>): Promise<unknown> {
+    const clienteId = String(payload.clienteId || '').trim();
+    const demandaId = String(payload.demandaId || '').trim();
+    const operacao = String(payload.operacao || '').trim();
+    const itemId = String(payload.itemId || '').trim();
+    const service = getClienteDemandaService();
+    const demanda = operacao === 'adicionar'
+      ? await service.addChecklistItem(clienteId, demandaId, payload)
+      : operacao === 'remover'
+        ? await service.removeChecklistItem(clienteId, demandaId, itemId)
+        : await service.updateChecklistItem(clienteId, demandaId, itemId, { concluido: operacao === 'concluir', autor: 'ALIX' });
+    if (!demanda) throw new Error(`Demanda ${demandaId} ou item ${itemId || '(novo)'} não encontrado`);
+    return { clienteId, ok: true, demanda };
+  }
+
+  // ── F6 · CRM operacional inteligente ───────────────────
+  public handle_definir_proxima_acao_cliente(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    const data = String(input.data || '').trim();
+    const descricao = String(input.descricao || '').trim();
+    if (!clienteId || !data || !descricao) return this.invalidInput('clienteId, data e descricao obrigatórios');
+    if (!this.clienteExiste(clienteId)) return this.invalidInput(`Cliente ${clienteId} não encontrado`);
+
+    const payload = {
+      clienteId,
+      data,
+      descricao,
+      prioridade: this.normalizarPrioridade(input.prioridade),
+      responsavel: String(input.responsavel || 'ALIX').trim(),
+      motivo: String(input.motivo || '').trim(),
+    };
+    return this.buildPendingResponse(
+      'definir_proxima_acao_cliente',
+      `Definir próxima ação do cliente ${clienteId} para ${data}: ${descricao}`,
+      payload,
+      { clienteId, data, descricao, prioridade: payload.prioridade, responsavel: payload.responsavel },
+    );
+  }
+
+  private async exec_definir_proxima_acao_cliente(payload: Record<string, unknown>): Promise<unknown> {
+    const clienteId = String(payload.clienteId || '').trim();
+    const data = String(payload.data || '').trim();
+    const descricao = String(payload.descricao || '').trim();
+    if (!clienteId || !data || !descricao) throw new Error('clienteId, data e descricao obrigatórios');
+    const now = new Date().toISOString();
+    const hoje = now.slice(0, 10);
+    const proximaAcao = {
+      data,
+      descricao,
+      prioridade: this.normalizarPrioridade(payload.prioridade),
+      responsavel: String(payload.responsavel || 'ALIX').trim(),
+      criadoEm: now,
+      criadoPor: 'ALIX',
+    };
+    const timelineEvent = {
+      data: hoje,
+      tipo: 'acao',
+      descricao: `Próxima ação definida para ${data}: ${descricao}`,
+      detalhes: String(payload.motivo || '').trim() || 'Registrado pela ALIX',
+    };
+    const cliente = await this.patchClienteOperacional(clienteId, { proximaAcao }, timelineEvent);
+    return { clienteId, ok: true, proximaAcao, cliente };
+  }
+
+  public handle_registrar_contato_cliente(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    const canal = this.normalizarCanalContato(input.canal);
+    const descricao = String(input.descricao || '').trim();
+    if (!clienteId || !canal || !descricao) return this.invalidInput('clienteId, canal e descricao obrigatórios');
+    if (!this.clienteExiste(clienteId)) return this.invalidInput(`Cliente ${clienteId} não encontrado`);
+
+    const proximaAcao = this.normalizarProximaAcao(input.proximaAcao);
+    const payload = {
+      clienteId,
+      canal,
+      descricao,
+      resultado: String(input.resultado || '').trim(),
+      data: String(input.data || '').trim(),
+      responsavel: String(input.responsavel || 'ALIX').trim(),
+      ...(proximaAcao ? { proximaAcao } : {}),
+    };
+    return this.buildPendingResponse(
+      'registrar_contato_cliente',
+      `Registrar contato ${canal} no cliente ${clienteId}: ${descricao}`,
+      payload,
+      { clienteId, canal, descricao, temProximaAcao: Boolean(proximaAcao) },
+    );
+  }
+
+  private async exec_registrar_contato_cliente(payload: Record<string, unknown>): Promise<unknown> {
+    const clienteId = String(payload.clienteId || '').trim();
+    const canal = this.normalizarCanalContato(payload.canal);
+    const descricao = String(payload.descricao || '').trim();
+    if (!clienteId || !canal || !descricao) throw new Error('clienteId, canal e descricao obrigatórios');
+
+    const now = new Date().toISOString();
+    const dataEvento = String(payload.data || '').trim().slice(0, 10) || now.slice(0, 10);
+    const proximaAcao = this.normalizarProximaAcao(payload.proximaAcao);
+    const patch: Record<string, unknown> = {};
+    if (proximaAcao) {
+      patch.proximaAcao = {
+        ...proximaAcao,
+        criadoEm: now,
+        criadoPor: 'ALIX',
+      };
+    }
+    const resultado = String(payload.resultado || '').trim();
+    const timelineEvent = {
+      data: dataEvento,
+      tipo: canal === 'reuniao' ? 'reuniao' : 'contato',
+      descricao: `${canal}: ${descricao}`,
+      detalhes: resultado || `Responsável: ${String(payload.responsavel || 'ALIX').trim()}`,
+    };
+    const cliente = await this.patchClienteOperacional(clienteId, patch, timelineEvent);
+    return { clienteId, ok: true, contato: timelineEvent, proximaAcao: patch.proximaAcao, cliente };
+  }
+
+  public handle_alterar_estagio_cliente(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    const estagio = String(input.estagio || '').trim();
+    if (!clienteId || !estagio) return this.invalidInput('clienteId e estagio obrigatórios');
+    if (!this.estagioCrmValido(estagio)) return this.invalidInput(`Estágio inválido: ${estagio}`);
+    if (!this.clienteExiste(clienteId)) return this.invalidInput(`Cliente ${clienteId} não encontrado`);
+
+    const proximaAcao = this.normalizarProximaAcao(input.proximaAcao);
+    const payload = {
+      clienteId,
+      estagio,
+      motivo: String(input.motivo || '').trim(),
+      responsavel: String(input.responsavel || 'ALIX').trim(),
+      ...(proximaAcao ? { proximaAcao } : {}),
+    };
+    return this.buildPendingResponse(
+      'alterar_estagio_cliente',
+      `Alterar estágio do cliente ${clienteId} para ${estagio}`,
+      payload,
+      { clienteId, estagio, motivo: payload.motivo, temProximaAcao: Boolean(proximaAcao) },
+    );
+  }
+
+  private async exec_alterar_estagio_cliente(payload: Record<string, unknown>): Promise<unknown> {
+    const clienteId = String(payload.clienteId || '').trim();
+    const estagio = String(payload.estagio || '').trim();
+    if (!clienteId || !this.estagioCrmValido(estagio)) throw new Error(`Estágio inválido: ${estagio}`);
+
+    const now = new Date().toISOString();
+    const hoje = now.slice(0, 10);
+    const proximaAcao = this.normalizarProximaAcao(payload.proximaAcao);
+    const patch: Record<string, unknown> = { estagio, estagioDesde: hoje };
+    if (proximaAcao) {
+      patch.proximaAcao = {
+        ...proximaAcao,
+        criadoEm: now,
+        criadoPor: 'ALIX',
+      };
+    }
+    const motivo = String(payload.motivo || '').trim();
+    const timelineEvent = {
+      data: hoje,
+      tipo: 'estagio',
+      descricao: `Estágio alterado para ${estagio}`,
+      detalhes: motivo || `Responsável: ${String(payload.responsavel || 'ALIX').trim()}`,
+    };
+    const cliente = await this.patchClienteOperacional(clienteId, patch, timelineEvent);
+    return { clienteId, ok: true, estagio, proximaAcao: patch.proximaAcao, cliente };
+  }
+
+  /**
+   * Handler HITL: onboarding completo a partir de documento.
+   * Cria cliente + proposta + vincula documento em uma única confirmação.
+   */
+  public handle_onboarding_cliente_completo(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const nome = String(input.nome || '').trim();
+    const cpfCnpj = normalizeCpfCnpj(input.cpfCnpj);
+    const tipoPessoa = String(input.tipoPessoa || 'PF').toUpperCase();
+    const escritorio = normalizeCrmOffice(input.escritorio);
+    const dividaTotal = documentMoney(input.dividaTotal);
+    if (input.dividaTotal !== undefined && input.dividaTotal !== null && input.dividaTotal !== '' && dividaTotal === undefined) return this.invalidInput('Saldo total inválido. Use valor decimal não negativo com até duas casas; ausência não significa zero.');
+    if (!nome) return this.invalidInput('Falta campo obrigatório: nome');
+    if (!escritorio) return this.invalidInput('Falta campo obrigatório: escritório. Pergunte ao usuário se o cliente pertence a Aletis ou Canarana.');
+    if (cpfCnpj && !isValidCpfCnpj(cpfCnpj)) return this.invalidInput('CPF/CNPJ informado é incompleto. Cadastre sem documento ou envie CPF/CNPJ com 11 ou 14 dígitos.');
+    if (!['PF', 'PJ'].includes(tipoPessoa)) return this.invalidInput('tipoPessoa deve ser PF ou PJ');
+    const existente = cpfCnpj ? this.clientePorCpfCnpj(cpfCnpj) : null;
+    if (existente?.id) {
+      return this.handle_atualizar_cliente_completo({ ...input, clienteId: existente.id, cpfCnpj });
+    }
+
+    const payload: Record<string, unknown> = {
+      nome,
+      tipoPessoa,
+      cpfCnpj,
+      cidade: String(input.cidade || ''),
+      uf: String(input.uf || '').toUpperCase(),
+      email: String(input.email || ''),
+      telefone: String(input.telefone || ''),
+      escritorio,
+      consultor: String(input.consultor || 'Christian Kohler'),
+      origem: String(input.origem || 'alix-documento'),
+      observacoes: String(input.observacoes || ''),
+      ...(dividaTotal !== undefined ? { dividaTotal } : {}),
+      estrategia: String(input.estrategia || ''),
+      bancos: Array.isArray(input.bancos) ? input.bancos : [],
+      documentoId: input.documentoId ? String(input.documentoId) : undefined,
+      documentReviewId: input.documentReviewId ? String(input.documentReviewId) : undefined,
+      evidencias: Array.isArray(input.evidencias) ? input.evidencias : [],
+      confiancaDocumento: typeof input.confiancaDocumento === 'number' ? input.confiancaDocumento : undefined,
+      sessionId: this.activeSessionId,
+      cliente: input.cliente && typeof input.cliente === 'object' ? input.cliente : undefined,
+      endereco: input.endereco && typeof input.endereco === 'object' ? input.endereco : undefined,
+      atividade: String(input.atividade || ''),
+      areaTotalHa: Number(input.areaTotalHa) || undefined,
+      culturas: Array.isArray(input.culturas) ? input.culturas : undefined,
+      carCodigoImovel: String(input.carCodigoImovel || ''),
+      dividas: Array.isArray(input.dividas) ? input.dividas.map(d => normalizeDocumentDebt(d as Record<string, unknown>)) : [],
+      propriedades: Array.isArray(input.propriedades) ? input.propriedades : [],
+      grupoFamiliar: Array.isArray(input.grupoFamiliar) ? input.grupoFamiliar : [],
+    };
+    const revisaoFinanceira = buildDocumentFinancialReview(Array.isArray(input.dividas) ? input.dividas as Record<string, unknown>[] : [], Array.isArray(input.evidencias) ? input.evidencias as any[] : []);
+    if (revisaoFinanceira.pendencias.some(p => p.motivo === 'valor_invalido')) return this.invalidInput('Há valores financeiros inválidos no documento. Revise os campos indicados antes de confirmar.');
+    payload.revisaoFinanceira = revisaoFinanceira;
+    const guardrail = validateDocumentGrounding('onboarding_cliente_completo', payload);
+    if (!guardrail.ok) {
+      return this.invalidInput(`Guardrail ALIX bloqueou onboarding sem lastro documental suficiente: ${guardrail.reasons.join(' ')}`);
+    }
+
+    return this.buildPendingResponse(
+      'onboarding_cliente_completo',
+      `Cadastrar ${nome}${cpfCnpj ? ` (${tipoPessoa} ${cpfCnpj})` : ' (sem CPF/CNPJ validado)'} no escritório ${escritorio}, ${dividaTotal !== undefined && dividaTotal !== '0.00' ? `preparar proposta com saldo documentado de R$ ${dividaTotal}` : 'manter a revisão financeira sem criar proposta'} e vincular documento`,
+      payload,
+      { nome, tipoPessoa, cpfCnpj, escritorio, cidade: payload.cidade, uf: payload.uf, dividaTotal, revisaoFinanceira, guardrail },
+    );
+  }
+
+  /**
+   * Executor do onboarding completo: cliente → proposta → documento.
+   * Executa os 3 passos sequencialmente. Se falhar no meio, faz rollback best-effort.
+   */
+  private async exec_onboarding_cliente_completo(payload: Record<string, unknown>): Promise<unknown> {
+    const b = getCrmWriteBackends();
+    if (!b.setCliente) throw new Error('Backend CRM setCliente não registrado');
+
+    const cpfCnpj = normalizeCpfCnpj(payload.cpfCnpj);
+    const escritorio = normalizeCrmOffice(payload.escritorio);
+    if (cpfCnpj && !isValidCpfCnpj(cpfCnpj)) throw new Error('CPF/CNPJ informado é incompleto. Cadastre sem documento ou envie 11/14 dígitos.');
+    if (!escritorio) throw new Error('Escritório obrigatório: Aletis ou Canarana.');
+    const nome = String(payload.nome);
+    const tipoPessoa = String(payload.tipoPessoa);
+    const dividaTotal = documentMoney(payload.dividaTotal);
+    if (payload.dividaTotal !== undefined && payload.dividaTotal !== null && payload.dividaTotal !== '' && dividaTotal === undefined) throw new Error('Saldo total inválido.');
+    const criarProposta = dividaTotal !== undefined && dividaTotal !== '0.00';
+    if (criarProposta && !b.setPropostaInteligente) throw new Error('Backend CRM setPropostaInteligente não registrado');
+    const estrategia = String(payload.estrategia || 'Renegociação integral');
+    const bancos = Array.isArray(payload.bancos) ? payload.bancos : [];
+    const evidencias = Array.isArray(payload.evidencias) ? payload.evidencias : [];
+    const confiancaDocumento = typeof payload.confiancaDocumento === 'number' ? payload.confiancaDocumento : undefined;
+    const documentoId = payload.documentoId ? String(payload.documentoId) : undefined;
+    const documentReviewId = payload.documentReviewId ? String(payload.documentReviewId) : undefined;
+    const sessionId = payload.sessionId ? String(payload.sessionId) : undefined;
+    const guardrail = assertDocumentGrounding('onboarding_cliente_completo', payload);
+
+    // Wave 11 — dados enriquecidos vindos do SmartExtractor/CrmEnrichmentEngine
+    const extra = payload.cliente && typeof payload.cliente === 'object'
+      ? payload.cliente as Record<string, unknown>
+      : {};
+    const rawDividas = Array.isArray(payload.dividas) ? payload.dividas as Record<string, unknown>[] : [];
+    const revisaoFinanceira = buildDocumentFinancialReview(rawDividas, evidencias as any[]);
+    if (revisaoFinanceira.pendencias.some(p => p.motivo === 'valor_invalido')) throw new Error('Dívida documental contém valor monetário inválido.');
+    const extraDividas = rawDividas.map(normalizeDocumentDebt);
+    const extraPropriedades = Array.isArray(payload.propriedades) ? payload.propriedades as unknown[] : [];
+
+    const now = new Date().toISOString();
+    const hoje = now.slice(0, 10);
+
+    const existente = cpfCnpj ? this.clientePorCpfCnpj(cpfCnpj) : null;
+    if (existente) throw new Error('CPF/CNPJ já cadastrado. Prepare atualização do cliente existente antes de confirmar.');
+
+    // ── Passo 1: Criar cliente ──
+    const clienteId = `cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const cliente: Record<string, unknown> & { id: string } = {
+      id: clienteId,
+      nome,
+      tipoPessoa,
+      cpfCnpj,
+      cidade: extra?.cidade || payload.cidade || '',
+      uf: extra?.uf || payload.uf || '',
+      telefone: extra?.telefone || payload.telefone || '',
+      email: extra?.email || payload.email || '',
+      atividade: extra?.atividade || payload.atividade || 'Produtor rural',
+      areaTotalHa: extra?.areaTotalHa || payload.areaTotalHa || 0,
+      culturas: extra?.culturas || payload.culturas || [],
+      estagio: 'lead',
+      consultor: payload.consultor || 'Christian Kohler',
+      escritorio,
+      credor: bancos[0] ? String(bancos[0]) : (extraDividas[0] as any)?.credor || 'A definir',
+      ...(dividaTotal !== undefined ? { valorTotalDivida: dividaTotal } : {}),
+      dividas: extraDividas.length > 0 ? extraDividas : [],
+      grupoFamiliar: Array.isArray(payload.grupoFamiliar) ? payload.grupoFamiliar : [],
+      pagamentos: [],
+      timeline: [
+        { data: hoje, tipo: 'contato', descricao: 'Cliente cadastrado pela ALIX via onboarding de documento' },
+      ],
+      dataCadastro: hoje,
+      ultimaAtualizacao: hoje,
+      observacoes: payload.observacoes || '',
+      evidenciasOrigem: evidencias,
+      confiancaDocumento,
+      origem: payload.origem || 'alix-documento',
+      criadoEm: now,
+      atualizadoEm: now,
+    };
+
+    // Enriquecimentos opcionais do Wave 11
+    if (extra?.endereco || payload.endereco) cliente.endereco = extra.endereco || payload.endereco;
+    if (extra?.carCodigoImovel || payload.carCodigoImovel) cliente.carCodigoImovel = extra.carCodigoImovel || payload.carCodigoImovel;
+    if (extraPropriedades.length > 0) cliente.propriedades = extraPropriedades;
+    if (Array.isArray(extra?.tags) && (extra.tags as string[]).length) cliente.tags = extra.tags;
+
+    await b.setCliente(cliente);
+
+    // ── Passo 2: Criar proposta inteligente ──
+    let propostaId: string | undefined;
+    if (criarProposta) {
+      try {
+        const propostaI = {
+          id: `prop-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          clienteId,
+          clienteNome: nome,
+          dividaTotal,
+          estrategia,
+          bancos: bancos.map(String),
+          status: 'rascunho',
+          dataCriacao: hoje,
+          dataAtualizacao: hoje,
+          consultor: payload.consultor || 'Christian Kohler',
+          observacao: payload.observacoes || '',
+        };
+        await b.setPropostaInteligente!(propostaI);
+        propostaId = propostaI.id;
+
+        // Atualiza timeline do cliente
+        if (b.patchCliente) {
+          await b.patchCliente(clienteId, {}, {
+            data: hoje,
+            tipo: 'proposta',
+            descricao: `Proposta inteligente criada via onboarding (${estrategia})`,
+            detalhes: evidencias.length > 0 ? `Evidências documentais: ${evidencias.length}` : undefined,
+          });
+        }
+      } catch (err) {
+        if (b.deleteCliente) {
+          try { await b.deleteCliente(clienteId); } catch { /* rollback best-effort */ }
+        }
+        throw new Error(`Falha ao criar proposta para ${nome}: ${(err as Error).message}`);
+      }
+
+    }
+
+    // ── Passo 3: Vincular documento (se tiver documentoId ou sessão) ──
+    let documentoVinculado = false;
+    let documentoCofre: unknown = null;
+    let docIdReal: string | undefined = documentoId;
+    if (!docIdReal && sessionId) {
+      try {
+        const intake = getDocumentIntakeService();
+        const docs = await intake.list(sessionId);
+        if (docs.length > 0) {
+          docIdReal = docs[0].id;
+        }
+      } catch {
+        /* best-effort: documento pode não existir */
+      }
+    }
+    if (docIdReal && b.patchCliente) {
+      try {
+        // Registra na timeline do cliente e na memória
+        await b.patchCliente(clienteId, {}, {
+          data: hoje,
+          tipo: 'documento',
+          descricao: `Documento vinculado ao cadastro: ${docIdReal}`,
+          detalhes: confiancaDocumento != null ? `Confiança documental: ${Math.round(confiancaDocumento * 100)}%` : undefined,
+        });
+        documentoVinculado = true;
+
+        // Registra na memória do cliente
+        try {
+          const memSvc = getAlixMemoryService();
+          await memSvc.appendNota(clienteId, 'historico', `Documento ${docIdReal} vinculado no onboarding de ${hoje}`);
+        } catch {
+          /* memória é best-effort */
+        }
+        documentoCofre = await attachAlixDocumentToCliente({
+          sessionId,
+          documentoId: docIdReal,
+          clienteId,
+          categoria: 'contrato',
+          enviadoPor: 'consultor',
+        });
+      } catch {
+        /* documento não trava o pipeline */
+      }
+    }
+
+    if (documentReviewId) {
+      try {
+        const { getDocumentOnboardingReviewService } = await import('./alix/intake/DocumentOnboardingReviewService.js');
+        await getDocumentOnboardingReviewService().updateStatus(documentReviewId, 'converted');
+      } catch {
+        /* revisão documental é best-effort */
+      }
+    }
+
+    return {
+      ok: true,
+      clienteId,
+      propostaId,
+      documentoId: docIdReal,
+      documentoVinculado,
+      documentoCofre,
+      guardrail,
+      nome,
+      cpfCnpj,
+      ...(dividaTotal !== undefined ? { dividaTotal } : {}),
+      propostaCriada: Boolean(propostaId),
+      revisaoFinanceira,
+      estrategia,
+    };
+  }
+
+  /**
+   * Handler HITL: atualizar cliente existente a partir de documento.
+   * Adiciona dados novos (endereço, propriedades, dívidas, documentos) sem sobrescrever existentes.
+   */
+  public handle_atualizar_cliente_completo(input: Record<string, unknown>): { content: string; sources: string[]; toolsUsed: string[]; metadata: Record<string, unknown> } {
+    const clienteId = String(input.clienteId || '').trim();
+    const cpfCnpj = normalizeCpfCnpj(input.cpfCnpj);
+    if (!clienteId) return this.invalidInput('clienteId é obrigatório');
+    if (!this.clienteExiste(clienteId)) {
+      return this.invalidInput(`Cliente ${clienteId} não encontrado no CRM. Use onboarding_cliente_completo para criar novo.`);
+    }
+
+    const payload: Record<string, unknown> = {
+      clienteId,
+      cpfCnpj,
+      cidade: String(input.cidade || ''),
+      uf: String(input.uf || '').toUpperCase(),
+      telefone: String(input.telefone || ''),
+      email: String(input.email || ''),
+      endereco: input.endereco ?? undefined,
+      atividade: String(input.atividade || ''),
+      areaTotalHa: Number(input.areaTotalHa) || undefined,
+      culturas: Array.isArray(input.culturas) ? input.culturas : undefined,
+      carCodigoImovel: String(input.carCodigoImovel || ''),
+      dividas: Array.isArray(input.dividas) ? input.dividas.map(d => normalizeDocumentDebt(d as Record<string, unknown>)) : [],
+      propriedades: Array.isArray(input.propriedades) ? input.propriedades : [],
+      documentoId: input.documentoId ? String(input.documentoId) : undefined,
+      evidencias: Array.isArray(input.evidencias) ? input.evidencias : [],
+      confiancaDocumento: typeof input.confiancaDocumento === 'number' ? input.confiancaDocumento : undefined,
+      observacoes: String(input.observacoes || ''),
+      sessionId: this.activeSessionId,
+    };
+
+    const existente = getCrmWriteBackends().getCliente?.(clienteId) as Record<string, unknown> | undefined;
+    const revisaoFinanceira = buildDocumentFinancialReview(Array.isArray(input.dividas) ? input.dividas as Record<string, unknown>[] : [], Array.isArray(input.evidencias) ? input.evidencias as any[] : []);
+    if (revisaoFinanceira.pendencias.some(p => p.motivo === 'valor_invalido')) return this.invalidInput('Há valores financeiros inválidos no documento. Revise os campos indicados antes de confirmar.');
+    payload.revisaoFinanceira = revisaoFinanceira;
+    const diff = existente ? buildClienteDocumentDiff(existente, payload) : undefined;
+    const guardrail = validateDocumentGrounding('atualizar_cliente_completo', payload);
+    if (!guardrail.ok) {
+      return this.invalidInput(`Guardrail ALIX bloqueou atualização sem lastro documental suficiente: ${guardrail.reasons.join(' ')}`);
+    }
+
+    return this.buildPendingResponse(
+      'atualizar_cliente_completo',
+      `Atualizar cliente ${clienteId} com dados extraídos do documento`,
+      payload,
+      { clienteId, cpfCnpj, diffSummary: diff?.summary, diff, guardrail, revisaoFinanceira, valorTotalDividaPreservado: documentMoney(existente?.valorTotalDivida) },
+    );
+  }
+
+  private async exec_atualizar_cliente_completo(payload: Record<string, unknown>): Promise<unknown> {
+    const b = getCrmWriteBackends();
+    if (!b.patchCliente) throw new Error('Backend patchCliente não registrado');
+
+    const clienteId = String(payload.clienteId);
+    const existente = b.getCliente ? b.getCliente(clienteId) : null;
+    if (!existente) throw new Error(`Cliente ${clienteId} não encontrado`);
+    const diff = buildClienteDocumentDiff(existente as Record<string, unknown>, payload);
+    const guardrail = assertDocumentGrounding('atualizar_cliente_completo', payload);
+
+    const now = new Date().toISOString();
+    const hoje = now.slice(0, 10);
+
+    const patch: Record<string, unknown> = {};
+    const fields = ['cidade', 'uf', 'telefone', 'email', 'atividade', 'areaTotalHa', 'carCodigoImovel', 'observacoes'] as const;
+    for (const f of fields) {
+      const v = payload[f];
+      if (v !== undefined && v !== '' && v !== 0) {
+        // Só sobrescreve se o campo estiver vazio no cliente existente
+        const existing = (existente as Record<string, unknown>)[f];
+        if (existing === undefined || existing === '' || existing === 0 || existing === null) {
+          patch[f] = v;
+        }
+      }
+    }
+
+    // Endereço: merge
+    if (payload.endereco && !(existente as any).endereco) {
+      patch.endereco = payload.endereco;
+    }
+
+    // Culturas
+    if (Array.isArray(payload.culturas) && payload.culturas.length > 0) {
+      const existingCulturas = (existente as any).culturas || [];
+      if (!existingCulturas.length) patch.culturas = payload.culturas;
+    }
+
+    // Dívidas: append novas
+    const rawDividas = Array.isArray(payload.dividas) ? payload.dividas as Record<string, unknown>[] : [];
+    const revisaoFinanceira = buildDocumentFinancialReview(rawDividas, Array.isArray(payload.evidencias) ? payload.evidencias as any[] : []);
+    if (revisaoFinanceira.pendencias.some(p => p.motivo === 'valor_invalido')) throw new Error('Dívida documental contém valor monetário inválido.');
+    const novasDividas = rawDividas.map(normalizeDocumentDebt);
+    if (novasDividas.length > 0) {
+      const existingDividas = (existente as any).dividas || [];
+      const contratosExistentes = new Set(existingDividas.map((d: any) => String(d.contrato || d.numeroContrato || '')));
+      const dividasParaAdicionar = novasDividas.filter((d: any) => !contratosExistentes.has(String(d.contrato || d.numeroContrato || '')));
+      if (dividasParaAdicionar.length > 0) {
+        patch.dividas = [...existingDividas, ...dividasParaAdicionar];
+        // Incluir um contrato documental não comprova mudança no saldo global já cadastrado.
+        // O total permanece intacto até uma revisão financeira específica.
+      }
+    }
+
+    // Propriedades: append novas
+    const novasPropriedades = Array.isArray(payload.propriedades) ? payload.propriedades as unknown[] : [];
+    if (novasPropriedades.length > 0) {
+      const existingProps = (existente as any).propriedades || [];
+      const carExistentes = new Set(existingProps.map((p: any) => String(p.car || '')));
+      const propsParaAdicionar = novasPropriedades.filter((p: any) => p.car && !carExistentes.has(String(p.car)));
+      if (propsParaAdicionar.length > 0) {
+        patch.propriedades = [...existingProps, ...propsParaAdicionar];
+      }
+    }
+
+    const timelineEvent = {
+      data: hoje,
+      tipo: 'documento',
+      descricao: 'Cliente atualizado pela ALIX via análise de documento',
+      detalhes: payload.documentoId
+        ? `Documento: ${payload.documentoId}. Novos campos: ${diff.summary.camposNovos}; conflitos: ${diff.summary.totalConflitos}`
+        : `Novos campos: ${diff.summary.camposNovos}; conflitos: ${diff.summary.totalConflitos}`,
+    };
+
+    await b.patchCliente(clienteId, patch, timelineEvent);
+
+    // Vincula documento na memória
+    let documentoCofre: unknown = null;
+    if (payload.documentoId) {
+      try {
+        const memSvc = getAlixMemoryService();
+        await memSvc.appendNota(clienteId, 'historico', `Documento ${payload.documentoId} vinculado na atualização de ${hoje}`);
+        documentoCofre = await attachAlixDocumentToCliente({
+          sessionId: payload.sessionId ? String(payload.sessionId) : undefined,
+          documentoId: String(payload.documentoId),
+          clienteId,
+          categoria: 'contrato',
+          enviadoPor: 'consultor',
+        });
+      } catch {
+        /* best-effort */
+      }
+    }
+
+    return { ok: true, clienteId, patchKeys: Object.keys(patch), diff, guardrail, documentoCofre, revisaoFinanceira, valorTotalDividaPreservado: documentMoney((existente as Record<string, unknown>).valorTotalDivida) };
+  }
+
+  private clienteExiste(clienteId: string): boolean {
+    const b = getCrmWriteBackends();
+    return typeof b.getCliente === 'function' ? Boolean(b.getCliente(clienteId)) : true;
+  }
+
+  private clientePorCpfCnpj(cpfCnpj: string): { id?: string; nome?: string } | null {
+    const clean = normalizeCpfCnpj(cpfCnpj);
+    if (!isValidCpfCnpj(clean)) return null;
+    return getClientesStore().find((c) => {
+      const value = normalizeCpfCnpj(c?.cpfCnpj ?? c?.cpfcnpj ?? c?.cpf ?? c?.cnpj ?? '');
+      return value === clean;
+    }) ?? null;
+  }
+
+  private async patchClienteOperacional(clienteId: string, patch: Record<string, unknown>, timelineEvent: Record<string, unknown>): Promise<unknown> {
+    const b = getCrmWriteBackends();
+    if (!b.patchCliente) throw new Error('Backend patchCliente não registrado');
+    const updated = await b.patchCliente(clienteId, patch, timelineEvent);
+    if (!updated) throw new Error(`Cliente ${clienteId} não encontrado`);
+    return updated;
+  }
+
+  private estagioCrmValido(estagio: string): boolean {
+    return ['lead', 'prospeccao', 'qualificacao', 'analise', 'proposta', 'negociacao', 'acordo', 'acompanhamento', 'concluido', 'encerrado'].includes(estagio);
+  }
+
+  private normalizarCanalContato(value: unknown): string {
+    const canal = String(value || '').trim().toLowerCase();
+    return ['telefone', 'whatsapp', 'email', 'reuniao', 'visita', 'outro'].includes(canal) ? canal : '';
+  }
+
+  private normalizarPrioridade(value: unknown): string {
+    const prioridade = String(value || 'normal').trim().toLowerCase();
+    return ['baixa', 'normal', 'alta', 'urgente'].includes(prioridade) ? prioridade : 'normal';
+  }
+
+  private normalizarProximaAcao(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== 'object') return null;
+    const raw = value as Record<string, unknown>;
+    const data = String(raw.data || '').trim();
+    const descricao = String(raw.descricao || '').trim();
+    if (!data || !descricao) return null;
+    return {
+      data,
+      descricao,
+      prioridade: this.normalizarPrioridade(raw.prioridade),
+      responsavel: String(raw.responsavel || 'ALIX').trim(),
+    };
+  }
 }
 
 // ── Store accessors (set via registerStores) ───────────────
@@ -5312,9 +6471,12 @@ export function alixGetPropostasInteligentes(): any[] { return _getPropostasInte
 
 // ── Alix Insano F4 — backends de escrita no CRM ──────────────
 interface CrmWriteBackends {
-  setCliente?: (cliente: { id: string; [key: string]: unknown }) => void;
-  setPropostaInteligente?: (p: { id: string; [key: string]: unknown }) => void;
-  updateProposta?: (id: string, partial: Record<string, unknown>) => boolean;
+  setCliente?: (cliente: { id: string; [key: string]: unknown }) => void | Promise<void>;
+  getCliente?: (id: string) => unknown;
+  deleteCliente?: (id: string) => void | Promise<void>;
+  patchCliente?: (id: string, partial: Record<string, unknown>, timelineEvent?: Record<string, unknown>) => unknown | Promise<unknown>;
+  setPropostaInteligente?: (p: { id: string; [key: string]: unknown }) => void | Promise<void>;
+  updateProposta?: (id: string, partial: Record<string, unknown>) => boolean | { data: unknown; meta?: unknown } | Promise<boolean | { data: unknown; meta?: unknown }>;
   getLead?: (cpfCnpj: string) => unknown;
 }
 let crmWriteBackends: CrmWriteBackends = {};

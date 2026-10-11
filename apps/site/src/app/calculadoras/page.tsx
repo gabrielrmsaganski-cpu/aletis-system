@@ -112,10 +112,10 @@ export default function CalculadorasHub() {
                     Precisa de análise real?
                   </p>
                   <h3 className="mt-3 font-display text-2xl font-semibold text-aletis-grafite-escuro md:text-3xl">
-                    O diagnóstico oficial ALETIS é gratuito e sai em 72 horas.
+                    A primeira leitura ALETIS organiza o cenário antes da decisão.
                   </h3>
                   <p className="mt-2 max-w-xl text-sm text-aletis-grafite-medio">
-                    Nossos simuladores usam heurísticas comerciais. O diagnóstico técnico é feito com os contratos e memória de cálculo auditável.
+                    Nossos simuladores usam heurísticas comerciais. A análise técnica depende dos contratos, extratos e garantias disponíveis.
                   </p>
                 </div>
                 <Link href="/contato" className="btn-primary flex-shrink-0">

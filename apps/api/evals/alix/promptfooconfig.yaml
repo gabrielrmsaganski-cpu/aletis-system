@@ -1,0 +1,6 @@
+description: ALIX reliability smoke evals
+providers:
+  - id: file://provider.cjs
+prompts:
+  - '{{caseName}}'
+tests: file://golden-tests.cjs

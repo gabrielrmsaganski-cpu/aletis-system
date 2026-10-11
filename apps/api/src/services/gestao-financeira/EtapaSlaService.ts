@@ -44,9 +44,9 @@ const ETAPAS_DEFAULT: EtapaTemplate[] = [
 
 const ETAPA_META: Record<string, { rotulo: string; cor: string; ordem: number }> = {
   elegibilidade: { rotulo: 'Elegibilidade Inicial', cor: '#5A8A6E', ordem: 1 },
-  mandato: { rotulo: 'Mandato', cor: '#0F4C35', ordem: 2 },
+  mandato: { rotulo: 'Mandato', cor: '#17251b', ordem: 2 },
   diagnostico: { rotulo: 'Diagnóstico', cor: '#7B5B30', ordem: 3 },
-  documentos: { rotulo: 'Documentos Cliente', cor: '#D4A574', ordem: 4 },
+  documentos: { rotulo: 'Documentos Cliente', cor: '#e3bd80', ordem: 4 },
   analise: { rotulo: 'Análise Interna', cor: '#4F46E5', ordem: 5 },
   comite: { rotulo: 'Comitê', cor: '#A855F7', ordem: 6 },
   envio_if: { rotulo: 'Envio à IF', cor: '#0EA5E9', ordem: 7 },

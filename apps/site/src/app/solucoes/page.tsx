@@ -1,53 +1,45 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import {
-  Stethoscope,
-  RefreshCw,
-  Scale,
-  TrendingUp,
-  BarChart3,
-  LifeBuoy,
-  ArrowRight,
-  Check,
-} from 'lucide-react'
+import { ArrowRight, Check } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { Reveal } from '@/components/ui/Reveal'
+import { BrandIcon } from '@/components/ui/BrandIcon'
 
 export const metadata: Metadata = {
   title: 'Consultoria · Reestruturação, revisional e estruturação financeira do agro',
   description:
-    'Consultoria financeira estratégica para o agronegócio: diagnóstico, reestruturação multi-credor, revisional, estruturação financeira, inteligência de mercado e gestão de crise. Sem vender software — entregando decisão.',
+    'Consultoria financeira estratégica para o agronegócio: diagnóstico, reestruturação, revisional, estruturação financeira, inteligência de mercado e gestão de crise.',
   alternates: { canonical: '/solucoes' },
 }
 
 const frentes = [
   {
     id: 'diagnostico',
-    icone: Stethoscope,
-    tag: 'Porta de entrada · gratuito',
+    icone: 2,
+    tag: 'Primeira leitura',
     titulo: 'Diagnóstico Financeiro',
     resumo:
-      'Em 72h colocamos toda a dívida do produtor em uma única memória de cálculo auditável — com abusividade mapeada, DSCR dimensionado e próximos passos recomendados.',
+      'Em até 72h organizamos a fotografia financeira inicial: contratos, credores, garantias, vencimentos e pontos que pedem revisão.',
     entregaveis: [
       'Auditoria dos contratos rurais e comerciais',
-      'Memória de cálculo peça por peça (sem planilha genérica)',
-      'Score de abusividade por contrato com fundamento legal',
+      'Conta reconstituída a partir dos documentos disponíveis',
+      'Pontos de revisão por contrato com fundamento explícito',
       'Plano priorizado de ação em 1 página executiva',
     ],
     quando:
-      'Sempre que há mais de um credor, mais de uma safra comprometida ou dúvida real sobre a conta que está sendo cobrada.',
+      'Quando há mais de um credor, mais de uma safra comprometida ou dúvida real sobre a conta cobrada.',
   },
   {
     id: 'reestruturacao',
-    icone: RefreshCw,
+    icone: 7,
     tag: 'Serviço principal',
     titulo: 'Reestruturação de Dívida',
     resumo:
-      'Mesa técnica multi-credor: o produtor senta apenas uma vez e a ALETIS conduz banco, cooperativa, revenda e cerealista simultaneamente — com cenário único e plano executável.',
+      'Plano de reorganização por credor, conectado ao fluxo de safra e às garantias existentes, para levar uma proposta séria à negociação.',
     entregaveis: [
-      'Negociação com 5+ credores simultâneos na mesma mesa',
+      'Mapa de credores, prioridade e sequência de abordagem',
       'Plano de 60–120 meses com DSCR realista e cenário de stress',
       'Garantias otimizadas e proteção patrimonial',
       'Contratos de renegociação prontos para assinar',
@@ -57,11 +49,11 @@ const frentes = [
   },
   {
     id: 'revisional',
-    icone: Scale,
+    icone: 12,
     tag: 'Alta conversão',
     titulo: 'Revisional & Abusividade',
     resumo:
-      'Auditoria técnica que identifica anatocismo, capitalização indevida e descaracterização de crédito rural — devolvendo ao saldo devedor o que nunca deveria ter entrado nele.',
+      'Auditoria técnica para identificar capitalização indevida, encargos contestáveis e descaracterização de crédito rural quando houver base documental.',
     entregaveis: [
       'Recálculo integral peça a peça com memória pública',
       'Mapeamento de encargos indevidos e tarifas contestáveis',
@@ -73,7 +65,7 @@ const frentes = [
   },
   {
     id: 'estruturacao',
-    icone: TrendingUp,
+    icone: 17,
     tag: 'Prevenção · profissionalização',
     titulo: 'Estruturação Financeira',
     resumo:
@@ -89,27 +81,27 @@ const frentes = [
   },
   {
     id: 'mercado',
-    icone: BarChart3,
+    icone: 21,
     tag: 'Recorrente',
     titulo: 'Inteligência de Mercado',
     resumo:
-      'Assessoria contínua de comercialização: quando vender, quanto travar, em que basis, com que hedge. Decisão de venda deixa de ser sentimento e vira tese.',
+      'Assessoria de comercialização: quando vender, quanto travar, em que basis e com qual efeito no caixa da operação.',
     entregaveis: [
       'Brief com sazonalidade, basis regional, câmbio e clima',
       'Recomendação de timing e percentual de trava por safra',
       'Suporte à decisão de CPR-F, CPR-Física e hedge',
-      'Acompanhamento mensal com mesa dedicada',
+      'Acompanhamento mensal com leitura dedicada',
     ],
     quando:
       'Produtor ou cerealista que decide comercialização por calendário — quando deveria decidir por cenário.',
   },
   {
     id: 'crise',
-    icone: LifeBuoy,
+    icone: 24,
     tag: 'Turn-around · urgência',
     titulo: 'Gestão de Crise',
     resumo:
-      'Para casos em estágio crítico: protesto iminente, execução ajuizada, risco de perda patrimonial. Mesa de emergência que estabiliza o perímetro em dias e abre caminho para a reestruturação.',
+      'Para casos em estágio crítico: protesto iminente, execução ajuizada ou risco patrimonial. Primeiro estabiliza, depois reestrutura.',
     entregaveis: [
       'Triagem de emergência em 24–48h',
       'Comunicação imediata com credores prioritários',
@@ -128,11 +120,11 @@ export default function SolucoesPage() {
         eyebrow="Consultoria"
         titulo={
           <>
-            Seis frentes de consultoria, uma{' '}
-            <span className="italic text-aletis-dourado">única mesa</span>.
+            Seis frentes para organizar dívida, caixa e{' '}
+            <span className="italic text-aletis-dourado">negociação</span>.
           </>
         }
-        subtitulo="A ALETIS não vende software nem parecer. Entrega decisão financeira estratégica para o agro — do diagnóstico ao acompanhamento pós-acordo. Cada frente pode entrar sozinha ou compor um plano integrado."
+        subtitulo="A ALETIS não vende software nem parecer solto. Entrega assessoria financeira estratégica para o agro, com documentação clara, cenários de decisão e acompanhamento do que foi combinado."
         breadcrumbs={[
           { label: 'Início', href: '/' },
           { label: 'Consultoria' },
@@ -143,7 +135,6 @@ export default function SolucoesPage() {
         <Container>
           <div className="space-y-6">
             {frentes.map((s, i) => {
-              const Icon = s.icone
               const inverted = i % 2 === 1
               return (
                 <Reveal key={s.id} delay={i * 60}>
@@ -159,7 +150,7 @@ export default function SolucoesPage() {
                       <div className={inverted ? 'lg:col-start-2' : ''}>
                         <div className="flex items-center gap-3">
                           <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-aletis-dourado/40 bg-aletis-dourado/10 text-aletis-verde-escuro">
-                            <Icon className="h-6 w-6" />
+                            <BrandIcon id={s.icone} size={52} />
                           </div>
                           <span className="rounded-full border border-aletis-borda bg-aletis-bege px-3 py-1 text-[10px] font-display font-semibold uppercase tracking-widest2 text-aletis-grafite-escuro">
                             {s.tag}
@@ -224,14 +215,14 @@ export default function SolucoesPage() {
                     Como entregamos · tecnologia interna
                   </p>
                   <h3 className="mt-4 font-display text-2xl font-semibold md:text-3xl">
-                    Tecnologia é nossa mesa de trabalho, não o nosso produto.
+                    Tecnologia é bastidor de análise, não o produto vendido.
                   </h3>
                   <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-white/75">
-                    O produtor não contrata software da ALETIS. Contrata consultoria.
-                    Por trás de cada entrega, porém, há um sistema proprietário, pipelines de
+                    O produtor não contrata software da ALETIS. Contrata assessoria.
+                    Por trás de cada entrega há um sistema proprietário, pipelines de
                     dados de mercado e a <strong className="text-aletis-dourado">ALIX</strong> —
                     IA treinada na metodologia da casa. São infraestrutura para o consultor
-                    sênior pensar melhor, mais rápido e com mais rigor. O que você vê no fim é a decisão.
+                    pensar melhor, mais rápido e com mais rigor. O que você vê no fim é a decisão.
                   </p>
                 </div>
                 <ul className="grid gap-3 text-[13px] text-white/80">
@@ -239,7 +230,7 @@ export default function SolucoesPage() {
                     <span className="text-[10px] font-display font-semibold uppercase tracking-widest2 text-aletis-dourado">
                       Infra 01
                     </span>
-                    <p className="mt-1 font-display font-semibold text-white">Mesa digital interna</p>
+                    <p className="mt-1 font-display font-semibold text-white">Sistema financeiro interno</p>
                     <p className="text-[12px] text-white/60">
                       CRM proprietário com pipeline de reestruturação, histórico de credor e controle de garantias.
                     </p>
@@ -275,7 +266,7 @@ export default function SolucoesPage() {
                   Próximo passo
                 </p>
                 <h3 className="mt-2 font-display text-xl font-semibold text-aletis-grafite-escuro md:text-2xl">
-                  Toda consultoria começa com diagnóstico. Gratuito. Em 72h.
+                  Toda consultoria começa por uma primeira leitura. Em até 72h.
                 </h3>
               </div>
               <Link href="/contato" className="btn-primary flex-shrink-0">

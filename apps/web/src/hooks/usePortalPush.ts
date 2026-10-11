@@ -27,6 +27,54 @@ interface UsePortalPushOpts {
   swPath?: string
 }
 
+export const PORTAL_PUSH_SCOPE = '/portal-cliente'
+
+function scopeUrl(): string {
+  return new URL(PORTAL_PUSH_SCOPE, window.location.origin).href
+}
+
+/** getRegistration devolve o registro raiz quando ainda não há um registro específico do portal. */
+async function findPortalRegistration(): Promise<ServiceWorkerRegistration | undefined> {
+  const registration = await navigator.serviceWorker.getRegistration(PORTAL_PUSH_SCOPE)
+  return registration?.scope === scopeUrl() ? registration : undefined
+}
+
+/** Espera o worker deste registro; ready pode resolver com o aplicativo principal. */
+export function waitForPortalWorker(registration: ServiceWorkerRegistration, swPath: string): Promise<void> {
+  if (registration.scope !== scopeUrl()) return Promise.reject(new Error('O registro de notificações não pertence ao portal.'))
+  const scriptUrl = new URL(swPath, window.location.origin).href
+  return new Promise((resolve, reject) => {
+    const workers = new Set<ServiceWorker>()
+    let finished = false
+    let timer: ReturnType<typeof setTimeout>
+    const finish = (error?: Error) => {
+      if (finished) return
+      finished = true
+      clearTimeout(timer)
+      registration.removeEventListener('updatefound', check)
+      for (const worker of workers) worker.removeEventListener('statechange', check)
+      if (error) reject(error)
+      else resolve()
+    }
+    const check = () => {
+      if (finished) return
+      const active = registration.active
+      if (active?.state === 'activated' && active.scriptURL === scriptUrl) return finish()
+      for (const worker of [registration.installing, registration.waiting, active]) {
+        if (!worker || worker.scriptURL !== scriptUrl || workers.has(worker)) continue
+        workers.add(worker)
+        worker.addEventListener('statechange', check)
+      }
+      if (workers.size && [...workers].every(worker => worker.state === 'redundant')) {
+        finish(new Error('Não foi possível ativar as notificações do portal. Tente novamente.'))
+      }
+    }
+    timer = setTimeout(() => finish(new Error('A ativação das notificações demorou. Tente novamente.')), 30000)
+    registration.addEventListener('updatefound', check)
+    check()
+  })
+}
+
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
@@ -52,7 +100,7 @@ export function usePortalPush({ token, swPath = '/sw-portal.js' }: UsePortalPush
       return
     }
     let mounted = true
-    navigator.serviceWorker.getRegistration(swPath).then(async (reg) => {
+    findPortalRegistration().then(async (reg) => {
       if (!mounted || !reg) return
       const sub = await reg.pushManager.getSubscription()
       if (mounted) setState(sub ? 'subscribed' : 'idle')
@@ -71,9 +119,9 @@ export function usePortalPush({ token, swPath = '/sw-portal.js' }: UsePortalPush
         setState(perm === 'denied' ? 'denied' : 'idle')
         return
       }
-      // 2. Registra SW (idempotente)
-      const reg = await navigator.serviceWorker.register(swPath)
-      await navigator.serviceWorker.ready
+      // 2. Registro próprio do portal. Inscrições antigas de outros escopos permanecem intactas.
+      const reg = await navigator.serviceWorker.register(swPath, { scope: PORTAL_PUSH_SCOPE })
+      await waitForPortalWorker(reg, swPath)
       // 3. Busca chave VAPID
       const vapidResp = await fetch('/api/portal/push/vapid-public-key', {
         credentials: 'same-origin',
@@ -116,7 +164,7 @@ export function usePortalPush({ token, swPath = '/sw-portal.js' }: UsePortalPush
     setState('pending')
     setErrorMsg(null)
     try {
-      const reg = await navigator.serviceWorker.getRegistration(swPath)
+      const reg = await findPortalRegistration()
       const sub = await reg?.pushManager.getSubscription()
       if (sub) {
         await fetch('/api/portal/push/unsubscribe', {

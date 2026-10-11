@@ -12,6 +12,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { join } from 'path'
 import { aggregateTelemetry, type TelemetryRecord } from '../services/alix/telemetry.js'
+import { getLLMProviderConfig } from '../services/llm/ProviderConfig.js'
 
 function getStorageDir(): string {
   return process.env.ALIX_STORAGE_DIR || join(process.cwd(), 'storage')
@@ -99,6 +100,8 @@ export default async function alixTelemetryDashboardRoutes(fastify: FastifyInsta
     const costMonth = recordsMonth.reduce((s, r) => s + (r.costUsd ?? 0), 0)
     const recordsDay = loadAllTelemetryRecords({ since: new Date(now.getFullYear(), now.getMonth(), now.getDate()) })
     const costDay = recordsDay.reduce((s, r) => s + (r.costUsd ?? 0), 0)
+    const provider = getLLMProviderConfig().provider
+    const costKnown = provider !== 'foundry' && [...records, ...recordsMonth].every(record => typeof record.costUsd === 'number' && Number.isFinite(record.costUsd))
 
     if (costDay > limitDay) {
       alerts.push({ level: 'crit', msg: `Custo do dia US$ ${costDay.toFixed(2)} ultrapassou limite US$ ${limitDay.toFixed(2)}` })
@@ -115,6 +118,9 @@ export default async function alixTelemetryDashboardRoutes(fastify: FastifyInsta
       success: true,
       data: {
         period,
+        provider,
+        costKnown,
+        costNote: costKnown ? 'Estimativa pela tabela pública do provedor; não é fatura.' : 'Cobrança do Foundry não verificada. Consulte o consumo no provedor; valores ausentes não significam custo zero.',
         since: since?.toISOString() ?? null,
         geradoEm: now.toISOString(),
         totals: {
@@ -123,17 +129,18 @@ export default async function alixTelemetryDashboardRoutes(fastify: FastifyInsta
           outputTokens: agg.totalOutputTokens,
           cacheReadTokens: agg.totalCacheRead,
           thinkingTokens: agg.totalThinkingTokens,
-          costUsd: agg.totalCostUsd,
+          costUsd: costKnown ? agg.totalCostUsd : null,
           avgLatencyMs: agg.totalRequests > 0 ? Math.round(agg.totalLatencyMs / agg.totalRequests) : 0,
         },
-        custoHoje: Number(costDay.toFixed(4)),
-        custoMes: Number(costMonth.toFixed(4)),
+        custoHoje: costKnown ? Number(costDay.toFixed(4)) : null,
+        custoMes: costKnown ? Number(costMonth.toFixed(4)) : null,
         limites: { mensal: limitMonth, diario: limitDay },
         latencia: { p50, p95, p99 },
         byAgent: agg.byAgent,
         byModel,
         topTools,
-        alertas: alerts,
+        alerts: costKnown ? alerts : [],
+        alertas: costKnown ? alerts : [],
       },
     })
   })

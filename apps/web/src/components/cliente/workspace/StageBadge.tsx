@@ -8,9 +8,9 @@ const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
   negociacao: { label: 'Negociação', color: '#E67E22' },
   acordo: { label: 'Acordo', color: '#27AE60' },
   acompanhamento: { label: 'Acompanhamento', color: '#17251b' },
-  concluido: { label: 'Concluído', color: '#1B6B4A' },
+  concluido: { label: 'Concluído', color: '#465b4a' },
   prospeccao: { label: 'Prospecção', color: '#6B7280' },
-  encerrado: { label: 'Encerrado', color: '#1B6B4A' },
+  encerrado: { label: 'Encerrado', color: '#465b4a' },
 }
 
 export default function StageBadge({ estagio, large }: { estagio: Estagio; large?: boolean }) {
@@ -18,7 +18,7 @@ export default function StageBadge({ estagio, large }: { estagio: Estagio; large
   return (
     <span
       className={`inline-flex items-center rounded-full font-semibold font-body ${
-        large ? 'px-3 py-1 text-xs' : 'px-2 py-0.5 text-[10px]'
+        large ? 'px-3 py-1 text-xs' : 'px-2 py-0.5 text-[11px]'
       }`}
       style={{ backgroundColor: cfg.color + '18', color: cfg.color }}
     >

@@ -1,3 +1,5 @@
+import SearchField from '../components/ui/SearchField'
+import PageHeader from '../components/ui/PageHeader'
 // ============================================================
 // ContratosOficiais — página standalone para gerar os 10
 // contratos oficiais ALETIS escolhendo um cliente do CRM.
@@ -14,6 +16,7 @@ import type { ClienteListItem } from '../types/cliente'
 export default function ContratosOficiais() {
   const [clientes, setClientes] = useState<ClienteListItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [choosing, setChoosing] = useState(true)
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
@@ -44,43 +47,22 @@ export default function ContratosOficiais() {
   return (
     <div className="space-y-6">
       {/* ── Cabeçalho ───────────────────────────────────── */}
-      <div className="card-premium p-6">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-aletis-verde to-aletis-dourado flex items-center justify-center flex-shrink-0">
-            <FileText className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-display font-bold text-aletis-grafite-escuro tracking-tight">
-              Contratos & Anexos Oficiais
-            </h1>
-            <p className="text-sm font-body text-aletis-grafite-claro mt-1 max-w-2xl">
+      <PageHeader title={<>Documentos oficiais</>} description={<> <p className="text-sm font-body text-muted-foreground mt-1 max-w-2xl">
               Os 10 documentos padronizados ALETIS. Escolha o cliente do CRM, selecione o
               template e o sistema preenche os dados preservando 100% da formatação,
               fontes, logos e layout original.
-            </p>
-          </div>
-        </div>
-      </div>
+            </p> </>} />
 
       {/* ── Seletor de cliente ────────────────────────────── */}
       <div className="card-premium p-5">
-        <h2 className="text-xs font-body font-semibold uppercase tracking-wider text-aletis-grafite-claro mb-3">
+        <h2 className="text-xs font-body font-semibold uppercase tracking-wider text-muted-foreground mb-3">
           1. Selecione o cliente
         </h2>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-grafite-medio pointer-events-none" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome, CPF/CNPJ, cidade ou consultor…"
-            className="w-full pl-10 pr-3 py-2.5 text-sm font-body rounded-lg border border-aletis-borda focus:border-aletis-verde focus:outline-none focus:ring-2 focus:ring-aletis-verde/20"
-          />
-        </div>
+        {choosing && <SearchField label="Buscar cliente para documentos" value={search} onChange={setSearch} placeholder="Nome, CPF/CNPJ, cidade ou consultor" />}
         {error && (
           <p className="mt-3 text-xs text-red-700">Erro carregando clientes: {error}</p>
         )}
-        {clientes && (
+        {clientes && choosing && (
           <div className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-1">
             {filtered.map((c) => {
               const isSel = c.id === selectedId
@@ -88,20 +70,21 @@ export default function ContratosOficiais() {
                 <button
                   key={c.id}
                   type="button"
-                  onClick={() => setSelectedId(c.id)}
+                  onClick={() => {setSelectedId(c.id);setChoosing(false)}}
+                  aria-pressed={isSel}
                   className={`text-left rounded-lg border p-3 transition-colors ${
                     isSel
                       ? 'border-aletis-verde bg-aletis-verde/5 ring-2 ring-aletis-verde/20'
-                      : 'border-aletis-borda hover:border-aletis-verde/40 bg-white'
+                      : 'border-aletis-borda hover:border-aletis-verde/40 bg-card'
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <User className={`w-4 h-4 flex-shrink-0 ${isSel ? 'text-aletis-verde' : 'text-aletis-grafite-medio'}`} />
-                    <p className="text-sm font-display font-semibold text-aletis-grafite-escuro truncate flex-1">
+                    <User className={`w-4 h-4 flex-shrink-0 ${isSel ? 'text-foreground' : 'text-[var(--text-soft)]'}`} />
+                    <p className="text-sm font-display font-semibold text-foreground truncate flex-1">
                       {c.nome}
                     </p>
                   </div>
-                  <p className="text-[11px] font-body text-aletis-grafite-claro mt-0.5 ml-6 truncate">
+                  <p className="text-[11px] font-body text-muted-foreground mt-0.5 ml-6 truncate">
                     {[c.cpfCnpj, [c.cidade, c.uf].filter(Boolean).join('/'), c.estagio]
                       .filter(Boolean)
                       .join(' · ')}
@@ -110,17 +93,18 @@ export default function ContratosOficiais() {
               )
             })}
             {filtered.length === 0 && (
-              <p className="col-span-full text-sm text-aletis-grafite-medio italic py-8 text-center">
+              <p className="col-span-full text-sm text-[var(--text-soft)] italic py-8 text-center">
                 Nenhum cliente encontrado.
               </p>
             )}
           </div>
         )}
         {selected && (
-          <div className="mt-3 px-3 py-2 rounded-lg bg-aletis-verde/10 text-sm font-body">
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-aletis-borda px-3 py-3 text-sm font-body">
             <strong className="text-aletis-verde-escuro">Cliente selecionado:</strong>{' '}
             {selected.nome}
-            {selected.cpfCnpj && <span className="text-aletis-grafite-medio"> · {selected.cpfCnpj}</span>}
+            {selected.cpfCnpj && <span className="text-[var(--text-soft)]"> · {selected.cpfCnpj}</span>}
+            <button type="button" onClick={()=>setChoosing(!choosing)} className="ml-auto rounded border border-aletis-borda px-3 py-2 text-xs font-semibold hover:bg-muted">{choosing ? 'Manter cliente selecionado' : 'Trocar cliente'}</button>
           </div>
         )}
       </div>
@@ -128,7 +112,7 @@ export default function ContratosOficiais() {
       {/* ── Templates ──────────────────────────────────────── */}
       {selected ? (
         <div>
-          <h2 className="text-xs font-body font-semibold uppercase tracking-wider text-aletis-grafite-claro mb-3">
+          <h2 className="text-xs font-body font-semibold uppercase tracking-wider text-muted-foreground mb-3">
             2. Escolha o documento
           </h2>
           <ContratosOficiaisTab clienteId={selected.id} />
@@ -136,9 +120,9 @@ export default function ContratosOficiais() {
       ) : (
         <div className="card-premium p-12 text-center">
           <div className="w-12 h-12 rounded-xl bg-aletis-borda/40 flex items-center justify-center mx-auto mb-3">
-            <FileText className="w-6 h-6 text-aletis-grafite-medio" />
+            <FileText className="w-6 h-6 text-[var(--text-soft)]" />
           </div>
-          <p className="text-sm font-body text-aletis-grafite-claro">
+          <p className="text-sm font-body text-muted-foreground">
             Selecione um cliente acima para ver os 10 templates disponíveis.
           </p>
         </div>

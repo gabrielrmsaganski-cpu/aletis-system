@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert';
 import { buildCnpjTool } from '../../src/services/alix/tools/websearch/scrapers/cnpj.ts';
 import { buildCvmTool } from '../../src/services/alix/tools/websearch/scrapers/cvm.ts';

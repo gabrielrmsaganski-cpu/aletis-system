@@ -1,11 +1,11 @@
 // ============================================================
 // ALETIS — Alix Confirmation Store (HITL)
-// In-memory store for executor-tool intents awaiting human
-// approval. Wave 6 — Agente Executor.
+// Intenções de execução e recibos de resultado compartilhados
+// entre a conversa e o painel de ações.
 //
 // Design notes
 // ────────────
-// Every mutation-capable tool Alix exposes to Claude must NOT
+// Every mutation-capable tool Alix exposes to the model must NOT
 // mutate state directly. Instead it registers a "pending
 // confirmation" here (TTL 10 min) and returns a payload that the
 // LLM surfaces to the user. A second HTTP round-trip
@@ -13,13 +13,17 @@
 // executor. This guarantees the human sees exactly what will be
 // written before it's written.
 //
-// Security boundary: this store is process-local, in-memory only.
-// If the API restarts, pending confirmations are dropped — that's
-// intentional (safer to re-confirm than to execute stale intents).
+// O snapshot atômico preserva pendências válidas e recibos entre
+// reinícios, com espelhamento no PostgreSQL quando habilitado.
+// Um recibo em execução no reinício passa a resultado desconhecido;
+// repetir seu ID nunca repete automaticamente o efeito.
 // ============================================================
 
 import { randomBytes } from 'crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'fs';
+import { getAlixTurnContext } from './AlixTurnContext.js';
+import { toolFailure, toolOutcome, type ToolOutcome } from './tools/ToolOutcome.js';
+import { z } from 'zod';
 
 export interface PendingConfirmation {
   id: string;
@@ -29,7 +33,33 @@ export interface PendingConfirmation {
   createdAt: number;
   expiresAt: number;
   sessionId?: string;
+  /** Cliente do contexto que preparou a ação, independente do alvo do payload. */
+  contextClienteId?: string | null;
+  riskLevel: ConfirmationRiskLevel;
+  approvalsRequired: 1 | 2;
+  approvalStep: 0 | 1;
+  firstApprovedAt?: number;
+  firstApprovedBy?: string;
+  secondApprovalChallenge?: string;
 }
+
+export type ConfirmationRiskLevel = 'standard' | 'high' | 'critical';
+
+export interface ConfirmationExecution {
+  confirmation: PendingConfirmation;
+  status: 'running' | 'completed' | 'failed' | 'unknown';
+  startedAt: string;
+  finishedAt?: string;
+  outcome?: ToolOutcome;
+  result?: unknown;
+  error?: string;
+}
+
+export type ConfirmationAuthorization =
+  | { status: 'ready'; confirmation: PendingConfirmation }
+  | { status: 'awaiting_second_approval'; confirmation: PendingConfirmation; challenge: string }
+  | { status: 'invalid_challenge'; confirmation: PendingConfirmation }
+  | { status: 'not_found' };
 
 // ── Alix Insano F4 — batch types ─────────────────────────────
 export interface PendingConfirmationWithDeps extends PendingConfirmation {
@@ -47,6 +77,10 @@ export interface ConfirmationBatch {
   updatedAt: number;
   status: BatchStatus;
   pendings: PendingConfirmationWithDeps[];
+  approvalStep?: 0 | 1;
+  firstApprovedAt?: number;
+  firstApprovedBy?: string;
+  secondApprovalChallenge?: string;
   results?: {
     applied: Array<{ confirmationId: string; toolName: string; result: unknown }>;
     failed: Array<{ confirmationId: string; toolName: string; error: string }>;
@@ -73,13 +107,26 @@ export type StoreListener = (ev: StoreEvent) => void;
 const DEFAULT_TTL_MS = 10 * 60 * 1000; // 10 minutos
 const CLEANUP_INTERVAL_MS = 60 * 1000; // 60s
 
+const HIGH_IMPACT_TOOL = /(?:^|_)(?:criar_cliente|promover_lead|onboarding_cliente|atualizar_cliente_completo|atualizar_dossie_dividas|excluir|deletar|remover|enviar_mensagem|whatsapp|email|agendar_reuniao|gerar_proposta_renegociacao)/i;
+const CRITICAL_TOOL = /(?:^|_)(?:excluir|deletar|remover_cliente|cancelar_contrato|efetivar_pagamento|transferir|desembolsar)/i;
+
+export function classifyConfirmationRisk(toolName: string): { riskLevel: ConfirmationRiskLevel; approvalsRequired: 1 | 2 } {
+  if (CRITICAL_TOOL.test(toolName)) return { riskLevel: 'critical', approvalsRequired: 2 };
+  if (HIGH_IMPACT_TOOL.test(toolName)) return { riskLevel: 'high', approvalsRequired: 2 };
+  return { riskLevel: 'standard', approvalsRequired: 1 };
+}
+
 export class AlixConfirmationStore {
   private static instance: AlixConfirmationStore | null = null;
   private readonly store: Map<string, PendingConfirmation> = new Map();
   private readonly batches: Map<string, ConfirmationBatch> = new Map();
+  private readonly executions = new Map<string, ConfirmationExecution>();
+  private pgWriteTail: Promise<void> = Promise.resolve();
   private readonly listeners: Set<StoreListener> = new Set();
   private readonly ttlMs: number;
   private cleanupTimer: NodeJS.Timeout | null = null;
+  private readonly storageRoot: string;
+  private disposed = false;
 
   on(listener: StoreListener): () => void {
     this.listeners.add(listener);
@@ -99,6 +146,7 @@ export class AlixConfirmationStore {
       ev.type === 'batch:done'
     ) {
       setImmediate(() => {
+        if (this.disposed) return
         try { this.persistSnapshot() } catch { /* best-effort */ }
       })
     }
@@ -106,6 +154,7 @@ export class AlixConfirmationStore {
 
   constructor(ttlMs: number = DEFAULT_TTL_MS) {
     this.ttlMs = ttlMs;
+    this.storageRoot = process.env.ALIX_STORAGE_DIR || `${process.cwd()}/storage`;
     // Agenda limpeza periódica (best-effort — não trava o processo).
     this.cleanupTimer = setInterval(() => {
       try {
@@ -130,35 +179,44 @@ export class AlixConfirmationStore {
   // persistimos o listener (ephemeral) nem o cleanupTimer.
 
   private snapshotFile(): string {
-    const dir = process.env.ALIX_STORAGE_DIR || `${process.cwd()}/storage`
+    const dir = this.storageRoot
     const target = `${dir}/alix-confirmations`
     try { mkdirSync(target, { recursive: true }) } catch {}
     return `${target}/snapshot.json`
   }
 
   /** Persiste pendings + batches + results em JSON. Idempotente. */
-  private persistSnapshot(): void {
+  private persistSnapshot(strict = false): void {
     try {
       const pendings = Array.from(this.store.values())
       const batches = Array.from(this.batches.values())
-      const data = { v: 1, savedAt: Date.now(), pendings, batches }
-      writeFileSync(this.snapshotFile(), JSON.stringify(data))
+      const data = { v: 2, savedAt: Date.now(), pendings, batches, executions: Array.from(this.executions.values()) }
+      const file = this.snapshotFile()
+      const temporary = `${file}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`
+      writeFileSync(temporary, JSON.stringify(data))
+      renameSync(temporary, file)
 
-      // Wave-PG-17: dual-write best-effort no Postgres
-      void (async () => {
+      // Espelha também recibos no mesmo registro PG; uma fila preserva a ordem.
+      const mirrored = JSON.parse(JSON.stringify([
+        ...pendings,
+        ...data.executions.map((item) => ({ ...item.confirmation, status: item.status, execution: item })),
+      ])) as unknown[]
+      const checked = mirrored.map((item) => z.record(z.unknown()).parse(item))
+      const batchCopy = JSON.parse(JSON.stringify(batches)) as Record<string, unknown>[]
+      this.pgWriteTail = this.pgWriteTail.catch(() => undefined).then(async () => {
         try {
           const repo = await import('../../db/AlixConfirmationFeedbackRepository.js')
           await repo.dumpConfirmations({
-            pendings: pendings as unknown as Iterable<Parameters<typeof repo.upsertConfirmation>[0]>,
-            batches: batches as unknown as Iterable<Parameters<typeof repo.upsertConfirmation>[0]>,
+            pendings: checked,
+            batches: batchCopy,
           })
         } catch (err) {
           // eslint-disable-next-line no-console
           console.warn('[AlixConfirmationStore.persistSnapshot] dual-write PG falhou:', (err as Error).message)
         }
-      })()
-    } catch {
-      /* best-effort */
+      })
+    } catch (error) {
+      if (strict) throw error
     }
   }
 
@@ -168,22 +226,43 @@ export class AlixConfirmationStore {
     if (!existsSync(file)) return
     const raw = readFileSync(file, 'utf-8')
     if (!raw.trim()) return
-    const data = JSON.parse(raw) as { pendings?: PendingConfirmation[]; batches?: ConfirmationBatch[] }
+    const data = JSON.parse(raw) as { pendings?: PendingConfirmation[]; batches?: ConfirmationBatch[]; executions?: ConfirmationExecution[] }
     const now = Date.now()
     let restoredP = 0, restoredB = 0
     for (const p of data.pendings || []) {
       if (!p?.id || !p.expiresAt) continue
       if (p.expiresAt <= now) continue
-      this.store.set(p.id, p)
+      const governance = classifyConfirmationRisk(p.toolName)
+      this.store.set(p.id, {
+        ...p,
+        riskLevel: p.riskLevel || governance.riskLevel,
+        approvalsRequired: p.approvalsRequired || governance.approvalsRequired,
+        approvalStep: p.approvalStep === 1 ? 1 : 0,
+      })
       restoredP++
     }
     for (const b of data.batches || []) {
       if (!b?.batchId) continue
-      this.batches.set(b.batchId, b)
+      const pendings = (b.pendings || []).map((p) => {
+        const governance = classifyConfirmationRisk(p.toolName)
+        return {
+          ...p,
+          riskLevel: p.riskLevel || governance.riskLevel,
+          approvalsRequired: p.approvalsRequired || governance.approvalsRequired,
+          approvalStep: p.approvalStep === 1 ? 1 as const : 0 as const,
+        }
+      })
+      this.batches.set(b.batchId, { ...b, status: b.status === 'applying' ? 'partial_applied' : b.status, pendings })
       restoredB++
     }
-    if (restoredP > 0 || restoredB > 0) {
-      console.log(`[AlixConfirmationStore] Recovered ${restoredP} pendings + ${restoredB} batches do snapshot`)
+    for (const execution of data.executions || []) {
+      if (!execution.confirmation?.id || !execution.startedAt) continue
+      if (execution.status === 'running') {
+        execution.status = 'unknown'
+        execution.error = 'A API reiniciou durante a execução. Confira o registro antes de preparar outra ação.'
+      }
+      this.executions.set(execution.confirmation.id, execution)
+      this.store.delete(execution.confirmation.id)
     }
   }
 
@@ -203,6 +282,7 @@ export class AlixConfirmationStore {
     sessionId?: string,
   ): PendingConfirmation {
     const now = Date.now();
+    const governance = classifyConfirmationRisk(toolName);
     const entry: PendingConfirmation = {
       id: this.genId(),
       toolName,
@@ -210,7 +290,10 @@ export class AlixConfirmationStore {
       payload,
       createdAt: now,
       expiresAt: now + this.ttlMs,
-      sessionId,
+      sessionId: sessionId || getAlixTurnContext()?.sessionId,
+      contextClienteId: getAlixTurnContext() ? getAlixTurnContext()!.clienteId || null : undefined,
+      ...governance,
+      approvalStep: 0,
     };
     this.store.set(entry.id, entry);
     this.emit({ type: 'pending:created', confirmation: entry });
@@ -236,7 +319,103 @@ export class AlixConfirmationStore {
     const entry = this.get(id);
     if (!entry) return null;
     this.store.delete(id);
+    this.persistSnapshot();
     return entry;
+  }
+
+  getExecution(id: string): ConfirmationExecution | undefined {
+    return this.executions.get(id);
+  }
+
+  /** O recibo é gravado antes do efeito. Repetições consultam o mesmo resultado. */
+  async executeOnce(confirmation: PendingConfirmation, executor: (payload: unknown) => Promise<unknown>): Promise<ConfirmationExecution> {
+    const previous = this.executions.get(confirmation.id)
+    if (previous) return previous
+    const execution: ConfirmationExecution = { confirmation, status: 'running', startedAt: new Date().toISOString() }
+    this.executions.set(confirmation.id, execution)
+    this.store.delete(confirmation.id)
+    try {
+      this.persistSnapshot(true)
+    } catch (error) {
+      this.executions.delete(confirmation.id)
+      this.store.set(confirmation.id, confirmation)
+      throw new Error('Não foi possível registrar o início da ação. Nenhuma execução foi iniciada.', { cause: error })
+    }
+    try {
+      const result = await executor(confirmation.payload)
+      execution.result = result
+      execution.error = toolFailure(result)
+      execution.status = execution.error ? 'failed' : 'completed'
+      execution.outcome = execution.error ? 'failed' : toolOutcome(confirmation.toolName, result)
+      // O executor terminou, mas um enfileiramento/prévia continua sendo preparo.
+      if (execution.outcome === 'unknown' && result !== null && result !== undefined) execution.outcome = 'executed'
+    } catch (error) {
+      execution.status = 'unknown'
+      execution.outcome = 'unknown'
+      execution.error = `${error instanceof Error ? error.message : 'Falha na execução'}. Confira o estado antes de repetir: o executor pode ter aplicado parte da ação.`
+    }
+    execution.finishedAt = new Date().toISOString()
+    try { this.persistSnapshot(true) } catch {
+      execution.status = 'unknown'
+      execution.outcome = 'unknown'
+      execution.error = 'O executor retornou, mas o recibo final não foi persistido. Confira o registro; não repita automaticamente.'
+    }
+    return execution
+  }
+
+  /**
+   * Autoriza uma execução sem permitir que caminhos alternativos ignorem a
+   * confirmação dupla. O challenge é de uso único e só nasce após a primeira
+   * aprovação explícita.
+   */
+  authorize(id: string, input: { actorId: string; challenge?: string; deferConsumption?: boolean }): ConfirmationAuthorization {
+    const entry = this.get(id);
+    if (!entry) return { status: 'not_found' };
+    if (entry.approvalsRequired === 1) {
+      if (input.deferConsumption) return { status: 'ready', confirmation: entry };
+      const consumed = this.consume(id);
+      return consumed ? { status: 'ready', confirmation: consumed } : { status: 'not_found' };
+    }
+    if (entry.approvalStep === 0) {
+      entry.approvalStep = 1;
+      entry.firstApprovedAt = Date.now();
+      entry.firstApprovedBy = input.actorId;
+      entry.secondApprovalChallenge = randomBytes(16).toString('hex');
+      setImmediate(() => this.persistSnapshot());
+      return { status: 'awaiting_second_approval', confirmation: entry, challenge: entry.secondApprovalChallenge };
+    }
+    if (!input.challenge || input.challenge !== entry.secondApprovalChallenge) {
+      return { status: 'invalid_challenge', confirmation: entry };
+    }
+    if (input.deferConsumption) return { status: 'ready', confirmation: entry };
+    entry.secondApprovalChallenge = undefined;
+    const consumed = this.consume(id);
+    return consumed ? { status: 'ready', confirmation: consumed } : { status: 'not_found' };
+  }
+
+  authorizeBatch(batchId: string, input: { actorId: string; challenge?: string }):
+    | { status: 'ready'; batch: ConfirmationBatch }
+    | { status: 'awaiting_second_approval'; batch: ConfirmationBatch; challenge: string }
+    | { status: 'invalid_challenge'; batch: ConfirmationBatch }
+    | { status: 'not_found' } {
+    const batch = this.getBatch(batchId);
+    if (!batch) return { status: 'not_found' };
+    const needsDouble = batch.pendings.some((pending) => pending.approvalsRequired === 2);
+    if (!needsDouble) return { status: 'ready', batch };
+    if ((batch.approvalStep ?? 0) === 0) {
+      batch.approvalStep = 1;
+      batch.firstApprovedAt = Date.now();
+      batch.firstApprovedBy = input.actorId;
+      batch.secondApprovalChallenge = randomBytes(16).toString('hex');
+      batch.updatedAt = Date.now();
+      setImmediate(() => this.persistSnapshot());
+      return { status: 'awaiting_second_approval', batch, challenge: batch.secondApprovalChallenge };
+    }
+    if (!input.challenge || input.challenge !== batch.secondApprovalChallenge) {
+      return { status: 'invalid_challenge', batch };
+    }
+    batch.secondApprovalChallenge = undefined;
+    return { status: 'ready', batch };
   }
 
   /** Descarta todas as entradas expiradas e retorna o número removido. */
@@ -257,10 +436,25 @@ export class AlixConfirmationStore {
     return Array.from(this.store.values()).sort((a, b) => a.createdAt - b.createdAt);
   }
 
+  /** Lista confirmações ativas de uma sessão específica (mais recentes primeiro). */
+  listActiveBySessionId(sessionId: string): PendingConfirmation[] {
+    this.cleanupExpired();
+    return Array.from(this.store.values())
+      .filter((p) => p.sessionId === sessionId)
+      .sort((a, b) => a.createdAt - b.createdAt);
+  }
+
   /** Teste/manutenção — libera todos os intents (sem notificação). */
   clear(): void {
     this.store.clear();
     this.batches.clear();
+    this.executions.clear();
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    if (this.cleanupTimer) clearInterval(this.cleanupTimer);
+    this.cleanupTimer = null;
   }
 
   // ── Alix Insano F4 — batch methods ──────────────────────────
@@ -319,16 +513,17 @@ export class AlixConfirmationStore {
     if (batch.status === 'all_applied' || batch.status === 'cancelled') {
       throw new Error(`Batch em estado terminal: ${batch.status}`);
     }
+    if (batch.status === 'applying') throw new Error('O lote já está em execução. Consulte seu progresso.');
     batch.status = 'applying';
     batch.updatedAt = Date.now();
 
-    const applied: Array<{ confirmationId: string; toolName: string; result: unknown }> = [];
+    const applied: Array<{ confirmationId: string; toolName: string; result: unknown }> = [...(batch.results?.applied || [])];
     const failed: Array<{ confirmationId: string; toolName: string; error: string }> = [];
     const skipped: Array<{ confirmationId: string; toolName: string; reason: string }> = [];
-    const successIds = new Set<string>();
+    const successIds = new Set<string>(applied.map((item) => item.confirmationId));
     const failedIds = new Set<string>();
     const restrict = opts.only ? new Set(opts.only) : null;
-    const remaining = [...batch.pendings];
+    const remaining = batch.pendings.filter((item) => !successIds.has(item.id));
 
     while (remaining.length > 0) {
       const idx = remaining.findIndex(p => {
@@ -347,7 +542,9 @@ export class AlixConfirmationStore {
       const [current] = remaining.splice(idx, 1);
       this.emit({ type: 'batch:progress', batchId, confirmationId: current.id, status: 'applying' });
       try {
-        const result = await runner(current);
+        const execution = await this.executeOnce(current, async () => runner(current));
+        if (execution.status !== 'completed') throw new Error(execution.error || 'Execução em andamento; confira seu recibo.');
+        const result = execution.result;
         applied.push({ confirmationId: current.id, toolName: current.toolName, result });
         successIds.add(current.id);
         this.store.delete(current.id);

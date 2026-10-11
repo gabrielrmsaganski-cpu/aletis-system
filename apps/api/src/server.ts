@@ -17,6 +17,8 @@ import { join, dirname } from 'path'
 import { readdirSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { createRequire } from 'module'
+import { isInternalAuthPublicPath, resolveInternalSession } from './lib/internal-auth.js'
+import { getLLMProviderConfig, isPrimaryLLMEnabled } from './services/llm/ProviderConfig.js'
 
 // Retry global no axios — fontes externas (BCB/CEPEA/INMET/IBGE/etc.) ocasionalmente
 // retornam 429/503/timeout. Sem retry, um spike marca a fonte como offline.
@@ -64,6 +66,11 @@ function buildLoggerOptions(): FastifyServerOptions['logger'] {
       'res.headers["set-cookie"]',
       '*.password',
       '*.senha',
+      '*.passphrase',
+      '*.pfx',
+      '*.envelope',
+      '*.ciphertext',
+      'req.body',
       '*.senha_hash',
       '*.token',
       '*.tokenHash',
@@ -115,6 +122,48 @@ async function buildApp() {
       return cryptoRandomId()
     },
     requestIdLogLabel: 'traceId',
+  })
+
+  let stopWorkflowEvents = () => {}
+  fastify.addHook('onReady', async () => {
+    if (process.env.ALETIS_PG_ENABLED !== '1') return
+    const { getAutomationEventService } = await import('./services/core/AutomationEventService.js')
+    let running = false
+    const consume = async () => {
+      if (running) return
+      running = true
+      try { await getAutomationEventService().processInternalWorkflowEvents() }
+      catch (err) { fastify.log.warn({ err }, 'recibos internos aguardam nova tentativa') }
+      finally { running = false }
+    }
+    const timer = setInterval(() => { void consume() }, 10_000)
+    timer.unref()
+    stopWorkflowEvents = () => clearInterval(timer)
+    void consume()
+  })
+
+  fastify.addHook('onClose', async () => {
+    stopWorkflowEvents()
+    const { stopFiscalConnectionWorker } = await import('./services/fiscal-connection/FiscalConnectionWorker.js')
+    await stopFiscalConnectionWorker()
+    try {
+      const { getPortalDocumentProcessor } = await import('./services/portal/PortalDocumentProcessor.js')
+      await getPortalDocumentProcessor().stop()
+    } catch (err) {
+      fastify.log.warn({ err }, '[shutdown] processamento do portal aguardará retomada')
+    }
+    try {
+      const { getAiJobQueueService } = await import('./services/alix/jobs/AiJobQueueService.js')
+      await getAiJobQueueService().stop()
+    } catch (err) {
+      fastify.log.warn({ err }, '[shutdown] falha ao encerrar fila de IA')
+    }
+    try {
+      const { closeDb } = await import('./db/client.js')
+      await closeDb()
+    } catch (err) {
+      fastify.log.warn({ err }, '[shutdown] falha ao encerrar pool PostgreSQL')
+    }
   })
 
   // Eco do trace-id no response para o cliente correlacionar.
@@ -193,7 +242,7 @@ async function buildApp() {
   await fastify.register(cors, { origin: corsOrigin, credentials: true })
 
   // --- Rate-limit global (proteção básica contra abuso) ---
-  // 300 req/min por IP no global; rotas pesadas (ALIX/Foundry) configuram
+  // 300 req/min por IP no global; rotas pesadas da ALIX configuram
   // limites mais restritivos via opção rateLimit no próprio handler.
   await fastify.register(rateLimit, {
     global: true,
@@ -249,6 +298,26 @@ async function buildApp() {
     parseOptions: {},
   })
 
+  // --- Autenticação do ambiente interno ---
+  // Protege toda a API usada pela equipe. Portal do Cliente, callbacks e
+  // webhooks mantêm seus mecanismos próprios e ficam explicitamente fora.
+  // Testes podem desativar o guard com ALETIS_INTERNAL_AUTH_ENABLED=0.
+  if (process.env.ALETIS_INTERNAL_AUTH_ENABLED !== '0') {
+    fastify.addHook('onRequest', async (request, reply) => {
+      if (!request.url.startsWith('/api/')) return
+      if (isInternalAuthPublicPath(request.method, request.url)) return
+
+      const user = resolveInternalSession(fastify, request)
+      if (!user) {
+        return reply.status(401).send({
+          success: false,
+          error: 'Sessão ausente ou expirada.',
+          code: 'UNAUTHORIZED',
+        })
+      }
+    })
+  }
+
   // --- Multipart (uploads de NF, comprovantes, OFX, etc) ---
   await fastify.register(multipart, {
     limits: {
@@ -269,8 +338,8 @@ async function buildApp() {
 
     reply.status(statusCode).send({
       success: false,
-      error: error.message || 'Erro interno do servidor',
-      code: error.code || 'INTERNAL_ERROR',
+      error: statusCode >= 500 ? 'Não foi possível concluir a operação. Tente novamente em instantes.' : error.message || 'Não foi possível concluir a operação.',
+      code: statusCode >= 500 ? 'INTERNAL_ERROR' : error.code || 'REQUEST_ERROR',
       statusCode,
       timestamp: new Date().toISOString(),
     })
@@ -291,7 +360,7 @@ async function buildApp() {
   // /api/health         → resposta rápida (apenas API up). 200 OK sempre
   //                       que o processo responde — usado por load
   //                       balancer + Docker HEALTHCHECK.
-  // /api/health/deep    → checa banco + storage + ALIX/Foundry. Mais
+  // /api/health/deep    → checa banco + storage + credenciais OpenAI. Mais
   //                       lento (até ~5s). Usar pra dashboard/migração.
   fastify.get('/api/health', async () => {
     return {
@@ -340,7 +409,19 @@ async function buildApp() {
       checks.postgres = { ok: true, detail: 'disabled (ALETIS_PG_ENABLED != 1)' }
     }
 
-    // 2) Storage de uploads do portal
+    // 2) Fila durável da IA
+    try {
+      const { getAiJobQueueService } = await import('./services/alix/jobs/AiJobQueueService.js')
+      const queue = await getAiJobQueueService().status() as { ready?: boolean; state?: string; lastError?: string }
+      checks.aiQueue = {
+        ok: process.env.ALETIS_PG_ENABLED !== '1' || process.env.ALETIS_AI_QUEUE_ENABLED === 'false' || Boolean(queue.ready),
+        detail: queue.lastError || queue.state,
+      }
+    } catch (err) {
+      checks.aiQueue = { ok: false, detail: (err as Error).message }
+    }
+
+    // 3) Storage de uploads do portal
     try {
       const { existsSync, statSync } = await import('node:fs')
       const path = process.env.ALETIS_PORTAL_UPLOAD_DIR || './storage/portal-uploads'
@@ -355,9 +436,9 @@ async function buildApp() {
       checks.storage = { ok: false, detail: (err as Error).message }
     }
 
-    // 3) ALIX / Foundry (apenas se habilitado)
-    if (process.env.ALIX_USE_LLM !== 'false' && process.env.AZURE_AI_SERVICES_KEY) {
-      checks.alix = { ok: true, detail: 'Foundry credentials present (no ping)' }
+    // 4) Configuração do provedor principal; disponibilidade dos modelos tem rota própria.
+    if (isPrimaryLLMEnabled()) {
+      checks.alix = { ok: true, detail: `${getLLMProviderConfig().provider} configured (no inference ping)` }
     } else {
       checks.alix = { ok: true, detail: 'disabled or no credentials' }
     }
@@ -369,7 +450,7 @@ async function buildApp() {
     return { success: true, data: result }
   })
 
-  // --- Auto-register route modules ---
+  // --- Auto-register route modules (inclui Notebook e qualidade ALIX) ---
   // Per-file try/catch: one bad module should not skip the rest.
   const routesDir = join(__dirname, 'routes')
   let files: string[] = []
@@ -408,6 +489,34 @@ async function start(): Promise<void> {
   } catch (err) {
     app.log.error({ err }, '[boot] auto-migrate falhou — abortando start')
     process.exit(1)
+  }
+
+  // Fila durável da ALIX. A API continua em modo degradado se a fila não
+  // puder iniciar; o healthcheck profundo torna a falha visível.
+  if (process.env.ALETIS_PG_ENABLED === '1') {
+    try {
+      const { getAiJobQueueService } = await import('./services/alix/jobs/AiJobQueueService.js')
+      const queue = getAiJobQueueService()
+      await queue.start(app.log)
+      if ((process.env.ALETIS_AI_BACKFILL_ON_START ?? 'false').toLowerCase() === 'true') {
+        await queue.enqueueBackfill({ includeSessionDocuments: false }).catch((err) => {
+          app.log.warn({ err }, '[boot] backfill de conhecimento já está em andamento ou não pôde ser enfileirado')
+        })
+      }
+    } catch (err) {
+      app.log.error({ err }, '[boot] fila durável da ALIX indisponível — API seguirá degradada')
+    }
+  }
+
+  if (process.env.ALETIS_PG_ENABLED === '1') {
+    try {
+      const { getPortalDocumentProcessor } = await import('./services/portal/PortalDocumentProcessor.js')
+      await getPortalDocumentProcessor().start(app.log)
+      const { startFiscalConnectionWorker } = await import('./services/fiscal-connection/FiscalConnectionWorker.js')
+      startFiscalConnectionWorker(app.log)
+    } catch (err) {
+      app.log.error({ err }, '[boot] processamento de documentos do portal aguardará retomada')
+    }
   }
 
   // Hidrata stores em memória do Portal a partir do PG (best-effort).
@@ -459,12 +568,16 @@ async function start(): Promise<void> {
 
     // Mesmo padrão para propostas (legacy + inteligente).
     try {
-      const { hydrateOrSeedPropostasPg } = await import('./routes/propostas.js')
+      const { hydrateOrSeedPropostasPg, reconcilePropostasComNegociacoes } = await import('./routes/propostas.js')
       const r = await hydrateOrSeedPropostasPg()
       if (r.hydrated > 0) {
         app.log.info(`[ALETIS-PG] ${r.hydrated} proposta(s) hidratada(s) do Postgres.`)
       } else if (r.seeded > 0) {
         app.log.info(`[ALETIS-PG] PG vazio — semeado com ${r.seeded} proposta(s) do seed em memória.`)
+      }
+      const reconciled = await reconcilePropostasComNegociacoes()
+      if (reconciled.criadas > 0 || reconciled.ignoradas > 0) {
+        app.log.info({ reconciled }, '[ALETIS] propostas reconciliadas com o Deal Room.')
       }
     } catch (err) {
       app.log.warn({ err }, '[ALETIS-PG] hydrate/seed proposta falhou — seguindo com Map em memória.')
@@ -492,6 +605,22 @@ async function start(): Promise<void> {
       } catch (err) {
         console.warn('[server] CronGestaoFinanceira não iniciou:', (err as Error).message)
       }
+    }
+
+    // Sincronização diária dos índices econômicos usados no recálculo de acordos.
+    // Falhas são isoladas: os snapshots locais continuam disponíveis para cálculo.
+    if ((process.env.RECALCULO_INDEX_SYNC_ENABLED ?? 'true').toLowerCase() !== 'false') {
+      try {
+        const { sincronizarIndices } = await import('./services/recalculo-acordo/IndexSyncService.js')
+        const runSync = async () => {
+          try { app.log.info({ resultado: await sincronizarIndices() }, '[Recálculo] sincronização de índices concluída') }
+          catch (err) { app.log.warn({ err }, '[Recálculo] sincronização de índices falhou; mantendo cache local') }
+        }
+        setTimeout(() => void runSync(), 5_000).unref()
+        // Verifica a cada 6h; as fontes mensais/diárias só alteram o cache
+        // quando existe período novo ou revisão, sem bloquear requisições.
+        setInterval(() => void runSync(), 6 * 60 * 60_000).unref()
+      } catch (err) { app.log.warn({ err }, '[Recálculo] scheduler de índices não iniciou') }
     }
 
     // Sondagem periódica das fontes de dados — primeira após 15s,

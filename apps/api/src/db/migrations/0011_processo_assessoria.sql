@@ -1,5 +1,5 @@
 -- ============================================================
--- Wave: Processo de Assessoria TEX CAPITAL
+-- Wave: Processo de Assessoria ALETIS
 -- Tabelas para persistência de checklists interativos e renders
 -- gerados (cache + auditoria) dos 25 documentos oficiais.
 -- ============================================================

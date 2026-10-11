@@ -1,6 +1,11 @@
-import React, { useState, useMemo, useCallback } from 'react'
-import { Link } from 'react-router-dom'
-import { useApi, apiFetch } from '../hooks/useApi'
+import SearchField from '../components/ui/SearchField'
+import ViewSwitch from '../components/ui/ViewSwitch'
+import FilterBar from '../components/ui/FilterBar'
+import PageHeader from '../components/ui/PageHeader'
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { ApiError, useApi, apiFetch, apiFetchFull } from '../hooks/useApi'
+import { proposalRevision } from '../components/cliente/proposalDraft'
 import { useToast } from '../hooks/useToast'
 import { ToastContainer } from '../components/Toast'
 import { KpiTile, Chip, InlineButton, type ChipTone } from '../components/ui'
@@ -25,40 +30,48 @@ import {
   FileCheck,
   ChevronDown,
   ArrowUpDown,
-  X,
 } from 'lucide-react'
+import AppDialog from '../components/ui/AppDialog'
+import { uiAction } from '../components/ui/foundation'
 
 // ────────────────────────────────────────────────────────────
 // Currency Formatter
 // ────────────────────────────────────────────────────────────
-const formatBRL = (value: number): string =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
+function toFiniteNumber(value: unknown): number {
+  if (value === null || value === undefined || value === '') return 0
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+const formatBRL = (value: unknown): string =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(toFiniteNumber(value))
+
+function textOr(value: unknown, fallback: string): string {
+  const normalized = String(value ?? '').replace(/\s+/g, ' ').trim()
+  return normalized || fallback
+}
 
 // ────────────────────────────────────────────────────────────
 // Status Configuration
 // ────────────────────────────────────────────────────────────
 type ProposalStatus =
   | 'rascunho'
-  | 'gerando'
-  | 'revisao'
+  | 'em_analise'
   | 'enviada'
-  | 'visualizada'
   | 'aceita'
   | 'rejeitada'
-  | 'em_analise'
+  | 'expirada'
 
 const statusConfig: Record<
   ProposalStatus,
   { label: string; tone: ChipTone; icon: React.ElementType }
 > = {
   rascunho: { label: 'Rascunho', tone: 'slate', icon: FileText },
-  gerando: { label: 'Gerando', tone: 'sky', icon: Loader2 },
-  revisao: { label: 'Em Revisão', tone: 'amber', icon: AlertCircle },
+  em_analise: { label: 'Em análise', tone: 'amber', icon: Clock },
   enviada: { label: 'Enviada', tone: 'violet', icon: Send },
-  visualizada: { label: 'Visualizada', tone: 'sky', icon: Eye },
   aceita: { label: 'Aceita', tone: 'emerald', icon: CheckCircle2 },
   rejeitada: { label: 'Rejeitada', tone: 'red', icon: XCircle },
-  em_analise: { label: 'Em Análise', tone: 'amber', icon: Clock },
+  expirada: { label: 'Expirada', tone: 'red', icon: AlertCircle },
 }
 
 const DEFAULT_STATUS_CONFIG: { label: string; tone: ChipTone; icon: React.ElementType } = {
@@ -72,6 +85,7 @@ const DEFAULT_STATUS_CONFIG: { label: string; tone: ChipTone; icon: React.Elemen
 // ────────────────────────────────────────────────────────────
 interface Proposal {
   id: number
+  revision?: number
   apiId?: string
   titulo: string
   cliente: string
@@ -87,127 +101,34 @@ interface Proposal {
   observacoes?: string
 }
 
-const fallbackProposals: Proposal[] = [
-  {
-    id: 1,
-    titulo: 'Proposta de Liquidação - Ailton Caeiro x Sicoob',
-    cliente: 'Ailton Caeiro da Silva',
-    credor: 'Sicoob Crediminas',
-    valorProposto: 2049802.53,
-    valorDivida: 2800000,
-    status: 'enviada',
-    dataCriacao: '31/03/2026',
-    tipo: 'Dação em pagamento',
-  },
-  {
-    id: 2,
-    titulo: 'Memória de Cálculo - Paulo Luciano x Fertiflora',
-    cliente: 'Paulo Luciano de Oliveira',
-    credor: 'Fertiflora Insumos Agrícolas',
-    valorProposto: 243178.75,
-    valorDivida: 320000,
-    status: 'enviada',
-    dataCriacao: '24/03/2026',
-    tipo: 'Parcelamento 4x R$ 70.550',
-  },
-  {
-    id: 3,
-    titulo: 'Proposta de Parcelamento - Maria Santos x Banco do Brasil',
-    cliente: 'Maria Santos',
-    credor: 'Banco do Brasil',
-    valorProposto: 450000.0,
-    valorDivida: 620000,
-    status: 'aceita',
-    dataCriacao: '15/03/2026',
-    tipo: 'Parcelamento 12x',
-  },
-  {
-    id: 4,
-    titulo: 'Memória de Cálculo - Roberto Almeida x Cresol',
-    cliente: 'Roberto Almeida',
-    credor: 'Cresol Cooperativa',
-    valorProposto: 1020000.0,
-    valorDivida: 1350000,
-    status: 'aceita',
-    dataCriacao: '10/03/2026',
-    tipo: 'Renegociação',
-  },
-  {
-    id: 5,
-    titulo: 'Proposta de Acordo - Carlos Mendes x Sicredi',
-    cliente: 'Carlos Mendes',
-    credor: 'Sicredi Vanguarda',
-    valorProposto: 780000.0,
-    valorDivida: 950000,
-    status: 'revisao',
-    dataCriacao: '08/04/2026',
-    tipo: 'Acordo extrajudicial',
-  },
-  {
-    id: 6,
-    titulo: 'Proposta de Liquidação - Pedro Henrique x Itaú',
-    cliente: 'Pedro Henrique',
-    credor: 'Itaú BBA',
-    valorProposto: 320000.0,
-    valorDivida: 420000,
-    status: 'gerando',
-    dataCriacao: '12/04/2026',
-    tipo: 'Liquidação antecipada',
-  },
-  {
-    id: 7,
-    titulo: 'Proposta Preliminar - João Silva x Bradesco',
-    cliente: 'João Silva',
-    credor: 'Bradesco Agronegócio',
-    valorProposto: 185000.0,
-    valorDivida: 250000,
-    status: 'rascunho',
-    dataCriacao: '14/04/2026',
-    tipo: 'Parcelamento 6x',
-  },
-  {
-    id: 8,
-    titulo: 'Memória de Cálculo - Faz. Sol Nascente x BNDES',
-    cliente: 'Fazenda Sol Nascente',
-    credor: 'BNDES',
-    valorProposto: 890000.0,
-    valorDivida: 1100000,
-    status: 'visualizada',
-    dataCriacao: '02/04/2026',
-    tipo: 'Refinanciamento',
-  },
-  {
-    id: 9,
-    titulo: 'Proposta de Acordo - José Moreira x Santander',
-    cliente: 'José Moreira',
-    credor: 'Santander Rural',
-    valorProposto: 510000.0,
-    valorDivida: 680000,
-    status: 'aceita',
-    dataCriacao: '28/02/2026',
-    tipo: 'Dação em pagamento',
-  },
-]
-
 // ────────────────────────────────────────────────────────────
 // API Response → Proposal mapping
 // ────────────────────────────────────────────────────────────
 interface ApiProposta {
   id: string
+  revision?: number
   clienteId: string
   clienteNome: string
   credor: string
   titulo: string
   tipo: string
   status: string
-  valorDivida: number
-  valorProposta: number
-  descontoPercentual: number
+  valorDivida: number | string | null
+  valorProposta: number | string | null
+  descontoPercentual: number | string | null
   dataCriacao: string
   dataValidade: string
   ultimaAtualizacao: string
   fundamentacao?: string
   observacoes?: string
+}
+
+interface ProposalMutationResponse {
+  data: ApiProposta
+  meta?: {
+    negociacaoId?: string
+    contratoId?: string
+  }
 }
 
 function mapApiToProposal(item: ApiProposta, index: number): Proposal {
@@ -220,13 +141,14 @@ function mapApiToProposal(item: ApiProposta, index: number): Proposal {
   return {
     id: index + 1,
     apiId: item.id,
-    titulo: item.titulo,
-    cliente: item.clienteNome,
+    revision: item.revision,
+    titulo: textOr(item.titulo, 'Proposta sem título — revisar'),
+    cliente: textOr(item.clienteNome, 'Cliente não identificado'),
     clienteId: item.clienteId,
-    credor: item.credor,
-    valorDivida: item.valorDivida,
-    valorProposto: item.valorProposta,
-    descontoPercentual: item.descontoPercentual,
+    credor: textOr(item.credor, 'Credor não identificado'),
+    valorDivida: toFiniteNumber(item.valorDivida),
+    valorProposto: toFiniteNumber(item.valorProposta),
+    descontoPercentual: toFiniteNumber(item.descontoPercentual),
     status: (item.status || 'rascunho') as ProposalStatus,
     dataCriacao: formatDate(item.dataCriacao),
     tipo: item.tipo,
@@ -241,6 +163,25 @@ function mapApiToProposal(item: ApiProposta, index: number): Proposal {
 function StatusBadge({ status }: { status: ProposalStatus }) {
   const config = statusConfig[status] || DEFAULT_STATUS_CONFIG
   return <Chip tone={config.tone} icon={config.icon} label={config.label} size="md" />
+}
+
+const proposalLabelClass = 'mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text-soft)]'
+const proposalInputClass = 'input-field h-10 text-sm'
+const proposalTextAreaClass = 'input-field min-h-24 resize-y text-sm'
+
+function DetailField({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <p className={proposalLabelClass}>{label}</p>
+      <div className="text-sm leading-relaxed text-foreground">{children}</div>
+    </div>
+  )
 }
 
 // ────────────────────────────────────────────────────────────
@@ -258,6 +199,8 @@ interface ProposalForm {
   titulo: string
   clienteNome: string
   clienteId: string
+  demandaId: string
+  demandaTitulo: string
   credor: string
   tipo: string
   valorDivida: string
@@ -266,10 +209,24 @@ interface ProposalForm {
   observacoes: string
 }
 
+const EDIT_FIELD_LABELS: Record<string, string> = { titulo: 'Título', valorProposta: 'Valor proposto', fundamentacao: 'Fundamentação', observacoes: 'Observações' }
+
+function editProposalValue(proposal: Proposal, key: string): string {
+  if (key === 'valorProposta') return String(proposal.valorProposto)
+  return String(proposal[key as keyof Proposal] ?? '')
+}
+
+function editProposalChanges(proposal: Proposal, form: ProposalForm): Record<string, string> {
+  const fields = proposal.status === 'aceita' ? ['observacoes'] : Object.keys(EDIT_FIELD_LABELS)
+  return Object.fromEntries(fields.filter(key => form[key as keyof ProposalForm] !== editProposalValue(proposal, key)).map(key => [key, form[key as keyof ProposalForm]]))
+}
+
 const emptyForm: ProposalForm = {
   titulo: '',
   clienteNome: '',
   clienteId: '',
+  demandaId: '',
+  demandaTitulo: '',
   credor: '',
   tipo: 'liquidacao',
   valorDivida: '',
@@ -278,10 +235,26 @@ const emptyForm: ProposalForm = {
   observacoes: '',
 }
 
+interface ClienteOption {
+  id: string
+  nome: string
+  credor?: string
+  valorTotalDivida?: number | string | null
+}
+
+interface DemandaOption {
+  id: string
+  titulo: string
+  credor?: string
+  valorPretendido?: string
+  status?: string
+}
+
 // ────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ────────────────────────────────────────────────────────────
 export default function Propostas() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('todas')
   const [dateFilter, setDateFilter] = useState<string>('todos')
@@ -295,24 +268,68 @@ export default function Propostas() {
   const [editingProposal, setEditingProposal] = useState<Proposal | null>(null)
   const [formData, setFormData] = useState<ProposalForm>(emptyForm)
   const [saving, setSaving] = useState(false)
+  const mutationInFlight = useRef(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [editConflict, setEditConflict] = useState(false)
+  const [editingLatest, setEditingLatest] = useState<Proposal | null>(null)
 
   // Toast
   const { toasts, show: showToast, dismiss: dismissToast } = useToast()
 
-  // Fetch proposals from backend, fall back to hardcoded data
+  // Fonte única: API persistida. Estado vazio é exibido como vazio, sem mocks.
   const { data: apiPropostas, refetch } = useApi<ApiProposta[]>('/propostas', [])
+  const { data: clientes } = useApi<ClienteOption[]>('/clientes', [])
+  const [demandas, setDemandas] = useState<DemandaOption[]>([])
+  const [loadingDemandas, setLoadingDemandas] = useState(false)
   const proposals: Proposal[] = useMemo(() => {
-    if (apiPropostas && apiPropostas.length > 0) {
-      return apiPropostas.map(mapApiToProposal)
-    }
-    return fallbackProposals
+    return (apiPropostas ?? []).map(mapApiToProposal)
   }, [apiPropostas])
+
+  useEffect(() => {
+    const requestedId = searchParams.get('proposta') || searchParams.get('id')
+    if (!requestedId || !apiPropostas) return
+    const proposal = proposals.find((item) => item.apiId === requestedId)
+    if (!proposal) return
+    setViewingProposal(proposal)
+  }, [apiPropostas, proposals, searchParams])
+
+  const closeViewingProposal = () => {
+    setViewingProposal(null)
+    if (!searchParams.has('proposta') && !searchParams.has('id')) return
+    const next = new URLSearchParams(searchParams)
+    next.delete('proposta')
+    next.delete('id')
+    setSearchParams(next, { replace: true })
+  }
+
+  useEffect(() => {
+    if (!formData.clienteId || !showCreateModal) {
+      setDemandas([])
+      return
+    }
+    const controller = new AbortController()
+    setLoadingDemandas(true)
+    apiFetch<DemandaOption[]>(`/clientes/${formData.clienteId}/demandas`, { signal: controller.signal })
+      .then(setDemandas)
+      .catch((error) => {
+        if ((error as Error).name !== 'AbortError') showToast(`Não foi possível carregar as demandas: ${(error as Error).message}`, 'warning')
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingDemandas(false)
+      })
+    return () => controller.abort()
+  }, [formData.clienteId, showCreateModal, showToast])
+
+  const creditorOptions = useMemo(() => Array.from(new Set([
+    ...clientes.map((cliente) => textOr(cliente.credor, '')),
+    ...demandas.map((demanda) => textOr(demanda.credor, '')),
+  ].filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')), [clientes, demandas])
 
   // Compute stats from actual data
   const stats = useMemo(() => {
     const total = proposals.length
-    const elaboracao = proposals.filter(p => ['rascunho', 'gerando', 'revisao'].includes(p.status)).length
-    const enviadas = proposals.filter(p => ['enviada', 'visualizada'].includes(p.status)).length
+    const elaboracao = proposals.filter(p => ['rascunho', 'em_analise'].includes(p.status)).length
+    const enviadas = proposals.filter(p => p.status === 'enviada').length
     const aceitas = proposals.filter(p => p.status === 'aceita').length
     return [
       { label: 'Total', value: total, icon: FileText, accent: 'verde' as const, sub: 'propostas cadastradas' },
@@ -340,15 +357,18 @@ export default function Propostas() {
       result = result.filter((p) => p.status === statusFilter)
     }
 
-    if (dateFilter === 'ultimo-mes') {
-      result = result.filter((p) => p.dataCriacao.includes('/04/2026') || p.dataCriacao.includes('/03/2026'))
-    } else if (dateFilter === 'ultimos-3-meses') {
-      result = result.filter(
-        (p) =>
-          p.dataCriacao.includes('/04/2026') ||
-          p.dataCriacao.includes('/03/2026') ||
-          p.dataCriacao.includes('/02/2026')
-      )
+    if (dateFilter !== 'todos') {
+      const now = new Date()
+      const threshold = new Date(now)
+      if (dateFilter === 'ultimo-mes') threshold.setMonth(threshold.getMonth() - 1)
+      if (dateFilter === 'ultimos-3-meses') threshold.setMonth(threshold.getMonth() - 3)
+      if (dateFilter === 'este-ano') threshold.setMonth(0, 1)
+      threshold.setHours(0, 0, 0, 0)
+      result = result.filter((proposal) => {
+        const [day, month, year] = proposal.dataCriacao.split('/').map(Number)
+        const createdAt = new Date(year, month - 1, day)
+        return Number.isFinite(createdAt.getTime()) && createdAt >= threshold && createdAt <= now
+      })
     }
 
     result.sort((a, b) => {
@@ -391,10 +411,15 @@ export default function Propostas() {
   }, [])
 
   const handleEdit = useCallback((proposal: Proposal) => {
+    setEditError(null)
+    setEditConflict(false)
+    setEditingLatest(null)
     setFormData({
       titulo: proposal.titulo,
       clienteNome: proposal.cliente,
       clienteId: proposal.clienteId || '',
+      demandaId: '',
+      demandaTitulo: '',
       credor: proposal.credor,
       tipo: proposal.tipo,
       valorDivida: String(proposal.valorDivida || ''),
@@ -408,10 +433,14 @@ export default function Propostas() {
   const handleDuplicate = useCallback(async (proposal: Proposal) => {
     try {
       setSaving(true)
+      if (!proposal.clienteId) {
+        showToast('Esta proposta não possui cliente canônico. Vincule-a a um cliente antes de duplicar.', 'warning')
+        return
+      }
       await apiFetch('/propostas/gerar', {
         method: 'POST',
         body: JSON.stringify({
-          clienteId: proposal.clienteId || `cli-${proposal.id}`,
+          clienteId: proposal.clienteId,
           clienteNome: proposal.cliente,
           credor: proposal.credor,
           titulo: `[COPIA] ${proposal.titulo}`,
@@ -454,8 +483,8 @@ export default function Propostas() {
   }, [showToast])
 
   const handleSaveCreate = useCallback(async () => {
-    if (!formData.titulo.trim() || !formData.clienteNome.trim() || !formData.credor.trim()) {
-      showToast('Preencha título, cliente e credor', 'warning')
+    if (!formData.titulo.trim() || !formData.clienteId || !formData.clienteNome.trim() || !formData.credor.trim()) {
+      showToast('Selecione um cliente do CRM e preencha título e credor', 'warning')
       return
     }
     const valorDivida = parseFloat(formData.valorDivida) || 0
@@ -470,8 +499,10 @@ export default function Propostas() {
       await apiFetch('/propostas/gerar', {
         method: 'POST',
         body: JSON.stringify({
-          clienteId: formData.clienteId || `cli-new-${Date.now()}`,
+          clienteId: formData.clienteId,
           clienteNome: formData.clienteNome,
+          demandaId: formData.demandaId || undefined,
+          demandaTitulo: formData.demandaTitulo || undefined,
           credor: formData.credor,
           titulo: formData.titulo,
           tipo: formData.tipo,
@@ -492,20 +523,20 @@ export default function Propostas() {
   }, [formData, showToast, refetch])
 
   const handleSaveEdit = useCallback(async () => {
-    if (!editingProposal) return
+    if (!editingProposal || mutationInFlight.current || editConflict) return
+    const patch = editProposalChanges(editingProposal, formData)
+    if (!Object.keys(patch).length) { setEditingProposal(null); return }
 
     try {
+      mutationInFlight.current = true
       setSaving(true)
+      setEditError(null)
       if (editingProposal.apiId) {
-        await apiFetch(`/propostas/${editingProposal.apiId}`, {
+        const updated = await apiFetch<ApiProposta>(`/propostas/${encodeURIComponent(editingProposal.apiId)}`, {
           method: 'PATCH',
-          body: JSON.stringify({
-            titulo: formData.titulo,
-            valorProposta: parseFloat(formData.valorProposta) || editingProposal.valorProposto,
-            fundamentacao: formData.fundamentacao,
-            observacoes: formData.observacoes,
-          }),
+          body: JSON.stringify({ ...patch, expectedRevision: proposalRevision({ ...editingProposal, id: editingProposal.apiId }) }),
         })
+        setViewingProposal(current => current?.apiId === updated.id ? mapApiToProposal(updated, current.id - 1) : current)
         showToast('Proposta atualizada com sucesso', 'success')
         refetch()
       } else {
@@ -513,40 +544,131 @@ export default function Propostas() {
       }
       setEditingProposal(null)
     } catch (err) {
+      setEditError((err as Error).message)
+      if (err instanceof ApiError && err.status === 409) {
+        setEditConflict(true)
+        if (editingProposal.apiId) {
+          try {
+            const latest = await apiFetch<ApiProposta>(`/propostas/${encodeURIComponent(editingProposal.apiId)}`)
+            setEditingLatest(mapApiToProposal(latest, editingProposal.id - 1))
+          } catch { /* A edição permanece aberta; a consulta pode ser repetida. */ }
+        }
+      }
       showToast(`Erro ao salvar: ${(err as Error).message}`, 'warning')
     } finally {
       setSaving(false)
+      mutationInFlight.current = false
     }
-  }, [editingProposal, formData, showToast, refetch])
+  }, [editingProposal, editConflict, formData, showToast, refetch])
+
+  const reconcileEdit = async (keepChanges: boolean) => {
+    if (!editingProposal?.apiId || saving) return
+    let latest = editingLatest
+    if (!latest) {
+      try { latest = mapApiToProposal(await apiFetch<ApiProposta>(`/propostas/${encodeURIComponent(editingProposal.apiId)}`), editingProposal.id - 1); setEditingLatest(latest) }
+      catch (error) { setEditError((error as Error).message); return }
+      return
+    }
+    const changes = keepChanges ? editProposalChanges(editingProposal, formData) : {}
+    if (latest.status === 'aceita' && Object.keys(changes).some(key => key !== 'observacoes')) return
+    handleEdit(latest)
+    if (keepChanges) setFormData(current => ({ ...current, ...Object.fromEntries(Object.entries(changes).map(([key, value]) => [key, String(value ?? '')])) }))
+    showToast(keepChanges ? 'Confira as alterações reaplicadas e salve novamente.' : 'Versão atual carregada.', 'info')
+  }
+
+  const handleStatusTransition = useCallback(async (
+    proposal: Proposal,
+    status: 'enviada' | 'aceita',
+  ) => {
+    if (mutationInFlight.current) return
+    if (!proposal.apiId) {
+      showToast('Esta proposta ainda não possui identificação persistida.', 'warning')
+      return
+    }
+    try {
+      mutationInFlight.current = true
+      setSaving(true)
+      const result = await apiFetchFull<ProposalMutationResponse>('/propostas/' + proposal.apiId, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, expectedRevision: proposalRevision({ ...proposal, id: proposal.apiId }) }),
+      })
+      setViewingProposal((current) => {
+        if (!current || current.apiId !== proposal.apiId) return current
+        return mapApiToProposal(result.data, current.id - 1)
+      })
+      refetch()
+      if (result.data.status === 'aceita') {
+        showToast(
+          result.meta?.contratoId
+            ? 'Aceite registrado. Negociação e rascunho contratual ' + result.meta.contratoId + ' foram vinculados.'
+            : 'Aceite registrado. A negociação foi atualizada.',
+          'success',
+        )
+      } else {
+        showToast(
+          result.meta?.negociacaoId
+            ? 'Envio registrado. Negociação ' + result.meta.negociacaoId + ' criada ou atualizada.'
+            : 'Envio da proposta registrado.',
+          'success',
+        )
+      }
+    } catch (error) {
+      showToast('Não foi possível atualizar o status: ' + (error as Error).message, 'warning')
+      if (error instanceof ApiError && error.status === 409) {
+        refetch()
+        try {
+          const latest = await apiFetch<ApiProposta>(`/propostas/${encodeURIComponent(proposal.apiId)}`)
+          setViewingProposal(current => current?.apiId === latest.id ? mapApiToProposal(latest, current.id - 1) : current)
+        } catch { /* O erro original já informa que o aceite não foi confirmado. */ }
+      }
+    } finally {
+      setSaving(false)
+      mutationInFlight.current = false
+    }
+  }, [refetch, showToast])
 
   const updateForm = (field: keyof ProposalForm, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
+  const selectCliente = (clienteId: string) => {
+    const cliente = clientes.find((item) => item.id === clienteId)
+    setFormData((previous) => ({
+      ...previous,
+      clienteId,
+      clienteNome: cliente?.nome || '',
+      demandaId: '',
+      demandaTitulo: '',
+      credor: textOr(cliente?.credor, ''),
+      valorDivida: previous.valorDivida || String(toFiniteNumber(cliente?.valorTotalDivida) || ''),
+    }))
+  }
+
+  const selectDemanda = (demandaId: string) => {
+    const demanda = demandas.find((item) => item.id === demandaId)
+    setFormData((previous) => ({
+      ...previous,
+      demandaId,
+      demandaTitulo: demanda?.titulo || '',
+      credor: textOr(demanda?.credor, previous.credor),
+      valorDivida: previous.valorDivida || String(toFiniteNumber(demanda?.valorPretendido) || ''),
+    }))
+  }
+
   return (
     <div className="min-h-screen bg-aletis-bege">
       {/* ── Page Header ─────────────────────────────────────── */}
-      <header className="mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl lg:text-4xl font-display font-bold text-aletis-grafite-escuro tracking-tight">
-              Propostas
-            </h1>
-            <p className="text-aletis-grafite-claro font-body mt-1 text-sm">
+      <PageHeader eyebrow="Comercial" title={<>Propostas</>} description={<> <p className="text-muted-foreground font-body mt-1 text-sm">
               Gestão de propostas técnicas
-            </p>
-          </div>
-          <InlineButton
-            variant="gold"
+            </p> </>} actions={<> <InlineButton
+            variant="primary"
             size="md"
             icon={Plus}
             onClick={handleCreateNew}
             className="self-start sm:self-auto"
           >
             Nova Proposta
-          </InlineButton>
-        </div>
-      </header>
+          </InlineButton> </>} />
 
       {/* ── Stats Strip ─────────────────────────────────────── */}
       <section className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
@@ -564,24 +686,16 @@ export default function Propostas() {
       </section>
 
       {/* ── Filter Bar ──────────────────────────────────────── */}
-      <section className="card-premium p-4 mb-6">
-        <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center">
-          {/* Search */}
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-grafite-claro" />
-            <input
-              type="text"
-              placeholder="Buscar por título, cliente ou credor..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="input-field pl-10 py-2.5 text-sm"
-            />
-          </div>
+      <FilterBar className="mb-6" activeCount={Number(Boolean(searchTerm.trim())) + Number(statusFilter !== 'todas') + Number(dateFilter !== 'todos')} onClear={() => { setSearchTerm(''); setStatusFilter('todas'); setDateFilter('todos') }}>
+        <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-end">
+          <SearchField label="Buscar propostas" value={searchTerm} onChange={setSearchTerm} placeholder="Título, cliente ou credor" />
 
           {/* Status dropdown */}
           <div className="relative">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-grafite-claro pointer-events-none" />
+            <label htmlFor="propostas-status" className="mb-1.5 block text-xs font-medium text-muted-foreground">Status</label>
+            <Filter className="absolute left-3 bottom-3 w-4 h-4 text-muted-foreground pointer-events-none" />
             <select
+              id="propostas-status"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="input-field pl-10 pr-8 py-2.5 text-sm appearance-none cursor-pointer min-w-[180px]"
@@ -595,13 +709,15 @@ export default function Propostas() {
               <option value="aceita">Aceita</option>
               <option value="rejeitada">Rejeitada</option>
             </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-grafite-claro pointer-events-none" />
+            <ChevronDown className="absolute right-3 bottom-3 w-4 h-4 text-muted-foreground pointer-events-none" />
           </div>
 
           {/* Date range */}
           <div className="relative">
-            <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-grafite-claro pointer-events-none" />
+            <label htmlFor="propostas-periodo" className="mb-1.5 block text-xs font-medium text-muted-foreground">Período</label>
+            <Clock className="absolute left-3 bottom-3 w-4 h-4 text-muted-foreground pointer-events-none" />
             <select
+              id="propostas-periodo"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
               className="input-field pl-10 pr-8 py-2.5 text-sm appearance-none cursor-pointer min-w-[180px]"
@@ -611,55 +727,32 @@ export default function Propostas() {
               <option value="ultimos-3-meses">Últimos 3 meses</option>
               <option value="este-ano">Este ano</option>
             </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-grafite-claro pointer-events-none" />
+            <ChevronDown className="absolute right-3 bottom-3 w-4 h-4 text-muted-foreground pointer-events-none" />
           </div>
 
-          {/* View toggle */}
-          <div className="flex items-center gap-1 border border-aletis-borda rounded-xl p-1 self-start lg:self-auto">
-            <button
-              onClick={() => setViewMode('table')}
-              className={`p-2 rounded-lg transition-colors duration-200 ${
-                viewMode === 'table'
-                  ? 'bg-aletis-verde text-white'
-                  : 'text-aletis-grafite-claro hover:bg-aletis-bege'
-              }`}
-              title="Visualização em tabela"
-            >
-              <LayoutList className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('card')}
-              className={`p-2 rounded-lg transition-colors duration-200 ${
-                viewMode === 'card'
-                  ? 'bg-aletis-verde text-white'
-                  : 'text-aletis-grafite-claro hover:bg-aletis-bege'
-              }`}
-              title="Visualização em cards"
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-          </div>
+
         </div>
-      </section>
+      </FilterBar>
 
       {/* ── Results count ───────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm font-body text-aletis-grafite-claro">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <p className="text-sm font-body text-muted-foreground">
           {filteredProposals.length} proposta{filteredProposals.length !== 1 ? 's' : ''} encontrada{filteredProposals.length !== 1 ? 's' : ''}
         </p>
+        <ViewSwitch label="Visualização das propostas" value={viewMode} onChange={setViewMode} options={[{value:'table',label:'Lista',icon:LayoutList},{value:'card',label:'Cartões',icon:LayoutGrid}]} />
       </div>
 
       {/* ── Table View ──────────────────────────────────────── */}
       {viewMode === 'table' && (
         <div className="card-premium overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="ui-table w-full">
               <thead>
                 <tr className="border-b border-aletis-borda bg-aletis-bege/50">
                   <th className="text-left px-5 py-3.5">
                     <button
                       onClick={() => handleSort('titulo')}
-                      className="flex items-center gap-1.5 text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider hover:text-aletis-grafite-escuro transition-colors"
+                      className="flex items-center gap-1.5 text-xs font-body font-semibold text-[var(--text-soft)] uppercase tracking-wider hover:text-aletis-grafite-escuro transition-colors"
                     >
                       Título
                       <ArrowUpDown className="w-3 h-3" />
@@ -668,42 +761,42 @@ export default function Propostas() {
                   <th className="text-left px-5 py-3.5">
                     <button
                       onClick={() => handleSort('cliente')}
-                      className="flex items-center gap-1.5 text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider hover:text-aletis-grafite-escuro transition-colors"
+                      className="flex items-center gap-1.5 text-xs font-body font-semibold text-[var(--text-soft)] uppercase tracking-wider hover:text-aletis-grafite-escuro transition-colors"
                     >
                       Cliente
                       <ArrowUpDown className="w-3 h-3" />
                     </button>
                   </th>
                   <th className="text-left px-5 py-3.5 hidden lg:table-cell">
-                    <span className="text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider">
+                    <span className="text-xs font-body font-semibold text-[var(--text-soft)] uppercase tracking-wider">
                       Credor
                     </span>
                   </th>
                   <th className="text-right px-5 py-3.5">
                     <button
                       onClick={() => handleSort('valorProposto')}
-                      className="flex items-center gap-1.5 text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider hover:text-aletis-grafite-escuro transition-colors ml-auto"
+                      className="flex items-center gap-1.5 text-xs font-body font-semibold text-[var(--text-soft)] uppercase tracking-wider hover:text-aletis-grafite-escuro transition-colors ml-auto"
                     >
                       Valor Proposto
                       <ArrowUpDown className="w-3 h-3" />
                     </button>
                   </th>
                   <th className="text-center px-5 py-3.5">
-                    <span className="text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider">
+                    <span className="text-xs font-body font-semibold text-[var(--text-soft)] uppercase tracking-wider">
                       Status
                     </span>
                   </th>
                   <th className="text-left px-5 py-3.5 hidden md:table-cell">
                     <button
                       onClick={() => handleSort('dataCriacao')}
-                      className="flex items-center gap-1.5 text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider hover:text-aletis-grafite-escuro transition-colors"
+                      className="flex items-center gap-1.5 text-xs font-body font-semibold text-[var(--text-soft)] uppercase tracking-wider hover:text-aletis-grafite-escuro transition-colors"
                     >
                       Criação
                       <ArrowUpDown className="w-3 h-3" />
                     </button>
                   </th>
                   <th className="text-center px-5 py-3.5">
-                    <span className="text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider">
+                    <span className="text-xs font-body font-semibold text-[var(--text-soft)] uppercase tracking-wider">
                       Ações
                     </span>
                   </th>
@@ -717,26 +810,26 @@ export default function Propostas() {
                   >
                     <td className="px-5 py-4">
                       <div>
-                        <p className="text-sm font-body font-medium text-aletis-grafite-escuro leading-tight group-hover:text-aletis-verde transition-colors">
+                        <p className="text-sm font-body font-medium text-foreground leading-tight group-hover:text-aletis-verde transition-colors">
                           {proposal.titulo}
                         </p>
-                        <p className="text-xs font-body text-aletis-grafite-claro mt-0.5">
+                        <p className="text-xs font-body text-muted-foreground mt-0.5">
                           {proposal.tipo}
                         </p>
                       </div>
                     </td>
                     <td className="px-5 py-4">
-                      <p className="text-sm font-body text-aletis-grafite-escuro">
+                      <p className="text-sm font-body text-foreground">
                         {proposal.cliente}
                       </p>
                     </td>
                     <td className="px-5 py-4 hidden lg:table-cell">
-                      <p className="text-sm font-body text-aletis-grafite-medio">
+                      <p className="text-sm font-body text-[var(--text-soft)]">
                         {proposal.credor}
                       </p>
                     </td>
                     <td className="px-5 py-4 text-right">
-                      <p className="text-sm font-body font-semibold text-aletis-grafite-escuro">
+                      <p className="text-sm font-body font-semibold text-foreground">
                         {formatBRL(proposal.valorProposto)}
                       </p>
                     </td>
@@ -744,7 +837,7 @@ export default function Propostas() {
                       <StatusBadge status={proposal.status} />
                     </td>
                     <td className="px-5 py-4 hidden md:table-cell">
-                      <p className="text-sm font-body text-aletis-grafite-claro">
+                      <p className="text-sm font-body text-muted-foreground">
                         {proposal.dataCriacao}
                       </p>
                     </td>
@@ -752,28 +845,28 @@ export default function Propostas() {
                       <div className="flex items-center justify-center gap-1">
                         <button
                           onClick={() => handleView(proposal)}
-                          className="p-2 rounded-lg text-aletis-grafite-claro hover:bg-aletis-bege hover:text-aletis-verde transition-colors"
+                          className="p-2 rounded-lg text-muted-foreground hover:bg-aletis-bege hover:text-aletis-verde transition-colors"
                           title="Ver proposta"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleEdit(proposal)}
-                          className="p-2 rounded-lg text-aletis-grafite-claro hover:bg-aletis-bege hover:text-aletis-dourado transition-colors"
+                          className="p-2 rounded-lg text-muted-foreground hover:bg-aletis-bege hover:text-aletis-dourado transition-colors"
                           title="Editar proposta"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDuplicate(proposal)}
-                          className="p-2 rounded-lg text-aletis-grafite-claro hover:bg-aletis-bege hover:text-blue-500 transition-colors"
+                          className="p-2 rounded-lg text-muted-foreground hover:bg-aletis-bege hover:text-blue-500 transition-colors"
                           title="Duplicar proposta"
                         >
                           <Copy className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDownloadPdf(proposal)}
-                          className="p-2 rounded-lg text-aletis-grafite-claro hover:bg-aletis-bege hover:text-alerta transition-colors"
+                          className="p-2 rounded-lg text-muted-foreground hover:bg-aletis-bege hover:text-alerta transition-colors"
                           title="Baixar PDF"
                         >
                           <Download className="w-4 h-4" />
@@ -787,7 +880,7 @@ export default function Propostas() {
           </div>
 
           {filteredProposals.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 text-aletis-grafite-claro">
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
               <FileCheck className="w-12 h-12 mb-3 opacity-40" />
               <p className="text-sm font-body">Nenhuma proposta encontrada</p>
               <p className="text-xs font-body mt-1">
@@ -800,7 +893,7 @@ export default function Propostas() {
                   to="/crm"
                   className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-aletis-verde text-white text-xs font-semibold hover:bg-aletis-verde-claro transition"
                 >
-                  Abrir CRM e escolher cliente
+                  Abrir CRM ALETIS e escolher cliente
                 </Link>
               )}
             </div>
@@ -819,40 +912,40 @@ export default function Propostas() {
               {/* Card header */}
               <div className="flex items-start justify-between mb-3">
                 <StatusBadge status={proposal.status} />
-                <span className="text-xs font-body text-aletis-grafite-claro flex items-center gap-1">
+                <span className="text-xs font-body text-muted-foreground flex items-center gap-1">
                   <Clock className="w-3 h-3" />
                   {proposal.dataCriacao}
                 </span>
               </div>
 
               {/* Title */}
-              <h3 className="text-sm font-body font-semibold text-aletis-grafite-escuro leading-tight mb-2 group-hover:text-aletis-verde transition-colors">
+              <h3 className="text-sm font-body font-semibold text-foreground leading-tight mb-2 group-hover:text-aletis-verde transition-colors">
                 {proposal.titulo}
               </h3>
 
               {/* Details */}
               <div className="space-y-1.5 mb-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-body text-aletis-grafite-claro uppercase tracking-wider w-14 flex-shrink-0">
+                  <span className="text-[11px] font-body text-muted-foreground uppercase tracking-wider w-14 flex-shrink-0">
                     Cliente
                   </span>
-                  <span className="text-xs font-body font-medium text-aletis-grafite-escuro truncate">
+                  <span className="text-xs font-body font-medium text-foreground truncate">
                     {proposal.cliente}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-body text-aletis-grafite-claro uppercase tracking-wider w-14 flex-shrink-0">
+                  <span className="text-[11px] font-body text-muted-foreground uppercase tracking-wider w-14 flex-shrink-0">
                     Credor
                   </span>
-                  <span className="text-xs font-body font-medium text-aletis-grafite-medio truncate">
+                  <span className="text-xs font-body font-medium text-[var(--text-soft)] truncate">
                     {proposal.credor}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-body text-aletis-grafite-claro uppercase tracking-wider w-14 flex-shrink-0">
+                  <span className="text-[11px] font-body text-muted-foreground uppercase tracking-wider w-14 flex-shrink-0">
                     Tipo
                   </span>
-                  <span className="text-xs font-body text-aletis-grafite-medio truncate">
+                  <span className="text-xs font-body text-[var(--text-soft)] truncate">
                     {proposal.tipo}
                   </span>
                 </div>
@@ -861,7 +954,7 @@ export default function Propostas() {
               {/* Value */}
               <div className="flex items-center gap-2 mb-4 p-3 rounded-xl bg-aletis-bege/60">
                 <DollarSign className="w-4 h-4 text-aletis-dourado flex-shrink-0" />
-                <span className="text-lg font-display font-bold text-aletis-grafite-escuro">
+                <span className="text-lg font-display font-semibold text-foreground">
                   {formatBRL(proposal.valorProposto)}
                 </span>
               </div>
@@ -870,7 +963,7 @@ export default function Propostas() {
               <div className="flex items-center gap-2 pt-3 border-t border-aletis-borda/60">
                 <button
                   onClick={() => handleView(proposal)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-body font-medium text-aletis-verde hover:bg-aletis-verde/5 transition-colors"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-body font-medium text-foreground hover:bg-aletis-verde/5 transition-colors"
                   title="Ver proposta"
                 >
                   <Eye className="w-3.5 h-3.5" />
@@ -894,7 +987,7 @@ export default function Propostas() {
                 </button>
                 <button
                   onClick={() => handleDownloadPdf(proposal)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-body font-medium text-aletis-grafite-medio hover:bg-aletis-bege transition-colors"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-body font-medium text-[var(--text-soft)] hover:bg-aletis-bege transition-colors"
                   title="Baixar PDF"
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -905,7 +998,7 @@ export default function Propostas() {
           ))}
 
           {filteredProposals.length === 0 && (
-            <div className="col-span-full flex flex-col items-center justify-center py-16 text-aletis-grafite-claro">
+            <div className="col-span-full flex flex-col items-center justify-center py-16 text-muted-foreground">
               <FileCheck className="w-12 h-12 mb-3 opacity-40" />
               <p className="text-sm font-body">Nenhuma proposta encontrada</p>
               <p className="text-xs font-body mt-1">Tente ajustar os filtros de busca</p>
@@ -916,196 +1009,220 @@ export default function Propostas() {
 
       {/* ── View Modal ─────────────────────────────────────── */}
       {viewingProposal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setViewingProposal(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-6 border-b border-aletis-borda">
-              <h2 className="text-lg font-display font-bold text-aletis-grafite-escuro">Detalhes da Proposta</h2>
-              <button onClick={() => setViewingProposal(null)} className="p-2 rounded-lg hover:bg-aletis-bege transition-colors">
-                <X className="w-5 h-5 text-aletis-grafite-claro" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Título</p>
-                <p className="text-sm font-body font-medium text-aletis-grafite-escuro">{viewingProposal.titulo}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Cliente</p>
-                  <p className="text-sm font-body text-aletis-grafite-escuro">{viewingProposal.cliente}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Credor</p>
-                  <p className="text-sm font-body text-aletis-grafite-escuro">{viewingProposal.credor}</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Tipo</p>
-                  <p className="text-sm font-body text-aletis-grafite-escuro">{viewingProposal.tipo}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Status</p>
-                  <StatusBadge status={viewingProposal.status} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Valor Dívida</p>
-                  <p className="text-sm font-body font-semibold text-red-600">{formatBRL(viewingProposal.valorDivida || 0)}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Valor Proposto</p>
-                  <p className="text-sm font-body font-semibold text-aletis-verde">{formatBRL(viewingProposal.valorProposto)}</p>
-                </div>
-              </div>
-              {viewingProposal.descontoPercentual !== undefined && (
-                <div>
-                  <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Desconto</p>
-                  <p className="text-sm font-body font-semibold text-aletis-dourado">{viewingProposal.descontoPercentual.toFixed(1)}%</p>
-                </div>
+        <AppDialog
+          title="Detalhes da proposta"
+          eyebrow={viewingProposal.cliente}
+          subtitle={viewingProposal.titulo}
+          icon={<FileText className="h-5 w-5" />}
+          size="md"
+          onClose={closeViewingProposal}
+          bodyClassName="space-y-5"
+          footerClassName="flex justify-end gap-2"
+          footer={(
+            <>
+              {viewingProposal.status === 'em_analise' && (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void handleStatusTransition(viewingProposal, 'enviada')}
+                  className={uiAction.secondary}
+                >
+                  <Send className="h-4 w-4" /> Registrar envio
+                </button>
               )}
-              <div>
-                <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Data Criação</p>
-                <p className="text-sm font-body text-aletis-grafite-escuro">{viewingProposal.dataCriacao}</p>
-              </div>
-              {viewingProposal.fundamentacao && (
-                <div>
-                  <p className="text-xs font-body text-aletis-grafite-claro uppercase tracking-wider mb-1">Fundamentação</p>
-                  <p className="text-sm font-body text-aletis-grafite-medio">{viewingProposal.fundamentacao}</p>
-                </div>
+              {viewingProposal.status === 'enviada' && (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void handleStatusTransition(viewingProposal, 'aceita')}
+                  className={uiAction.primary}
+                >
+                  <CheckCircle2 className="h-4 w-4" /> Registrar aceite
+                </button>
               )}
-            </div>
-            <div className="flex justify-end gap-3 p-6 border-t border-aletis-borda">
-              <button onClick={() => { setViewingProposal(null); handleEdit(viewingProposal) }} className="px-4 py-2 rounded-xl text-sm font-body font-medium text-aletis-dourado hover:bg-aletis-dourado/5 transition-colors">
-                Editar
+              <button type="button" onClick={() => { closeViewingProposal(); handleEdit(viewingProposal) }} className={uiAction.secondary}>
+                <Pencil className="h-4 w-4" /> Editar
               </button>
-              <button onClick={() => handleDownloadPdf(viewingProposal)} className="px-4 py-2 rounded-xl text-sm font-body font-medium bg-aletis-verde text-white hover:bg-aletis-verde/90 transition-colors">
-                Baixar PDF
+              <button type="button" onClick={() => handleDownloadPdf(viewingProposal)} className={uiAction.primary}>
+                <Download className="h-4 w-4" /> Baixar PDF
               </button>
-            </div>
+            </>
+          )}
+        >
+          <DetailField label="Título">
+            <span className="font-medium">{viewingProposal.titulo}</span>
+          </DetailField>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <DetailField label="Cliente">{viewingProposal.cliente}</DetailField>
+            <DetailField label="Credor">{viewingProposal.credor}</DetailField>
+            <DetailField label="Tipo">{viewingProposal.tipo}</DetailField>
+            <DetailField label="Status"><StatusBadge status={viewingProposal.status} /></DetailField>
+            <DetailField label="Valor dívida">
+              <span className="font-semibold text-rose-600">{formatBRL(viewingProposal.valorDivida || 0)}</span>
+            </DetailField>
+            <DetailField label="Valor proposto">
+              <span className="font-semibold text-foreground">{formatBRL(viewingProposal.valorProposto)}</span>
+            </DetailField>
+            {viewingProposal.descontoPercentual !== undefined && (
+              <DetailField label="Desconto">
+                <span className="font-semibold text-aletis-gold-escuro">{viewingProposal.descontoPercentual.toFixed(1)}%</span>
+              </DetailField>
+            )}
+            <DetailField label="Data criação">{viewingProposal.dataCriacao}</DetailField>
           </div>
-        </div>
+
+          {viewingProposal.fundamentacao && (
+            <DetailField label="Fundamentação">
+              <p className="text-[var(--text-soft)]">{viewingProposal.fundamentacao}</p>
+            </DetailField>
+          )}
+        </AppDialog>
       )}
 
       {/* ── Create Modal ───────────────────────────────────── */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowCreateModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-6 border-b border-aletis-borda">
-              <h2 className="text-lg font-display font-bold text-aletis-grafite-escuro">Nova Proposta</h2>
-              <button onClick={() => setShowCreateModal(false)} className="p-2 rounded-lg hover:bg-aletis-bege transition-colors">
-                <X className="w-5 h-5 text-aletis-grafite-claro" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Título *</label>
-                <input type="text" value={formData.titulo} onChange={e => updateForm('titulo', e.target.value)} placeholder="Ex: Proposta de Liquidação - Cliente x Credor" className="input-field py-2.5 text-sm" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Cliente *</label>
-                  <input type="text" value={formData.clienteNome} onChange={e => updateForm('clienteNome', e.target.value)} placeholder="Nome do cliente" className="input-field py-2.5 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Credor *</label>
-                  <input type="text" value={formData.credor} onChange={e => updateForm('credor', e.target.value)} placeholder="Nome do credor" className="input-field py-2.5 text-sm" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Tipo</label>
-                <select value={formData.tipo} onChange={e => updateForm('tipo', e.target.value)} className="input-field py-2.5 text-sm appearance-none cursor-pointer">
-                  {TIPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Valor Dívida (R$) *</label>
-                  <input type="number" value={formData.valorDivida} onChange={e => updateForm('valorDivida', e.target.value)} placeholder="0.00" className="input-field py-2.5 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Valor Proposta (R$) *</label>
-                  <input type="number" value={formData.valorProposta} onChange={e => updateForm('valorProposta', e.target.value)} placeholder="0.00" className="input-field py-2.5 text-sm" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Fundamentação</label>
-                <textarea value={formData.fundamentacao} onChange={e => updateForm('fundamentacao', e.target.value)} placeholder="Argumentação técnica e jurídica..." rows={3} className="input-field py-2.5 text-sm resize-none" />
-              </div>
-              <div>
-                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Observações</label>
-                <textarea value={formData.observacoes} onChange={e => updateForm('observacoes', e.target.value)} placeholder="Notas internas..." rows={2} className="input-field py-2.5 text-sm resize-none" />
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 p-6 border-t border-aletis-borda">
-              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 rounded-xl text-sm font-body font-medium text-aletis-grafite-medio hover:bg-aletis-bege transition-colors">
-                Cancelar
-              </button>
-              <button onClick={handleSaveCreate} disabled={saving} className="px-6 py-2 rounded-xl text-sm font-body font-medium bg-aletis-verde text-white hover:bg-aletis-verde/90 transition-colors disabled:opacity-50 flex items-center gap-2">
+        <AppDialog
+          title="Nova proposta"
+          eyebrow="Propostas"
+          subtitle="Cadastre a proposta comercial com valores, credor e fundamentação."
+          icon={<FileText className="h-5 w-5" />}
+          size="md"
+          onClose={() => setShowCreateModal(false)}
+          bodyClassName="space-y-4"
+          footerClassName="flex justify-end gap-2"
+          footer={(
+            <>
+              <button type="button" onClick={() => setShowCreateModal(false)} className={uiAction.secondary}>Cancelar</button>
+              <button type="button" onClick={handleSaveCreate} disabled={saving} className={uiAction.primary}>
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                Criar Proposta
+                Criar proposta
               </button>
+            </>
+          )}
+        >
+          <div>
+            <label className={proposalLabelClass}>Título *</label>
+            <input type="text" value={formData.titulo} onChange={e => updateForm('titulo', e.target.value)} placeholder="Ex: Proposta de Liquidação - Cliente x Credor" className={proposalInputClass} />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className={proposalLabelClass}>Cliente *</label>
+              <select value={formData.clienteId} onChange={e => selectCliente(e.target.value)} className={`${proposalInputClass} cursor-pointer`}>
+                <option value="">Selecione no CRM</option>
+                {clientes.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.nome}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={proposalLabelClass}>Credor *</label>
+              <select value={formData.credor} onChange={e => updateForm('credor', e.target.value)} className={`${proposalInputClass} cursor-pointer`} disabled={!formData.clienteId}>
+                <option value="">Selecione um credor cadastrado</option>
+                {formData.credor && !creditorOptions.includes(formData.credor) && <option value={formData.credor}>{formData.credor}</option>}
+                {creditorOptions.map((credor) => <option key={credor} value={credor}>{credor}</option>)}
+              </select>
             </div>
           </div>
-        </div>
+          <div>
+            <label className={proposalLabelClass}>Demanda / caso</label>
+            <select value={formData.demandaId} onChange={e => selectDemanda(e.target.value)} className={`${proposalInputClass} cursor-pointer`} disabled={!formData.clienteId || loadingDemandas}>
+              <option value="">{loadingDemandas ? 'Carregando demandas…' : 'Associar automaticamente à demanda compatível'}</option>
+              {demandas.map((demanda) => <option key={demanda.id} value={demanda.id}>{demanda.titulo} · {demanda.status || 'ativa'}</option>)}
+            </select>
+            {formData.clienteId && !loadingDemandas && demandas.length === 0 && (
+              <p className="mt-1 text-xs text-muted-foreground">A primeira demanda será criada e vinculada pelo fluxo operacional ao salvar.</p>
+            )}
+          </div>
+          <div>
+            <label className={proposalLabelClass}>Tipo</label>
+            <select value={formData.tipo} onChange={e => updateForm('tipo', e.target.value)} className={`${proposalInputClass} cursor-pointer appearance-none`}>
+              {TIPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className={proposalLabelClass}>Valor dívida (R$) *</label>
+              <input type="number" value={formData.valorDivida} onChange={e => updateForm('valorDivida', e.target.value)} placeholder="0.00" className={proposalInputClass} />
+            </div>
+            <div>
+              <label className={proposalLabelClass}>Valor proposta (R$) *</label>
+              <input type="number" value={formData.valorProposta} onChange={e => updateForm('valorProposta', e.target.value)} placeholder="0.00" className={proposalInputClass} />
+            </div>
+          </div>
+          <div>
+            <label className={proposalLabelClass}>Fundamentação</label>
+            <textarea value={formData.fundamentacao} onChange={e => updateForm('fundamentacao', e.target.value)} placeholder="Argumentação técnica e jurídica..." rows={3} className={proposalTextAreaClass} />
+          </div>
+          <div>
+            <label className={proposalLabelClass}>Observações</label>
+            <textarea value={formData.observacoes} onChange={e => updateForm('observacoes', e.target.value)} placeholder="Notas internas..." rows={2} className="input-field min-h-20 resize-y text-sm" />
+          </div>
+        </AppDialog>
       )}
 
       {/* ── Edit Modal ─────────────────────────────────────── */}
       {editingProposal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setEditingProposal(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-6 border-b border-aletis-borda">
-              <h2 className="text-lg font-display font-bold text-aletis-grafite-escuro">Editar Proposta</h2>
-              <button onClick={() => setEditingProposal(null)} className="p-2 rounded-lg hover:bg-aletis-bege transition-colors">
-                <X className="w-5 h-5 text-aletis-grafite-claro" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Título</label>
-                <input type="text" value={formData.titulo} onChange={e => updateForm('titulo', e.target.value)} className="input-field py-2.5 text-sm" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Cliente</label>
-                  <input type="text" value={formData.clienteNome} disabled className="input-field py-2.5 text-sm bg-gray-50 cursor-not-allowed" />
-                </div>
-                <div>
-                  <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Credor</label>
-                  <input type="text" value={formData.credor} disabled className="input-field py-2.5 text-sm bg-gray-50 cursor-not-allowed" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Valor Dívida (R$)</label>
-                  <input type="text" value={formData.valorDivida ? formatBRL(parseFloat(formData.valorDivida)) : '-'} disabled className="input-field py-2.5 text-sm bg-gray-50 cursor-not-allowed" />
-                </div>
-                <div>
-                  <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Valor Proposta (R$)</label>
-                  <input type="number" value={formData.valorProposta} onChange={e => updateForm('valorProposta', e.target.value)} className="input-field py-2.5 text-sm" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Fundamentação</label>
-                <textarea value={formData.fundamentacao} onChange={e => updateForm('fundamentacao', e.target.value)} rows={3} className="input-field py-2.5 text-sm resize-none" />
-              </div>
-              <div>
-                <label className="block text-xs font-body font-semibold text-aletis-grafite-medio uppercase tracking-wider mb-1.5">Observações</label>
-                <textarea value={formData.observacoes} onChange={e => updateForm('observacoes', e.target.value)} rows={2} className="input-field py-2.5 text-sm resize-none" />
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 p-6 border-t border-aletis-borda">
-              <button onClick={() => setEditingProposal(null)} className="px-4 py-2 rounded-xl text-sm font-body font-medium text-aletis-grafite-medio hover:bg-aletis-bege transition-colors">
-                Cancelar
-              </button>
-              <button onClick={handleSaveEdit} disabled={saving} className="px-6 py-2 rounded-xl text-sm font-body font-medium bg-aletis-dourado text-white hover:bg-aletis-dourado/90 transition-colors disabled:opacity-50 flex items-center gap-2">
+        <AppDialog
+          title="Editar proposta"
+          eyebrow={editingProposal.cliente}
+          subtitle="Atualize título, valor proposto, fundamentação e observações."
+          icon={<Pencil className="h-5 w-5" />}
+          size="md"
+          onClose={() => { if (!saving) setEditingProposal(null) }}
+          bodyClassName="space-y-4"
+          footerClassName="flex justify-end gap-2"
+          footer={(
+            <>
+              <button type="button" disabled={saving} onClick={() => setEditingProposal(null)} className={uiAction.secondary}>Cancelar</button>
+              <button type="button" onClick={handleSaveEdit} disabled={saving || editConflict} className={uiAction.primary}>
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                Salvar Alterações
+                Salvar alterações
               </button>
+            </>
+          )}
+        >
+          {editingProposal.status === 'aceita' && <p className="text-xs text-[var(--text-soft)]">Proposta aceita. Somente as observações internas podem ser alteradas.</p>}
+          {editError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{editError} Sua edição foi preservada.</p>}
+          {editConflict && <div className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs">
+            <p>Outra gravação alterou esta proposta. Compare os campos antes de continuar.</p>
+            {editingLatest && Object.entries(editProposalChanges(editingProposal, formData)).map(([key, value]) => <div key={key} className="break-words border-t border-amber-200 pt-2"><strong>{EDIT_FIELD_LABELS[key] || key}</strong><p>Sua edição: {String(value).slice(0, 250)}</p><p>Atual: {String(editProposalValue(editingLatest, key)).slice(0, 250)}</p></div>)}
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => void reconcileEdit(false)} className={uiAction.secondary}>{editingLatest ? 'Usar versão atual e descartar minha edição' : 'Consultar versão atual'}</button>
+              {editingLatest && <button type="button" disabled={editingLatest.status === 'aceita' && Object.keys(editProposalChanges(editingProposal, formData)).some(key => key !== 'observacoes')} onClick={() => void reconcileEdit(true)} className={uiAction.secondary}>Reaplicar meus campos para revisão</button>}
+            </div>
+          </div>}
+          <div>
+            <label className={proposalLabelClass}>Título</label>
+            <input type="text" disabled={saving || editingProposal.status === 'aceita'} value={formData.titulo} onChange={e => updateForm('titulo', e.target.value)} className={proposalInputClass} />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className={proposalLabelClass}>Cliente</label>
+              <input type="text" value={formData.clienteNome} disabled className={`${proposalInputClass} cursor-not-allowed bg-muted`} />
+            </div>
+            <div>
+              <label className={proposalLabelClass}>Credor</label>
+              <input type="text" value={formData.credor} disabled className={`${proposalInputClass} cursor-not-allowed bg-muted`} />
             </div>
           </div>
-        </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className={proposalLabelClass}>Valor dívida (R$)</label>
+              <input type="text" value={formData.valorDivida ? formatBRL(parseFloat(formData.valorDivida)) : '-'} disabled className={`${proposalInputClass} cursor-not-allowed bg-muted`} />
+            </div>
+            <div>
+              <label className={proposalLabelClass}>Valor proposta (R$)</label>
+              <input type="number" disabled={saving || editingProposal.status === 'aceita'} value={formData.valorProposta} onChange={e => updateForm('valorProposta', e.target.value)} className={proposalInputClass} />
+            </div>
+          </div>
+          <div>
+            <label className={proposalLabelClass}>Fundamentação</label>
+            <textarea disabled={saving || editingProposal.status === 'aceita'} value={formData.fundamentacao} onChange={e => updateForm('fundamentacao', e.target.value)} rows={3} className={proposalTextAreaClass} />
+          </div>
+          <div>
+            <label className={proposalLabelClass}>Observações</label>
+            <textarea disabled={saving} value={formData.observacoes} onChange={e => updateForm('observacoes', e.target.value)} rows={2} className="input-field min-h-20 resize-y text-sm" />
+          </div>
+        </AppDialog>
       )}
 
       {/* Bottom spacer */}

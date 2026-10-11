@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useId, useState } from 'react'
 import {
   Sprout,
   ShieldAlert,
@@ -77,6 +77,7 @@ function PremiumCalculatorCard({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
         className="flex items-center gap-3 w-full text-left"
       >
         <div className="w-10 h-10 rounded-xl bg-aletis-dourado/10 flex items-center justify-center shrink-0">
@@ -84,21 +85,21 @@ function PremiumCalculatorCard({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-base font-display font-semibold text-aletis-grafite-escuro">
+            <h3 className="text-base font-display font-semibold text-foreground">
               {title}
             </h3>
             {badge && (
-              <span className="text-[10px] font-body font-semibold px-2 py-0.5 rounded-full bg-aletis-verde/10 text-aletis-verde">
+              <span className="text-[11px] font-body font-semibold px-2 py-0.5 rounded-full bg-aletis-verde/10 text-foreground">
                 {badge}
               </span>
             )}
           </div>
-          <p className="text-xs font-body text-aletis-grafite-claro truncate">{subtitle}</p>
+          <p className="text-xs font-body text-muted-foreground truncate">{subtitle}</p>
         </div>
         {open ? (
-          <ChevronUp className="w-4 h-4 text-aletis-grafite-claro" />
+          <ChevronUp className="w-4 h-4 text-muted-foreground" />
         ) : (
-          <ChevronDown className="w-4 h-4 text-aletis-grafite-claro" />
+          <ChevronDown className="w-4 h-4 text-muted-foreground" />
         )}
       </button>
 
@@ -133,20 +134,22 @@ function Input({
   suffix?: string
   type?: string
 }) {
+  const fieldId = useId()
   return (
     <div>
-      <label className="block text-[11px] font-body font-medium text-aletis-grafite-medio mb-1">
+      <label htmlFor={fieldId} className="block text-[11px] font-body font-medium text-[var(--text-soft)] mb-1">
         {label}
       </label>
       <div className="relative">
         <input
+          id={fieldId}
           type={type}
           value={value}
           onChange={e => onChange(e.target.value)}
           className="input-field pr-10 text-sm"
         />
         {suffix && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-aletis-grafite-claro font-body">
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground font-body">
             {suffix}
           </span>
         )}
@@ -166,12 +169,14 @@ function Select({
   onChange: (v: string) => void
   options: Array<{ value: string; label: string }>
 }) {
+  const fieldId = useId()
   return (
     <div>
-      <label className="block text-[11px] font-body font-medium text-aletis-grafite-medio mb-1">
+      <label htmlFor={fieldId} className="block text-[11px] font-body font-medium text-[var(--text-soft)] mb-1">
         {label}
       </label>
       <select
+        id={fieldId}
         value={value}
         onChange={e => onChange(e.target.value)}
         className="input-field text-sm"
@@ -217,11 +222,11 @@ function Metric({
     variant === 'positive' ? 'text-positivo' :
     variant === 'gold' ? 'text-aletis-dourado-escuro' :
     variant === 'alert' ? 'text-alerta' :
-    'text-aletis-grafite-escuro'
+    'text-foreground'
   return (
     <div className={`rounded-lg border ${bg} p-3`}>
-      <p className="text-[10px] font-body text-aletis-grafite-claro uppercase tracking-wide mb-0.5">{label}</p>
-      <p className={`text-base font-display font-bold ${color}`}>{value}</p>
+      <p className="text-[11px] font-body text-muted-foreground uppercase tracking-wide mb-0.5">{label}</p>
+      <p className={`text-base font-display font-semibold ${color}`}>{value}</p>
     </div>
   )
 }
@@ -306,7 +311,7 @@ function CardAlongamento() {
               />
               {result.parcelasAnuais.length > 0 && (
                 <div className="col-span-2 lg:col-span-4 rounded-lg bg-aletis-bege p-3 border border-aletis-grafite-claro/10">
-                  <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-claro mb-2">Parcelas por safra</p>
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">Parcelas por safra</p>
                   <div className="space-y-1 text-xs font-body">
                     {result.parcelasAnuais.map(p => (
                       <div key={p.safra} className="flex justify-between">
@@ -318,8 +323,8 @@ function CardAlongamento() {
                 </div>
               )}
               <div className="col-span-2 lg:col-span-4 rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
-                <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Fundamentação jurídica</p>
-                <p className="text-xs font-body text-aletis-grafite-escuro">{result.fundamentacaoJuridica}</p>
+                <p className="text-[11px] uppercase tracking-wide text-foreground mb-1">Fundamentação jurídica</p>
+                <p className="text-xs font-body text-foreground">{result.fundamentacaoJuridica}</p>
               </div>
             </div>
           )}
@@ -424,16 +429,16 @@ function CardDescaracterizacao() {
               />
               {result.indicios.length > 0 && (
                 <div className="col-span-2 lg:col-span-4 rounded-lg bg-alerta/5 border border-alerta/20 p-3">
-                  <p className="text-[10px] uppercase tracking-wide text-alerta mb-1">Indícios detectados</p>
-                  <ul className="text-xs font-body text-aletis-grafite-escuro list-disc list-inside space-y-0.5">
+                  <p className="text-[11px] uppercase tracking-wide text-alerta mb-1">Indícios detectados</p>
+                  <ul className="text-xs font-body text-foreground list-disc list-inside space-y-0.5">
                     {result.indicios.map((i, idx) => <li key={idx}>{i}</li>)}
                   </ul>
                 </div>
               )}
               {result.basesLegais.length > 0 && (
                 <div className="col-span-2 lg:col-span-4 rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
-                  <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Bases legais</p>
-                  <ul className="text-xs font-body text-aletis-grafite-escuro list-disc list-inside space-y-0.5">
+                  <p className="text-[11px] uppercase tracking-wide text-foreground mb-1">Bases legais</p>
+                  <ul className="text-xs font-body text-foreground list-disc list-inside space-y-0.5">
                     {result.basesLegais.map((b, idx) => <li key={idx}>{b}</li>)}
                   </ul>
                 </div>
@@ -543,15 +548,15 @@ function CardCapitalizacao() {
               />
               {result.fundamentosContestacao.length > 0 && (
                 <div className="col-span-2 lg:col-span-4 rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
-                  <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Fundamentos para contestação</p>
-                  <ul className="text-xs font-body text-aletis-grafite-escuro list-disc list-inside space-y-0.5">
+                  <p className="text-[11px] uppercase tracking-wide text-foreground mb-1">Fundamentos para contestação</p>
+                  <ul className="text-xs font-body text-foreground list-disc list-inside space-y-0.5">
                     {result.fundamentosContestacao.map((f, i) => <li key={i}>{f}</li>)}
                   </ul>
                 </div>
               )}
               <div className="col-span-2 lg:col-span-4 rounded-lg bg-aletis-dourado/5 border border-aletis-dourado/20 p-3">
-                <p className="text-[10px] uppercase tracking-wide text-aletis-dourado-escuro mb-1">Recomendação ALETIS</p>
-                <p className="text-xs font-body text-aletis-grafite-escuro">{result.recomendacaoAletis}</p>
+                <p className="text-[11px] uppercase tracking-wide text-aletis-dourado-escuro mb-1">Recomendação ALETIS</p>
+                <p className="text-xs font-body text-foreground">{result.recomendacaoAletis}</p>
               </div>
             </div>
           )}
@@ -635,10 +640,10 @@ function CardParcelamentoSafra() {
                 <Metric label="Economia" value={fmtBRL(result.economiaVsConvencional)} variant="positive" />
               </div>
               <div className="rounded-lg bg-aletis-bege p-3 border border-aletis-grafite-claro/10 overflow-x-auto">
-                <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-claro mb-2">Cronograma de parcelas</p>
-                <table className="w-full text-xs font-body">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">Cronograma de parcelas</p>
+                <table className="ui-table w-full text-xs font-body">
                   <thead>
-                    <tr className="text-aletis-grafite-claro">
+                    <tr className="text-muted-foreground">
                       <th className="text-left py-1">Safra</th>
                       <th className="text-left py-1">Data</th>
                       <th className="text-right py-1">Amortização</th>
@@ -655,15 +660,15 @@ function CardParcelamentoSafra() {
                         <td className="text-right py-1">{fmtBRL(p.amortizacao)}</td>
                         <td className="text-right py-1">{fmtBRL(p.juros)}</td>
                         <td className="text-right py-1 font-semibold">{fmtBRL(p.valorTotal)}</td>
-                        <td className="text-right py-1 text-aletis-grafite-claro">{fmtBRL(p.saldoRemanescente)}</td>
+                        <td className="text-right py-1 text-muted-foreground">{fmtBRL(p.saldoRemanescente)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <div className="rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
-                <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Fundamentação</p>
-                <p className="text-xs font-body text-aletis-grafite-escuro">{result.fundamentacao}</p>
+                <p className="text-[11px] uppercase tracking-wide text-foreground mb-1">Fundamentação</p>
+                <p className="text-xs font-body text-foreground">{result.fundamentacao}</p>
               </div>
             </div>
           )}
@@ -743,9 +748,9 @@ function CardStressTest() {
                 />
               </div>
               <div className="rounded-lg bg-aletis-bege p-3 border border-aletis-grafite-claro/10 overflow-x-auto">
-                <table className="w-full text-xs font-body">
+                <table className="ui-table w-full text-xs font-body">
                   <thead>
-                    <tr className="text-aletis-grafite-claro">
+                    <tr className="text-muted-foreground">
                       <th className="text-left py-1">Queda</th>
                       <th className="text-right py-1">Preço stress</th>
                       <th className="text-right py-1">Receita</th>
@@ -773,8 +778,8 @@ function CardStressTest() {
                 </table>
               </div>
               <div className="rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
-                <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Recomendação</p>
-                <p className="text-xs font-body text-aletis-grafite-escuro">{result.recomendacao}</p>
+                <p className="text-[11px] uppercase tracking-wide text-foreground mb-1">Recomendação</p>
+                <p className="text-xs font-body text-foreground">{result.recomendacao}</p>
               </div>
             </div>
           )}
@@ -895,7 +900,7 @@ function CardMultiCredor() {
                 onClick={() => setCredores(cs => [...cs, {
                   nome: '', tipo: 'bancario', saldoDevedor: '0', taxaAA: '14', garantia: 'pessoal',
                 }])}
-                className="text-xs font-body text-aletis-verde hover:underline"
+                className="text-xs font-body text-foreground hover:underline"
               >
                 + Adicionar credor
               </button>
@@ -919,7 +924,7 @@ function CardMultiCredor() {
                 <Metric label="Custo anual" value={fmtBRL(result.custoAnualTotal)} variant="alert" />
               </div>
               <div className="space-y-2">
-                <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-claro">Prioridade de renegociação</p>
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Prioridade de renegociação</p>
                 {result.prioridadeRenegociacao.map((p, i) => (
                   <div key={i} className="rounded-lg bg-aletis-bege p-3 border border-aletis-grafite-claro/10">
                     <div className="flex justify-between items-start gap-2">
@@ -928,23 +933,23 @@ function CardMultiCredor() {
                           <span className="w-6 h-6 rounded-full bg-aletis-dourado text-white flex items-center justify-center text-xs font-bold">
                             {i + 1}
                           </span>
-                          <span className="font-display font-semibold text-aletis-grafite-escuro">{p.credor}</span>
-                          <span className="text-[10px] font-body text-aletis-grafite-claro">score: {fmtNum(p.score, 0)}</span>
+                          <span className="font-display font-semibold text-foreground">{p.credor}</span>
+                          <span className="text-[11px] font-body text-muted-foreground">score: {fmtNum(p.score, 0)}</span>
                         </div>
-                        <p className="text-xs font-body text-aletis-grafite-medio mt-1">{p.justificativa}</p>
-                        <p className="text-xs font-body text-aletis-verde mt-1">Estratégia: {p.estrategiaSugerida}</p>
+                        <p className="text-xs font-body text-[var(--text-soft)] mt-1">{p.justificativa}</p>
+                        <p className="text-xs font-body text-foreground mt-1">Estratégia: {p.estrategiaSugerida}</p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-[10px] text-aletis-grafite-claro">Economia potencial</p>
-                        <p className="text-sm font-display font-bold text-positivo">{fmtBRL(p.valorEconomiaPotencial)}</p>
+                        <p className="text-[11px] text-muted-foreground">Economia potencial</p>
+                        <p className="text-sm font-display font-semibold text-positivo">{fmtBRL(p.valorEconomiaPotencial)}</p>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
               <div className="rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
-                <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Plano sugerido</p>
-                <p className="text-xs font-body text-aletis-grafite-escuro">{result.planoSugerido}</p>
+                <p className="text-[11px] uppercase tracking-wide text-foreground mb-1">Plano sugerido</p>
+                <p className="text-xs font-body text-foreground">{result.planoSugerido}</p>
               </div>
             </div>
           )}
@@ -1000,11 +1005,11 @@ function CardEnquadramento() {
             <Input label="Renda bruta anual" value={renda} onChange={setRenda} suffix="R$" />
             <Input label="Área explorada" value={area} onChange={setArea} suffix="ha" />
             <Input label="Atividade principal" value={atividade} onChange={setAtividade} />
-            <label className="flex items-center gap-2 text-xs font-body text-aletis-grafite-medio">
+            <label className="flex items-center gap-2 text-xs font-body text-[var(--text-soft)]">
               <input type="checkbox" checked={possuiCaf} onChange={e => setPossuiCaf(e.target.checked)} />
               Possui CAF
             </label>
-            <label className="flex items-center gap-2 text-xs font-body text-aletis-grafite-medio">
+            <label className="flex items-center gap-2 text-xs font-body text-[var(--text-soft)]">
               <input type="checkbox" checked={possuiDap} onChange={e => setPossuiDap(e.target.checked)} />
               Possui DAP
             </label>
@@ -1022,20 +1027,20 @@ function CardEnquadramento() {
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                 <div className="rounded-lg bg-aletis-bege p-3 border border-aletis-grafite-claro/10">
-                  <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-claro mb-1">Requisitos</p>
-                  <ul className="text-xs font-body text-aletis-grafite-escuro list-disc list-inside space-y-0.5">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Requisitos</p>
+                  <ul className="text-xs font-body text-foreground list-disc list-inside space-y-0.5">
                     {result.requisitos.map((r, i) => <li key={i}>{r}</li>)}
                   </ul>
                 </div>
                 <div className="rounded-lg bg-aletis-bege p-3 border border-aletis-grafite-claro/10">
-                  <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-claro mb-1">Documentação</p>
-                  <ul className="text-xs font-body text-aletis-grafite-escuro list-disc list-inside space-y-0.5">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Documentação</p>
+                  <ul className="text-xs font-body text-foreground list-disc list-inside space-y-0.5">
                     {result.documentacaoNecessaria.map((d, i) => <li key={i}>{d}</li>)}
                   </ul>
                 </div>
                 <div className="rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
-                  <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Próximos passos</p>
-                  <ul className="text-xs font-body text-aletis-grafite-escuro list-disc list-inside space-y-0.5">
+                  <p className="text-[11px] uppercase tracking-wide text-foreground mb-1">Próximos passos</p>
+                  <ul className="text-xs font-body text-foreground list-disc list-inside space-y-0.5">
                     {result.proximosPassos.map((p, i) => <li key={i}>{p}</li>)}
                   </ul>
                 </div>
@@ -1159,7 +1164,7 @@ function CardDacao() {
                 { value: 'baixa', label: `Baixa (deságio ${DESAGIO_POR_LIQUIDEZ.baixa}%)` },
               ]}
             />
-            <label className="flex items-center gap-2 text-xs font-body text-aletis-grafite-medio col-span-2 lg:col-span-1">
+            <label className="flex items-center gap-2 text-xs font-body text-[var(--text-soft)] col-span-2 lg:col-span-1">
               <input type="checkbox" checked={aceitaDacao} onChange={e => setAceitaDacao(e.target.checked)} />
               Credor sinalizou abertura
             </label>
@@ -1223,23 +1228,23 @@ function CardDacao() {
                 }`}
               >
                 <p
-                  className={`text-[10px] uppercase tracking-wide mb-1 ${
-                    result.suficiente ? 'text-aletis-verde' : 'text-amber-700'
+                  className={`text-[11px] uppercase tracking-wide mb-1 ${
+                    result.suficiente ? 'text-foreground' : 'text-amber-700'
                   }`}
                 >
                   Proposta de liquidação
                 </p>
-                <p className="text-xs font-body text-aletis-grafite-escuro">
+                <p className="text-xs font-body text-foreground">
                   {result.propostaLiquidacaoParcial}
                 </p>
               </div>
 
               {result.detalhamento.length > 1 && (
                 <div className="rounded-lg bg-aletis-bege p-3 border border-aletis-grafite-claro/10">
-                  <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-claro mb-1">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
                     Detalhamento dos bens
                   </p>
-                  <ul className="text-xs font-body text-aletis-grafite-escuro space-y-0.5">
+                  <ul className="text-xs font-body text-foreground space-y-0.5">
                     {result.detalhamento.map((d, i) => (
                       <li key={i} className="flex justify-between gap-2">
                         <span className="truncate">{d.bem}</span>
@@ -1253,10 +1258,10 @@ function CardDacao() {
               )}
 
               <div className="rounded-lg bg-aletis-grafite-escuro/5 border border-aletis-grafite-escuro/10 p-3">
-                <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-medio mb-1">
+                <p className="text-[11px] uppercase tracking-wide text-[var(--text-soft)] mb-1">
                   Fundamentação
                 </p>
-                <pre className="text-[11px] font-body text-aletis-grafite-escuro whitespace-pre-wrap leading-relaxed">
+                <pre className="text-[11px] font-body text-foreground whitespace-pre-wrap leading-relaxed">
                   {result.fundamentacao}
                 </pre>
               </div>
@@ -1362,8 +1367,8 @@ function CardMultiCenario() {
                       'bg-red-50 border-red-200'
                     }`}
                   >
-                    <p className="text-[10px] uppercase tracking-wide text-aletis-grafite-claro capitalize">{c.nome}</p>
-                    <p className="text-xl font-display font-bold text-aletis-grafite-escuro mt-1">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground capitalize">{c.nome}</p>
+                    <p className="text-xl font-display font-semibold text-foreground mt-1">
                       DSCR {c.dscr.toFixed(2)}
                     </p>
                     <p className={`text-[11px] font-body font-semibold mt-0.5 capitalize ${
@@ -1373,11 +1378,11 @@ function CardMultiCenario() {
                     }`}>
                       {c.classificacao}
                     </p>
-                    <div className="mt-2 pt-2 border-t border-current/10 space-y-0.5 text-[10px] text-aletis-grafite-medio">
+                    <div className="mt-2 pt-2 border-t border-current/10 space-y-0.5 text-[11px] text-[var(--text-soft)]">
                       <p>Parcela: <strong>{fmtBRL(c.parcelaMensal)}</strong></p>
                       <p>Receita: <strong>{fmtBRL(c.receitaAnualCenario)}</strong></p>
                       <p>Taxa: {fmtPct(c.taxaAnualCenario)}</p>
-                      <p className="text-aletis-grafite-claro">
+                      <p className="text-muted-foreground">
                         Δ preço {c.shocks.precoPct > 0 ? '+' : ''}{c.shocks.precoPct}%
                         {' · '}Δ prod {c.shocks.produtividadePct > 0 ? '+' : ''}{c.shocks.produtividadePct}%
                         {' · '}Δ Selic {c.shocks.taxaPp > 0 ? '+' : ''}{c.shocks.taxaPp}pp
@@ -1398,15 +1403,15 @@ function CardMultiCenario() {
                       ? '⚠ Insolvência detectada em pelo menos um cenário'
                       : '⚠ Cenário crítico detectado — monitorar'}
                   </p>
-                  <p className="text-[11px] font-body text-aletis-grafite-medio mt-1">
+                  <p className="text-[11px] font-body text-[var(--text-soft)] mt-1">
                     DSCR realista: {result.resumo.dscrRealista.toFixed(2)} · pessimista: {result.resumo.dscrPessimista.toFixed(2)}
                   </p>
                 </div>
               )}
 
               <div className="rounded-lg bg-aletis-verde/5 border border-aletis-verde/20 p-3">
-                <p className="text-[10px] uppercase tracking-wide text-aletis-verde mb-1">Fundamentação</p>
-                <p className="text-xs font-body text-aletis-grafite-escuro">{result.fundamentacao}</p>
+                <p className="text-[11px] uppercase tracking-wide text-foreground mb-1">Fundamentação</p>
+                <p className="text-xs font-body text-foreground">{result.fundamentacao}</p>
               </div>
             </div>
           )}
@@ -1424,14 +1429,14 @@ export default function CreditoPremium() {
     <section className="space-y-4">
       <div className="flex items-end justify-between gap-2">
         <div>
-          <h2 className="text-xl font-display font-bold text-aletis-grafite-escuro tracking-tight">
+          <h2 className="text-xl font-display font-semibold text-foreground tracking-tight">
             Calculadoras Premium
           </h2>
-          <p className="text-xs font-body text-aletis-grafite-claro mt-0.5">
+          <p className="text-xs font-body text-muted-foreground mt-0.5">
             Análises avançadas para reestruturação com base em MCR, Súmulas STJ e Plano Safra 2025/26
           </p>
         </div>
-        <div className="text-[11px] font-body text-aletis-grafite-claro hidden sm:block">
+        <div className="text-[11px] font-body text-muted-foreground hidden sm:block">
           9 calculadoras jurídico-financeiras
         </div>
       </div>

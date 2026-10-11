@@ -94,7 +94,7 @@ function Block({ block }: { block: InsightBlock }) {
       return (
         <div className="mt-10 rounded-2xl border border-aletis-dourado/40 bg-gradient-to-br from-aletis-verde-escuro to-aletis-verde-profundo p-7 text-white">
           <p className="text-[10px] font-display font-semibold uppercase tracking-widest2 text-aletis-dourado">
-            Princípio da mesa
+            Princípio de análise
           </p>
           <p className="mt-3 text-[16px] leading-relaxed">
             {block.content as string}
@@ -134,7 +134,7 @@ export default function InsightDetail({ params }: Props) {
       name: siteConfig.name,
       logo: {
         '@type': 'ImageObject',
-        url: `${siteConfig.url}/brand/logos/aletis-principal-cream.png`,
+        url: `${siteConfig.url}/brand/logos/principal-03.png`,
       },
     },
     mainEntityOfPage: {
@@ -249,10 +249,10 @@ export default function InsightDetail({ params }: Props) {
                   Essa tese se aplica ao seu caso?
                 </p>
                 <h3 className="mt-3 font-display text-2xl font-semibold text-aletis-grafite-escuro md:text-[28px]">
-                  Toda conversa começa com um diagnóstico. Gratuito. Em 72h.
+                  Toda conversa começa por uma primeira leitura organizada.
                 </h3>
                 <p className="mt-2 max-w-xl text-[14px] text-aletis-grafite-medio">
-                  Se algum contrato seu se parece com o que foi descrito aqui, faz sentido sentarmos.
+                  Se algum contrato seu se parece com o que foi descrito aqui, faz sentido entender documentos, prazos e urgência.
                 </p>
                 <Link
                   href="/contato"
@@ -280,7 +280,7 @@ export default function InsightDetail({ params }: Props) {
                     Sobre este artigo
                   </p>
                   <p className="mt-3 text-[12px] text-aletis-grafite-medio">
-                    Produzido pela mesa técnica ALETIS com base em casos reais, metodologia proprietária e revisão editorial sênior.
+                    Produzido pela ALETIS com base em metodologia proprietária, repertório de atuação e revisão editorial sênior.
                   </p>
                 </div>
 
@@ -325,7 +325,7 @@ export default function InsightDetail({ params }: Props) {
                 Continuar lendo
               </p>
               <h2 className="mt-4 font-display text-2xl font-semibold text-aletis-grafite-escuro md:text-3xl">
-                Outras teses da mesa.
+                Outras teses para decidir melhor.
               </h2>
             </Reveal>
 

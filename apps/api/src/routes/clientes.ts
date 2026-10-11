@@ -1,8 +1,18 @@
+import { loadPortalAccess, refreshPortalAccesses, savePortalAccess, deletePortalAccess } from '../services/portal/PortalAccountService.js'
+import { assertPortalStaff } from '../services/portal/PortalDocumentRoutes.js'
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import { randomUUID } from 'crypto'
+import { isPrimaryLLMEnabled } from '../services/llm/ProviderConfig.js'
 import {
   upsertCliente as pgUpsertCliente,
+  upsertClienteStrict as pgUpsertClienteStrict,
+  insertClienteStrict as pgInsertClienteStrict,
   listClientes as pgListClientes,
+  listClienteAliases,
   deleteCliente as pgDeleteCliente,
+  findClienteByCpfCnpj as pgFindClienteByCpfCnpj,
+  isValidCpfCnpj,
+  normalizeCpfCnpj,
 } from '../db/ClienteRepository.js'
 import { isPgEnabled } from '../db/client.js'
 import { auditAsync } from '../db/AuditLog.js'
@@ -31,6 +41,26 @@ import {
 import type { AnaliseCliente } from '../services/cliente/types.js'
 import { getAnalisesBus } from '../services/cliente/AnalisesBus.js'
 import { getSmartAdvisor } from '../services/cliente/advisor/SmartAdvisor.js'
+import { isMimeAllowed } from '../lib/upload-validation.js'
+import { getDocumentIntakeService } from '../services/alix/intake/DocumentIntakeService.js'
+import { MAX_FILE_BYTES } from '../services/alix/intake/types.js'
+import {
+  buildClientOnboardingDossier,
+  buildOnboardingDocumentPreview,
+  type OnboardingDocumentPreview,
+} from '../services/alix/intake/ClientOnboardingDossierService.js'
+import { rememberClienteSnapshot } from '../services/alix/memory/AlixMemoryEvents.js'
+import { calcularSaudeFinanceiraCliente } from '../services/cliente/ClienteFinancialHealthService.js'
+import { clienteCreateSchema, clientePatchSchema } from '../lib/crm-write-validation.js'
+import { withCrmWriteLock } from '../lib/crm-write-lock.js'
+import { CanonicalClientMap } from '../services/core/ClientIdentity.js'
+
+function withDeadline<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('A leitura por IA excedeu o tempo limite; usando extração local.')), timeoutMs)
+    promise.then((value) => { clearTimeout(timer); resolve(value) }, (error) => { clearTimeout(timer); reject(error) })
+  })
+}
 
 /* ========================================================================
  *  Portal do Cliente — tipos anexados
@@ -246,25 +276,45 @@ interface Pagamento {
 
 interface TimelineEvent {
   data: string
-  tipo: 'contato' | 'proposta' | 'pagamento' | 'reuniao' | 'documento' | 'analise' | 'acordo' | 'vencimento'
+  tipo: 'contato' | 'proposta' | 'pagamento' | 'reuniao' | 'documento' | 'analise' | 'acordo' | 'vencimento' | 'estagio' | 'acao'
   descricao: string
   detalhes?: string
+}
+
+interface GrupoFamiliarPessoa {
+  id: string
+  nome: string
+  parentesco?: string
+  papel?: string
+  cpfCnpj?: string
+  telefone?: string
+  email?: string
+  atuaAtividade?: boolean
+  vinculoCliente?: string
+  observacoes?: string
+  principal?: boolean
+  criadoEm: string
+  atualizadoEm: string
 }
 
 interface Cliente {
   id: string
   nome: string
   cpfCnpj: string
+  tipo?: 'pessoa_fisica' | 'pessoa_juridica'
   cidade: string
   uf: string
   telefone: string
+  whatsapp?: string
   email: string
   atividade: string
   areaTotalHa: number
   culturas: string[]
   estagio: 'prospeccao' | 'analise' | 'negociacao' | 'acordo' | 'encerrado'
   consultor: string
+  escritorio?: string
   credor: string
+  modalidadeCredito?: string
   valorTotalDivida: number
   valorTotalPago: number
   dividas: Divida[]
@@ -304,6 +354,8 @@ interface Cliente {
   }
   /** Tags livres para segmentar carteira (ex: "alta-prioridade", "aguardando-doc"). */
   tags?: string[]
+  /** Pessoas vinculadas ao cliente principal: cônjuge, filhos, sócios, avalistas, arrendadores etc. */
+  grupoFamiliar?: GrupoFamiliarPessoa[]
   /** Notas internas (comentários livres) — equipe interna. */
   notas?: Array<{
     id: string
@@ -330,24 +382,270 @@ interface Cliente {
    * para o cliente não precisar disparar GET /srai + /abs + /... no mount.
    */
   analises?: AnaliseCliente
+  /** Calculado na leitura; não é uma nota fixa persistida pelo cadastro. */
+  saudeFinanceira?: number | null
+  dossieDocumental?: {
+    fatos?: Record<string, unknown>
+    fonte?: string
+    confianca?: string
+    reconciliadoEm?: string
+  }
+}
+
+type PrioridadeOperacional = 'critica' | 'alta' | 'media' | 'normal'
+
+interface ScoreOperacional {
+  scoreOperacional: number
+  prioridade: PrioridadeOperacional
+  motivosPrioridade: string[]
+  proximaMelhorAcao: {
+    tipo: 'definir_proxima_acao' | 'registrar_contato' | 'avancar_estagio' | 'revisar_dossie'
+    descricao: string
+    dataSugerida?: string
+  }
+}
+
+export type ResumoFinanceiroCrm = {
+  classificacao: 'divida_documentada' | 'demanda_capital' | 'estrategia_financeira' | 'status_contratual' | 'em_levantamento'
+  rotulo: string
+  contexto: string
+  descricao?: string
+  valorFaixa?: string
+}
+
+export type ResumoFinanceiroSource = Pick<Cliente, 'credor' | 'valorTotalDivida' | 'dossieDocumental'>
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function textValue(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed || undefined
+}
+
+function hasDefinedCredor(value: string | undefined): boolean {
+  const normalized = String(value || '').trim().toLowerCase()
+  return Boolean(normalized) && !['a definir', 'credor a definir', 'não informado', 'nao informado'].includes(normalized)
+}
+
+export function buildResumoFinanceiroCrm(cliente: ResumoFinanceiroSource): ResumoFinanceiroCrm {
+  const fatos = cliente.dossieDocumental?.fatos
+  const necessidadeCapital = isRecord(fatos?.necessidadeCapital) ? fatos.necessidadeCapital : undefined
+  const statusContratual = isRecord(fatos?.statusContratual) ? fatos.statusContratual : undefined
+  const faixaCapital = textValue(necessidadeCapital?.faixaPlantio)
+  const finalidadeCapital = textValue(necessidadeCapital?.finalidade)
+  const estrategia = textValue(fatos?.estrategia)
+  const tipoContratual = textValue(statusContratual?.tipo)
+  const efeitoContratual = textValue(statusContratual?.efeito)
+  const credorDefinido = hasDefinedCredor(cliente.credor)
+
+  if (faixaCapital) {
+    return {
+      classificacao: 'demanda_capital',
+      rotulo: 'Necessidade de capital',
+      contexto: credorDefinido ? cliente.credor : 'Estrutura financeira em consolidação',
+      descricao: finalidadeCapital,
+      valorFaixa: faixaCapital,
+    }
+  }
+
+  if (tipoContratual) {
+    return {
+      classificacao: 'status_contratual',
+      rotulo: 'Status contratual',
+      contexto: `${tipoContratual} documentado`,
+      descricao: efeitoContratual,
+    }
+  }
+
+  if (cliente.valorTotalDivida > 0) {
+    return {
+      classificacao: 'divida_documentada',
+      rotulo: 'Dívida documentada',
+      contexto: credorDefinido ? cliente.credor : 'Credor em conferência documental',
+    }
+  }
+
+  if (estrategia) {
+    return {
+      classificacao: 'estrategia_financeira',
+      rotulo: 'Estratégia financeira',
+      contexto: 'Fluxo de caixa e garantias em consolidação',
+      descricao: estrategia,
+    }
+  }
+
+  return {
+    classificacao: 'em_levantamento',
+    rotulo: 'Posição financeira',
+    contexto: credorDefinido ? cliente.credor : 'Em levantamento documental',
+  }
 }
 
 /* ========================================================================
  *  Dados em memória (seed com casos reais + fictícios)
  * ======================================================================== */
 
-export const clientes: Map<string, Cliente> = new Map()
+export const clientes = new CanonicalClientMap<Cliente>()
+
+function diffDias(from?: string): number | null {
+  if (!from) return null
+  const d = new Date(from)
+  if (Number.isNaN(d.getTime())) return null
+  return Math.floor((Date.now() - d.getTime()) / 86_400_000)
+}
+
+function diasAte(from?: string): number | null {
+  if (!from) return null
+  const d = new Date(from)
+  if (Number.isNaN(d.getTime())) return null
+  return Math.floor((d.getTime() - Date.now()) / 86_400_000)
+}
+
+function nextBusinessDayYmd(from = new Date()): string {
+  const d = new Date(from)
+  d.setDate(d.getDate() + 1)
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
+function calcularScoreOperacional(c: Cliente): ScoreOperacional {
+  let score = 0
+  const motivos: string[] = []
+  const estagio = String(c.estagio || '').toLowerCase()
+  const estagiosAtivos = new Set(['lead', 'prospeccao', 'qualificacao', 'analise', 'proposta', 'negociacao', 'acordo', 'acompanhamento'])
+  const estagioPeso: Record<string, number> = {
+    lead: 8,
+    prospeccao: 10,
+    qualificacao: 16,
+    analise: 20,
+    proposta: 28,
+    negociacao: 34,
+    acordo: 24,
+    acompanhamento: 12,
+  }
+
+  if (!estagiosAtivos.has(estagio)) {
+    return {
+      scoreOperacional: 0,
+      prioridade: 'normal',
+      motivosPrioridade: ['Cliente fora do funil ativo'],
+      proximaMelhorAcao: { tipo: 'revisar_dossie', descricao: 'Sem ação operacional sugerida' },
+    }
+  }
+
+  score += estagioPeso[estagio] ?? 10
+  if (['proposta', 'negociacao', 'acordo'].includes(estagio)) motivos.push(`Estágio sensível: ${estagio}`)
+
+  const prox = diasAte(c.proximaAcao?.data)
+  if (!c.proximaAcao) {
+    score += ['proposta', 'negociacao', 'acordo'].includes(estagio) ? 28 : 18
+    motivos.push('Sem próxima ação definida')
+  } else if (prox !== null && prox < 0) {
+    score += Math.min(35, 22 + Math.abs(prox) * 4)
+    motivos.push(`Próxima ação atrasada há ${Math.abs(prox)} dia(s)`)
+  } else if (prox === 0) {
+    score += 18
+    motivos.push('Próxima ação marcada para hoje')
+  } else if (prox !== null && prox <= 3) {
+    score += 10
+    motivos.push(`Próxima ação em ${prox} dia(s)`)
+  }
+
+  const parado = diffDias(c.estagioDesde || c.ultimaAtualizacao)
+  if (parado !== null) {
+    if (parado >= 60) {
+      score += 24
+      motivos.push(`Sem atualização há ${parado} dias`)
+    } else if (parado >= 30) {
+      score += 16
+      motivos.push(`Parado há ${parado} dias`)
+    } else if (parado >= 14 && ['proposta', 'negociacao', 'acordo'].includes(estagio)) {
+      score += 10
+      motivos.push(`Deal ativo sem avanço há ${parado} dias`)
+    }
+  }
+
+  if (c.valorTotalDivida >= 2_000_000) {
+    score += 14
+    motivos.push('Dívida acima de R$ 2 mi')
+  } else if (c.valorTotalDivida >= 500_000) {
+    score += 8
+    motivos.push('Dívida relevante')
+  }
+
+  const saude = c.saudeFinanceira == null ? Number.NaN : Number(c.saudeFinanceira)
+  if (Number.isFinite(saude)) {
+    if (saude < 40) {
+      score += 12
+      motivos.push('Saúde financeira baixa')
+    } else if (saude >= 70 && ['proposta', 'negociacao'].includes(estagio)) {
+      score += 5
+      motivos.push('Boa condição para conversão')
+    }
+  }
+
+  if (Array.isArray(c.tags)) {
+    if (c.tags.some(t => /urgente|prioridade|critico|crítico/i.test(t))) {
+      score += 12
+      motivos.push('Tag de prioridade')
+    }
+    if (c.tags.some(t => /documento|doc|pendente/i.test(t))) {
+      score += 8
+      motivos.push('Pendência documental sinalizada')
+    }
+  }
+
+  const prioridade: PrioridadeOperacional =
+    score >= 80 ? 'critica' :
+    score >= 55 ? 'alta' :
+    score >= 30 ? 'media' :
+    'normal'
+
+  let proximaMelhorAcao: ScoreOperacional['proximaMelhorAcao']
+  if (!c.proximaAcao) {
+    proximaMelhorAcao = {
+      tipo: 'definir_proxima_acao',
+      descricao: ['proposta', 'negociacao', 'acordo'].includes(estagio)
+        ? 'Agendar retomada do deal com prazo curto'
+        : 'Definir próximo contato com cliente',
+      dataSugerida: nextBusinessDayYmd(),
+    }
+  } else if (prox !== null && prox <= 0) {
+    proximaMelhorAcao = {
+      tipo: 'registrar_contato',
+      descricao: prox < 0 ? 'Executar follow-up atrasado e registrar resultado' : 'Executar ação de hoje e registrar resultado',
+      dataSugerida: new Date().toISOString().slice(0, 10),
+    }
+  } else if (['lead', 'prospeccao', 'qualificacao'].includes(estagio)) {
+    proximaMelhorAcao = { tipo: 'avancar_estagio', descricao: 'Qualificar dados e avançar se houver aderência' }
+  } else {
+    proximaMelhorAcao = { tipo: 'revisar_dossie', descricao: 'Revisar dossiê, proposta e documentos antes do próximo contato' }
+  }
+
+  return {
+    scoreOperacional: Math.max(0, Math.min(100, Math.round(score))),
+    prioridade,
+    motivosPrioridade: motivos.slice(0, 6),
+    proximaMelhorAcao,
+  }
+}
 
 /**
- * Helper unificado: grava no Map (source of truth runtime) e tenta
- * espelhar no Postgres via dual-write. Erros do PG são best-effort —
- * nunca falham o caller. Também emite trilha de auditoria LGPD.
+ * Helper unificado: atualiza o cache runtime em Map e espelha no Postgres
+ * em best-effort. Mantido para writers legados; criação e PATCH usam
+ * gravação estrita seguida de publishCliente quando ALETIS_PG_ENABLED=1.
  */
 function persistCliente(c: Cliente, ator = 'system'): void {
-  const anterior = clientes.get(c.id)
+  void pgUpsertCliente(c as unknown as Parameters<typeof pgUpsertCliente>[0])
+  publishCliente(c, ator)
+}
+
+/** Usado pelos comandos que já confirmaram a gravação no banco. */
+function publishCliente(c: Cliente, ator = 'system', anterior = clientes.get(c.id)): void {
   clientes.set(c.id, c)
-  // fire-and-forget no upsert PG (não bloqueia o request).
-  void pgUpsertCliente(c as unknown as Record<string, unknown> as Parameters<typeof pgUpsertCliente>[0])
   auditAsync({
     ator,
     acao: anterior ? 'update' : 'create',
@@ -361,6 +659,40 @@ function persistCliente(c: Cliente, ator = 'system'): void {
   })
 }
 
+function describeClientePatch(body: Record<string, unknown>): string {
+  const labels: Record<string, string> = {
+    nome: 'nome',
+    cpfCnpj: 'CPF/CNPJ',
+    cidade: 'cidade',
+    uf: 'UF',
+    telefone: 'telefone',
+    whatsapp: 'WhatsApp',
+    email: 'e-mail',
+    atividade: 'atividade',
+    areaTotalHa: 'área',
+    culturas: 'culturas',
+    estagio: 'estágio',
+    consultor: 'consultor',
+    escritorio: 'escritório',
+    credor: 'credor',
+    modalidadeCredito: 'modalidade',
+    valorTotalDivida: 'dívida total',
+    dividas: 'dívidas',
+    pagamentos: 'pagamentos',
+    observacoes: 'observações',
+    carCodigoImovel: 'CAR',
+    proximaAcao: 'próxima ação',
+    tags: 'tags',
+    grupoFamiliar: 'grupo familiar',
+    timelineEvent: 'timeline',
+  }
+  const campos = Object.keys(body || {})
+    .filter((key) => body[key] !== undefined && labels[key])
+    .map((key) => labels[key])
+  if (campos.length === 0) return 'Atualização sem campos operacionais mapeados.'
+  return `Campos alterados: ${campos.slice(0, 12).join(', ')}${campos.length > 12 ? ` e mais ${campos.length - 12}` : ''}.`
+}
+
 /**
  * Variante que NÃO toca PG — usada pelo seed inicial. O seed roda em
  * module-load e não pode sobrescrever um PG já populado (perderia
@@ -369,6 +701,79 @@ function persistCliente(c: Cliente, ator = 'system'): void {
  */
 function setClienteLocal(c: Cliente): void {
   clientes.set(c.id, c)
+}
+
+function findClienteLocalByCpfCnpj(cpfCnpj: unknown): Cliente | null {
+  const clean = normalizeCpfCnpj(cpfCnpj)
+  if (!isValidCpfCnpj(clean)) return null
+  for (const c of clientes.values()) {
+    if (normalizeCpfCnpj(c.cpfCnpj).length === clean.length && normalizeCpfCnpj(c.cpfCnpj) === clean) {
+      return c
+    }
+  }
+  return null
+}
+
+function cleanOptionalText(value: unknown, max = 180): string | undefined {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim()
+  if (!text) return undefined
+  return text.slice(0, max)
+}
+
+function cleanCpfCnpjLoose(value: unknown): string | undefined {
+  const raw = String(value ?? '').trim()
+  if (!raw) return undefined
+  const digits = normalizeCpfCnpj(raw)
+  if (digits.length === 11 || digits.length === 14) return digits
+  return raw.slice(0, 32)
+}
+
+function normalizeGrupoFamiliar(input: unknown, clienteId: string): GrupoFamiliarPessoa[] {
+  if (!Array.isArray(input)) return []
+  const now = new Date().toISOString()
+  return input
+    .map((raw): GrupoFamiliarPessoa | null => {
+      if (!raw || typeof raw !== 'object') return null
+      const item = raw as Record<string, unknown>
+      const nome = cleanOptionalText(item.nome, 220)
+      if (!nome) return null
+      const created = cleanOptionalText(item.criadoEm, 40) ?? now
+      return {
+        id: cleanOptionalText(item.id, 80) ?? `gf-${clienteId}-${randomUUID()}`,
+        nome,
+        parentesco: cleanOptionalText(item.parentesco, 80),
+        papel: cleanOptionalText(item.papel, 80),
+        cpfCnpj: cleanCpfCnpjLoose(item.cpfCnpj),
+        telefone: cleanOptionalText(item.telefone, 60),
+        email: cleanOptionalText(item.email, 160),
+        atuaAtividade: typeof item.atuaAtividade === 'boolean' ? item.atuaAtividade : undefined,
+        vinculoCliente: cleanOptionalText(item.vinculoCliente, 120),
+        observacoes: cleanOptionalText(item.observacoes, 1200),
+        principal: item.principal === true,
+        criadoEm: created,
+        atualizadoEm: now,
+      }
+    })
+    .filter((item): item is GrupoFamiliarPessoa => Boolean(item))
+}
+
+function persistGrupoFamiliar(cliente: Cliente, descricao: string, detalhes?: string): void {
+  const hoje = new Date().toISOString().slice(0, 10)
+  cliente.ultimaAtualizacao = hoje
+  cliente.timeline = Array.isArray(cliente.timeline) ? cliente.timeline : []
+  cliente.timeline.push({
+    data: hoje,
+    tipo: 'contato',
+    descricao,
+    detalhes,
+  })
+  persistCliente(cliente, 'crm:grupo-familiar')
+  void rememberClienteSnapshot(cliente, descricao, detalhes ?? 'Grupo familiar atualizado no cadastro do cliente.')
+}
+
+function isPgUniqueViolation(err: unknown): boolean {
+  const error = err as { code?: string; cause?: { code?: string } } | undefined
+  return error?.code === '23505' || error?.cause?.code === '23505'
 }
 
 /**
@@ -384,10 +789,12 @@ function setClienteLocal(c: Cliente): void {
 export async function hydrateOrSeedClientesPg(): Promise<{ hydrated: number; seeded: number }> {
   if (!isPgEnabled()) return { hydrated: 0, seeded: 0 }
   const fromPg = await pgListClientes()
-  if (fromPg.length > 0) {
+  const aliases = await listClienteAliases()
+  if (fromPg.length > 0 || aliases.length > 0) {
     // Sobrescreve Map (PG vence seed)
     clientes.clear()
     for (const c of fromPg) clientes.set(c.id as string, c as unknown as Cliente)
+    for (const alias of aliases) clientes.registerAlias(alias.id, alias.canonicalId)
     return { hydrated: fromPg.length, seeded: 0 }
   }
   // PG vazio: dump do Map atual no banco (one-shot)
@@ -491,6 +898,47 @@ function seed() {
       dataCadastro: '2025-08-10',
       ultimaAtualizacao: '2026-02-26',
       observacoes: 'Memória de cálculo elaborada. Proposta de 4x R$70.550 alinhadas safra. Pagamentos parciais em andamento.',
+    },
+
+    /* ---- CASO REAL 3: Lucídio Griep Fenner x Sicoob Fronteiras ---- */
+    {
+      id: 'cli-003',
+      nome: 'Lucídio Griep Fenner',
+      cpfCnpj: '000.000.000-00',
+      cidade: 'Cascavel',
+      uf: 'PR',
+      telefone: '(45) 99999-3003',
+      email: 'lucidio.fenner@email.com',
+      atividade: 'Produtor rural - Grãos (soja, milho)',
+      areaTotalHa: 650,
+      culturas: ['soja', 'milho'],
+      estagio: 'analise',
+      consultor: 'Christian Kohler',
+      credor: 'Sicoob Fronteiras',
+      valorTotalDivida: 3445428.22,
+      valorTotalPago: 1256962.68,
+      dividas: [
+        { contrato: '413740', valorOriginal: 2149908.40, valorAtualizado: 2149908.40, vencimento: '2024-03-11', status: 'renegociada', credor: 'Sicoob Fronteiras' },
+        { contrato: '554904', valorOriginal: 1007076.00, valorAtualizado: 1007076.00, vencimento: '2025-01-20', status: 'renegociada', credor: 'Sicoob Fronteiras' },
+        { contrato: '561037', valorOriginal: 487886.46, valorAtualizado: 487886.46, vencimento: '2025-09-29', status: 'renegociada', credor: 'Sicoob Fronteiras' },
+      ],
+      pagamentos: [
+        { data: '2024-03-11', valor: 2149908.40, descricao: 'Liberação contrato 413740', tipo: 'pagamento' },
+        { data: '2025-01-20', valor: 1007076.00, descricao: 'Liberação contrato 554904', tipo: 'pagamento' },
+        { data: '2025-09-29', valor: 487886.46, descricao: 'Liberação contrato 561037', tipo: 'pagamento' },
+        { data: '2025-01-23', valor: 814232.45, descricao: 'Amortização parcela 1 contrato 413740', tipo: 'pagamento' },
+        { data: '2025-12-22', valor: 442730.23, descricao: 'Amortização parcela 1 contrato 554904', tipo: 'pagamento' },
+      ],
+      timeline: [
+        { data: '2024-03-11', tipo: 'contato', descricao: 'Liberação do contrato 413740 (R$ 2.149.908,40)' },
+        { data: '2025-01-20', tipo: 'contato', descricao: 'Liberação do contrato 554904 (R$ 1.007.076,00)' },
+        { data: '2025-09-29', tipo: 'contato', descricao: 'Liberação do contrato 561037 (R$ 487.886,46)' },
+        { data: '2026-05-06', tipo: 'analise', descricao: 'Frustração de safra comprovada por laudos técnicos + queda de commodities + aumento de custos' },
+        { data: '2026-05-07', tipo: 'proposta', descricao: 'Proposta de reestruturação integral – consolidação dos 3 contratos com alongamento e ajuste ao fluxo de caixa' },
+      ],
+      dataCadastro: '2026-05-07',
+      ultimaAtualizacao: '2026-05-07',
+      observacoes: 'Cooperado do Sicoob Fronteiras com 3 contratos (custeio + CPRF). Amortizou 34,49% do capital original (R$ 1.256.962,68). CET consolidado ~19% a.a. Frustração de safra comprovada.',
     },
   ]
 
@@ -826,6 +1274,19 @@ async function enrichAndApply(
   cliente.ultimaAtualizacao = agoraDia
 }
 
+
+/** Resultado externo só substitui a versão que o originou, depois do commit. */
+async function enrichCommittedCliente(current: Cliente, opts: { codImovel?: string; motivo?: string }): Promise<boolean> {
+  const enriched = structuredClone(current)
+  await enrichAndApply(enriched, opts)
+  return withCrmWriteLock(`cliente:${current.id}`, async () => {
+    if (clientes.get(current.id) !== current) return false
+    await pgUpsertClienteStrict(enriched as unknown as Parameters<typeof pgUpsertClienteStrict>[0])
+    publishCliente(enriched, 'crm:enriquecimento', current)
+    return true
+  })
+}
+
 /* ========================================================================
  *  AutoCalc — orquestrador de análises automáticas
  * ======================================================================== */
@@ -983,7 +1444,220 @@ function registrarSubscriberDoBus(): void {
   })
 }
 
+type CrmIntakeCampo = {
+  nome?: string
+  cpfCnpj?: string
+  tipo?: 'pessoa_fisica' | 'pessoa_juridica'
+  email?: string
+  telefone?: string
+  whatsapp?: string
+  cep?: string
+  endereco?: string
+  numero?: string
+  complemento?: string
+  bairro?: string
+  cidade?: string
+  uf?: string
+  atividade?: string
+  areaTotalHa?: number | string
+  culturas?: string[] | string
+  carCodigoImovel?: string
+  credor?: string
+  valorTotalDivida?: number | string
+  valorTotalPago?: number | string
+  observacoes?: string
+  estagio?: string
+  consultor?: string
+  escritorio?: string
+  tags?: string[] | string
+}
+
+function cleanMaybeString(value: unknown, max = 240): string | undefined {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim()
+  if (!text || text.toLowerCase() === 'null' || text.toLowerCase() === 'undefined') return undefined
+  return text.slice(0, max)
+}
+
+function cleanMoneyLike(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  const text = cleanMaybeString(value)
+  if (!text) return undefined
+  const cleaned = text.replace(/[^\d,.-]/g, '')
+  const normalized = cleaned.includes(',') && cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')
+    ? cleaned.replace(/\./g, '').replace(',', '.')
+    : cleaned.replace(/,/g, '')
+  const n = Number(normalized)
+  return Number.isFinite(n) ? n : undefined
+}
+
+function cleanList(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    const list = value.map((v) => cleanMaybeString(v, 80)).filter(Boolean) as string[]
+    return list.length ? list : undefined
+  }
+  const text = cleanMaybeString(value, 500)
+  if (!text) return undefined
+  const list = text.split(/[,;\n]/).map((v) => cleanMaybeString(v, 80)).filter(Boolean) as string[]
+  return list.length ? list : undefined
+}
+
+function sanitizeCrmIntakeCampos(raw: Record<string, unknown> | null): CrmIntakeCampo {
+  const src = (raw?.campos && typeof raw.campos === 'object' ? raw.campos : raw) as Record<string, unknown> | null
+  if (!src) return {}
+  const cpfCnpj = cleanMaybeString(src.cpfCnpj ?? src.cpf_cnpj ?? src.documento, 32)
+  const cpfDigits = cpfCnpj ? normalizeCpfCnpj(cpfCnpj) : ''
+  const tipoRaw = cleanMaybeString(src.tipo, 32)
+  const tipo = tipoRaw === 'pessoa_juridica' || cpfDigits.length > 11 ? 'pessoa_juridica' : tipoRaw === 'pessoa_fisica' ? 'pessoa_fisica' : undefined
+  const estagio = cleanMaybeString(src.estagio, 40)
+  const estagioOk = estagio && ['lead', 'prospeccao', 'qualificacao', 'analise', 'proposta', 'negociacao', 'acordo', 'acompanhamento', 'concluido', 'encerrado'].includes(estagio)
+    ? estagio
+    : undefined
+  return {
+    nome: cleanMaybeString(src.nome ?? src.razaoSocial ?? src.razao_social, 180),
+    cpfCnpj: cpfCnpj ? cpfDigits || cpfCnpj : undefined,
+    tipo,
+    email: cleanMaybeString(src.email, 180),
+    telefone: cleanMaybeString(src.telefone, 40),
+    whatsapp: cleanMaybeString(src.whatsapp, 40),
+    cep: cleanMaybeString(src.cep, 20)?.replace(/\D/g, ''),
+    endereco: cleanMaybeString(src.endereco ?? src.logradouro, 220),
+    numero: cleanMaybeString(src.numero, 40),
+    complemento: cleanMaybeString(src.complemento, 120),
+    bairro: cleanMaybeString(src.bairro, 120),
+    cidade: cleanMaybeString(src.cidade ?? src.municipio, 120),
+    uf: cleanMaybeString(src.uf, 2)?.toUpperCase(),
+    atividade: cleanMaybeString(src.atividade, 180),
+    areaTotalHa: cleanMoneyLike(src.areaTotalHa ?? src.area_total_ha ?? src.areaHa),
+    culturas: cleanList(src.culturas ?? src.cultura ?? src.atividades),
+    carCodigoImovel: cleanMaybeString(src.carCodigoImovel ?? src.codImovel ?? src.car, 120),
+    credor: cleanMaybeString(src.credor ?? src.banco ?? src.instituicaoFinanceira, 160),
+    valorTotalDivida: cleanMoneyLike(src.valorTotalDivida ?? src.dividaTotal ?? src.valorDivida),
+    valorTotalPago: cleanMoneyLike(src.valorTotalPago ?? src.valorPago),
+    observacoes: cleanMaybeString(src.observacoes ?? src.contexto ?? src.resumo, 1200),
+    estagio: estagioOk,
+    consultor: cleanMaybeString(src.consultor, 120),
+    escritorio: cleanMaybeString(src.escritorio, 120),
+    tags: cleanList(src.tags),
+  }
+}
+
+function fallbackCrmIntake(texto: string): {
+  campos: CrmIntakeCampo
+  resumo: string
+  camposAusentes: string[]
+  origem: 'heuristica'
+  confianca: number
+} {
+  const cpfCnpj = texto.match(/\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b|\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/)?.[0]
+  const email = texto.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0]
+  const telefone = texto.match(/\(?\d{2}\)?\s?\d{4,5}-?\d{4}/)?.[0]
+  const uf = texto.match(/\b(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)\b/i)?.[0]?.toUpperCase()
+  const valor = texto.match(/R\$\s?[\d.]+,\d{2}|(?:div[ií]da|saldo|valor)[^\d]{0,20}[\d.]+,\d{2}/i)?.[0]
+  const nome = texto.match(/(?:nome|raz[aã]o social|titular|devedor)\s*[:\-]\s*([^\n;|]{3,120})/i)?.[1]?.trim()
+  const cidade = texto.match(/(?:cidade|munic[ií]pio)\s*[:\-]\s*([^\n;|,]{2,80})/i)?.[1]?.trim()
+  const campos = sanitizeCrmIntakeCampos({ nome, cidade, cpfCnpj, email, telefone, uf, valorTotalDivida: valor })
+  return {
+    campos,
+    resumo: 'Pré-leitura heurística: foram extraídos apenas campos explícitos por padrão textual. Revise antes de salvar.',
+    camposAusentes: ['nome', 'cidade'].filter((k) => !(campos as Record<string, unknown>)[k]),
+    origem: 'heuristica',
+    confianca: Object.keys(campos).length > 2 ? 0.45 : 0.25,
+  }
+}
+
+async function buildCrmIntakePreview(texto: string): Promise<{
+  campos: CrmIntakeCampo
+  resumo: string
+  camposAusentes: string[]
+  origem: 'ia' | 'heuristica'
+  confianca: number
+}> {
+  const baseFallback = fallbackCrmIntake(texto)
+  if (!isPrimaryLLMEnabled()) {
+    return baseFallback
+  }
+
+  try {
+    const { generateStructured } = await import('../services/llm/OpenAIClient.js')
+    const { getModelForRole } = await import('../services/llm/LLMConfig.js')
+    const model = getModelForRole('doc_extractor')
+    const result = await withDeadline(generateStructured<Record<string, unknown>>(
+      [{
+        role: 'user',
+        content: `Texto bruto para pré-cadastro CRM:\n\n${texto.slice(0, 18000)}`,
+      }],
+      {
+        name: 'pre_cadastro_crm',
+        schema: {
+          type: 'object',
+          properties: {
+            campos: {
+              type: 'object',
+              properties: {
+                nome: { type: 'string' }, cpfCnpj: { type: 'string' }, tipo: { type: 'string', enum: ['pessoa_fisica', 'pessoa_juridica'] },
+                email: { type: 'string' }, telefone: { type: 'string' }, whatsapp: { type: 'string' }, cep: { type: 'string' },
+                endereco: { type: 'string' }, numero: { type: 'string' }, complemento: { type: 'string' }, bairro: { type: 'string' },
+                cidade: { type: 'string' }, uf: { type: 'string' }, atividade: { type: 'string' }, areaTotalHa: { type: 'number' },
+                culturas: { type: 'array', items: { type: 'string' } }, carCodigoImovel: { type: 'string' }, credor: { type: 'string' },
+                valorTotalDivida: { type: 'number' }, valorTotalPago: { type: 'number' }, observacoes: { type: 'string' },
+                estagio: { type: 'string', enum: ['lead', 'prospeccao', 'qualificacao', 'analise', 'proposta', 'negociacao', 'acordo', 'acompanhamento', 'concluido', 'encerrado'] },
+                consultor: { type: 'string' }, escritorio: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } },
+              },
+            },
+            resumo: { type: 'string' }, camposAusentes: { type: 'array', items: { type: 'string' } },
+            confianca: { type: 'number', minimum: 0, maximum: 1 },
+          },
+          required: ['campos', 'resumo', 'camposAusentes', 'confianca'],
+        },
+        model,
+        maxTokens: 1600,
+        reasoning: { effort: 'low' },
+        system: [
+          'Você é uma IA de pré-cadastro do CRM ALETIS.',
+          'Extraia SOMENTE dados explicitamente presentes no texto. Não invente, não complete por conhecimento externo.',
+          'Se o texto vier de contrato/proposta, use os dados do tomador/cliente e os dados financeiros presentes.',
+          'Responda somente JSON válido, sem markdown, neste formato:',
+          '{"campos":{"nome":null,"cpfCnpj":null,"tipo":null,"email":null,"telefone":null,"whatsapp":null,"cep":null,"endereco":null,"numero":null,"complemento":null,"bairro":null,"cidade":null,"uf":null,"atividade":null,"areaTotalHa":null,"culturas":[],"carCodigoImovel":null,"credor":null,"valorTotalDivida":null,"valorTotalPago":null,"observacoes":null,"estagio":null,"consultor":null,"escritorio":null,"tags":[]},"resumo":"","camposAusentes":[],"confianca":0.0}',
+          'Use estagio apenas se aparecer claramente e estiver entre: lead, prospeccao, qualificacao, analise, proposta, negociacao, acordo, acompanhamento, concluido, encerrado.',
+        ].join('\n'),
+      },
+    ), Math.max(15_000, Number(process.env.ALIX_INTAKE_LLM_TIMEOUT_MS || 45_000)))
+    const parsed = result.data
+    const campos = sanitizeCrmIntakeCampos(parsed)
+    const camposAusentes = Array.isArray(parsed?.camposAusentes)
+      ? parsed.camposAusentes.map((v) => cleanMaybeString(v, 80)).filter(Boolean) as string[]
+      : ['nome', 'cpfCnpj', 'cidade', 'uf'].filter((k) => !(campos as Record<string, unknown>)[k])
+    const confiancaRaw = Number(parsed?.confianca)
+    return {
+      campos,
+      resumo: cleanMaybeString(parsed?.resumo, 900) || 'Pré-cadastro gerado a partir do material enviado. Revise os campos antes de salvar.',
+      camposAusentes,
+      confianca: Number.isFinite(confiancaRaw) ? Math.max(0, Math.min(1, confiancaRaw)) : 0.65,
+      origem: 'ia',
+    }
+  } catch (err) {
+    return {
+      ...baseFallback,
+      resumo: `${baseFallback.resumo} A extração por IA não foi concluída: ${cleanMaybeString((err as Error).message, 220)}`,
+    }
+  }
+}
+
 export default async function (fastify: FastifyInstance) {
+  // Links antigos continuam legíveis. Escritas exigem ID atual para não recriar vínculos no arquivo consolidado.
+  fastify.addHook('preHandler', async (request, reply) => {
+    if (!request.url.startsWith('/api/clientes/')) return
+    const params = request.params as { id?: string } | undefined
+    if (!params?.id) return
+    const canonicalId = clientes.canonicalId(params.id)
+    if (canonicalId === params.id) return
+    if (request.method === 'GET' || request.method === 'HEAD') {
+      reply.header('X-Aletis-Canonical-Client-Id', canonicalId)
+      params.id = canonicalId
+      return
+    }
+    return reply.status(409).send({ success: false, code: 'CLIENTE_MERGED', canonicalId, error: 'Cadastro consolidado. Atualize a página para usar o cliente atual.' })
+  })
   // Backfill seed clients with CAR data when the module registers.
   backfillSeedEnrichment()
   // Hidrata seeds com o snapshot de análises (após enriquecimento).
@@ -993,9 +1667,10 @@ export default async function (fastify: FastifyInstance) {
 
   /* ---- LIST ---- */
   fastify.get('/api/clientes', async (request: FastifyRequest, _reply: FastifyReply) => {
-    const { estagio, consultor, search } = request.query as {
+    const { estagio, consultor, escritorio, search } = request.query as {
       estagio?: string
       consultor?: string
+      escritorio?: string
       search?: string
     }
 
@@ -1006,6 +1681,9 @@ export default async function (fastify: FastifyInstance) {
     }
     if (consultor) {
       result = result.filter(c => c.consultor.toLowerCase().includes(consultor.toLowerCase()))
+    }
+    if (escritorio) {
+      result = result.filter(c => (c.escritorio || '').toLowerCase() === escritorio.toLowerCase())
     }
     if (search) {
       const q = search.toLowerCase()
@@ -1019,20 +1697,32 @@ export default async function (fastify: FastifyInstance) {
     }
 
     // Retorna resumo (sem arrays pesados)
-    const resumos = result.map(c => ({
-      id: c.id,
-      nome: c.nome,
-      cidade: c.cidade,
-      uf: c.uf,
-      estagio: c.estagio,
-      consultor: c.consultor,
-      credor: c.credor,
-      valorTotalDivida: c.valorTotalDivida,
-      valorTotalPago: c.valorTotalPago,
-      culturas: c.culturas,
-      areaTotalHa: c.areaTotalHa,
-      ultimaAtualizacao: c.ultimaAtualizacao,
-    }))
+    const resumos = result.map(c => {
+      const saude = calcularSaudeFinanceiraCliente(c, c.analises ?? getAutoCalcOrchestrator().get(c.id))
+      const operacional = calcularScoreOperacional({ ...c, saudeFinanceira: saude.score })
+      return {
+        id: c.id,
+        nome: c.nome,
+        cidade: c.cidade,
+        uf: c.uf,
+        estagio: c.estagio,
+        consultor: c.consultor,
+        escritorio: c.escritorio,
+        credor: c.credor,
+        valorTotalDivida: c.valorTotalDivida,
+        valorTotalPago: c.valorTotalPago,
+        culturas: c.culturas,
+        areaTotalHa: c.areaTotalHa,
+        ultimaAtualizacao: c.ultimaAtualizacao,
+        saudeFinanceira: saude.score,
+        saudeFinanceiraDetalhes: saude,
+        tags: c.tags,
+        proximaAcao: c.proximaAcao,
+        estagioDesde: c.estagioDesde,
+        resumoFinanceiro: buildResumoFinanceiroCrm(c),
+        ...operacional,
+      }
+    }).sort((a, b) => b.scoreOperacional - a.scoreOperacional)
 
     return { success: true, data: resumos, total: resumos.length }
   })
@@ -1047,45 +1737,283 @@ export default async function (fastify: FastifyInstance) {
       return { success: false, error: 'Cliente não encontrado' }
     }
 
-    return { success: true, data: cliente }
+    const saude = calcularSaudeFinanceiraCliente(
+      cliente,
+      cliente.analises ?? getAutoCalcOrchestrator().get(cliente.id),
+    )
+    return {
+      success: true,
+      data: {
+        ...cliente,
+        saudeFinanceira: saude.score,
+        saudeFinanceiraDetalhes: saude,
+      },
+    }
+  })
+
+  /* ---- SAÚDE FINANCEIRA EXPLICÁVEL ---- */
+  fastify.get('/api/clientes/:id/saude-financeira', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string }
+    const cliente = clientes.get(id)
+    if (!cliente) {
+      return reply.status(404).send({ success: false, error: 'Cliente não encontrado' })
+    }
+    const orchestrator = getAutoCalcOrchestrator()
+    const analise = cliente.analises ?? orchestrator.get(id)
+      ?? await orchestrator.orchestrate(cliente as unknown as ClienteParaAnalise)
+    cliente.analises = analise
+    return {
+      success: true,
+      data: calcularSaudeFinanceiraCliente(cliente, analise),
+    }
+  })
+
+  /* ---- CRM INTAKE PREVIEW WITH IA ---- */
+  fastify.post('/api/clientes/intake-preview', async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = request.body as { texto?: string }
+    const texto = String(body?.texto ?? '').trim()
+    if (texto.length < 20) {
+      reply.status(400)
+      return { success: false, error: 'Informe um texto com dados do cliente para a IA analisar.' }
+    }
+
+    const preview = await buildCrmIntakePreview(texto)
+    return { success: true, data: preview }
+  })
+
+  /* ---- CRM INTAKE DOCUMENT PREVIEW WITH IA ---- */
+  fastify.post('/api/clientes/intake-document-preview', async (request: FastifyRequest, reply: FastifyReply) => {
+    const query = request.query as { sessionId?: string }
+    const requestedSession = String(query.sessionId || '').trim()
+    const sessionId = /^crm-intake-[A-Za-z0-9_-]{8,100}$/.test(requestedSession)
+      ? requestedSession
+      : `crm-intake-${randomUUID()}`
+    type DocumentPreview = OnboardingDocumentPreview & { erro?: string }
+    const uploads: Array<{
+      filename: string
+      mimetype: string
+      buffer?: Buffer
+      erro?: string
+    }> = []
+
+    try {
+      for await (const file of request.files({
+        limits: { fileSize: MAX_FILE_BYTES, files: 8 },
+      })) {
+        if (!isMimeAllowed(file.mimetype)) {
+          file.file.resume()
+          uploads.push({
+            filename: file.filename,
+            mimetype: file.mimetype,
+            erro: `Tipo de arquivo não suportado: ${file.mimetype}`,
+          })
+          continue
+        }
+        try {
+          const buffer = await file.toBuffer()
+          uploads.push({ filename: file.filename, mimetype: file.mimetype, buffer })
+        } catch (err) {
+          uploads.push({
+            filename: file.filename,
+            mimetype: file.mimetype,
+            erro: cleanMaybeString((err as Error).message, 500) || 'Não foi possível receber o arquivo.',
+          })
+        }
+      }
+    } catch (err) {
+      request.log.warn({ err }, '[clientes-intake-document-preview] multipart inválido')
+      return reply.status(400).send({ success: false, error: 'Falha ao ler os anexos enviados.' })
+    }
+
+    if (!uploads.length) {
+      return reply.status(400).send({ success: false, error: 'Envie ao menos um contrato, proposta ou documento.' })
+    }
+
+    // O lote já é pequeno no cliente. Processá-lo em paralelo reduz a espera
+    // sem alterar a ordem dos documentos retornados para a interface.
+    const resultados = await Promise.all(uploads.map(async (upload): Promise<{ documento: DocumentPreview }> => {
+      if (!upload.buffer || upload.erro) {
+        return {
+          documento: {
+            filename: upload.filename,
+            mimetype: upload.mimetype,
+            sizeBytes: upload.buffer?.length ?? 0,
+            tipoArquivo: 'documento',
+            resumo: upload.erro || 'Não foi possível receber este arquivo.',
+            textoExtraidoChars: 0,
+            campos: {},
+            camposAusentes: ['arquivo_valido'],
+            confianca: 0,
+            origem: 'heuristica',
+            alixDocumentId: '',
+            tipoDocumento: 'arquivo_invalido',
+            evidencias: [],
+            riscos: [],
+            lacunas: ['arquivo_valido'],
+            acoesSugeridas: [],
+            processamento: 'basico',
+            estadoProcessamento: 'failed',
+            erro: upload.erro,
+          },
+        }
+      }
+      try {
+        const doc = await getDocumentIntakeService().enqueue({
+          buffer: upload.buffer,
+          filename: upload.filename,
+          mimetype: upload.mimetype,
+          sessionId,
+          processingMode: 'fast',
+        })
+        return {
+          documento: buildOnboardingDocumentPreview(doc),
+        }
+      } catch (err) {
+        return {
+          documento: {
+            filename: upload.filename,
+            mimetype: upload.mimetype,
+            sizeBytes: upload.buffer.length,
+            tipoArquivo: 'documento',
+            resumo: 'Não foi possível extrair o conteúdo deste arquivo.',
+            textoExtraidoChars: 0,
+            campos: {},
+            camposAusentes: ['leitura_documento'],
+            confianca: 0,
+            origem: 'heuristica',
+            alixDocumentId: '',
+            tipoDocumento: 'erro_leitura',
+            evidencias: [],
+            riscos: [],
+            lacunas: ['leitura_documento'],
+            acoesSugeridas: [],
+            processamento: 'basico',
+            estadoProcessamento: 'failed',
+            erro: cleanMaybeString((err as Error).message, 500),
+          },
+        }
+      }
+    }))
+    const documentos = resultados.map((resultado) => resultado.documento)
+
+    return {
+      success: true,
+      data: {
+        documentos,
+        sessionId,
+        propostaDetectada: documentos.some((d) => d.tipoArquivo === 'proposta'),
+      },
+    }
+  })
+
+  /* ---- CONSOLIDA TODOS OS LOTES DA SESSAO EM UM DOSSIÊ ---- */
+  fastify.post('/api/clientes/intake-dossier-preview', async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = request.body as { sessionId?: string; deep?: boolean }
+    const sessionId = String(body?.sessionId || '').trim()
+    if (!/^crm-intake-[A-Za-z0-9_-]{8,100}$/.test(sessionId)) {
+      return reply.status(400).send({ success: false, error: 'Sessão de documentos inválida.' })
+    }
+    const intake = getDocumentIntakeService()
+    await intake.resumePending(sessionId)
+    const listed = await intake.list(sessionId)
+    if (!listed.length) {
+      return reply.status(404).send({ success: false, error: 'Nenhum documento processado nesta sessão.' })
+    }
+    const documents = (await Promise.all(listed.map((document) => intake.get(sessionId, document.id))))
+      .filter((document): document is NonNullable<typeof document> => Boolean(document))
+    // A consolidação heurística é rápida e suficiente para preencher o cadastro.
+    // IA profunda só é executada quando solicitada explicitamente, evitando
+    // timeout no fluxo de upload.
+    const dossier = await buildClientOnboardingDossier(documents, { useAi: body?.deep === true })
+    return {
+      success: true,
+      data: {
+        ...dossier,
+        campos: {
+          ...dossier.campos,
+          estagio: dossier.campos.estagio || (dossier.propostaDetectada ? 'negociacao' : undefined),
+        },
+      },
+    }
+  })
+
+  // Consulta leve para a interface atualizar o dossiê enquanto a extração
+  // especializada termina em segundo plano.
+  fastify.get('/api/clientes/intake-dossier-preview', async (request: FastifyRequest, reply: FastifyReply) => {
+    const query = request.query as { sessionId?: string }
+    const sessionId = String(query?.sessionId || '').trim()
+    if (!/^crm-intake-[A-Za-z0-9_-]{8,100}$/.test(sessionId)) {
+      return reply.status(400).send({ success: false, error: 'Sessão de documentos inválida.' })
+    }
+    const intake = getDocumentIntakeService()
+    await intake.resumePending(sessionId)
+    const listed = await intake.list(sessionId)
+    if (!listed.length) return reply.status(404).send({ success: false, error: 'Nenhum documento processado nesta sessão.' })
+    const documents = (await Promise.all(listed.map((document) => intake.get(sessionId, document.id))))
+      .filter((document): document is NonNullable<typeof document> => Boolean(document))
+    const dossier = await buildClientOnboardingDossier(documents, { useAi: false })
+    return {
+      success: true,
+      data: {
+        ...dossier,
+        campos: { ...dossier.campos, estagio: dossier.campos.estagio || (dossier.propostaDetectada ? 'negociacao' : undefined) },
+      },
+    }
   })
 
   /* ---- CREATE ---- */
   fastify.post('/api/clientes', async (request: FastifyRequest, reply: FastifyReply) => {
-    const body = request.body as Record<string, unknown>
+    const parsed = clienteCreateSchema.safeParse(request.body)
+    if (!parsed.success) return reply.status(400).send({ success: false, error: 'Dados do cliente inválidos', detalhes: parsed.error.flatten() })
+    const body = parsed.data as Record<string, unknown>
 
-    // Zod-style inline validation
+    // Validações complementares de compatibilidade
     const errors: string[] = []
     if (!body.nome || typeof body.nome !== 'string') errors.push('nome é obrigatório (string)')
-    if (!body.cpfCnpj || typeof body.cpfCnpj !== 'string') errors.push('cpfCnpj é obrigatório (string)')
+    const cpfCnpjClean = normalizeCpfCnpj(body.cpfCnpj)
+    const cpfCnpjFinal = cpfCnpjClean || cleanOptionalText(body.cpfCnpj, 32) || ''
     if (!body.cidade || typeof body.cidade !== 'string') errors.push('cidade é obrigatória (string)')
     if (!body.uf || typeof body.uf !== 'string' || (body.uf as string).length !== 2) errors.push('uf é obrigatória (2 caracteres)')
-    if (!body.credor || typeof body.credor !== 'string') errors.push('credor é obrigatório (string)')
-    if (body.valorTotalDivida === undefined || typeof body.valorTotalDivida !== 'number') errors.push('valorTotalDivida é obrigatório (number)')
+    const informedOffice = cleanOptionalText(body.escritorio, 120)
+    const escritorio = ['Aletis', 'Canarana'].find((office) => office.toLowerCase() === informedOffice?.toLowerCase())
+    if (!informedOffice) errors.push('escritorio é obrigatório (string)')
+    else if (!escritorio) errors.push('escritorio deve ser Aletis ou Canarana')
+    const valorTotalDivida = body.valorTotalDivida ?? body.dividaTotal ?? 0
+    const credor = typeof body.credor === 'string' && body.credor.trim() ? body.credor.trim() : 'A definir'
 
     if (errors.length > 0) {
       reply.status(400)
       return { success: false, error: 'Erro de validação', detalhes: errors }
     }
 
-    const id = `cli-${String(clientes.size + 1).padStart(3, '0')}`
+    const duplicado =
+      isValidCpfCnpj(cpfCnpjClean)
+        ? findClienteLocalByCpfCnpj(cpfCnpjClean) ?? await pgFindClienteByCpfCnpj(cpfCnpjClean)
+        : null
+
+    const id = `cli-${randomUUID()}`
     const agora = new Date().toISOString().slice(0, 10)
 
     const novo: Cliente = {
       id,
       nome: body.nome as string,
-      cpfCnpj: body.cpfCnpj as string,
+      cpfCnpj: cpfCnpjFinal,
+      tipo: body.tipo === 'pessoa_juridica' ? 'pessoa_juridica' : 'pessoa_fisica',
       cidade: body.cidade as string,
       uf: body.uf as string,
       telefone: (body.telefone as string) || '',
+      whatsapp: (body.whatsapp as string) || '',
       email: (body.email as string) || '',
       atividade: (body.atividade as string) || '',
       areaTotalHa: (body.areaTotalHa as number) || 0,
       culturas: (body.culturas as string[]) || [],
       estagio: (body.estagio as Cliente['estagio']) || 'prospeccao',
       consultor: (body.consultor as string) || 'Não atribuído',
-      credor: body.credor as string,
-      valorTotalDivida: body.valorTotalDivida as number,
+      escritorio,
+      credor,
+      modalidadeCredito: (body.modalidadeCredito as string) || undefined,
+      // O tipo legado ainda é number; preserva a string decimal já validada no transporte e no PG.
+      valorTotalDivida: valorTotalDivida as Cliente['valorTotalDivida'],
       valorTotalPago: (body.valorTotalPago as number) || 0,
       dividas: (body.dividas as Divida[]) || [],
       pagamentos: (body.pagamentos as Pagamento[]) || [],
@@ -1097,25 +2025,65 @@ export default async function (fastify: FastifyInstance) {
       observacoes: (body.observacoes as string) || '',
       carCodigoImovel: (body.carCodigoImovel as string) || (body.codImovel as string) || undefined,
       cep: typeof body.cep === 'string' ? (body.cep as string).replace(/\D/g, '') || undefined : undefined,
+      endereco: {
+        cep: typeof body.cep === 'string' ? (body.cep as string).replace(/\D/g, '') || undefined : undefined,
+        logradouro: cleanMaybeString(body.endereco, 220),
+        numero: cleanMaybeString(body.numero, 40),
+        complemento: cleanMaybeString(body.complemento, 120),
+        bairro: cleanMaybeString(body.bairro, 120),
+        cidade: body.cidade as string,
+        uf: body.uf as string,
+        formatado: [
+          cleanMaybeString(body.endereco, 220),
+          cleanMaybeString(body.numero, 40),
+          cleanMaybeString(body.bairro, 120),
+          body.cidade as string,
+          body.uf as string,
+        ].filter(Boolean).join(', '),
+        fonte: 'manual',
+        enriquecidoEm: new Date().toISOString(),
+      },
       carStatus: { status: 'pendente', tentadoEm: new Date().toISOString() },
       enrichStatus: { cnpj: 'pendente', geo: 'pendente', tentadoEm: new Date().toISOString() },
+      grupoFamiliar: normalizeGrupoFamiliar(body.grupoFamiliar, id),
+    }
+    if (duplicado) {
+      novo.timeline.push({
+        data: agora,
+        tipo: 'analise',
+        descricao: 'CPF/CNPJ já existe em outro cadastro',
+        detalhes: `Cadastro permitido por norma ALETIS. Possível vínculo com ${(duplicado as any).nome ?? (duplicado as any).id}.`,
+      })
     }
 
-    persistCliente(novo)
+    try {
+      await pgInsertClienteStrict(novo as unknown as Parameters<typeof pgInsertClienteStrict>[0])
+    } catch (err) {
+      if (isPgUniqueViolation(err)) {
+        request.log.warn({ err, clienteId: id }, 'conflito ao criar cliente; nenhum registro foi sobrescrito')
+        reply.status(409)
+        return { success: false, error: 'O cadastro conflita com um registro existente. Atualize a lista e tente novamente.', code: 'CLIENTE_CREATE_CONFLICT' }
+      }
+      request.log.error({ err, clienteId: id }, 'falha ao persistir novo cliente')
+      return reply.status(503).send({ success: false, error: 'Não foi possível salvar o cliente. Tente novamente.' })
+    }
+    publishCliente(novo)
+    void rememberClienteSnapshot(novo, 'Cliente cadastrado no CRM', 'Cadastro inicial criado e disponível para ALIX.')
 
     // Enriquecimento CAR — async, com timeout curto para offline; falha não bloqueia cadastro.
     // Se offline não achar, retorna imediatamente; live (codImovel) pode levar 15-30s.
-    const enrichPromise = enrichAndApply(novo, {
+    const enrichPromise = enrichCommittedCliente(novo, {
       codImovel: novo.carCodigoImovel,
       motivo: 'cadastro inicial',
     }).catch((err) => {
       request.log.warn({ err, clienteId: id }, 'falha no enriquecimento CAR automático')
+      return false
     })
 
     // Aguarda até 3s para incluir CAR offline na resposta — se não concluir,
     // devolve cliente e o enriquecimento continua em background.
     const waitResult = await Promise.race([
-      enrichPromise.then(() => 'done' as const),
+      enrichPromise.then(applied => applied ? 'done' as const : 'skipped' as const),
       new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 3000)),
     ])
 
@@ -1123,99 +2091,208 @@ export default async function (fastify: FastifyInstance) {
     // fire-and-forget. Se o enriquecimento ainda estiver em voo, agenda outra
     // passada quando ele terminar para re-hidratar com CAR/clima/CNPJ.
     scheduleAnalises(novo, 'cadastro inicial')
-    enrichPromise.then(() => scheduleAnalises(novo, 'pós-enriquecimento'))
+    void enrichPromise.then(applied => { if (applied) scheduleAnalises(clientes.get(id)!, 'pós-enriquecimento') })
 
     reply.status(201)
     return {
       success: true,
       data: clientes.get(id),
-      carEnrichment: waitResult === 'done' ? 'applied' : 'pending',
+      carEnrichment: waitResult === 'done' ? 'applied' : waitResult === 'skipped' ? 'skipped' : 'pending',
     }
   })
 
   /* ---- UPDATE ---- */
   fastify.patch('/api/clientes/:id', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string }
-    const cliente = clientes.get(id)
+    const parsed = clientePatchSchema.safeParse(request.body)
+    if (!parsed.success) return reply.status(400).send({ success: false, error: 'Atualização do cliente inválida', detalhes: parsed.error.flatten() })
+    return withCrmWriteLock(`cliente:${id}`, async () => {
+      const previous = clientes.get(id)
 
+      if (!previous) {
+        reply.status(404)
+        return { success: false, error: 'Cliente não encontrado' }
+      }
+
+      const cliente = structuredClone(previous)
+      const body = parsed.data as Record<string, unknown>
+      if (body.escritorio !== undefined) {
+        const informedOffice = cleanOptionalText(body.escritorio, 120)
+        const canonicalOffice = ['Aletis', 'Canarana'].find((office) => office.toLowerCase() === informedOffice?.toLowerCase())
+        if (!canonicalOffice) {
+          reply.status(400)
+          return { success: false, error: 'Escritório inválido. Use Aletis ou Canarana.' }
+        }
+        body.escritorio = canonicalOffice
+      }
+      const updatable = [
+        'nome', 'cpfCnpj', 'tipo', 'cidade', 'uf', 'telefone', 'whatsapp', 'email', 'atividade',
+        'areaTotalHa', 'culturas', 'estagio', 'consultor', 'escritorio', 'credor',
+        'modalidadeCredito', 'valorTotalDivida', 'valorTotalPago', 'dividas', 'pagamentos',
+        'observacoes', 'carCodigoImovel', 'cep', 'endereco',
+        'proximaAcao', 'tags', 'grupoFamiliar',
+      ]
+
+      const cpfAntes = cliente.cpfCnpj
+      const nomeAntes = cliente.nome
+      const codCarAntes = cliente.carCodigoImovel
+      const estagioAntes = cliente.estagio
+
+      for (const key of updatable) {
+        if (body[key] !== undefined) {
+          ;(cliente as unknown as Record<string, unknown>)[key] =
+            key === 'grupoFamiliar' ? normalizeGrupoFamiliar(body[key], id) : body[key]
+        }
+      }
+
+      cliente.ultimaAtualizacao = new Date().toISOString().slice(0, 10)
+
+      // Add timeline event for stage change + track aging
+      if (body.estagio && body.estagio !== estagioAntes) {
+        cliente.estagioDesde = new Date().toISOString()
+        cliente.timeline.push({
+          data: cliente.ultimaAtualizacao,
+          tipo: 'analise',
+          descricao: `Estágio alterado para: ${body.estagio}`,
+        })
+      }
+
+      // Timeline event for nova próxima ação
+      if (body.proximaAcao && typeof body.proximaAcao === 'object') {
+        const pa = body.proximaAcao as { data?: string; descricao?: string }
+        if (pa.data && pa.descricao) {
+          cliente.timeline.push({
+            data: cliente.ultimaAtualizacao,
+            tipo: 'acao',
+            descricao: `Próxima ação (${pa.data}): ${pa.descricao}`,
+          })
+        }
+      }
+
+      // Evento operacional explícito (contato/reunião/documento/etc.) vindo de ações rápidas.
+      if (body.timelineEvent && typeof body.timelineEvent === 'object') {
+        const ev = body.timelineEvent as Partial<TimelineEvent>
+        const tiposValidos = new Set<TimelineEvent['tipo']>(['contato', 'proposta', 'pagamento', 'reuniao', 'documento', 'analise', 'acordo', 'vencimento', 'estagio', 'acao'])
+        const tipo = tiposValidos.has(ev.tipo as TimelineEvent['tipo']) ? ev.tipo as TimelineEvent['tipo'] : 'contato'
+        const descricao = typeof ev.descricao === 'string' ? ev.descricao.trim() : ''
+        if (descricao) {
+          cliente.timeline.push({
+            data: typeof ev.data === 'string' && ev.data.trim() ? ev.data.trim() : cliente.ultimaAtualizacao,
+            tipo,
+            descricao,
+            detalhes: typeof ev.detalhes === 'string' && ev.detalhes.trim() ? ev.detalhes.trim() : undefined,
+          })
+        }
+      }
+
+      // Re-enriquece CAR se o cpfCnpj, nome, ou código CAR mudaram — ou se
+      // o cliente ainda não tem CAR carregado (tentativa oportunística).
+      const precisaReenriquecer =
+        cliente.cpfCnpj !== cpfAntes ||
+        cliente.nome !== nomeAntes ||
+        cliente.carCodigoImovel !== codCarAntes ||
+        !cliente.car
+
+      if (precisaReenriquecer) cliente.carStatus = { status: 'pendente', tentadoEm: new Date().toISOString() }
+      try {
+        await pgUpsertClienteStrict(cliente as unknown as Parameters<typeof pgUpsertClienteStrict>[0])
+      } catch (err) {
+        request.log.error({ err, clienteId: id }, 'falha ao persistir atualização do cliente')
+        return reply.status(503).send({ success: false, error: 'Não foi possível salvar o cliente. Tente novamente.' })
+      }
+      publishCliente(cliente, 'system', previous)
+      // Enriquecimento trabalha numa cópia e só publica após sua própria gravação.
+      // Não aguardamos sob o lock; uma edição posterior invalida o resultado antigo.
+      if (precisaReenriquecer) {
+        void enrichCommittedCliente(cliente, {
+          codImovel: cliente.carCodigoImovel,
+          motivo: cpfAntes !== cliente.cpfCnpj ? 'cpfCnpj atualizado' : 'reavaliação CAR',
+        }).then(applied => { if (applied) scheduleAnalises(clientes.get(id)!, 'pós-enriquecimento') })
+          .catch(err => request.log.warn({ err, clienteId: id }, 'falha no enriquecimento CAR no update'))
+      }
+      void rememberClienteSnapshot(cliente, 'Cliente atualizado no CRM', describeClientePatch(body))
+      // Qualquer PATCH pode mudar dívidas/área/cultura/estágio/exposição — o
+      // orquestrador usa hash(input) então, se nada afetar análises, é no-op.
+      scheduleAnalises(cliente, 'patch cliente')
+      return { success: true, data: cliente, carEnrichment: precisaReenriquecer ? 'pending' : 'skipped' }
+    })
+  })
+
+  /* ---- GRUPO FAMILIAR / PESSOAS VINCULADAS ---- */
+  fastify.get('/api/clientes/:id/grupo-familiar', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string }
+    const cliente = clientes.get(id)
     if (!cliente) {
       reply.status(404)
       return { success: false, error: 'Cliente não encontrado' }
     }
-
-    const body = request.body as Record<string, unknown>
-    const updatable = [
-      'nome', 'cpfCnpj', 'cidade', 'uf', 'telefone', 'email', 'atividade',
-      'areaTotalHa', 'culturas', 'estagio', 'consultor', 'credor',
-      'valorTotalDivida', 'valorTotalPago', 'dividas', 'pagamentos',
-      'observacoes', 'carCodigoImovel', 'cep',
-      'proximaAcao', 'tags',
-    ]
-
-    const cpfAntes = cliente.cpfCnpj
-    const nomeAntes = cliente.nome
-    const codCarAntes = cliente.carCodigoImovel
-    const estagioAntes = cliente.estagio
-
-    for (const key of updatable) {
-      if (body[key] !== undefined) {
-        ;(cliente as unknown as Record<string, unknown>)[key] = body[key]
-      }
+    cliente.grupoFamiliar = normalizeGrupoFamiliar(cliente.grupoFamiliar ?? [], id)
+    return {
+      success: true,
+      data: cliente.grupoFamiliar,
+      total: cliente.grupoFamiliar.length,
     }
+  })
 
-    cliente.ultimaAtualizacao = new Date().toISOString().slice(0, 10)
-
-    // Add timeline event for stage change + track aging
-    if (body.estagio && body.estagio !== estagioAntes) {
-      cliente.estagioDesde = new Date().toISOString()
-      cliente.timeline.push({
-        data: cliente.ultimaAtualizacao,
-        tipo: 'analise',
-        descricao: `Estágio alterado para: ${body.estagio}`,
-      })
+  fastify.post('/api/clientes/:id/grupo-familiar', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string }
+    const cliente = clientes.get(id)
+    if (!cliente) {
+      reply.status(404)
+      return { success: false, error: 'Cliente não encontrado' }
     }
-
-    // Timeline event for nova próxima ação
-    if (body.proximaAcao && typeof body.proximaAcao === 'object') {
-      const pa = body.proximaAcao as { data?: string; descricao?: string }
-      if (pa.data && pa.descricao) {
-        cliente.timeline.push({
-          data: cliente.ultimaAtualizacao,
-          tipo: 'analise',
-          descricao: `Próxima ação (${pa.data}): ${pa.descricao}`,
-        })
-      }
+    const [membro] = normalizeGrupoFamiliar([request.body], id)
+    if (!membro) {
+      reply.status(400)
+      return { success: false, error: 'Informe ao menos o nome da pessoa vinculada' }
     }
+    cliente.grupoFamiliar = normalizeGrupoFamiliar(cliente.grupoFamiliar ?? [], id)
+    cliente.grupoFamiliar.push(membro)
+    persistGrupoFamiliar(cliente, `Grupo familiar: ${membro.nome} vinculado ao cliente`, membro.parentesco || membro.papel)
+    return { success: true, data: membro, total: cliente.grupoFamiliar.length }
+  })
 
-    // Re-enriquece CAR se o cpfCnpj, nome, ou código CAR mudaram — ou se
-    // o cliente ainda não tem CAR carregado (tentativa oportunística).
-    const precisaReenriquecer =
-      cliente.cpfCnpj !== cpfAntes ||
-      cliente.nome !== nomeAntes ||
-      cliente.carCodigoImovel !== codCarAntes ||
-      !cliente.car
-
-    let carEnrichmentStatus: 'applied' | 'pending' | 'skipped' = 'skipped'
-    if (precisaReenriquecer) {
-      cliente.carStatus = { status: 'pendente', tentadoEm: new Date().toISOString() }
-      const enrichPromise = enrichAndApply(cliente, {
-        codImovel: cliente.carCodigoImovel,
-        motivo: cpfAntes !== cliente.cpfCnpj ? 'cpfCnpj atualizado' : 'reavaliação CAR',
-      }).catch((err) => {
-        request.log.warn({ err, clienteId: id }, 'falha no enriquecimento CAR no update')
-      })
-      const waitResult = await Promise.race([
-        enrichPromise.then(() => 'done' as const),
-        new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 3000)),
-      ])
-      carEnrichmentStatus = waitResult === 'done' ? 'applied' : 'pending'
+  fastify.patch('/api/clientes/:id/grupo-familiar/:membroId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id, membroId } = request.params as { id: string; membroId: string }
+    const cliente = clientes.get(id)
+    if (!cliente) {
+      reply.status(404)
+      return { success: false, error: 'Cliente não encontrado' }
     }
+    const atuais = normalizeGrupoFamiliar(cliente.grupoFamiliar ?? [], id)
+    const index = atuais.findIndex((m) => m.id === membroId)
+    if (index < 0) {
+      reply.status(404)
+      return { success: false, error: 'Pessoa do grupo familiar não encontrada' }
+    }
+    const merged = { ...atuais[index], ...(request.body as Record<string, unknown>), id: membroId }
+    const [membro] = normalizeGrupoFamiliar([merged], id)
+    if (!membro) {
+      reply.status(400)
+      return { success: false, error: 'Nome é obrigatório para a pessoa vinculada' }
+    }
+    atuais[index] = membro
+    cliente.grupoFamiliar = atuais
+    persistGrupoFamiliar(cliente, `Grupo familiar: ${membro.nome} atualizado`, membro.parentesco || membro.papel)
+    return { success: true, data: membro, total: cliente.grupoFamiliar.length }
+  })
 
-    persistCliente(cliente)
-    // Qualquer PATCH pode mudar dívidas/área/cultura/estágio/exposição — o
-    // orquestrador usa hash(input) então, se nada afetar análises, é no-op.
-    scheduleAnalises(cliente, 'patch cliente')
-    return { success: true, data: cliente, carEnrichment: carEnrichmentStatus }
+  fastify.delete('/api/clientes/:id/grupo-familiar/:membroId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id, membroId } = request.params as { id: string; membroId: string }
+    const cliente = clientes.get(id)
+    if (!cliente) {
+      reply.status(404)
+      return { success: false, error: 'Cliente não encontrado' }
+    }
+    const atuais = normalizeGrupoFamiliar(cliente.grupoFamiliar ?? [], id)
+    const removido = atuais.find((m) => m.id === membroId)
+    if (!removido) {
+      reply.status(404)
+      return { success: false, error: 'Pessoa do grupo familiar não encontrada' }
+    }
+    cliente.grupoFamiliar = atuais.filter((m) => m.id !== membroId)
+    persistGrupoFamiliar(cliente, `Grupo familiar: ${removido.nome} removido do cadastro`)
+    return { success: true, total: cliente.grupoFamiliar.length }
   })
 
   /* ---- MANUAL CAR ENRICH (force) ---- */
@@ -1313,120 +2390,138 @@ export default async function (fastify: FastifyInstance) {
   fastify.post('/api/clientes/iniciar-prospeccao', async (request: FastifyRequest, reply: FastifyReply) => {
     const body = (request.body as { cpfCnpj?: string; consultor?: string; observacoes?: string }) || {}
     const cpfCnpjRaw = body.cpfCnpj || ''
-    const clean = cpfCnpjRaw.replace(/\D/g, '')
-    if (!clean || (clean.length !== 11 && clean.length !== 14)) {
+    const clean = normalizeCpfCnpj(cpfCnpjRaw)
+    if (!isValidCpfCnpj(clean)) {
       reply.status(400)
       return { success: false, error: 'cpfCnpj inválido' }
     }
 
-    // Idempotência: se já existe cliente com esse CPF/CNPJ, retorna
-    const existente = Array.from(clientes.values()).find(
-      (c) => c.cpfCnpj.replace(/\D/g, '') === clean,
-    )
-    if (existente) {
+    return withCrmWriteLock(`cliente-import:${clean}`, async () => {
+      // Idempotência: se já existe cliente com esse CPF/CNPJ, retorna.
+      // Quando PG está ativo, o banco também é consultado para evitar
+      // divergência entre processos.
+      const existente = findClienteLocalByCpfCnpj(clean) ?? await pgFindClienteByCpfCnpj(clean)
+      if (existente) {
+        return {
+          success: true,
+          data: existente,
+          jaExistia: true,
+          message: 'Cliente já havia sido importado anteriormente',
+        }
+      }
+
+      const service = getProspeccaoService()
+      const lead: LeadFull | null = service.getLead(cpfCnpjRaw)
+      if (!lead) {
+        reply.status(404)
+        return { success: false, error: 'Lead não encontrado na base PGFN' }
+      }
+
+      const id = `cli-${randomUUID()}`
+      const agora = new Date().toISOString().slice(0, 10)
+      const agoraIso = new Date().toISOString()
+
+      // Mapeia dívidas PGFN para o formato interno
+      const dividas: Divida[] = lead.debts.map((d) => ({
+        contrato: d.inscricao,
+        valorOriginal: d.valor,
+        valorAtualizado: d.valor,
+        vencimento: d.dataInscricao || agora,
+        status: d.ajuizado ? 'ativa' : 'ativa',
+        credor: d.fonte === 'PREV' ? 'RFB/Previdência' : d.fonte === 'FGTS' ? 'FGTS' : 'RFB/Dívida Ativa',
+      }))
+
+      const novo: Cliente = {
+        id,
+        nome: lead.cnpj?.razaoSocial || lead.nome,
+        cpfCnpj: lead.cpfCnpj,
+        cidade: lead.cnpj?.endereco?.municipio || '',
+        uf: lead.cnpj?.endereco?.uf || lead.uf || '',
+        telefone: lead.cnpj?.telefone1 || '',
+        email: lead.cnpj?.email || '',
+        atividade: lead.cnpj?.cnaeFiscalDescricao || lead.agroSignals.join(', ') || 'Produtor rural',
+        areaTotalHa: Math.round(lead.area?.hectaresEstimados || 0),
+        culturas: [],
+        estagio: 'prospeccao',
+        consultor: body.consultor || 'Não atribuído',
+        credor: 'PGFN',
+        valorTotalDivida: lead.totalDivida,
+        valorTotalPago: 0,
+        dividas,
+        pagamentos: [],
+        timeline: [
+          {
+            data: agora,
+            tipo: 'contato',
+            descricao: 'Lead importado da base PGFN via Prospecção OODA',
+            detalhes: `Score ${lead.score.total} (${lead.score.classificacao}) · ${lead.qtdInscricoes} inscrições · ${lead.temAjuizada ? 'com ajuizamento' : 'sem ajuizamento'}`,
+          },
+        ],
+        dataCadastro: agora,
+        ultimaAtualizacao: agora,
+        observacoes: body.observacoes || `Honorários estimados: R$ ${lead.score.honorariosEstimados.toLocaleString('pt-BR')}. Sinais agro: ${lead.agroSignals.join(', ') || '—'}.`,
+        carCodigoImovel: lead.car?.codImovel,
+        cep: lead.cnpj?.endereco?.cep?.replace(/\D/g, ''),
+        cnpjInfo: lead.cnpj ? mapCnpjInfo(lead.cnpj) : undefined,
+        carStatus: lead.car ? { status: 'ok', tentadoEm: agoraIso } : { status: 'pendente', tentadoEm: agoraIso },
+        enrichStatus: { cnpj: lead.cnpj ? 'ok' : 'pendente', geo: 'pendente', clima: 'pendente', producao: 'pendente', tentadoEm: agoraIso },
+        leadOrigem: {
+          cpfCnpjClean: lead.cpfCnpjClean,
+          scoreTotal: lead.score.total,
+          classificacao: lead.score.classificacao,
+          honorariosEstimados: lead.score.honorariosEstimados,
+          temAjuizada: lead.temAjuizada,
+          totalDividaPgfn: lead.totalDivida,
+          importadoEm: agoraIso,
+        },
+      }
+
+      // Aplica CAR já vindo do lead (se houver)
+      if (lead.car && lead.carSource) {
+        novo.car = mapCarInfo(lead.car, lead.carSource, lead.carOutrosImoveis?.length, lead.car.areaImovel)
+        if ((!novo.areaTotalHa || novo.areaTotalHa <= 0) && lead.car.areaImovel > 0) {
+          novo.areaTotalHa = Math.round(lead.car.areaImovel)
+        }
+      }
+
+      try {
+        await pgInsertClienteStrict(novo as unknown as Parameters<typeof pgInsertClienteStrict>[0])
+      } catch (err) {
+        if (isPgUniqueViolation(err)) {
+          const existentePg = await pgFindClienteByCpfCnpj(clean)
+          if (existentePg) return {
+            success: true,
+            data: existentePg,
+            jaExistia: true,
+            message: 'Cliente já havia sido importado anteriormente',
+          }
+          return reply.status(409).send({ success: false, error: 'O cadastro conflita com um registro existente. Atualize a lista e tente novamente.', code: 'CLIENTE_CREATE_CONFLICT' })
+        }
+        request.log.error({ err, clienteId: id }, 'falha ao persistir cliente importado')
+        return reply.status(503).send({ success: false, error: 'Não foi possível importar o cliente. Tente novamente.' })
+      }
+      publishCliente(novo)
+
+      // Enriquecimento em background (geo + clima + produção). Fire-and-forget.
+      // Após o enrichment concluir, roda o orquestrador com o estado já completo.
+      setImmediate(() => {
+        enrichCommittedCliente(novo, { motivo: 'import prospecção PGFN' })
+          .then(applied => { if (applied) scheduleAnalises(clientes.get(id)!, 'pós-import prospecção') })
+          .catch((err) => {
+            request.log.warn({ err, clienteId: id }, 'falha no enriquecimento pós-import prospecção')
+          })
+      })
+      // Já dispara uma primeira passada com o que temos (dívidas PGFN + CAR se veio).
+      scheduleAnalises(novo, 'import prospecção PGFN')
+
+      reply.status(201)
       return {
         success: true,
-        data: existente,
-        jaExistia: true,
-        message: 'Cliente já havia sido importado anteriormente',
+        data: novo,
+        jaExistia: false,
+        message: 'Lead importado com sucesso para o funil CRM',
       }
-    }
-
-    const service = getProspeccaoService()
-    const lead: LeadFull | null = service.getLead(cpfCnpjRaw)
-    if (!lead) {
-      reply.status(404)
-      return { success: false, error: 'Lead não encontrado na base PGFN' }
-    }
-
-    const id = `cli-${String(clientes.size + 1).padStart(3, '0')}`
-    const agora = new Date().toISOString().slice(0, 10)
-    const agoraIso = new Date().toISOString()
-
-    // Mapeia dívidas PGFN para o formato interno
-    const dividas: Divida[] = lead.debts.map((d) => ({
-      contrato: d.inscricao,
-      valorOriginal: d.valor,
-      valorAtualizado: d.valor,
-      vencimento: d.dataInscricao || agora,
-      status: d.ajuizado ? 'ativa' : 'ativa',
-      credor: d.fonte === 'PREV' ? 'RFB/Previdência' : d.fonte === 'FGTS' ? 'FGTS' : 'RFB/Dívida Ativa',
-    }))
-
-    const novo: Cliente = {
-      id,
-      nome: lead.cnpj?.razaoSocial || lead.nome,
-      cpfCnpj: lead.cpfCnpj,
-      cidade: lead.cnpj?.endereco?.municipio || '',
-      uf: lead.cnpj?.endereco?.uf || lead.uf || '',
-      telefone: lead.cnpj?.telefone1 || '',
-      email: lead.cnpj?.email || '',
-      atividade: lead.cnpj?.cnaeFiscalDescricao || lead.agroSignals.join(', ') || 'Produtor rural',
-      areaTotalHa: Math.round(lead.area?.hectaresEstimados || 0),
-      culturas: [],
-      estagio: 'prospeccao',
-      consultor: body.consultor || 'Não atribuído',
-      credor: 'PGFN',
-      valorTotalDivida: lead.totalDivida,
-      valorTotalPago: 0,
-      dividas,
-      pagamentos: [],
-      timeline: [
-        {
-          data: agora,
-          tipo: 'contato',
-          descricao: 'Lead importado da base PGFN via Prospecção OODA',
-          detalhes: `Score ${lead.score.total} (${lead.score.classificacao}) · ${lead.qtdInscricoes} inscrições · ${lead.temAjuizada ? 'com ajuizamento' : 'sem ajuizamento'}`,
-        },
-      ],
-      dataCadastro: agora,
-      ultimaAtualizacao: agora,
-      observacoes: body.observacoes || `Honorários estimados: R$ ${lead.score.honorariosEstimados.toLocaleString('pt-BR')}. Sinais agro: ${lead.agroSignals.join(', ') || '—'}.`,
-      carCodigoImovel: lead.car?.codImovel,
-      cep: lead.cnpj?.endereco?.cep?.replace(/\D/g, ''),
-      cnpjInfo: lead.cnpj ? mapCnpjInfo(lead.cnpj) : undefined,
-      carStatus: lead.car ? { status: 'ok', tentadoEm: agoraIso } : { status: 'pendente', tentadoEm: agoraIso },
-      enrichStatus: { cnpj: lead.cnpj ? 'ok' : 'pendente', geo: 'pendente', clima: 'pendente', producao: 'pendente', tentadoEm: agoraIso },
-      leadOrigem: {
-        cpfCnpjClean: lead.cpfCnpjClean,
-        scoreTotal: lead.score.total,
-        classificacao: lead.score.classificacao,
-        honorariosEstimados: lead.score.honorariosEstimados,
-        temAjuizada: lead.temAjuizada,
-        totalDividaPgfn: lead.totalDivida,
-        importadoEm: agoraIso,
-      },
-    }
-
-    // Aplica CAR já vindo do lead (se houver)
-    if (lead.car && lead.carSource) {
-      novo.car = mapCarInfo(lead.car, lead.carSource, lead.carOutrosImoveis?.length, lead.car.areaImovel)
-      if ((!novo.areaTotalHa || novo.areaTotalHa <= 0) && lead.car.areaImovel > 0) {
-        novo.areaTotalHa = Math.round(lead.car.areaImovel)
-      }
-    }
-
-    persistCliente(novo)
-
-    // Enriquecimento em background (geo + clima + produção). Fire-and-forget.
-    // Após o enrichment concluir, roda o orquestrador com o estado já completo.
-    setImmediate(() => {
-      enrichAndApply(novo, { motivo: 'import prospecção PGFN' })
-        .then(() => scheduleAnalises(novo, 'pós-import prospecção'))
-        .catch((err) => {
-          request.log.warn({ err, clienteId: id }, 'falha no enriquecimento pós-import prospecção')
-        })
     })
-    // Já dispara uma primeira passada com o que temos (dívidas PGFN + CAR se veio).
-    scheduleAnalises(novo, 'import prospecção PGFN')
-
-    reply.status(201)
-    return {
-      success: true,
-      data: novo,
-      jaExistia: false,
-      message: 'Lead importado com sucesso para o funil CRM',
-    }
   })
 
   /* ---- SCORE SRAI (Risco Agrícola Integrado) ---- */
@@ -1566,6 +2661,7 @@ export default async function (fastify: FastifyInstance) {
         .map((e) => `${e.commodity}: ${e.areaHa} ha × ${e.produtividade} ${e.unidadeProdutividade}`)
         .join(' · '),
     })
+    persistCliente(cliente)
     return { success: true, data: cliente.exposicaoCommodity }
   })
 
@@ -1606,6 +2702,7 @@ export default async function (fastify: FastifyInstance) {
       descricao: `Visita técnica realizada por ${visita.consultor}`,
       detalhes: `Checklist: ${itensOk}/${totalChecklist} itens OK${visita.observacoesGerais ? ' · ' + visita.observacoesGerais.slice(0, 100) : ''}`,
     })
+    persistCliente(cliente)
 
     reply.status(201)
     return { success: true, data: visita, total: cliente.visitasTecnicas.length }
@@ -1624,6 +2721,8 @@ export default async function (fastify: FastifyInstance) {
       reply.status(404)
       return { success: false, error: 'Visita não encontrada' }
     }
+    cliente.ultimaAtualizacao = new Date().toISOString().slice(0, 10)
+    persistCliente(cliente)
     return { success: true }
   })
 
@@ -1648,6 +2747,7 @@ export default async function (fastify: FastifyInstance) {
     }
     cliente.notas = [...(cliente.notas || []), nota]
     cliente.ultimaAtualizacao = new Date().toISOString().slice(0, 10)
+    persistCliente(cliente)
     return { success: true, data: nota, total: cliente.notas.length }
   })
 
@@ -1664,6 +2764,8 @@ export default async function (fastify: FastifyInstance) {
       reply.status(404)
       return { success: false, error: 'Nota não encontrada' }
     }
+    cliente.ultimaAtualizacao = new Date().toISOString().slice(0, 10)
+    persistCliente(cliente)
     return { success: true }
   })
 
@@ -1698,6 +2800,7 @@ export default async function (fastify: FastifyInstance) {
 
   /** Listagem resumida de todos os clientes + status do portalAcesso. */
   fastify.get('/api/portal-admin/clientes', async () => {
+    await refreshPortalAccesses()
     const lista = Array.from(clientes.values()).map((c) => ({
       id: c.id,
       nome: c.nome,
@@ -1728,12 +2831,15 @@ export default async function (fastify: FastifyInstance) {
     '/api/clientes/:id/portal-access',
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string }
+      await assertPortalStaff(fastify, request, id, request.method !== 'GET')
+      await loadPortalAccess(id)
       const cliente = clientes.get(id)
       if (!cliente) {
         reply.status(404)
         return { success: false, error: 'Cliente não encontrado' }
       }
       const body = request.body as { usuario?: string; senhaInicial?: string } | undefined
+      if (body?.senhaInicial !== undefined && (typeof body.senhaInicial !== 'string' || body.senhaInicial.length < 8 || body.senhaInicial.length > 200)) return reply.code(400).send({success:false,error:'A senha precisa ter entre 8 e 200 caracteres.'})
       const usuarioInput =
         body?.usuario?.trim() ||
         cliente.email?.trim() ||
@@ -1755,7 +2861,7 @@ export default async function (fastify: FastifyInstance) {
         usuario: usuarioNorm,
         senhaInicial: body?.senhaInicial,
       })
-      cliente.portalAcesso = acesso
+      await savePortalAccess(cliente.id, acesso)
       cliente.ultimaAtualizacao = new Date().toISOString()
       return {
         success: true,
@@ -1775,6 +2881,8 @@ export default async function (fastify: FastifyInstance) {
     '/api/clientes/:id/portal-access',
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string }
+      await assertPortalStaff(fastify, request, id, request.method !== 'GET')
+      await loadPortalAccess(id)
       const cliente = clientes.get(id)
       if (!cliente || !cliente.portalAcesso) {
         reply.status(404)
@@ -1785,8 +2893,7 @@ export default async function (fastify: FastifyInstance) {
         reply.status(400)
         return { success: false, error: 'Campo "ativo" (boolean) obrigatório' }
       }
-      cliente.portalAcesso.ativo = body.ativo
-      cliente.portalAcesso.atualizadoEm = new Date().toISOString()
+      await savePortalAccess(cliente.id, {...cliente.portalAcesso,ativo:body.ativo,atualizadoEm:new Date().toISOString()})
       return { success: true, data: { ativo: cliente.portalAcesso.ativo } }
     }
   )
@@ -1796,98 +2903,16 @@ export default async function (fastify: FastifyInstance) {
     '/api/clientes/:id/portal-access',
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string }
+      await assertPortalStaff(fastify, request, id, request.method !== 'GET')
+      await loadPortalAccess(id)
       const cliente = clientes.get(id)
       if (!cliente || !cliente.portalAcesso) {
         reply.status(404)
         return { success: false, error: 'Acesso portal não configurado' }
       }
-      cliente.portalAcesso = undefined
+      await deletePortalAccess(cliente.id)
       cliente.ultimaAtualizacao = new Date().toISOString()
       return { success: true, data: { revogado: true } }
-    }
-  )
-
-  /** Lista mensagens portal (consultor vê todas). */
-  fastify.get(
-    '/api/clientes/:id/portal-mensagens',
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const { id } = request.params as { id: string }
-      const cliente = clientes.get(id)
-      if (!cliente) {
-        reply.status(404)
-        return { success: false, error: 'Cliente não encontrado' }
-      }
-      return { success: true, data: cliente.portalMensagens ?? [] }
-    }
-  )
-
-  /** Consultor responde ao cliente pelo sistema. */
-  fastify.post(
-    '/api/clientes/:id/portal-mensagens',
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const { id } = request.params as { id: string }
-      const cliente = clientes.get(id)
-      if (!cliente) {
-        reply.status(404)
-        return { success: false, error: 'Cliente não encontrado' }
-      }
-      const body = request.body as { texto?: string; autorNome?: string } | undefined
-      const texto = body?.texto?.trim()
-      if (!texto) {
-        reply.status(400)
-        return { success: false, error: 'Texto obrigatório' }
-      }
-      const msg: PortalMensagem = {
-        id: `pm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        de: 'consultor',
-        autorNome: body?.autorNome?.trim() || cliente.consultor || 'Consultor ALETIS',
-        texto,
-        criadoEm: new Date().toISOString(),
-      }
-      cliente.portalMensagens = [...(cliente.portalMensagens ?? []), msg]
-
-      // Push notification — best-effort, não bloqueia a resposta. Subs
-      // expiradas (410) são removidas automaticamente.
-      const subs = cliente.portalAcesso?.pushSubscriptions ?? []
-      if (subs.length > 0) {
-        const { enviarPush } = await import('../services/PushService.js')
-        enviarPush(subs, {
-          title: `Mensagem de ${msg.autorNome}`,
-          body: texto.length > 120 ? `${texto.slice(0, 117)}…` : texto,
-          url: '/portal-cliente?tab=chat',
-          tag: `chat-${cliente.id}`,
-        }).then(({ expiradas }) => {
-          if (expiradas.length > 0 && cliente.portalAcesso) {
-            cliente.portalAcesso.pushSubscriptions = (
-              cliente.portalAcesso.pushSubscriptions ?? []
-            ).filter((s) => !expiradas.includes(s.endpoint))
-          }
-        }).catch(() => { /* swallow — log já feito no service */ })
-      }
-
-      return reply.status(201).send({ success: true, data: msg })
-    }
-  )
-
-  /** Marca mensagens do cliente como lidas (pelo consultor). */
-  fastify.patch(
-    '/api/clientes/:id/portal-mensagens/marcar-lidas',
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const { id } = request.params as { id: string }
-      const cliente = clientes.get(id)
-      if (!cliente) {
-        reply.status(404)
-        return { success: false, error: 'Cliente não encontrado' }
-      }
-      const agora = new Date().toISOString()
-      let marcadas = 0
-      for (const m of cliente.portalMensagens ?? []) {
-        if (m.de === 'cliente' && !m.lidaEm) {
-          m.lidaEm = agora
-          marcadas++
-        }
-      }
-      return { success: true, data: { marcadas } }
     }
   )
 

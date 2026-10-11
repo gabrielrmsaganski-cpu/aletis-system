@@ -1,7 +1,7 @@
-import type { ClaudeTool, ClaudeToolRegistry } from '../../../../llm/ClaudeFoundryClient.js';
+import type { LLMTool, LLMToolRegistry } from '../../../../llm/OpenAIClient.js';
 
-export function buildJusbrasilTool(): { tools: ClaudeTool[]; registry: ClaudeToolRegistry } {
-  const tool: ClaudeTool = {
+export function buildJusbrasilTool(): { tools: LLMTool[]; registry: LLMToolRegistry } {
+  const tool: LLMTool = {
     name: 'consultar_jusbrasil',
     description: 'Busca processos públicos no Jusbrasil. Implementação F2 retorna query otimizada para web_search (site:jusbrasil.com.br). Use para descobrir ações judiciais envolvendo CPF/CNPJ/nome.',
     input_schema: {

@@ -1,20 +1,6 @@
-// ============================================================
-// AuthContext — usuário corrente do sistema.
-//
-// Fonte única de verdade para Header, Sidebar e qualquer componente
-// que precise saber quem é o consultor logado. Substitui hardcodes
-// "Christian Kohler" / "CK" espalhados pela UI.
-//
-// Boot strategy:
-//   1. Cache local (localStorage 'aletis:user') para evitar flash
-//   2. Fetch /api/auth/me em paralelo — quando responder, atualiza
-//   3. Fallback para FALLBACK_USER se ambos falharem
-//
-// O backend retorna do JWT (quando login real estiver implementado)
-// ou de env vars CONSULTOR_*.
-// ============================================================
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -22,127 +8,107 @@ import {
   type ReactNode,
 } from 'react'
 import { apiFetch } from '../hooks/useApi'
+import { queryClient } from '../lib/query-client'
 
 export interface AuthUser {
-  /** ID estável (usado em comentários, changelog, audit). */
   id: string
-  /** Nome completo. */
+  username: string
   nome: string
-  /** Primeiro nome — exibido em headers compactos. */
   primeiroNome: string
-  /** Iniciais (2 letras) para avatar fallback. */
   iniciais: string
-  /** Cargo/role. */
   cargo: string
-  /** E-mail. */
   email: string
-  /** URL do avatar (opcional). */
+  consultorId?: string
   avatarUrl?: string
 }
 
+export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
+
 interface AuthContextValue {
   user: AuthUser
-  /** Atualiza o usuário (após login bem-sucedido ou edição de perfil). */
-  setUser: (user: AuthUser) => void
-  /** Faz logout — limpa storage e volta para fallback. */
-  logout: () => void
+  status: AuthStatus
+  login: (username: string, password: string) => Promise<AuthUser>
+  logout: () => Promise<void>
+  refreshSession: () => Promise<void>
 }
 
-const FALLBACK_USER: AuthUser = {
-  id: 'consultor-001',
-  nome: 'Christian Kohler',
-  primeiroNome: 'Christian',
-  iniciais: 'CK',
-  cargo: 'Consultor sênior',
-  email: 'christian@aletis.com.br',
-}
-
-const STORAGE_KEY = 'aletis:user'
-
-function loadUserFromStorage(): AuthUser {
-  if (typeof window === 'undefined') return FALLBACK_USER
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return FALLBACK_USER
-    const parsed = JSON.parse(raw) as Partial<AuthUser>
-    if (!parsed?.nome) return FALLBACK_USER
-    return {
-      ...FALLBACK_USER,
-      ...parsed,
-      iniciais: parsed.iniciais ?? deriveIniciais(parsed.nome ?? FALLBACK_USER.nome),
-      primeiroNome: parsed.primeiroNome ?? (parsed.nome ?? FALLBACK_USER.nome).split(' ')[0],
-    }
-  } catch {
-    return FALLBACK_USER
-  }
-}
-
-export function deriveIniciais(nome: string): string {
-  return nome
-    .split(' ')
-    .filter(Boolean)
-    .map((w) => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
+const ANONYMOUS_USER: AuthUser = {
+  id: '',
+  username: '',
+  nome: '',
+  primeiroNome: '',
+  iniciais: '',
+  cargo: '',
+  email: '',
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUserState] = useState<AuthUser>(() => loadUserFromStorage())
+  const [user, setUser] = useState<AuthUser>(ANONYMOUS_USER)
+  const [status, setStatus] = useState<AuthStatus>('loading')
 
-  // Sync entre abas (storage event)
-  useEffect(() => {
-    const handler = (e: StorageEvent) => {
-      if (e.key !== STORAGE_KEY) return
-      setUserState(loadUserFromStorage())
+  const clearLocalSession = useCallback(() => {
+    queryClient.clear()
+    try {
+      window.localStorage.removeItem('aletis:user')
+      window.localStorage.removeItem('aletis:session')
+      window.sessionStorage.clear()
+    } catch {
+      // Storage pode estar indisponível em navegação privada.
     }
-    window.addEventListener('storage', handler)
-    return () => window.removeEventListener('storage', handler)
+    setUser(ANONYMOUS_USER)
+    setStatus('unauthenticated')
   }, [])
 
-  // Boot: tenta /api/auth/me (backend é a fonte de verdade)
+  const refreshSession = useCallback(async () => {
+    try {
+      const authenticatedUser = await apiFetch<AuthUser>('/auth/me')
+      setUser(authenticatedUser)
+      setStatus('authenticated')
+    } catch {
+      clearLocalSession()
+    }
+  }, [clearLocalSession])
+
   useEffect(() => {
-    let cancelled = false
-    apiFetch<Partial<AuthUser>>('/auth/me')
-      .then((data) => {
-        if (cancelled || !data?.nome) return
-        const next: AuthUser = {
-          ...FALLBACK_USER,
-          ...data,
-          iniciais: data.iniciais ?? deriveIniciais(data.nome),
-          primeiroNome: data.primeiroNome ?? data.nome.split(' ')[0],
-        }
-        setUserState(next)
-        try {
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-        } catch {}
-      })
-      .catch(() => {
-        // backend offline / sem auth — segue com cache local
-      })
-    return () => { cancelled = true }
+    void refreshSession()
+  }, [refreshSession])
+
+  useEffect(() => {
+    const handleExpiredSession = () => clearLocalSession()
+    window.addEventListener('aletis:auth-expired', handleExpiredSession)
+    return () => window.removeEventListener('aletis:auth-expired', handleExpiredSession)
+  }, [clearLocalSession])
+
+  const login = useCallback(async (username: string, password: string) => {
+    const authenticatedUser = await apiFetch<AuthUser>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    })
+    queryClient.clear()
+    setUser(authenticatedUser)
+    setStatus('authenticated')
+    return authenticatedUser
   }, [])
 
-  const value = useMemo<AuthContextValue>(
-    () => ({
-      user,
-      setUser: (next) => {
-        setUserState(next)
-        try {
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-        } catch {}
-      },
-      logout: () => {
-        try {
-          window.localStorage.removeItem(STORAGE_KEY)
-        } catch {}
-        setUserState(FALLBACK_USER)
-      },
-    }),
-    [user],
-  )
+  const logout = useCallback(async () => {
+    try {
+      await apiFetch('/auth/logout', { method: 'POST' })
+    } catch {
+      // Mesmo sem rede, a interface deve encerrar a sessão local.
+    } finally {
+      clearLocalSession()
+    }
+  }, [clearLocalSession])
+
+  const value = useMemo<AuthContextValue>(() => ({
+    user,
+    status,
+    login,
+    logout,
+    refreshSession,
+  }), [login, logout, refreshSession, status, user])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

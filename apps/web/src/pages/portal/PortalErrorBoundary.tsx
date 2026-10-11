@@ -46,19 +46,19 @@ export class PortalErrorBoundary extends React.Component<
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-aletis-cream flex items-center justify-center p-6">
-          <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl border border-aletis-borda p-8 text-center">
+          <div className="max-w-md w-full bg-card rounded-2xl shadow-2xl border border-aletis-borda p-8 text-center">
             <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-7 h-7 text-red-600" />
             </div>
-            <h2 className="text-lg font-display font-bold text-aletis-grafite-escuro">
+            <h2 className="text-lg font-display font-bold text-foreground">
               Algo travou no portal
             </h2>
-            <p className="mt-2 text-sm font-body text-aletis-grafite-claro leading-relaxed">
+            <p className="mt-2 text-sm font-body text-muted-foreground leading-relaxed">
               Não conseguimos renderizar esta área agora. Sua sessão e seus dados estão intactos —
               só esta tela travou. Tente recarregar.
             </p>
             {this.state.error?.message && (
-              <pre className="mt-3 text-[10px] font-mono text-aletis-grafite-medio bg-aletis-bege/40 rounded p-2 overflow-auto max-h-24">
+              <pre className="mt-3 text-[10px] font-mono text-[var(--text-soft)] bg-aletis-bege/40 rounded p-2 overflow-auto max-h-24">
                 {this.state.error.message}
               </pre>
             )}
@@ -71,7 +71,7 @@ export class PortalErrorBoundary extends React.Component<
               </button>
               <a
                 href="mailto:contato@aletis.com.br?subject=Erro no portal"
-                className="w-full inline-flex items-center justify-center gap-2 border border-aletis-borda text-aletis-grafite-escuro px-4 py-2.5 rounded-lg font-body font-semibold text-sm hover:bg-aletis-bege transition-colors"
+                className="w-full inline-flex items-center justify-center gap-2 border border-aletis-borda text-foreground px-4 py-2.5 rounded-lg font-body font-semibold text-sm hover:bg-aletis-bege transition-colors"
               >
                 <MessageCircle className="w-4 h-4" /> Avisar o consultor
               </a>

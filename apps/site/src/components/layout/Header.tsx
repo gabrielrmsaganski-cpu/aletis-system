@@ -55,7 +55,7 @@ export function Header() {
         </Link>
 
         {/* Desktop nav */}
-        <nav aria-label="Navegação principal" className="hidden items-center gap-9 lg:flex">
+        <nav aria-label="Navegação principal" className="hidden items-center gap-7 xl:flex">
           {nav.primary.map((item) => {
             const active = pathname.startsWith(item.href)
             return (
@@ -70,7 +70,7 @@ export function Header() {
           })}
         </nav>
 
-        <div className="hidden lg:flex">
+        <div className="hidden xl:flex">
           <Link
             href="/contato"
             className="group inline-flex items-center gap-2 rounded-full bg-aletis-gold px-5 py-2.5 font-display text-[11.5px] font-semibold uppercase tracking-wider2 text-aletis-verde shadow-gold transition-all duration-300 hover:bg-aletis-gold-claro hover:-translate-y-0.5"
@@ -85,7 +85,7 @@ export function Header() {
           aria-label={open ? 'Fechar menu' : 'Abrir menu'}
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-aletis-sage/20 text-aletis-cream transition hover:border-aletis-gold/50 hover:text-aletis-gold lg:hidden"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-aletis-sage/20 text-aletis-cream transition hover:border-aletis-gold/50 hover:text-aletis-gold xl:hidden"
         >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
@@ -94,8 +94,8 @@ export function Header() {
       {/* Mobile drawer */}
       <div
         className={cn(
-          'fixed inset-x-0 top-[80px] bottom-0 z-40 overflow-y-auto bg-aletis-verde/98 backdrop-blur-xl transition-all duration-500 lg:hidden',
-          open ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none',
+          'fixed inset-x-0 top-[80px] bottom-0 z-40 overflow-y-auto bg-aletis-verde/98 backdrop-blur-xl transition-all duration-500 xl:hidden',
+          open ? 'translate-x-0 opacity-100 visible' : 'translate-x-0 opacity-0 pointer-events-none invisible',
         )}
         style={{
           backgroundImage:

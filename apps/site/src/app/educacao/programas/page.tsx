@@ -72,7 +72,7 @@ export default function Programas() {
         <LI><Strong>Equalização</Strong> — quanto o Tesouro paga ao banco. Programas com mais equalização têm fila maior e exigem mais documentação.</LI>
       </UL>
 
-      <Callout tone="info" title="Mesa ALETIS">
+      <Callout tone="info" title="ALETIS">
         Antes de qualquer captação, a equipe ALETIS faz a <Strong>análise de enquadramento múltiplo</Strong> — em qual cesto de programas seu perfil cabe e como combinar para extrair o máximo de subsídio. É a diferença entre tomar Moderfrota a 13,5% ou ficar fora dele e pagar BNDES Rural a 14% — pode parecer pouco, mas em R$ 4 mi por 7 anos são quase R$ 280 mil em juros a mais.
       </Callout>
     </EduLayout>

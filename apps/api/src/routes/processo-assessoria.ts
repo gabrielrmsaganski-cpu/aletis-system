@@ -1,5 +1,5 @@
 // ============================================================
-// /api/processo-assessoria — REST do Processo de Assessoria TEX
+// /api/processo-assessoria — REST do Processo de Assessoria ALETIS
 // ============================================================
 //
 // Endpoints:
@@ -34,12 +34,28 @@ import { getDb, isPgEnabled } from '../db/client.js'
 import { processoRender } from '../db/schema.js'
 import { alixGetClientes } from '../services/AlixService.js'
 import type { ProcessoClienteData } from '../services/processo-assessoria/ProcessoAssessoriaService.js'
+import { getSpreadsheetMigrationSummary } from '../services/processo-assessoria/SpreadsheetIntelligenceService.js'
 
 function envelope<T>(data: T) {
   return { success: true, data }
 }
 function err(message: string, code = 'ERR') {
   return { success: false, error: message, code }
+}
+
+function formatEndereco(endereco: any): string {
+  if (!endereco) return ''
+  if (typeof endereco === 'string') return endereco.trim()
+  const parts: string[] = []
+  if (endereco.logradouro) parts.push(String(endereco.logradouro).trim())
+  if (endereco.numero) parts.push('Nº ' + String(endereco.numero).trim())
+  if (endereco.complemento) parts.push(String(endereco.complemento).trim())
+  if (endereco.bairro) parts.push(String(endereco.bairro).trim())
+  const cidadeUf = [endereco.cidade, endereco.uf].filter(Boolean).join('/')
+  if (cidadeUf) parts.push(cidadeUf)
+  if (endereco.cep) parts.push('CEP ' + String(endereco.cep).trim())
+  if (endereco.formatado && parts.length === 0) return String(endereco.formatado).trim()
+  return parts.join(', ')
 }
 
 async function resolveCliente(clienteId: string): Promise<ProcessoClienteData | null> {
@@ -52,7 +68,7 @@ async function resolveCliente(clienteId: string): Promise<ProcessoClienteData | 
     cpfCnpj: (c as any).cpfCnpj ?? null,
     cidade: (c as any).cidade ?? null,
     uf: (c as any).uf ?? null,
-    endereco: (c as any).endereco ?? null,
+    endereco: formatEndereco((c as any).endereco),
     email: (c as any).email ?? null,
     telefone: (c as any).telefone ?? null,
     estagio: (c as any).estagio ?? null,
@@ -95,6 +111,17 @@ export default async function processoAssessoriaRoutes(fastify: FastifyInstance)
     return envelope({ categorias: CATEGORIA_META, tabs: UI_TABS })
   })
 
+  // ── Inteligência de substituição das planilhas ───────────────
+  // Consolida os XLSX/XLSM enviados em /documentos e informa qual
+  // módulo nativo substitui cada arquivo. Esta rota é deliberadamente
+  // separada do catálogo de templates: templates preservam o legado;
+  // este endpoint guia a migração para operação 100% no sistema.
+  fastify.get('/api/processo-assessoria/planilhas/sistema', async (req) => {
+    const refresh = (req.query as any)?.refresh === '1'
+    const summary = await getSpreadsheetMigrationSummary(refresh)
+    return envelope(summary)
+  })
+
   fastify.get('/api/processo-assessoria/templates/:slug', async (req, reply) => {
     const { slug } = req.params as { slug: string }
     const tpl = getProcessoTemplateBySlug(slug)
@@ -103,6 +130,21 @@ export default async function processoAssessoriaRoutes(fastify: FastifyInstance)
       return err(`Template "${slug}" não existe`, 'NOT_FOUND')
     }
     return envelope({ template: tpl })
+  })
+
+  fastify.get('/api/processo-assessoria/templates/:slug/structure', async (req, reply) => {
+    const { slug } = req.params as { slug: string }
+    try {
+      const structure = await service.getStructure(slug)
+      if (!structure) {
+        reply.code(404)
+        return err(`Template "${slug}" não existe`, 'NOT_FOUND')
+      }
+      return envelope(structure)
+    } catch (e: any) {
+      reply.code(400)
+      return err(e?.message ?? 'erro ao ler estrutura', 'STRUCTURE_ERROR')
+    }
   })
 
   // ── Preview / Render ──────────────────────────────────────

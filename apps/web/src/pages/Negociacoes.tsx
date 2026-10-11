@@ -1,3 +1,6 @@
+import SearchField from '../components/ui/SearchField'
+import FilterBar from '../components/ui/FilterBar'
+import PageHeader from '../components/ui/PageHeader'
 // ============================================================
 // Negociacoes — visão global do Deal Room (todos os clientes).
 // Útil pro Christian ver todas as negociações ativas em um só
@@ -34,7 +37,8 @@ interface Negociacao {
 }
 
 const STATUSES = ['todos', 'negociando', 'contraproposta', 'aguardando_doc', 'aprovado', 'recusado', 'encerrado', 'suspenso']
-const STATUS_TONE: Record<string, any> = {
+const STATUS_LABEL: Record<string, string> = { ativas: 'Ativas', todos: 'Todas', negociando: 'Negociando', contraproposta: 'Contraproposta', aguardando_doc: 'Aguardando documentos', aprovado: 'Aprovadas', recusado: 'Recusadas', encerrado: 'Encerradas', suspenso: 'Suspensas' }
+const STATUS_TONE: Record<string, 'info' | 'warning' | 'positive' | 'negative' | 'neutral'> = {
   negociando: 'info',
   contraproposta: 'warning',
   aguardando_doc: 'warning',
@@ -44,10 +48,10 @@ const STATUS_TONE: Record<string, any> = {
   suspenso: 'neutral',
 }
 
-const fmtBRL = (v: any) => {
+const fmtBRL = (v: unknown) => {
   const n = typeof v === 'string' ? Number(v) : v
   if (!n || !Number.isFinite(n)) return '—'
-  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+  return Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export default function Negociacoes() {
@@ -56,6 +60,7 @@ export default function Negociacoes() {
   const [clientes, setClientes] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [serverResumo, setServerResumo] = useState<{ total: number; porStatus: Record<string, number>; valorEmNegociacao: string; economiaProjetada: string; proximoDeadline: { credor: string; data: string } | null } | null>(null)
   const [filterStatus, setFilterStatus] = useState<string>('ativas')
   const [search, setSearch] = useState('')
 
@@ -64,14 +69,16 @@ export default function Negociacoes() {
     Promise.allSettled([
       apiFetch<Negociacao[]>('/deal-room/negociacoes'),
       apiFetch<Cliente[]>('/clientes'),
-    ]).then(([r1, r2]) => {
+      apiFetch<typeof serverResumo>('/deal-room/resumo'),
+    ]).then(([r1, r2, r3]) => {
       if (r1.status === 'fulfilled') setList(r1.value ?? [])
-      else setError(String((r1.reason as any)?.message ?? r1.reason))
+      else setError(r1.reason instanceof Error ? r1.reason.message : String(r1.reason))
       if (r2.status === 'fulfilled') {
         const m = new Map<string, string>()
         for (const c of r2.value ?? []) m.set(c.id, c.nome)
         setClientes(m)
       }
+      if (r3?.status === 'fulfilled') setServerResumo(r3.value)
       setLoading(false)
     })
   }, [])
@@ -95,7 +102,7 @@ export default function Negociacoes() {
     })
   }, [list, clientes, filterStatus, search])
 
-  const resumo = useMemo(() => {
+  const resumoLocal = useMemo(() => {
     const ativos = list.filter((n) => ['negociando', 'contraproposta', 'aguardando_doc'].includes(n.status))
     const valorTotal = ativos.reduce((sum, n) => sum + (Number(n.valorAtual) || 0), 0)
     const economiaProjetada = ativos.reduce((sum, n) => {
@@ -116,22 +123,15 @@ export default function Negociacoes() {
       proximoDeadline,
     }
   }, [list])
+  const resumo = serverResumo
+    ? { totalAtivas: ['negociando', 'contraproposta', 'aguardando_doc'].reduce((sum, status) => sum + (serverResumo.porStatus[status] ?? 0), 0), totalGeral: serverResumo.total, valorTotal: Number(serverResumo.valorEmNegociacao), economiaProjetada: Number(serverResumo.economiaProjetada), aprovadas: serverResumo.porStatus.aprovado ?? 0, proximoDeadline: serverResumo.proximoDeadline ? { proximaData: serverResumo.proximoDeadline.data, credor: serverResumo.proximoDeadline.credor } : null }
+    : resumoLocal
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <DSCard>
-        <div className="flex items-start gap-3">
-          <Building2 className="w-5 h-5 text-aletis-verde mt-0.5" />
-          <div>
-            <h1 className="text-xl font-display font-bold text-aletis-grafite-escuro dark:text-white tracking-tight">
-              Negociações — Deal Room global
-            </h1>
-            <p className="text-sm font-body text-aletis-grafite-claro dark:text-white/60 mt-0.5">
+      <PageHeader title={<>Negociações</>} description={<> <p className="text-sm font-body text-muted-foreground dark:text-white/60 mt-0.5">
               Visão consolidada de todas as negociações por credor em todos os clientes.
-            </p>
-          </div>
-        </div>
-      </DSCard>
+            </p> </>} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <DSStatCard
@@ -155,7 +155,7 @@ export default function Negociacoes() {
           icon={<CheckCircle2 className="w-4 h-4" />}
         />
         <DSStatCard
-          label="Próximo deadline"
+          label="Próximo prazo"
           value={
             resumo.proximoDeadline?.proximaData
               ? new Date(resumo.proximoDeadline.proximaData).toLocaleDateString('pt-BR')
@@ -167,36 +167,13 @@ export default function Negociacoes() {
         />
       </div>
 
-      <DSCard>
-        <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
-          <div className="relative flex-1 w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aletis-grafite-medio pointer-events-none" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar credor, cliente ou responsável…"
-              className="w-full pl-10 pr-3 py-2 text-sm font-body rounded-lg border border-aletis-borda focus:border-aletis-verde focus:outline-none focus:ring-2 focus:ring-aletis-verde/20 dark:bg-white/5 dark:border-white/10 dark:text-white"
-            />
-          </div>
-          <div className="flex gap-1 flex-wrap">
-            {[{ id: 'ativas', label: 'Ativas' }, ...STATUSES.map((s) => ({ id: s, label: s }))].map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setFilterStatus(f.id)}
-                className={`px-2.5 py-1 text-[11px] font-body font-semibold uppercase rounded-full transition-colors ${
-                  filterStatus === f.id
-                    ? 'bg-aletis-verde text-white'
-                    : 'bg-aletis-borda/60 text-aletis-grafite-escuro hover:bg-aletis-bege dark:bg-white/10 dark:text-white/80 dark:hover:bg-white/15'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
+      <FilterBar activeCount={Number(Boolean(search.trim())) + Number(filterStatus !== 'todos')} onClear={() => {setSearch('');setFilterStatus('todos')}}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <SearchField label="Buscar negociações" value={search} onChange={setSearch} placeholder="Credor, cliente ou responsável" />
+          <label className="text-xs font-medium text-muted-foreground">Situação<select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} className="input-field mt-1.5 block w-full sm:w-60">{['ativas',...STATUSES].map(status=><option value={status} key={status}>{STATUS_LABEL[status] ?? status}</option>)}</select></label>
         </div>
-      </DSCard>
+      </FilterBar>
+      <p role="status" className="text-xs text-muted-foreground">{loading ? 'Carregando negociações…' : filtered.length+' negociações · '+(STATUS_LABEL[filterStatus] ?? filterStatus)}</p>
 
       {error && (
         <DSCard className="border-red-300 bg-red-50/30 dark:bg-red-900/20">
@@ -215,7 +192,7 @@ export default function Negociacoes() {
             title={list.length === 0 ? 'Nenhuma negociação ainda' : 'Nenhuma negociação para este filtro'}
             description={
               list.length === 0
-                ? 'Abra a primeira negociação dentro de um cliente — Command Center → Deal Room.'
+                ? 'Abra um cliente e acesse Negociação → Negociações por credor.'
                 : 'Tente outro status ou limpe a busca.'
             }
           />
@@ -232,7 +209,7 @@ export default function Negociacoes() {
                   <Link
                     to={`/clientes/${n.clienteId}/deal-room?neg=${n.id}`}
                     onClick={(e) => e.stopPropagation()}
-                    className="text-aletis-verde hover:underline font-semibold"
+                    className="text-foreground hover:underline font-semibold"
                   >
                     {clientes.get(n.clienteId) ?? n.clienteId}
                   </Link>
@@ -242,7 +219,7 @@ export default function Negociacoes() {
               {
                 key: 'status',
                 label: 'Status',
-                render: (n) => <DSBadge tone={STATUS_TONE[n.status] ?? 'neutral'}>{n.status}</DSBadge>,
+                render: (n) => <DSBadge tone={STATUS_TONE[n.status] ?? 'neutral'}>{STATUS_LABEL[n.status] ?? n.status}</DSBadge>,
               },
               {
                 key: 'valor',

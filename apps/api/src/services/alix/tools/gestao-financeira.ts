@@ -10,7 +10,7 @@
 //   - listar_insights_gf(grupoId)
 //   - explicar_indicador_gf(grupoId, indicador)
 // ============================================================
-import type { ClaudeTool, ClaudeToolRegistry } from '../../llm/ClaudeFoundryClient.js'
+import type { LLMTool, LLMToolRegistry } from '../../llm/OpenAIClient.js'
 import { getGestaoFinanceiraService } from '../../gestao-financeira/GestaoFinanceiraService.js'
 import { getGestaoFinanceiraServiceV2 } from '../../gestao-financeira/GestaoFinanceiraServiceV2.js'
 
@@ -19,11 +19,11 @@ function fmtBRL(v: number): string {
 }
 
 export function buildGestaoFinanceiraTools(): {
-  tools: ClaudeTool[]
-  registry: ClaudeToolRegistry
+  tools: LLMTool[]
+  registry: LLMToolRegistry
 } {
-  const tools: ClaudeTool[] = []
-  const registry: ClaudeToolRegistry = {}
+  const tools: LLMTool[] = []
+  const registry: LLMToolRegistry = {}
   const svc = getGestaoFinanceiraService()
   const svcV2 = getGestaoFinanceiraServiceV2()
 

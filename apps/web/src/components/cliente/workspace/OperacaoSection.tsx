@@ -1,52 +1,55 @@
 // ============================================================
-// OperacaoSection — matriz de dados estruturados (R.OP.001 v2.0).
-// Embeda GestaoFinanceiraTab em modo compact, ocultando sub-tabs
-// que pertencem a outras áreas do workspace (dashboard/insights →
-// Diagnóstico, comentários/changelog → Workflow).
+// OperacaoSection — Gestão Financeira ALETIS dentro do cliente.
 // ============================================================
 import { lazy, Suspense } from 'react'
-import { Database, Sparkles } from 'lucide-react'
+import { Calculator, Database, FileText, Pencil, Plus, ShieldCheck } from 'lucide-react'
 import type { UseClienteDataReturn } from './useClienteData'
 
 const GestaoFinanceiraTab = lazy(() => import('../../gestao-financeira/GestaoFinanceiraTab'))
 
 interface Props {
   data: UseClienteDataReturn
+  onEditFinancial: () => void
 }
 
-export default function OperacaoSection({ data }: Props) {
+export default function OperacaoSection({ data, onEditFinancial }: Props) {
   const { cliente, apiId } = data
   if (!cliente || !apiId) {
     return (
-      <div className="card-premium p-8 text-center">
-        <p className="text-xs text-aletis-grafite-claro">Cliente não identificado.</p>
+      <div className="rounded-lg border border-aletis-borda bg-card p-8 text-center shadow-none">
+        <p className="text-xs text-muted-foreground">Cliente não identificado.</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-3 animate-fade-in">
-      <header className="card-premium p-4 flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center flex-shrink-0">
-          <Database className="w-5 h-5 text-white" />
+    <div className="space-y-4 animate-fade-in">
+      <header className="rounded-lg border border-aletis-borda bg-card p-4 shadow-none">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-aletis-borda bg-aletis-bege/45 text-foreground">
+            <Database className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-mono text-foreground uppercase font-semibold tracking-[0.18em]">
+              financeiro do cliente
+            </p>
+            <h2 className="mt-1 text-lg font-display font-semibold text-foreground">
+              Gestão Financeira ALETIS
+            </h2>
+            <p className="mt-1 max-w-4xl text-xs font-body leading-relaxed text-[var(--text-soft)]">
+              Cadastre a estrutura econômica do cliente, safras, custos, dívidas, garantias, premissas e demandas.
+              As saídas de diagnóstico, banco e auditoria ficam no próprio módulo.
+            </p>
+          </div>
+          <button type="button" onClick={onEditFinancial} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-aletis-verde px-4 text-sm font-semibold text-white hover:bg-aletis-verde-escuro"><Pencil className="h-4 w-4" /> Editar contratos e pagamentos</button>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-mono text-amber-700 uppercase font-semibold tracking-wider">
-            🗂️ matriz de dados estruturados
-          </p>
-          <h2 className="text-base font-display font-bold text-aletis-grafite-escuro">
-            Operação — R.OP.001 v2.0
-          </h2>
-          <p className="text-xs font-body text-aletis-grafite-medio mt-0.5">
-            Cadastro · Safras · Custos · Endividamento · Passivos · Garantias · Demandas · Fazendas · Premissas.
-            Todas as fórmulas da planilha (28 sheets, 12k cálculos) reimplementadas nativamente.
-          </p>
+        <details className="mt-4 border-t border-aletis-borda pt-3"><summary className="cursor-pointer text-xs font-medium text-muted-foreground">Como usar a gestão financeira</summary><div className="mt-3 grid gap-2 md:grid-cols-3">
+          <Signal icon={Calculator} label="Análise" value="Raio X, DRE/FCL, EBITDA, LTV, dívida/EBITDA, safra e cenários" />
+          <Signal icon={ShieldCheck} label="Governança" value="Dados por cliente, trilha de auditoria, comentários e snapshots" />
+          <Signal icon={FileText} label="Saídas" value="Kit Banco PDF, diagnóstico em apresentação e exportação Excel quando necessário" />
         </div>
-        <div className="hidden md:block flex-shrink-0">
-          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-aletis-verde/10 text-aletis-verde text-[10px] font-bold">
-            <Sparkles className="w-3 h-3" /> Sistema nativo
-          </span>
-        </div>
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-aletis-verde/20 bg-aletis-verde/5 px-3 py-2 text-xs text-[var(--text-soft)]"><Plus className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground" /><p><strong className="text-foreground">Todos os blocos abaixo são editáveis.</strong> Abra uma área, adicione linhas e altere diretamente cadastro, propriedades, safras, custos, dívidas, passivos, garantias, demandas e premissas.</p></div>
+        </details>
       </header>
 
       <Suspense fallback={<EditorSkeleton />}>
@@ -54,10 +57,21 @@ export default function OperacaoSection({ data }: Props) {
           clienteId={apiId}
           clienteNome={cliente.nome}
           compact
-          initialSubTab="cadastro"
-          hideSubTabs={['dashboard', 'workflow', 'benchmark', 'comentarios', 'changelog', 'insights']}
+          initialSubTab="endividamento"
         />
       </Suspense>
+    </div>
+  )
+}
+
+function Signal({ icon: Icon, label, value }: { icon: typeof Database; label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-aletis-borda bg-aletis-bege/25 px-3 py-2">
+      <div className="flex items-center gap-2 text-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        <span className="text-[11px] font-mono uppercase tracking-[0.18em]">{label}</span>
+      </div>
+      <p className="mt-1 text-[11px] leading-snug text-[var(--text-soft)]">{value}</p>
     </div>
   )
 }

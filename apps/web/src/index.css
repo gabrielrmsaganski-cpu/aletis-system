@@ -1,166 +1,138 @@
+@import './design-system/components.css';
+@import './design-system/crm.css';
+@import './design-system/workspaces.css';
+@import './design-system/board.css';
+@import './components/gestao-financeira/gestao-financeira.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@import './components/gestao-financeira/gestao-financeira.css';
 
 /* ---------------------------------------------------------------- */
-/* Tipografia oficial — Chakra Petch (display) + Verdana (body)     */
+/* Tipografia Oficial — versão operacional 2026                     */
+/* Inter unificado + Verdana fallback + JetBrains Mono (mono)       */
 /* ---------------------------------------------------------------- */
-@font-face {
-  font-family: 'Chakra Petch';
-  font-style: normal;
-  font-weight: 300;
-  font-display: swap;
-  src: url('/fonts/chakra/ChakraPetch-Light.ttf') format('truetype');
-}
-@font-face {
-  font-family: 'Chakra Petch';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/chakra/ChakraPetch-Regular.ttf') format('truetype');
-}
-@font-face {
-  font-family: 'Chakra Petch';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('/fonts/chakra/ChakraPetch-Medium.ttf') format('truetype');
-}
-@font-face {
-  font-family: 'Chakra Petch';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('/fonts/chakra/ChakraPetch-SemiBold.ttf') format('truetype');
-}
-@font-face {
-  font-family: 'Chakra Petch';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('/fonts/chakra/ChakraPetch-Bold.ttf') format('truetype');
-}
-@font-face {
-  font-family: 'Chakra Petch';
-  font-style: italic;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/chakra/ChakraPetch-Italic.ttf') format('truetype');
-}
-@font-face {
-  font-family: 'Chakra Petch';
-  font-style: italic;
-  font-weight: 700;
-  font-display: swap;
-  src: url('/fonts/chakra/ChakraPetch-BoldItalic.ttf') format('truetype');
-}
-@font-face {
-  font-family: 'Verdana';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: local('Verdana'), url('/fonts/verdana/Verdana.ttf') format('truetype');
-}
-@font-face {
-  font-family: 'Verdana';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: local('Verdana Bold'), url('/fonts/verdana/Verdana-Bold.ttf') format('truetype');
-}
-@font-face {
-  font-family: 'Verdana';
-  font-style: italic;
-  font-weight: 400;
-  font-display: swap;
-  src: local('Verdana Italic'), url('/fonts/verdana/Verdana-Italic.ttf') format('truetype');
-}
 
-/* ---------------------------------------------------------------- */
-/* Tokens semânticos da identidade ALETIS                           */
-/* ---------------------------------------------------------------- */
-:root {
-  /* Paleta oficial */
-  --aletis-verde-dark: #17251b;
-  --aletis-verde-medio: #465b4a;
-  --aletis-sage: #b2bda1;
-  --aletis-sage-claro: #cdd5c0;
-  --aletis-cream: #ede9d9;
-  --aletis-cream-papel: #f5f2e7;
-  --aletis-gold: #cb9d52;
-  --aletis-gold-escuro: #a87f3d;
-  --aletis-cinza: #d9d9d9;
-  --aletis-grafite: #3d3d3d;
-
-  /* Semânticos UI (light) */
-  --bg-app: var(--aletis-cream);
-  --bg-surface: #ffffff;
-  --bg-surface-soft: var(--aletis-cream-papel);
-  --bg-inverse: var(--aletis-verde-dark);
-  --text-strong: var(--aletis-verde-dark);
-  --text-soft: var(--aletis-verde-medio);
-  --text-muted: #6b7d6f;
-  --border-default: #d9d3bc;
-  --border-strong: var(--aletis-sage);
-  --accent: var(--aletis-gold);
-}
-
-.dark {
-  --bg-app: #0d1611;
-  --bg-surface: #17251b;
-  --bg-surface-soft: #1d3024;
-  --bg-inverse: var(--aletis-cream);
-  --text-strong: var(--aletis-cream);
-  --text-soft: var(--aletis-sage);
-  --text-muted: #8a9a8d;
-  --border-default: rgba(178, 189, 161, 0.18);
-  --border-strong: rgba(178, 189, 161, 0.4);
-}
-
-/* ---------------------------------------------------------------- */
-/* Base                                                             */
-/* ---------------------------------------------------------------- */
+/* ── Tokens semânticos da identidade ALETIS + shadcn/ui ── */
 @layer base {
+  :root {
+    /* shadcn/ui core tokens — mapeados para paleta ALETIS */
+    --background: 45 33% 92%;        /* #ede9d9 (cream) */
+    --foreground: 140 24% 12%;       /* #17251b (verde) */
+    --card: 0 0% 100%;
+    --card-foreground: 140 24% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 140 24% 12%;
+    --primary: 140 24% 12%;           /* verde escuro */
+    --primary-foreground: 45 33% 92%; /* cream */
+    --secondary: 88 14% 68%;          /* sage */
+    --secondary-foreground: 140 24% 12%;
+    --muted: 88 14% 75%;
+    --muted-foreground: 140 8% 38%;
+    --accent: 37 51% 56%;             /* gold */
+    --accent-foreground: 140 24% 12%;
+    --destructive: 0 63% 47%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 44 22% 82%;             /* borda cream */
+    --input: 44 22% 82%;
+    --ring: 37 51% 56%;               /* gold ring */
+    --radius: 0.5rem;
+
+    /* Paleta ALETIS oficial (hex para compatibilidade legada) */
+    --aletis-verde-dark: #17251b;
+    --aletis-verde-medio: #465b4a;
+    --aletis-sage: #b2bda1;
+    --aletis-sage-claro: #cdd5c0;
+    --aletis-cream: #ede9d9;
+    --aletis-cream-papel: #f5f2e7;
+    --aletis-gold: #cb9d52;
+    --aletis-gold-escuro: #a87f3d;
+    --aletis-cinza: #d9d9d9;
+    --aletis-grafite: #3d3d3d;
+
+    /* Semânticos UI (light mode) — REFINADO */
+    --bg-app: #f6f5f2;       /* stone-50 — mais puro, menos amarelado */
+    --bg-surface: #ffffff;
+    --bg-surface-soft: #fafaf9;
+    --bg-inverse: #17251b;
+    --text-strong: #1c1917;  /* stone-900 */
+    --text-soft: #44403c;    /* stone-700 */
+    --text-muted: #78716c;   /* stone-500 */
+    --border-default: #e7e5e4;
+    --border-strong: #d6d3d1;
+    --brand-accent: #cb9d52;
+  }
+
+  .dark {
+    --background: 140 24% 6%;
+    --foreground: 45 33% 92%;
+    --card: 140 24% 10%;
+    --card-foreground: 45 33% 92%;
+    --popover: 140 24% 10%;
+    --popover-foreground: 45 33% 92%;
+    --primary: 45 33% 92%;
+    --primary-foreground: 140 24% 12%;
+    --secondary: 140 15% 20%;
+    --secondary-foreground: 45 33% 92%;
+    --muted: 140 15% 20%;
+    --muted-foreground: 88 10% 55%;
+    --accent: 37 51% 56%;
+    --accent-foreground: 140 24% 12%;
+    --destructive: 0 63% 47%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 140 15% 20%;
+    --input: 140 15% 20%;
+    --ring: 37 51% 56%;
+
+    --bg-app: #0c0a09;
+    --bg-surface: #17251b;
+    --bg-surface-soft: #1d3024;
+    --bg-inverse: var(--aletis-cream);
+    --text-strong: #f5f5f4;
+    --text-soft: #a8a29e;
+    --text-muted: #78716c;
+    --border-default: rgba(178, 189, 161, 0.15);
+    --border-strong: rgba(178, 189, 161, 0.35);
+  }
+
+  /* ── Base typography ── */
   * {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
   html {
     scroll-behavior: smooth;
     background: var(--bg-app);
   }
+
   body {
-    font-family: 'Verdana', 'Segoe UI', system-ui, sans-serif;
+    font-family: 'Inter', Verdana, 'Segoe UI', system-ui, sans-serif;
     background: var(--bg-app);
     color: var(--text-strong);
     font-size: 14px;
     line-height: 1.55;
+    letter-spacing: 0;
+    font-feature-settings: 'cv11', 'ss01', 'ss03', 'cv02';
+    text-rendering: optimizeLegibility;
   }
+
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Chakra Petch', system-ui, sans-serif;
+    font-family: 'Inter', Verdana, 'Segoe UI', system-ui, sans-serif;
     color: inherit;
-    letter-spacing: 0.005em;
+    letter-spacing: 0;
     font-weight: 600;
   }
-  h1 { font-weight: 700; letter-spacing: 0.01em; }
-  /* Reforço para textos de marca */
-  .font-display {
-    font-family: 'Chakra Petch', system-ui, sans-serif;
-  }
-  .font-body {
-    font-family: 'Verdana', 'Segoe UI', system-ui, sans-serif;
-  }
+
+  h1 { font-weight: 700; letter-spacing: 0; }
+
+  /* Selection */
   ::selection {
     background: var(--aletis-gold);
     color: var(--aletis-verde-dark);
   }
 
-  /* ── Focus-visible global (WCAG 2.4.11 Focus Appearance) ──
-     Garante anel dourado em qualquer elemento interativo no foco
-     por teclado. Não afeta clique/toque (que usam :focus em vez
-     de :focus-visible). Pode ser sobrescrito por componentes que
-     já definem :focus-visible próprio (input-field, btn-*). */
+  /* Focus-visible global (WCAG 2.4.11) */
   button:focus-visible,
   a:focus-visible,
   [role='button']:focus-visible,
@@ -169,41 +141,83 @@
     outline-offset: 3px;
     border-radius: 6px;
   }
-  /* Nunca mostre o anel-padrão do browser quando foco veio do mouse */
+
   button:focus:not(:focus-visible),
   a:focus:not(:focus-visible) {
     outline: none;
   }
+
+  /* ── Global premium scrollbar (Linear/Vercel) ── */
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgba(23, 37, 27, 0.14);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    transition: background 0.2s ease;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(203, 157, 82, 0.55);
+    background-clip: content-box;
+  }
+  .dark *::-webkit-scrollbar-thumb {
+    background: rgba(237, 233, 217, 0.16);
+    background-clip: content-box;
+  }
+  .dark *::-webkit-scrollbar-thumb:hover {
+    background: rgba(203, 157, 82, 0.7);
+    background-clip: content-box;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(23, 37, 27, 0.18) transparent;
+  }
 }
 
 /* ---------------------------------------------------------------- */
-/* Componentes                                                      */
+/* shadcn/ui base overrides                                         */
+/* ---------------------------------------------------------------- */
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+}
+
+/* ---------------------------------------------------------------- */
+/* Componentes utilitários ALETIS                                   */
 /* ---------------------------------------------------------------- */
 @layer components {
-
   /* ---- Cards ---- */
   .card {
-    @apply bg-white rounded-2xl border border-aletis-borda shadow-brand-sm hover:shadow-brand transition-all duration-300;
+    @apply rounded-lg border border-aletis-borda;
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-panel);
   }
   .card-premium {
-    @apply relative bg-white rounded-2xl border border-aletis-borda/70
-      shadow-brand-sm hover:shadow-brand-lg
-      hover:border-aletis-gold/50 hover:-translate-y-0.5
-      transition-all duration-300;
+    @apply relative rounded-lg border border-aletis-borda;
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-panel);
   }
-  .card-premium::before {
-    content: "";
-    @apply pointer-events-none absolute inset-x-0 top-0 h-[2px] rounded-t-2xl
-      bg-gradient-to-r from-transparent via-aletis-gold/70 to-transparent
-      opacity-0 transition-opacity duration-300;
+
+
+  /* ── Glass Cards ── */
+  .card-glass {
+    @apply rounded-lg border border-aletis-borda transition-colors duration-200;
+    background: var(--bg-surface);
   }
-  .card-premium:hover::before {
-    @apply opacity-100;
+  .card-glass-dark {
+    @apply bg-aletis-verde rounded-lg border border-white/10 transition-colors duration-200;
   }
 
   /* ---- Tipografia utilitária ---- */
   .eyebrow {
-    @apply text-[10.5px] font-display font-semibold uppercase
+    @apply text-[11px] font-body font-semibold uppercase
       tracking-[0.18em] text-aletis-gold-escuro;
   }
   .section-chip {
@@ -223,18 +237,17 @@
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2
       bg-aletis-verde text-aletis-cream
-      px-5 py-2.5 rounded-xl
-      font-display font-semibold uppercase tracking-wider text-[12.5px]
+      px-4 py-2.5 rounded-lg
+      font-body font-semibold text-sm
       hover:bg-aletis-verde-medio
-      shadow-brand hover:shadow-brand-lg
-      transition-all duration-200 active:scale-[0.98];
+      transition-colors duration-200;
   }
   .btn-outline {
     @apply inline-flex items-center justify-center gap-2
-      border-2 border-aletis-verde text-aletis-verde
+      border border-aletis-borda text-foreground
       bg-transparent
-      px-5 py-2.5 rounded-xl
-      font-display font-semibold uppercase tracking-wider text-[12.5px]
+      px-4 py-2.5 rounded-lg
+      font-body font-semibold text-sm
       hover:bg-aletis-verde hover:text-aletis-cream
       transition-all duration-200;
   }
@@ -248,11 +261,11 @@
 
   /* ---- Inputs ---- */
   .input-field {
-    @apply w-full px-4 py-3 rounded-xl
-      border border-aletis-borda bg-white
-      text-aletis-verde placeholder:text-aletis-verde-claro
-      focus:outline-none focus:ring-2 focus:ring-aletis-gold/35
-      focus:border-aletis-gold transition-all;
+    @apply w-full px-3 py-2.5 rounded-lg border border-aletis-borda text-sm
+      focus:outline-none focus:ring-2 focus:ring-aletis-gold/30
+      focus:border-aletis-gold/50 transition-colors;
+    background: var(--bg-surface);
+    color: var(--text-strong);
   }
 
   /* ---- Badges ---- */
@@ -261,21 +274,21 @@
       text-[11px] font-display font-semibold tracking-wide;
   }
   .badge-verde {
-    @apply badge bg-aletis-verde-medio/12 text-aletis-verde-medio
-      border border-aletis-verde-medio/30;
+    @apply badge bg-aletis-verde-medio/10 text-aletis-verde-medio
+      border border-aletis-verde-medio/20;
   }
   .badge-gold,
   .badge-dourado {
-    @apply badge bg-aletis-gold/15 text-aletis-gold-escuro
-      border border-aletis-gold/40;
+    @apply badge bg-aletis-gold/10 text-aletis-gold-escuro
+      border border-aletis-gold/30;
   }
   .badge-vermelho {
-    @apply badge bg-alerta/10 text-alerta border border-alerta/25;
+    @apply badge bg-red-50 text-red-700 border border-red-200;
   }
 
   /* ---- Sidebar ---- */
   .sidebar-link {
-    @apply flex items-center gap-3 px-4 py-2.5 rounded-xl
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg
       text-[13px] font-display font-medium tracking-wide
       text-aletis-cream/70 hover:text-aletis-cream
       hover:bg-aletis-sage/10
@@ -300,29 +313,279 @@
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     @apply bg-aletis-sage/70;
   }
+
+  .onboarding-scrollbar {
+    scrollbar-gutter: stable;
+    scrollbar-width: auto;
+    scrollbar-color: rgba(23, 37, 27, 0.48) rgba(23, 37, 27, 0.06);
+  }
+  .onboarding-scrollbar::-webkit-scrollbar {
+    width: 12px;
+  }
+  .onboarding-scrollbar::-webkit-scrollbar-track {
+    background: rgba(23, 37, 27, 0.055);
+    border-left: 1px solid rgba(23, 37, 27, 0.06);
+  }
+  .onboarding-scrollbar::-webkit-scrollbar-thumb {
+    min-height: 44px;
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: rgba(23, 37, 27, 0.48);
+    background-clip: content-box;
+  }
+  .onboarding-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(203, 157, 82, 0.82);
+    background-clip: content-box;
+  }
+
+  @media (min-width: 1024px) and (max-height: 720px) {
+    .onboarding-sidebar-intro,
+    .onboarding-sidebar-progress,
+    .onboarding-step-description,
+    .onboarding-step-number {
+      display: none !important;
+    }
+    .onboarding-step-button {
+      padding-top: 0.5rem;
+      padding-bottom: 0.5rem;
+    }
+    .onboarding-sidebar-nav {
+      justify-content: center;
+      overflow-y: auto;
+    }
+  }
+
+  /* ── Shimmer / Glow effects ── */
+  .shimmer-bg {
+    background: linear-gradient(90deg, rgba(203,157,82,0.0) 0%, rgba(203,157,82,0.5) 50%, rgba(203,157,82,0.0) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 7s linear infinite;
+  }
+  .shimmer-bg-fast {
+    background: linear-gradient(90deg, rgba(203,157,82,0.0) 0%, rgba(203,157,82,0.4) 50%, rgba(203,157,82,0.0) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 2.5s ease-in-out infinite;
+  }
+
+  /* ── Spotlight / Ambient Glow ── */
+  .spotlight {
+    position: relative;
+    overflow: hidden;
+  }
+  .spotlight::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(203,157,82,0.06), transparent 40%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Premium Surfaces — Linear / Vercel / Notion inspired
+     ════════════════════════════════════════════════════════════ */
+  .surface {
+    @apply rounded-lg border border-aletis-borda transition-colors duration-200;
+    background: var(--bg-surface);
+  }
+  .surface-hover {
+    @apply surface hover:border-stone-300;
+  }
+  .surface-premium {
+    @apply surface relative;
+  }
+  .surface-glass {
+    @apply surface;
+  }
+  .surface-glass-dark {
+    @apply bg-aletis-verde border border-aletis-sage/15 rounded-lg;
+  }
+
+  /* Premium pill — chips, status badges */
+  .pill {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
+      text-[11px] font-display font-semibold tracking-wide
+      transition-all duration-200;
+  }
+  .pill-gold {
+    @apply pill bg-gradient-to-b from-aletis-gold/15 to-aletis-gold/10
+      text-aletis-gold-escuro ring-1 ring-inset ring-aletis-gold/30;
+  }
+  .pill-green {
+    @apply pill bg-gradient-to-b from-aletis-verde-medio/12 to-aletis-verde-medio/8
+      text-aletis-verde ring-1 ring-inset ring-aletis-verde-medio/20;
+  }
+  .pill-neutral {
+    @apply pill bg-stone-100 text-stone-700 ring-1 ring-inset ring-stone-200;
+  }
+
+  /* Premium icon button */
+  .icon-btn {
+    @apply inline-flex items-center justify-center
+      w-9 h-9 rounded-xl
+      text-aletis-verde-medio
+      hover:text-aletis-verde hover:bg-stone-100/80
+      active:scale-95
+      transition-all duration-200 ease-snappy;
+  }
+  .icon-btn-active {
+    @apply icon-btn text-aletis-gold-escuro bg-aletis-gold/10;
+  }
+
+  /* Premium divider with gold accent */
+  .divider-premium {
+    @apply relative h-px w-full bg-gradient-to-r
+      from-transparent via-stone-200 to-transparent;
+  }
+
+  /* Premium gradient text (heroes, KPIs) */
+  .text-premium-gradient {
+    background: linear-gradient(135deg, #17251b 0%, #465b4a 60%, #cb9d52 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
 }
 
 /* ---------------------------------------------------------------- */
-/* Animações                                                        */
+/* Animações globais                                                */
 /* ---------------------------------------------------------------- */
 .ticker-wrapper {
   overflow: hidden;
   white-space: nowrap;
+  position: relative;
+  contain: layout paint;
 }
 .ticker-content {
   display: inline-flex;
+  align-items: center;
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: max-content;
   animation: ticker 60s linear infinite;
 }
 .ticker-content:hover {
   animation-play-state: paused;
 }
+@media (max-width: 640px) {
+  .ticker-content {
+    position: static;
+    width: 100%;
+    animation: none;
+    overflow: hidden;
+  }
+  .ticker-content > span:nth-child(n + 3) {
+    display: none;
+  }
+}
+@keyframes ticker {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
 @keyframes fillGauge {
   from { stroke-dashoffset: 283; }
 }
 
+/* ════════════════════════════════════════════════════════════
+   Dashboard Premium — utilitários e animações extras
+   ════════════════════════════════════════════════════════════ */
+@keyframes dash-fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes dash-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes dash-slide-right {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes dash-shimmer-bar {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes dash-ping-soft {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.5; transform: scale(1.4); }
+}
+
+.dash-animate-fade-up {
+  animation: dash-fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.dash-animate-scale-in {
+  animation: dash-scale-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.dash-animate-slide-right {
+  animation: dash-slide-right 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Card premium refinado — sem glassmorphism pesado */
+.card-dash {
+  background: #ffffff;
+  border: 1px solid rgba(214, 211, 209, 0.5);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(23, 37, 27, 0.04), 0 4px 12px rgba(23, 37, 27, 0.03);
+  transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.card-dash:hover {
+  box-shadow: 0 4px 16px rgba(23, 37, 27, 0.07), 0 12px 32px rgba(23, 37, 27, 0.05);
+  border-color: rgba(203, 157, 82, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Card com destaque dourado sutil no topo */
+.card-dash-accent::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  border-radius: 14px 14px 0 0;
+  background: linear-gradient(90deg, transparent, rgba(203,157,82,0.55), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.card-dash-accent:hover::before {
+  opacity: 1;
+}
+
+/* KPI stat */
+.stat-value {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+
+/* Tooltip custom para gráficos */
+.chart-tooltip-premium {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid rgba(214, 211, 209, 0.7) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 32px rgba(23, 37, 27, 0.12) !important;
+  backdrop-filter: blur(16px) !important;
+  padding: 10px 14px !important;
+}
+
+/* Progress bar clean */
+.progress-clean {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(214, 211, 209, 0.35);
+  overflow: hidden;
+}
+.progress-clean > div {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* Respeito a preferências de motion */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

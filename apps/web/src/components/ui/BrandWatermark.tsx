@@ -31,7 +31,7 @@ export default function BrandWatermark({
       className={`pointer-events-none select-none ${className}`}
       style={{ opacity, transform: rotate ? `rotate(${rotate}deg)` : undefined }}
     >
-      <BrandSymbol tone={tone} size={size} strokeWidth={2.4} />
+      <BrandSymbol tone={tone} size={size} strokeWidth={2.4} plaque={false} />
     </span>
   )
 }

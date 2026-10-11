@@ -1,97 +1,118 @@
 // ============================================================
-// auth — informa o consultor logado (sistema interno).
+// Autenticação do ambiente interno ALETIS.
 //
-// Hoje retorna o consultor canônico hardcoded — o sistema ainda
-// não tem login real para os consultores ALETIS (apenas para o
-// portal cliente em /api/portal/auth/*).
-//
-// Quando o login real for implementado, esta rota:
-//   1. Valida JWT em request.headers.authorization (já há `jwt` registrado)
-//   2. Resolve o consultor pelo `sub` claim
-//   3. Retorna ou 401 se inválido
-//
-// Por enquanto: serve como fonte única de verdade do nome/cargo
-// do consultor para que o frontend não tenha "Christian Kohler"
-// hardcoded em 3 lugares.
+// A sessão usa JWT em cookie HttpOnly. O navegador não recebe nem
+// persiste o token, reduzindo a superfície para vazamento via XSS.
 // ============================================================
-import type { FastifyInstance } from 'fastify'
+import { randomUUID } from 'node:crypto'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { z } from 'zod'
+import {
+  findInternalUser,
+  INTERNAL_SESSION_COOKIE,
+  INTERNAL_SESSION_TTL_SECONDS,
+  normalizeUsername,
+  resolveInternalSession,
+  verifyInternalPassword,
+} from '../lib/internal-auth.js'
 
-interface ConsultorMe {
-  id: string
-  nome: string
-  primeiroNome: string
-  iniciais: string
-  cargo: string
-  email: string
-  /** ID interno usado em comentários, changelog e audit. */
-  consultorId: string
+const LoginSchema = z.object({
+  username: z.string().trim().min(1).max(80),
+  password: z.string().min(1).max(256),
+})
+
+function isSecureRequest(request: FastifyRequest): boolean {
+  const forwardedProto = request.headers['x-forwarded-proto']
+  const proto = Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto
+  return request.protocol === 'https' || proto?.split(',')[0]?.trim() === 'https'
 }
 
-const FALLBACK_CONSULTOR: ConsultorMe = {
-  id: 'consultor-001',
-  nome: 'Christian Kohler',
-  primeiroNome: 'Christian',
-  iniciais: 'CK',
-  cargo: 'Consultor sênior',
-  email: 'christian@aletis.com.br',
-  consultorId: 'consultor-001',
-}
-
-function deriveIniciais(nome: string): string {
-  return nome
-    .split(' ')
-    .filter(Boolean)
-    .map((w) => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
+function cookieOptions(request: FastifyRequest) {
+  return {
+    path: '/',
+    httpOnly: true,
+    secure: isSecureRequest(request),
+    sameSite: 'lax' as const,
+    maxAge: INTERNAL_SESSION_TTL_SECONDS,
+  }
 }
 
 export default async function authRoutes(fastify: FastifyInstance) {
-  /**
-   * GET /api/auth/me
-   * Retorna o consultor logado. Hoje sem auth real, devolve o
-   * consultor canônico das envs (CONSULTOR_DEFAULT_*).
-   */
-  fastify.get('/api/auth/me', async (request) => {
-    // Tenta JWT primeiro — se válido, usa o claim `sub` como nome
-    try {
-      const auth = request.headers.authorization
-      if (auth?.startsWith('Bearer ')) {
-        // O plugin `jwt` está registrado em server.ts. Valida silenciosamente.
-        await (request as any).jwtVerify().catch(() => null)
-        const decoded = (request as any).user
-        if (decoded?.nome) {
-          return {
-            success: true,
-            data: {
-              id: decoded.sub ?? decoded.id ?? FALLBACK_CONSULTOR.id,
-              nome: decoded.nome,
-              primeiroNome: decoded.primeiroNome ?? String(decoded.nome).split(' ')[0],
-              iniciais: decoded.iniciais ?? deriveIniciais(decoded.nome),
-              cargo: decoded.cargo ?? 'Consultor',
-              email: decoded.email ?? '',
-              consultorId: decoded.consultorId ?? decoded.sub ?? FALLBACK_CONSULTOR.consultorId,
-            },
-          }
-        }
-      }
-    } catch {
-      // ignora — cai pro fallback abaixo
+  fastify.post('/api/auth/login', {
+    config: {
+      rateLimit: {
+        max: Number(process.env.ALETIS_AUTH_RATE_LIMIT_MAX ?? 8),
+        timeWindow: '1 minute',
+      },
+    },
+  }, async (request, reply) => {
+    const parsed = LoginSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: 'Informe usuário e senha.',
+        code: 'INVALID_LOGIN_PAYLOAD',
+      })
     }
 
-    // Fallback: lê env vars CONSULTOR_NOME / CONSULTOR_EMAIL etc
-    const env = process.env
-    const nome = env.CONSULTOR_NOME ?? FALLBACK_CONSULTOR.nome
-    const consultor: ConsultorMe = {
-      id: env.CONSULTOR_ID ?? FALLBACK_CONSULTOR.id,
-      nome,
-      primeiroNome: env.CONSULTOR_PRIMEIRO_NOME ?? nome.split(' ')[0],
-      iniciais: env.CONSULTOR_INICIAIS ?? deriveIniciais(nome),
-      cargo: env.CONSULTOR_CARGO ?? FALLBACK_CONSULTOR.cargo,
-      email: env.CONSULTOR_EMAIL ?? FALLBACK_CONSULTOR.email,
-      consultorId: env.CONSULTOR_ID ?? FALLBACK_CONSULTOR.consultorId,
+    const configuredHash = process.env.ALETIS_AUTH_PASSWORD_HASH?.trim()
+    if (!configuredHash) {
+      request.log.error('[auth] ALETIS_AUTH_PASSWORD_HASH não configurado')
+      return reply.status(503).send({
+        success: false,
+        error: 'O acesso interno ainda não foi configurado no servidor.',
+        code: 'AUTH_NOT_CONFIGURED',
+      })
     }
-    return { success: true, data: consultor }
+
+    const username = normalizeUsername(parsed.data.username)
+    const user = findInternalUser(username)
+    // Executa scrypt mesmo para usuário inexistente, evitando diferença de
+    // tempo que permita enumerar os logins cadastrados.
+    const passwordMatches = await verifyInternalPassword(parsed.data.password, configuredHash)
+    if (!user || !passwordMatches) {
+      request.log.warn({ ip: request.ip }, '[auth] tentativa de login interno rejeitada')
+      return reply.status(401).send({
+        success: false,
+        error: 'Usuário ou senha inválidos.',
+        code: 'INVALID_CREDENTIALS',
+      })
+    }
+
+    const token = fastify.jwt.sign(
+      {
+        sub: user.id,
+        kind: 'internal',
+        username: user.username,
+        jti: randomUUID(),
+      },
+      { expiresIn: INTERNAL_SESSION_TTL_SECONDS },
+    )
+
+    reply.setCookie(INTERNAL_SESSION_COOKIE, token, cookieOptions(request))
+    request.log.info({ userId: user.id }, '[auth] login interno realizado')
+    return reply.send({ success: true, data: user })
+  })
+
+  fastify.post('/api/auth/logout', async (request, reply) => {
+    reply.clearCookie(INTERNAL_SESSION_COOKIE, {
+      path: '/',
+      httpOnly: true,
+      secure: isSecureRequest(request),
+      sameSite: 'lax',
+    })
+    return reply.send({ success: true, data: { loggedOut: true } })
+  })
+
+  fastify.get('/api/auth/me', async (request, reply) => {
+    const user = resolveInternalSession(fastify, request)
+    if (!user) {
+      return reply.status(401).send({
+        success: false,
+        error: 'Sessão ausente ou expirada.',
+        code: 'UNAUTHORIZED',
+      })
+    }
+    return reply.send({ success: true, data: user })
   })
 }

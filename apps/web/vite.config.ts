@@ -7,7 +7,8 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // Ativa a versão nova pelo aviso da interface, preservando formulários em edição.
+      registerType: 'prompt',
       // Em dev, manter SW desligado (HMR + PWA brigam). Habilitar
       // só em build de prod e durante preview local.
       devOptions: { enabled: false },
@@ -24,25 +25,35 @@ export default defineConfig({
         scope: '/',
         lang: 'pt-BR',
         icons: [
-          { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
+          {
+            src: '/favicon.svg',
+            sizes: 'any',
+            type: 'image/svg+xml',
+            purpose: 'any maskable',
+          },
         ],
       },
       workbox: {
+        // Mantém recebimento das inscrições antigas que usavam o registro raiz.
+        // O arquivo compartilhado não altera o ciclo de atualização do aplicativo.
+        importScripts: ['/portal-push-handlers.js'],
         // Pre-cache: HTML/CSS/JS/fontes do shell.
         globPatterns: ['**/*.{js,css,html,svg,woff2,woff}'],
-        // Estratégia por tipo de URL: API GET = NetworkFirst (10s
-        // timeout, fallback cache), fontes externas e CDN = CacheFirst.
+        // Chunks pesados e acionados sob demanda ficam fora do precache
+        // inicial. Eles seguem disponíveis online quando o usuário abre
+        // gráficos, mapas, ZIP, planilhas ou exportação PDF.
+        globIgnores: [
+          '**/charts-vendor-*.js',
+          '**/leaflet-vendor-*.js',
+          '**/pdf-vendor-*.js',
+          '**/spreadsheet-vendor-*.js',
+          '**/zip-vendor-*.js',
+          '**/html2canvas*.js',
+        ],
+        // Dados autenticados da API nunca entram no cache do Service Worker:
+        // isso evita que informações de uma sessão apareçam para o próximo
+        // usuário do mesmo navegador. Somente assets públicos são cacheados.
         runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'aletis-api',
-              networkTimeoutSeconds: 10,
-              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 }, // 24h
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
           {
             urlPattern: ({ url }) =>
               url.origin === 'https://fonts.googleapis.com' ||
@@ -95,7 +106,9 @@ export default defineConfig({
           'leaflet-vendor': ['leaflet', 'react-leaflet'],
           'icons-vendor': ['lucide-react'],
           'charts-vendor': ['recharts'],
-          'export-vendor': ['jspdf', 'jspdf-autotable', 'xlsx'],
+          'pdf-vendor': ['jspdf', 'jspdf-autotable'],
+          'spreadsheet-vendor': ['xlsx'],
+          'zip-vendor': ['jszip'],
         },
       },
     },

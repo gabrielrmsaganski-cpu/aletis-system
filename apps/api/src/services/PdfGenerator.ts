@@ -3,7 +3,8 @@
 // Renders professional PDF proposals using Puppeteer
 // ============================================================
 
-import puppeteer, { type Browser } from 'puppeteer';
+import puppeteer, { type Browser, type Page } from 'puppeteer';
+import { formatContractMoney } from '../lib/contract-money.js';
 
 interface PropostaData {
   id: string;
@@ -40,6 +41,10 @@ const TIPO_LABELS: Record<string, string> = {
   acordo_judicial: 'Acordo Judicial',
 };
 
+const escapeHtmlText = (value: string): string => value
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
 function buildHtml(p: PropostaData): string {
   const tipoLabel = TIPO_LABELS[p.tipo] || p.tipo;
   const economia = p.valorDivida - p.valorProposta;
@@ -47,16 +52,16 @@ function buildHtml(p: PropostaData): string {
   const itensRows = p.itens.length > 0
     ? p.itens.map(item => `
         <tr>
-          <td>${item.descricao}</td>
+          <td>${escapeHtmlText(item.descricao)}</td>
           <td class="right">${formatBRL(item.valor)}</td>
-          <td>${item.tipo}</td>
-          <td>${item.data ? formatDate(item.data) : '-'}</td>
+          <td>${escapeHtmlText(item.tipo)}</td>
+          <td>${item.data ? escapeHtmlText(formatDate(item.data)) : '-'}</td>
         </tr>
       `).join('')
     : `<tr><td colspan="4" class="center muted">Nenhum item detalhado</td></tr>`;
 
   const condicoesList = p.condicoes.length > 0
-    ? p.condicoes.map(c => `<li>${c}</li>`).join('')
+    ? p.condicoes.map(c => `<li>${escapeHtmlText(c)}</li>`).join('')
     : '<li>Condições a serem definidas em comum acordo entre as partes.</li>';
 
   return `<!DOCTYPE html>
@@ -75,7 +80,7 @@ function buildHtml(p: PropostaData): string {
   }
 
   .header {
-    background: linear-gradient(135deg, #0F4C35 0%, #1B6B4A 100%);
+    background: linear-gradient(135deg, #17251b 0%, #465b4a 100%);
     color: white;
     padding: 40px 50px 30px;
     position: relative;
@@ -87,11 +92,11 @@ function buildHtml(p: PropostaData): string {
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, #C9A84C, #E8D5A0, #C9A84C);
+    background: linear-gradient(90deg, #cb9d52, #f0d9a8, #cb9d52);
   }
   .header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 2px; }
   .header .subtitle { font-size: 12px; opacity: 0.85; font-weight: 400; }
-  .header .logo { font-size: 28px; font-weight: 800; letter-spacing: 3px; margin-bottom: 10px; color: #C9A84C; }
+  .header .logo { font-size: 28px; font-weight: 800; letter-spacing: 3px; margin-bottom: 10px; color: #cb9d52; }
   .header .meta { display: flex; gap: 30px; margin-top: 15px; font-size: 10px; opacity: 0.8; }
 
   .content { padding: 35px 50px 30px; }
@@ -100,11 +105,11 @@ function buildHtml(p: PropostaData): string {
   .section-title {
     font-size: 13px;
     font-weight: 700;
-    color: #0F4C35;
+    color: #17251b;
     text-transform: uppercase;
     letter-spacing: 1.5px;
     padding-bottom: 6px;
-    border-bottom: 2px solid #C9A84C;
+    border-bottom: 2px solid #cb9d52;
     margin-bottom: 12px;
   }
 
@@ -125,8 +130,8 @@ function buildHtml(p: PropostaData): string {
   .value-card .amount { font-size: 20px; font-weight: 700; }
   .value-card .label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #6B7280; margin-top: 3px; }
   .divida { color: #DC2626; }
-  .proposta { color: #0F4C35; }
-  .economia { color: #C9A84C; }
+  .proposta { color: #17251b; }
+  .economia { color: #cb9d52; }
 
   table { width: 100%; border-collapse: collapse; font-size: 11px; }
   thead { background: #F3F4F6; }
@@ -138,9 +143,9 @@ function buildHtml(p: PropostaData): string {
 
   .condicoes ul { list-style: none; }
   .condicoes li { padding: 5px 0 5px 18px; position: relative; font-size: 11px; }
-  .condicoes li::before { content: '\\2713'; position: absolute; left: 0; color: #0F4C35; font-weight: 700; }
+  .condicoes li::before { content: '\\2713'; position: absolute; left: 0; color: #17251b; font-weight: 700; }
 
-  .fundamentacao { background: #FFFBEB; border-left: 3px solid #C9A84C; padding: 12px 15px; font-size: 11px; line-height: 1.6; border-radius: 0 6px 6px 0; }
+  .fundamentacao { background: #fbf9f0; border-left: 3px solid #cb9d52; padding: 12px 15px; font-size: 11px; line-height: 1.6; border-radius: 0 6px 6px 0; }
 
   .footer {
     margin-top: 30px;
@@ -167,12 +172,12 @@ function buildHtml(p: PropostaData): string {
 
 <div class="header">
   <div class="logo">ALETIS</div>
-  <h1>${p.titulo}</h1>
-  <div class="subtitle">${tipoLabel}</div>
+  <h1>${escapeHtmlText(p.titulo)}</h1>
+  <div class="subtitle">${escapeHtmlText(tipoLabel)}</div>
   <div class="meta">
-    <span>Doc: ${p.id.toUpperCase()}</span>
-    <span>Emissão: ${formatDate(p.dataCriacao)}</span>
-    <span>Validade: ${formatDate(p.dataValidade)}</span>
+    <span>Doc: ${escapeHtmlText(p.id.toUpperCase())}</span>
+    <span>Emissão: ${escapeHtmlText(formatDate(p.dataCriacao))}</span>
+    <span>Validade: ${escapeHtmlText(formatDate(p.dataValidade))}</span>
   </div>
 </div>
 
@@ -180,10 +185,10 @@ function buildHtml(p: PropostaData): string {
   <div class="section">
     <div class="section-title">Informações Gerais</div>
     <div class="info-grid">
-      <div class="info-item"><label>Cliente / Devedor</label><p>${p.clienteNome}</p></div>
-      <div class="info-item"><label>Credor / Instituição</label><p>${p.credor}</p></div>
-      <div class="info-item"><label>Tipo de Proposta</label><p>${tipoLabel}</p></div>
-      <div class="info-item"><label>Data de Emissão</label><p>${formatDate(p.dataCriacao)}</p></div>
+      <div class="info-item"><label>Cliente / Devedor</label><p>${escapeHtmlText(p.clienteNome)}</p></div>
+      <div class="info-item"><label>Credor / Instituição</label><p>${escapeHtmlText(p.credor)}</p></div>
+      <div class="info-item"><label>Tipo de Proposta</label><p>${escapeHtmlText(tipoLabel)}</p></div>
+      <div class="info-item"><label>Data de Emissão</label><p>${escapeHtmlText(formatDate(p.dataCriacao))}</p></div>
     </div>
   </div>
 
@@ -223,22 +228,22 @@ function buildHtml(p: PropostaData): string {
   ${p.fundamentacao ? `
   <div class="section">
     <div class="section-title">Fundamentação</div>
-    <div class="fundamentacao">${p.fundamentacao}</div>
+    <div class="fundamentacao">${escapeHtmlText(p.fundamentacao)}</div>
   </div>` : ''}
 
   ${p.observacoes ? `
   <div class="section">
     <div class="section-title">Observações</div>
-    <p style="font-size:11px; color:#6B7280;">${p.observacoes}</p>
+    <p style="font-size:11px; color:#6B7280;">${escapeHtmlText(p.observacoes)}</p>
   </div>` : ''}
 </div>
 
 <div class="footer">
   <div class="sig">
-    <div class="sig-line">${p.clienteNome}<br/>Cliente / Devedor</div>
+    <div class="sig-line">${escapeHtmlText(p.clienteNome)}<br/>Cliente / Devedor</div>
   </div>
   <div class="sig">
-    <div class="sig-line">${p.credor}<br/>Credor / Instituição</div>
+    <div class="sig-line">${escapeHtmlText(p.credor)}<br/>Credor / Instituição</div>
   </div>
   <div class="sig">
     <div class="sig-line">ALETIS Assessoria<br/>Consultor Responsável</div>
@@ -247,7 +252,7 @@ function buildHtml(p: PropostaData): string {
 
 <div class="confidential">
   DOCUMENTO CONFIDENCIAL — Gerado pelo sistema ALETIS em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}.
-  Este documento é válido até ${formatDate(p.dataValidade)}. Uso exclusivo das partes envolvidas.
+  Este documento é válido até ${escapeHtmlText(formatDate(p.dataValidade))}. Uso exclusivo das partes envolvidas.
 </div>
 
 </body>
@@ -265,12 +270,24 @@ async function getBrowser(): Promise<Browser> {
   return browserInstance;
 }
 
+async function prepareStaticPdfPage(page: Page): Promise<void> {
+  // Os PDFs usam CSS inline, fontes instaladas e recursos incorporados.
+  // Texto cadastral nunca pode executar código ou buscar URLs pelo servidor.
+  await page.setJavaScriptEnabled(false);
+  await page.setRequestInterception(true);
+  page.on('request', (request) => {
+    const embedded = /^(?:data:|blob:|about:blank(?:[?#]|$))/i.test(request.url());
+    void (embedded ? request.continue() : request.abort('blockedbyclient')).catch(() => undefined);
+  });
+}
+
 export async function generatePropostaPdf(proposta: PropostaData): Promise<Buffer> {
   const html = buildHtml(proposta);
   const browser = await getBrowser();
   const page = await browser.newPage();
 
   try {
+    await prepareStaticPdfPage(page);
     await page.setContent(html, { waitUntil: 'networkidle0' });
     const pdf = await page.pdf({
       format: 'A4',
@@ -293,14 +310,13 @@ interface ContratoPdfData {
   tipo: string;
   dataGeracao: string;
   partes: { devedor: string; credor: string };
-  valorTotal: number;
+  valorTotal: string | number;
   conteudoMarkdown: string;
   fundamentoLegal: string[];
 }
 
 function markdownToHtml(md: string): string {
-  const escapeHtml = (s: string): string =>
-    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const escapeHtml = escapeHtmlText;
 
   const lines = md.split('\n');
   const out: string[] = [];
@@ -371,11 +387,12 @@ function markdownToHtml(md: string): string {
 }
 
 function buildContratoHtml(c: ContratoPdfData): string {
+  const text = escapeHtmlText;
   const body = markdownToHtml(c.conteudoMarkdown);
   const fundamento = c.fundamentoLegal.length
     ? `<div class="fundamento-box">
          <div class="fundamento-label">Fundamentação Legal</div>
-         <div class="fundamento-list">${c.fundamentoLegal.map((f) => `<span class="fund-tag">${f}</span>`).join('')}</div>
+         <div class="fundamento-list">${c.fundamentoLegal.map((f) => `<span class="fund-tag">${text(f)}</span>`).join('')}</div>
        </div>`
     : '';
 
@@ -397,7 +414,7 @@ function buildContratoHtml(c: ContratoPdfData): string {
 
   .capa {
     padding: 60px 50px 40px;
-    background: linear-gradient(180deg, #0F4C35 0%, #1B6B4A 100%);
+    background: linear-gradient(180deg, #17251b 0%, #465b4a 100%);
     color: white;
     page-break-after: always;
     min-height: 100vh;
@@ -408,9 +425,9 @@ function buildContratoHtml(c: ContratoPdfData): string {
     position: absolute;
     bottom: 0; left: 0; right: 0;
     height: 6px;
-    background: linear-gradient(90deg, #C9A84C, #E8D5A0, #C9A84C);
+    background: linear-gradient(90deg, #cb9d52, #f0d9a8, #cb9d52);
   }
-  .capa-logo { font-family: 'Segoe UI', sans-serif; font-size: 32px; letter-spacing: 6px; font-weight: 800; color: #C9A84C; margin-bottom: 40px; }
+  .capa-logo { font-family: 'Segoe UI', sans-serif; font-size: 32px; letter-spacing: 6px; font-weight: 800; color: #cb9d52; margin-bottom: 40px; }
   .capa h1 { font-size: 26px; margin-bottom: 10px; line-height: 1.3; }
   .capa .tipo { font-size: 13px; opacity: 0.8; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 50px; }
   .capa .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 15px 40px; margin-top: 60px; }
@@ -421,7 +438,7 @@ function buildContratoHtml(c: ContratoPdfData): string {
     margin: 40px 0 0;
     padding: 18px 20px;
     background: rgba(255,255,255,0.08);
-    border-left: 3px solid #C9A84C;
+    border-left: 3px solid #cb9d52;
     border-radius: 0 6px 6px 0;
   }
   .fundamento-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.75; margin-bottom: 8px; }
@@ -434,7 +451,7 @@ function buildContratoHtml(c: ContratoPdfData): string {
   .body h1 {
     font-size: 16pt;
     margin: 20px 0 15px;
-    color: #0F4C35;
+    color: #17251b;
     font-weight: bold;
     text-align: center;
     text-transform: uppercase;
@@ -444,14 +461,14 @@ function buildContratoHtml(c: ContratoPdfData): string {
   .body h2 {
     font-size: 13pt;
     margin: 22px 0 10px;
-    color: #0F4C35;
+    color: #17251b;
     padding-bottom: 4px;
-    border-bottom: 1px solid #C9A84C;
+    border-bottom: 1px solid #cb9d52;
     page-break-after: avoid;
   }
-  .body h3 { font-size: 11pt; margin: 16px 0 8px; color: #0F4C35; page-break-after: avoid; }
+  .body h3 { font-size: 11pt; margin: 16px 0 8px; color: #17251b; page-break-after: avoid; }
   .body p { margin-bottom: 8px; text-align: justify; text-indent: 0; }
-  .body strong { color: #0F4C35; }
+  .body strong { color: #17251b; }
   .body ul { margin: 6px 0 10px 22px; }
   .body li { margin-bottom: 4px; }
   .body hr { border: none; border-top: 1px dashed #ccc; margin: 18px 0; }
@@ -465,14 +482,14 @@ function buildContratoHtml(c: ContratoPdfData): string {
     border-top: 1px solid #eee;
   }
   .confidential {
-    background: #FFFBEB;
+    background: #fbf9f0;
     color: #92400E;
     padding: 10px 20px;
     margin: 20px 55px 0;
     border-radius: 4px;
     font-size: 9pt;
     text-align: center;
-    border: 1px solid #FEF3C7;
+    border: 1px solid #f0d9a8;
   }
 </style>
 </head>
@@ -480,17 +497,17 @@ function buildContratoHtml(c: ContratoPdfData): string {
 
 <div class="capa">
   <div class="capa-logo">ALETIS</div>
-  <h1>${c.titulo}</h1>
-  <div class="tipo">${c.tipo.replace(/_/g, ' ').toUpperCase()}</div>
+  <h1>${text(c.titulo)}</h1>
+  <div class="tipo">${text(c.tipo.replace(/_/g, ' ').toUpperCase())}</div>
 
   <div class="meta">
-    <div class="meta-item"><label>Documento</label><p>${c.id}</p></div>
-    <div class="meta-item"><label>Data de Geração</label><p>${new Date(c.dataGeracao).toLocaleDateString('pt-BR')}</p></div>
-    <div class="meta-item"><label>Devedor</label><p>${c.partes.devedor}</p></div>
-    <div class="meta-item"><label>Credor</label><p>${c.partes.credor}</p></div>
+    <div class="meta-item"><label>Documento</label><p>${text(c.id)}</p></div>
+    <div class="meta-item"><label>Data de Geração</label><p>${text(new Date(c.dataGeracao).toLocaleDateString('pt-BR'))}</p></div>
+    <div class="meta-item"><label>Devedor</label><p>${text(c.partes.devedor)}</p></div>
+    <div class="meta-item"><label>Credor</label><p>${text(c.partes.credor)}</p></div>
     <div class="meta-item" style="grid-column: 1 / -1;">
       <label>Valor da Operação</label>
-      <p style="font-size: 18px; color: #C9A84C; font-weight: 700;">${formatBRL(c.valorTotal)}</p>
+      <p style="font-size: 18px; color: #cb9d52; font-weight: 700;">${formatContractMoney(c.valorTotal)}</p>
     </div>
   </div>
 
@@ -506,7 +523,7 @@ function buildContratoHtml(c: ContratoPdfData): string {
 </div>
 
 <div class="footer">
-  Emitido em ${new Date(c.dataGeracao).toLocaleString('pt-BR')} · Documento ${c.id}
+  Emitido em ${text(new Date(c.dataGeracao).toLocaleString('pt-BR'))} · Documento ${text(c.id)}
 </div>
 
 </body>
@@ -519,6 +536,7 @@ export async function generateContratoPdf(c: ContratoPdfData): Promise<Buffer> {
   const page = await browser.newPage();
 
   try {
+    await prepareStaticPdfPage(page);
     await page.setContent(html, { waitUntil: 'networkidle0' });
     const pdf = await page.pdf({
       format: 'A4',

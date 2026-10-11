@@ -2,7 +2,7 @@
 // useClienteData — fetcher único do workspace do cliente.
 // Concentra todas as chamadas que ClienteDetalhes fazia disperso.
 // ============================================================
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { apiFetch } from '../../../hooks/useApi'
 
 export type Estagio =
@@ -25,8 +25,46 @@ export interface DividaResumo {
   valorOriginal: number
   valorAtual: number
   taxa: string
-  status: 'em_dia' | 'atrasada' | 'renegociada' | 'quitada'
+  status: 'em_dia' | 'atrasada' | 'renegociada' | 'quitada' | 'ativa' | 'em_acordo' | 'paga' | 'nao_informado'
   vencimento?: string
+  emitente?: string
+  tomador?: string
+  finalidade?: string
+  enquadramento?: string
+  numeroCedula?: string
+  valorParcela?: number
+  dataContratacao?: string
+  primeiraParcela?: string
+  ultimaParcela?: string
+  parcelasTotal?: number
+  parcelasPagas?: number
+  prazoMeses?: number
+  carenciaMeses?: number
+  diasAtraso?: number
+  taxaNominalAa?: string
+  taxaEfetivaAa?: string
+  cetAa?: string
+  indexador?: string
+  periodicidade?: string
+  metodoCalculo?: string
+  garantias?: string[]
+  observacoes?: string
+  informacoesAdicionais?: Array<{ campo: string; valor: string }>
+}
+
+export interface PagamentoCliente {
+  id: string
+  data: string
+  valor: number
+  descricao: string
+  tipo: 'pagamento' | 'dacao' | 'deposito_judicial'
+  status?: 'previsto' | 'realizado' | 'compensado' | 'cancelado'
+  credor?: string
+  contrato?: string
+  formaPagamento?: string
+  comprovante?: string
+  observacoes?: string
+  informacoesAdicionais?: Array<{ campo: string; valor: string }>
 }
 
 export interface SraiResult {
@@ -55,20 +93,63 @@ export interface AnaliseResumo {
   recomendacoes?: Array<{ id: string; titulo: string; prioridade: 'p1' | 'p2' | 'p3'; acao: string; categoria: string; impactoEstimado?: string }>
 }
 
+export interface FinancialHealth {
+  score: number | null
+  nivel: 'forte' | 'equilibrada' | 'atencao' | 'pressionada' | 'critica' | 'indisponivel'
+  confianca: 'alta' | 'media' | 'baixa'
+  coberturaPct: number
+  metodologiaVersao: string
+  calculadoEm: string
+  componentes: Array<{
+    id: string
+    label: string
+    score: number | null
+    peso: number
+    disponivel: boolean
+    valor: string
+    leitura: string
+  }>
+  fatores: Array<{ tipo: 'positivo' | 'atencao' | 'critico'; titulo: string; detalhe: string }>
+  metricas: {
+    capacidadePagamentoPct: number | null
+    saldoLivre: string | null
+    margemBrutaProjetada: string | null
+    margemRealPct: number | null
+    dividaPorHa: string | null
+    contratosConsiderados: number
+    contratosVencidos: number
+  }
+}
+
 export interface Cliente {
   id: string
   nome: string
   cpfCnpj: string
+  tipo?: 'pessoa_fisica' | 'pessoa_juridica'
   cidade: string
   uf: string
   telefone: string
+  whatsapp?: string
   email: string
+  atividade?: string
   estagio: Estagio
-  saudeFinanceira: number
+  saudeFinanceira: number | null
+  saudeFinanceiraDetalhes?: FinancialHealth
   consultor: string
+  escritorio?: string
+  credor: string
+  modalidadeCredito?: string
+  valorTotalDivida?: number
+  valorTotalPago?: number
+  observacoes?: string
+  cep?: string
+  carCodigoImovel?: string
+  culturas?: string[]
+  ultimaAtualizacao?: string
   propriedade?: { nome?: string; area?: string; culturas?: string[]; condicao?: string }
   resumoFinanceiro: { totalDivida: number; totalPago: number; pendente: number }
   dividas: DividaResumo[]
+  pagamentos: PagamentoCliente[]
   evolucaoDivida: Array<{ mes: string; valor: number }>
   endereco?: any
   clima?: any
@@ -77,6 +158,21 @@ export interface Cliente {
   areaTotalHa?: number
   notas: Array<{ id: string; autor: string; criadoEm: string; texto: string }>
   tags: string[]
+  grupoFamiliar: Array<{
+    id: string
+    nome: string
+    parentesco?: string
+    papel?: string
+    cpfCnpj?: string
+    telefone?: string
+    email?: string
+    atuaAtividade?: boolean
+    vinculoCliente?: string
+    observacoes?: string
+    principal?: boolean
+    criadoEm?: string
+    atualizadoEm?: string
+  }>
   proximaAcao: { data: string; descricao: string } | null
   exposicaoCommodity: any[]
   visitasTecnicas: any[]
@@ -93,13 +189,14 @@ export interface UseClienteDataReturn {
   abs: AbsResult | null
   /** Análise consolidada do AutoCalcOrchestrator */
   analises: AnaliseResumo | null
+  financialHealth: FinancialHealth | null
   loadingAnalises: boolean
   recalcularAnalises: () => Promise<void>
   recalculando: boolean
   /** Helpers de mutação que atualizam o estado local */
   reload: () => Promise<void>
   patchCliente: (patch: Partial<Cliente>) => Promise<void>
-  addNota: (texto: string) => Promise<void>
+  addNota: (texto: string, autor?: string) => Promise<void>
   removerNota: (notaId: string) => Promise<void>
   setProximaAcao: (acao: { data: string; descricao: string } | null) => Promise<void>
   setTags: (tags: string[]) => Promise<void>
@@ -117,10 +214,10 @@ function resolveApiId(urlId: string | undefined): string | undefined {
 }
 
 const debtStatusMap: Record<string, DividaResumo['status']> = {
-  ativa: 'atrasada',
-  em_acordo: 'renegociada',
+  ativa: 'ativa',
+  em_acordo: 'em_acordo',
   renegociada: 'renegociada',
-  paga: 'quitada',
+  paga: 'paga',
   em_dia: 'em_dia',
   atrasada: 'atrasada',
   quitada: 'quitada',
@@ -136,8 +233,48 @@ function mapCliente(data: any): Cliente {
         valorOriginal: Number(d.valorOriginal) || 0,
         valorAtual: Number(d.valorAtual ?? d.valorAtualizado) || 0,
         taxa: d.taxa || '—',
-        status: debtStatusMap[d.status] || 'em_dia',
+        status: debtStatusMap[d.status] || 'nao_informado',
         vencimento: d.vencimento,
+        emitente: d.emitente,
+        tomador: d.tomador,
+        finalidade: d.finalidade,
+        enquadramento: d.enquadramento,
+        numeroCedula: d.numeroCedula,
+        valorParcela: d.valorParcela == null ? undefined : Number(d.valorParcela) || 0,
+        dataContratacao: d.dataContratacao,
+        primeiraParcela: d.primeiraParcela,
+        ultimaParcela: d.ultimaParcela,
+        parcelasTotal: d.parcelasTotal == null ? undefined : Number(d.parcelasTotal) || 0,
+        parcelasPagas: d.parcelasPagas == null ? undefined : Number(d.parcelasPagas) || 0,
+        prazoMeses: d.prazoMeses == null ? undefined : Number(d.prazoMeses) || 0,
+        carenciaMeses: d.carenciaMeses == null ? undefined : Number(d.carenciaMeses) || 0,
+        diasAtraso: d.diasAtraso == null ? undefined : Number(d.diasAtraso) || 0,
+        taxaNominalAa: d.taxaNominalAa,
+        taxaEfetivaAa: d.taxaEfetivaAa,
+        cetAa: d.cetAa,
+        indexador: d.indexador,
+        periodicidade: d.periodicidade,
+        metodoCalculo: d.metodoCalculo,
+        garantias: Array.isArray(d.garantias) ? d.garantias.map(String) : [],
+        observacoes: d.observacoes,
+        informacoesAdicionais: Array.isArray(d.informacoesAdicionais) ? d.informacoesAdicionais : [],
+      }))
+    : []
+
+  const pagamentos: PagamentoCliente[] = Array.isArray(data.pagamentos)
+    ? data.pagamentos.map((p: any, idx: number): PagamentoCliente => ({
+        id: p.id || `pag-${idx}`,
+        data: p.data || '',
+        valor: Number(p.valor) || 0,
+        descricao: p.descricao || '',
+        tipo: ['dacao', 'deposito_judicial'].includes(p.tipo) ? p.tipo : 'pagamento',
+        status: ['previsto', 'realizado', 'compensado', 'cancelado'].includes(p.status) ? p.status : 'realizado',
+        credor: p.credor || '',
+        contrato: p.contrato || '',
+        formaPagamento: p.formaPagamento || '',
+        comprovante: p.comprovante || '',
+        observacoes: p.observacoes || '',
+        informacoesAdicionais: Array.isArray(p.informacoesAdicionais) ? p.informacoesAdicionais : [],
       }))
     : []
 
@@ -147,14 +284,29 @@ function mapCliente(data: any): Cliente {
   return {
     id: data.id,
     nome: data.nome,
-    cpfCnpj: data.cpfCnpj || '---',
+    cpfCnpj: data.cpfCnpj || '',
+    tipo: data.tipo === 'pessoa_juridica' ? 'pessoa_juridica' : 'pessoa_fisica',
     cidade: data.cidade,
     uf: data.uf,
     telefone: data.telefone || '',
+    whatsapp: data.whatsapp || '',
     email: data.email || '',
+    atividade: data.atividade || '',
     estagio: data.estagio || 'lead',
-    saudeFinanceira: data.saudeFinanceira ?? 50,
+    saudeFinanceira: data.saudeFinanceira !== null && data.saudeFinanceira !== undefined && data.saudeFinanceira !== '' && Number.isFinite(Number(data.saudeFinanceira))
+      ? Math.max(0, Math.min(100, Number(data.saudeFinanceira))) : null,
+    saudeFinanceiraDetalhes: data.saudeFinanceiraDetalhes,
     consultor: data.consultor || 'Não atribuído',
+    escritorio: data.escritorio || '',
+    credor: data.credor || 'A definir',
+    modalidadeCredito: data.modalidadeCredito || '',
+    valorTotalDivida: totalDivida,
+    valorTotalPago: totalPago,
+    observacoes: data.observacoes || '',
+    cep: data.cep || data.endereco?.cep || '',
+    carCodigoImovel: data.carCodigoImovel || data.car?.codImovel || '',
+    culturas: Array.isArray(data.culturas) ? data.culturas : [],
+    ultimaAtualizacao: data.ultimaAtualizacao,
     propriedade: data.propriedade ?? {
       nome: data.car?.codImovel ? `CAR ${data.car.codImovel}` : data.nome,
       area: data.car?.areaImovel ? `${data.car.areaImovel} ha` : data.areaTotalHa ? `${data.areaTotalHa} ha` : '—',
@@ -167,6 +319,7 @@ function mapCliente(data: any): Cliente {
       pendente: totalDivida - totalPago,
     },
     dividas,
+    pagamentos,
     evolucaoDivida: Array.isArray(data.evolucaoDivida) ? data.evolucaoDivida : [],
     endereco: data.endereco,
     clima: data.clima,
@@ -175,6 +328,7 @@ function mapCliente(data: any): Cliente {
     areaTotalHa: data.areaTotalHa,
     notas: Array.isArray(data.notas) ? data.notas : [],
     tags: Array.isArray(data.tags) ? data.tags : [],
+    grupoFamiliar: Array.isArray(data.grupoFamiliar) ? data.grupoFamiliar : [],
     proximaAcao: data.proximaAcao ?? null,
     exposicaoCommodity: Array.isArray(data.exposicaoCommodity) ? data.exposicaoCommodity : [],
     visitasTecnicas: Array.isArray(data.visitasTecnicas) ? data.visitasTecnicas : [],
@@ -184,6 +338,9 @@ function mapCliente(data: any): Cliente {
 
 export function useClienteData(urlId: string | undefined): UseClienteDataReturn {
   const apiId = useMemo(() => resolveApiId(urlId), [urlId])
+  const activeId = useRef(apiId)
+  activeId.current = apiId
+  const reloadController = useRef<AbortController | null>(null)
 
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [loading, setLoading] = useState(true)
@@ -191,51 +348,88 @@ export function useClienteData(urlId: string | undefined): UseClienteDataReturn 
   const [srai, setSrai] = useState<SraiResult | null>(null)
   const [abs, setAbs] = useState<AbsResult | null>(null)
   const [analises, setAnalises] = useState<AnaliseResumo | null>(null)
+  const [financialHealth, setFinancialHealth] = useState<FinancialHealth | null>(null)
   const [loadingAnalises, setLoadingAnalises] = useState(false)
   const [recalculando, setRecalculando] = useState(false)
 
+  useEffect(() => {
+    setCliente(null)
+    setSrai(null)
+    setAbs(null)
+    setAnalises(null)
+    setFinancialHealth(null)
+    setRecalculando(false)
+    setError(null)
+  }, [apiId])
+
   const reload = useCallback(async () => {
     if (!apiId) return
+    reloadController.current?.abort()
+    const controller = new AbortController()
+    reloadController.current = controller
     setLoading(true)
     setError(null)
     try {
-      const data = await apiFetch<any>(`/clientes/${apiId}`)
-      if (data && data.nome) setCliente(mapCliente(data))
+      const data = await apiFetch<any>(`/clientes/${apiId}`, { signal: controller.signal })
+      if (!controller.signal.aborted && activeId.current === apiId && data && data.nome) {
+        const mapped = mapCliente(data)
+        setCliente(mapped)
+        if (mapped.saudeFinanceiraDetalhes) setFinancialHealth(mapped.saudeFinanceiraDetalhes)
+      }
     } catch (e: any) {
-      setError(String(e?.message ?? e))
+      if (!controller.signal.aborted && activeId.current === apiId) setError(String(e?.message ?? e))
     } finally {
-      setLoading(false)
+      if (!controller.signal.aborted && activeId.current === apiId) setLoading(false)
     }
   }, [apiId])
 
   useEffect(() => {
+    if (!apiId) return
+    const controller = new AbortController()
+    apiFetch<FinancialHealth>(`/clientes/${apiId}/saude-financeira`, { signal: controller.signal })
+      .then((health) => {
+        if (controller.signal.aborted || activeId.current !== apiId) return
+        setFinancialHealth(health)
+        setCliente((current) => current?.id === apiId ? { ...current, saudeFinanceira: health.score, saudeFinanceiraDetalhes: health } : current)
+      })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [apiId, analises?.geradoEm])
+
+  useEffect(() => {
     reload()
+    return () => reloadController.current?.abort()
   }, [reload])
 
   // Análises consolidadas (AutoCalcOrchestrator)
   useEffect(() => {
     if (!apiId) return
+    const controller = new AbortController()
     setLoadingAnalises(true)
-    apiFetch<any>(`/clientes/${apiId}/analises`)
+    apiFetch<any>(`/clientes/${apiId}/analises`, { signal: controller.signal })
       .then((data) => {
-        if (data) setAnalises(data)
+        if (!controller.signal.aborted && activeId.current === apiId && data) setAnalises(data)
       })
       .catch(() => {})
-      .finally(() => setLoadingAnalises(false))
+      .finally(() => { if (!controller.signal.aborted && activeId.current === apiId) setLoadingAnalises(false) })
+    return () => controller.abort()
   }, [apiId])
 
   // SRAI + AB+S em paralelo
   useEffect(() => {
     if (!apiId) return
+    const controller = new AbortController()
     Promise.all([
-      apiFetch<any>(`/clientes/${apiId}/srai`).catch(() => null),
-      apiFetch<any>(`/clientes/${apiId}/abs?plantioDireto=false&ilpf=false&prada=false`).catch(() => null),
+      apiFetch<any>(`/clientes/${apiId}/srai`, { signal: controller.signal }).catch(() => null),
+      apiFetch<any>(`/clientes/${apiId}/abs?plantioDireto=false&ilpf=false&prada=false`, { signal: controller.signal }).catch(() => null),
     ]).then(([sraiRes, absRes]) => {
+      if (controller.signal.aborted || activeId.current !== apiId) return
       if (sraiRes?.success && sraiRes.data) setSrai(sraiRes.data)
       else if (sraiRes && !('success' in sraiRes)) setSrai(sraiRes)
       if (absRes?.success && absRes.data) setAbs(absRes.data)
       else if (absRes && !('success' in absRes)) setAbs(absRes)
     })
+    return () => controller.abort()
   }, [apiId])
 
   const recalcularAnalises = useCallback(async () => {
@@ -243,9 +437,14 @@ export function useClienteData(urlId: string | undefined): UseClienteDataReturn 
     setRecalculando(true)
     try {
       const data = await apiFetch<AnaliseResumo>(`/clientes/${apiId}/recalcular`, { method: 'POST' })
+      if (activeId.current !== apiId) return
       if (data) setAnalises(data)
+      const health = await apiFetch<FinancialHealth>(`/clientes/${apiId}/saude-financeira`)
+      if (activeId.current !== apiId) return
+      setFinancialHealth(health)
+      setCliente((current) => current ? { ...current, saudeFinanceira: health.score, saudeFinanceiraDetalhes: health } : current)
     } finally {
-      setRecalculando(false)
+      if (activeId.current === apiId) setRecalculando(false)
     }
   }, [apiId])
 
@@ -256,18 +455,18 @@ export function useClienteData(urlId: string | undefined): UseClienteDataReturn 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     })
-    setCliente((prev) => (prev ? { ...prev, ...patch } : prev))
+    setCliente((prev) => (prev?.id === apiId ? { ...prev, ...patch } : prev))
   }, [apiId])
 
-  const addNota = useCallback(async (texto: string) => {
+  const addNota = useCallback(async (texto: string, autor?: string) => {
     if (!apiId || !texto.trim()) return
-    const res = await apiFetch<{ success: boolean; data: { id: string; autor: string; criadoEm: string; texto: string } }>(
+    const nota = await apiFetch<{ id: string; autor: string; criadoEm: string; texto: string }>(
       `/clientes/${apiId}/notas`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto: texto.trim(), autor: 'Equipe ALETIS' }) },
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto: texto.trim(), autor: autor?.trim() || 'Equipe ALETIS' }) },
     )
-    if (res.success) {
-      setCliente((prev) => (prev ? { ...prev, notas: [...prev.notas, res.data] } : prev))
-    }
+    setCliente((prev) => (prev?.id === apiId
+      ? { ...prev, notas: [...prev.notas.filter((existing) => existing.id !== nota.id), nota] }
+      : prev))
   }, [apiId])
 
   const removerNota = useCallback(async (notaId: string) => {
@@ -286,12 +485,13 @@ export function useClienteData(urlId: string | undefined): UseClienteDataReturn 
 
   return {
     apiId,
-    cliente,
-    loading,
+    cliente: cliente?.id === apiId ? cliente : null,
+    loading: loading || Boolean(apiId && cliente?.id !== apiId && !error),
     error,
     srai,
     abs,
     analises,
+    financialHealth,
     loadingAnalises,
     recalcularAnalises,
     recalculando,
